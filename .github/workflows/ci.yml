@@ -1,0 +1,287 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - master
+  pull_request:
+    branches: ["master"]
+  # The merge queue tests a batch of PRs against master together, then merges them in order. Without
+  # this trigger the queue waits forever for checks that never start, because a required check only
+  # counts when it reports on the merge_group event.
+  merge_group:
+  # Nightly, for the smoke job only. The API is published from another repository, so a change
+  # there never pushes here. This is how an API change surfaces without anyone pushing.
+  schedule:
+    - cron: "23 18 * * *"
+
+jobs:
+  console:
+    name: Console (lint, types, unit)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # A run that discovers no test files exits zero, so the count is asserted rather than the
+      # status. Read from the JSON reporter, not the console output: the human output is
+      # ANSI-coloured under CI and not under a local pipe, so a grep passes on a laptop and fails
+      # on the runner.
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          npx vitest run --reporter=default --reporter=json --outputFile.json=unit-results.json
+          COUNT=$(jq -r '.numTotalTests // 0' unit-results.json)
+          [ "$COUNT" -gt 0 ] 2>/dev/null || {
+            echo "::error::vitest discovered no tests (numTotalTests=$COUNT)"; exit 1; }
+          echo "unit tests: $COUNT" >> "$GITHUB_STEP_SUMMARY"
+
+  audit:
+    name: Audit dependencies
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Dependency vulnerability gate: Critical or High fails the build. The step is the one the API
+      # repository runs for this same lockfile, copied whole, so the two hold the same line. It used
+      # to fail on Critical only, because three High advisories in `next` had no fix we could take
+      # and a permanently red gate is one everybody learns to ignore. Taking Next 16.3 cleared them.
+      - name: Audit dependencies (fail on Critical or High)
+        run: |
+          # `npm audit` exits non-zero when it finds anything, so its status cannot distinguish
+          # "found vulnerabilities" from "could not run". The report itself is the signal, and an
+          # unreadable one fails the build rather than passing: a gate that cannot see must not wave
+          # things through.
+          # The registry's audit endpoint has gone away for minutes at a time (503, or a hang), which
+          # made every run fail for a reason that had nothing to do with the code. Retry for a while
+          # before concluding that the report is unreadable. The gate below still fails closed.
+          for attempt in 1 2 3 4 5; do
+            timeout 180 npm audit --json > audit.json || true
+            if jq -e '.metadata.vulnerabilities.total' audit.json >/dev/null 2>&1; then break; fi
+            echo "npm audit attempt $attempt returned no report, retrying in 60s"
+            sleep 60
+          done
+
+          CRIT=$(jq -r '.metadata.vulnerabilities.critical // empty' audit.json 2>/dev/null || true)
+          HIGH=$(jq -r '.metadata.vulnerabilities.high // empty' audit.json 2>/dev/null || true)
+          case "${CRIT}|${HIGH}" in
+            *[!0-9]\|*|*\|*[!0-9]*|\|*|*\|)
+              echo "::error::npm audit did not return a usable report, failing closed"
+              head -c 500 audit.json || true
+              exit 1
+              ;;
+          esac
+
+          echo "npm audit: critical=$CRIT high=$HIGH" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CRIT" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "::error::npm audit found $CRIT critical and $HIGH high severity vulnerabilities"
+            jq -r '.vulnerabilities | to_entries[]
+                   | select(.value.severity == "critical" or .value.severity == "high")
+                   | "\(.value.severity)\t\(.key)"' audit.json
+            exit 1
+          fi
+
+  e2e:
+    name: End to end (Playwright and axe)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # The job name promises an axe pass. A renamed or deleted accessibility spec would leave the
+      # promise and remove the pass, so the listing is checked before anything runs.
+      - name: The accessibility spec is in the run
+        run: |
+          set -euo pipefail
+          npx playwright test --list --project=chromium > listing.txt
+          grep -q 'accessibility.spec.ts' listing.txt || {
+            echo "::error::e2e/accessibility.spec.ts is not in the Playwright listing; the axe pass would not run"; exit 1; }
+
+      # Drives the real UI against a mocked API to catch the class of bug unit tests miss:
+      # empty-vs-error states, routing, forms, per-field-type controls.
+      - name: E2E (full pack)
+        run: npx playwright test --project=chromium
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  image:
+    name: Image builds
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # No push. The published image is built by publish.yml; this proves the Dockerfile still
+      # builds from a pull request before it merges.
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: barako-admin:ci
+          build-args: |
+            BARAKO_VERSION=0.0.0-ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A build that succeeds is not a container that starts. entrypoint.sh has to write
+      # env-config.js from NEXT_PUBLIC_API_URL and the standalone server has to answer, or the
+      # image is a tarball nobody can run.
+      - name: The image starts and reads its API URL at start
+        run: |
+          set -euo pipefail
+          docker run -d --name ci-admin -p 3300:3000 \
+            -e NEXT_PUBLIC_API_URL=http://api.example.test:5005 barako-admin:ci
+          for _ in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3300/login || true)" = "200" ] && break
+            sleep 2
+          done
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3300/login || true)
+          [ "$code" = "200" ] || { docker logs ci-admin; echo "::error::/login answered $code"; exit 1; }
+          curl -s http://127.0.0.1:3300/env-config.js | tee env-config.js
+          grep -q 'NEXT_PUBLIC_API_URL: "http://api.example.test:5005"' env-config.js || {
+            echo "::error::env-config.js does not carry the NEXT_PUBLIC_API_URL the container was started with"; exit 1; }
+          docker rm -f ci-admin >/dev/null
+
+      # `docker compose config` parses the file, resolves every variable and fails on the first one
+      # that has no value. The quickstart is what a newcomer runs first, so a broken one costs the
+      # most at the worst moment.
+      - name: The quickstart compose file resolves
+        env:
+          DB_PASSWORD: ci-not-a-real-password
+          JWT_KEY: ci-not-a-real-key-at-least-32-characters
+          ADMIN_PASSWORD: ci-not-a-real-password
+        run: |
+          set -euo pipefail
+          docker compose -f quickstart/docker-compose.yml config > quickstart.resolved
+          grep -q 'ghcr.io/baryodev/barako-cms:' quickstart.resolved
+          grep -q 'ghcr.io/baryodev/barako-admin:' quickstart.resolved
+          if grep -qE '^[[:space:]]+build:' quickstart.resolved; then
+            echo "::error::quickstart/docker-compose.yml resolves to a build step; it must run published images"; exit 1
+          fi
+          echo "quickstart/docker-compose.yml resolves"
+
+  sbom:
+    name: SBOM generates
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # The same command as the API repository's release used for this image, so the file a release
+      # ships is the file this job proves. A tool that writes nothing still exits 0, so the file is
+      # checked rather than the command.
+      - name: Generate the SBOM
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          mkdir -p sbom
+          npx --yes @cyclonedx/cyclonedx-npm --output-file sbom/barako-admin.cdx.json package.json
+          f=sbom/barako-admin.cdx.json
+          [ -s "$f" ] || { echo "::error::$f is missing or empty."; exit 1; }
+          COMPONENTS=$(python3 -c "import json; print(len(json.load(open('$f')).get('components', [])))")
+          [ "$COMPONENTS" -gt 0 ] || { echo "::error::$f lists no components, so it describes nothing."; exit 1; }
+          echo "$f: $COMPONENTS components" >> "$GITHUB_STEP_SUMMARY"
+
+  # The console against the real API, with nothing mocked.
+  #
+  # Every other job mocks the API with page.route, so it proves the console behaves correctly given
+  # fixtures the same person wrote, and cannot prove those fixtures match the server. That gap
+  # shipped a bug and kept it: the History panel read `versions` from a response that had returned
+  # `items` since the envelope change, rendered an empty list rather than failing, and every mocked
+  # spec stayed green because the mock returned `versions` too.
+  #
+  # An arm runner, because ghcr.io/baryodev/barako-cms:playground is built for the Ampere VM and
+  # exists only as arm64. Free for public repositories.
+  smoke:
+    name: Console against the real API
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Which API image the pack runs against is a repository variable, so pointing it at a newer
+      # tag is a settings change rather than a pull request. Unset, it is :playground, the build
+      # that runs playground.baryo.dev.
+      - name: Stand up the stack and run the unmocked pack
+        env:
+          BARAKO_API_TAG: ${{ vars.BARAKO_API_TAG || 'playground' }}
+        run: bash scripts/smoke-check.sh
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: smoke-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # Two pull requests, never one per package: routine bumps in one, majors in another. Majors
+      # are kept separate because they are the ones that need reading, not because they need to
+      # arrive individually.
+      admin:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      admin-major:
+        patterns: ["*"]
+        update-types: ["major"]
+
+  # Keep the Actions themselves current. The same concern the npm gate exists for applies to
+  # third-party Actions too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
