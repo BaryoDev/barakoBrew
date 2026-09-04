@@ -20,7 +20,7 @@ RUN \
 FROM base AS builder
 WORKDIR /app
 
-# Accept build argument from fly.toml
+# Where the browser reaches the API. Overridden at container start by entrypoint.sh.
 ARG NEXT_PUBLIC_API_URL
 # Set it as environment variable so Next.js can use it during build
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
