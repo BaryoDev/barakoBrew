@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # This script simulates the Docker entrypoint behavior to verify
 # that environment variables are correctly translated into public/env-config.js
@@ -6,6 +7,13 @@
 # 1. Setup
 ADMIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP_ENV_CONFIG="$ADMIN_DIR/public/env-config.js.bak"
+
+restore_config() {
+    if [ -f "$TEMP_ENV_CONFIG" ]; then
+        mv "$TEMP_ENV_CONFIG" "$ADMIN_DIR/public/env-config.js"
+    fi
+}
+trap restore_config EXIT
 
 # Backup existing config if it exists
 if [ -f "$ADMIN_DIR/public/env-config.js" ]; then
@@ -39,8 +47,5 @@ else
     exit 1
 fi
 
-# 3. Cleanup
+# 3. Cleanup (config restore is handled by the EXIT trap above)
 rm -rf /tmp/barako-test
-if [ -f "$TEMP_ENV_CONFIG" ]; then
-    mv "$TEMP_ENV_CONFIG" "$ADMIN_DIR/public/env-config.js"
-fi

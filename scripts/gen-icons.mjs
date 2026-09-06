@@ -1,9 +1,9 @@
 // Generates src/components/icons/index.tsx from line-awesome (Icons8) SVGs.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SVG_DIR = join(ROOT, 'node_modules/line-awesome/svg');
 const OUT = join(ROOT, 'src/components/icons/index.tsx');
 
