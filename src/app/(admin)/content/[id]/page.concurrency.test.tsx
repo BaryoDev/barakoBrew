@@ -49,6 +49,7 @@ const { api } = await import('@/lib/api');
 const { default: ContentDetailPage } = await import('./page');
 
 const ID = '6fb1d0c6-5217-4381-8bc8-4bb45302db0b';
+const ETAG = '"01a07fec-36ea-4133-a252-5a2a73447dc4"';
 
 const SCHEMA = {
     name: 'article',
@@ -114,7 +115,7 @@ function routeGet(current: () => unknown) {
         if (url === `/api/contents/${ID}/history`) {
             return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
         }
-        if (url === `/api/contents/${ID}`) return { data: current() };
+        if (url === `/api/contents/${ID}`) return { data: current(), headers: { etag: ETAG } };
         return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
     });
 }
@@ -122,6 +123,47 @@ function routeGet(current: () => unknown) {
 describe('two editors, one entry', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    it('sends the ETag it read back as If-Match', async () => {
+        // The API's stronger guard, bound to the document's own version rather than the event
+        // stream's. It was unbuildable until the API exposed the header through CORS
+        // (BaryoDev/barakoCMS#680); before that a browser could not read the ETag at all.
+        routeGet(() => entry(1, 'original'));
+        vi.mocked(api.put).mockResolvedValue({ data: { id: ID, version: 2 }, headers: {} });
+
+        renderEditor();
+        await screen.findByDisplayValue('original');
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalled());
+        const [, , config] = vi.mocked(api.put).mock.calls[0];
+        expect((config as { headers?: Record<string, string> })?.headers?.['If-Match']).toBe(ETAG);
+    });
+
+    it('sends no If-Match when the API sent no ETag, rather than an empty one', async () => {
+        // An API that predates the ETag, or an event-sourced type, which the server deliberately
+        // does not emit one for. `If-Match: ""` would be refused as malformed with a 400, turning
+        // a working save into a broken one.
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/content-types') {
+                return { data: { items: [SCHEMA], totalItems: 1, page: 1, pageSize: 20 } };
+            }
+            if (url === `/api/contents/${ID}/history`) {
+                return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
+            }
+            if (url === `/api/contents/${ID}`) return { data: entry(1, 'original'), headers: {} };
+            return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
+        });
+        vi.mocked(api.put).mockResolvedValue({ data: { id: ID, version: 2 }, headers: {} });
+
+        renderEditor();
+        await screen.findByDisplayValue('original');
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalled());
+        const [, , config] = vi.mocked(api.put).mock.calls[0];
+        expect((config as { headers?: Record<string, string> })?.headers ?? {}).not.toHaveProperty('If-Match');
     });
 
     it('sends the version it read, which is what makes the server able to refuse', async () => {

@@ -25,6 +25,19 @@ export interface ContentDetail extends ContentListItem {
     scheduledUnpublishAt?: string | null;
 }
 
+/**
+ * An entry as read, plus the ETag that read returned.
+ *
+ * Not part of the response body: the API sends it as an HTTP header, and it is carried here so the
+ * save that follows can send it back as `If-Match`. Optional because it is genuinely absent
+ * sometimes. The server does not emit one for an event-sourced type, deliberately, since that
+ * type's write path does not consult `If-Match` and a header there would promise a precondition
+ * nothing checks.
+ */
+export interface ContentDetailRead extends ContentDetail {
+    etag?: string;
+}
+
 export interface ScheduleContentRequest {
     scheduledPublishAt: string | null;
     scheduledUnpublishAt: string | null;
