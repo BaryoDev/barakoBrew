@@ -53,6 +53,7 @@ jobs:
   # build happens inside the image.
   verify:
     name: Verify
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,6 +67,14 @@ jobs:
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npx vitest run
+
+      # Only on a tag. A dev build's version is derived from the SHA and has no changelog section
+      # by design, so requiring one on every master push would make this gate noise rather than a
+      # gate. Runnable by hand, and proven to fail, before it was trusted here:
+      # `scripts/check-release.sh 9.9.9`.
+      - name: The version agrees with itself
+        if: needs.version.outputs.is_release == 'true'
+        run: bash scripts/check-release.sh "${{ needs.version.outputs.version }}"
 
   build:
     name: Build ${{ matrix.arch }}
@@ -213,6 +222,49 @@ jobs:
             --tag "arnelirobles/barako-admin:latest" \
             --tag "arnelirobles/barako-admin:$VERSION" \
             "ghcr.io/baryodev/barako-admin:$VERSION"
+
+  # The release itself, after the tags are pushed and proven multi-architecture, because a release
+  # pointing at an image that does not exist is worse than a late release. Notes come out of
+  # CHANGELOG.md rather than being written a second time here: two sources for the same sentence is
+  # how they end up disagreeing, and the section is already required to exist by the verify gate.
+  release:
+    name: GitHub release
+    needs: [version, publish]
+    if: needs.version.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cut the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # The same extraction the gate measures, so the notes are the section a human read and
+          # approved, not a summary of it.
+          awk -v v="## [$VERSION]" '
+            index($0, v) == 1 { inside = 1; next }
+            inside && (/^## / || /^\[[^]]+\]: /) { exit }
+            inside { print }
+          ' CHANGELOG.md > notes.md
+
+          [ -s notes.md ] || { echo "::error::no notes for $VERSION"; exit 1; }
+
+          {
+            echo
+            echo "---"
+            echo
+            echo "Image: \`ghcr.io/baryodev/barako-admin:$VERSION\`, linux/amd64 and linux/arm64."
+          } >> notes.md
+
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "barakoBrew $VERSION" \
+            --notes-file notes.md
 
   # The playground image is a different build, not a retag: NEXT_BASE_PATH is baked in at build time
   # and the VM serves the console under /barakocms. Native arm64 because the VM is Ampere.
