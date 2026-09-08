@@ -28,11 +28,29 @@ test.describe('Runtime Configuration', () => {
         await expect.poll(() => loginOrigin, { timeout: 10000 }).toBe(CUSTOM_API_URL);
     });
 
-    test('should fallback to process.env or default if window._env_ is missing', async ({ page }) => {
+    test('falls back to the default when env-config.js carries no API URL', async ({ page }) => {
+        // This asserted that `window._env_.NEXT_PUBLIC_API_URL` was **defined**, which is the
+        // opposite of its own name, and it passed only because the committed `public/env-config.js`
+        // hardcoded `http://localhost:5006`. That value outranks `NEXT_PUBLIC_API_URL`, so the
+        // documented environment variable did nothing in local development and this test was
+        // holding that in place.
+        //
+        // The file is committed empty now. What matters is that the app still resolves an API and
+        // reaches it, which is what the fallback is for.
+        let loginOrigin = '';
+        await page.route('**/api/auth/login', (route) => {
+            loginOrigin = new URL(route.request().url()).origin;
+            return route.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"x"}' });
+        });
+
         await page.goto('/login');
-        const runtimeUrl = await page.evaluate(() => window['_env_']?.NEXT_PUBLIC_API_URL);
-        // In local dev without the script running, this might be undefined or the default
-        // We just want to ensure it doesn't crash the app.
-        expect(runtimeUrl).toBeDefined();
+        expect(await page.evaluate(() => window['_env_']?.NEXT_PUBLIC_API_URL)).toBeUndefined();
+
+        await page.getByLabel('Username').fill('u');
+        await page.getByLabel('Password', { exact: true }).fill('p');
+        await page.getByRole('button', { name: 'Sign in' }).click();
+
+        // The port the quickstart publishes, which is what somebody following it will have running.
+        await expect.poll(() => loginOrigin, { timeout: 10000 }).toBe('http://localhost:5005');
     });
 });

@@ -97,7 +97,7 @@ detection is never tripped. The access token lives in memory, not in local stora
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000, expects the API on http://localhost:5006
+npm run dev        # http://localhost:3000, expects the API on http://localhost:5005
 ```
 
 ```bash

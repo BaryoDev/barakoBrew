@@ -2,9 +2,13 @@ import axios from 'axios';
 
 export function getApiUrl(): string {
     return (
+        // Written by entrypoint.sh at container start, so a deployment can be repointed without a
+        // rebuild. Empty in the repository: a value committed here outranks the environment
+        // variable everything else documents.
         (typeof window !== 'undefined' && window._env_?.NEXT_PUBLIC_API_URL) ||
         process.env.NEXT_PUBLIC_API_URL ||
-        'http://localhost:5006'
+        // The port the quickstart publishes the API on. It was 5005 everywhere except here.
+        'http://localhost:5005'
     );
 }
 
