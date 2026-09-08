@@ -62,6 +62,16 @@ jobs:
             echo "::error::vitest discovered $COUNT tests, below the floor of 200"; exit 1; }
           echo "unit tests: $COUNT" >> "$GITHUB_STEP_SUMMARY"
 
+      # Every check above this one reads text. Images are not text, so nothing above can see what
+      # is inside them. The screenshots in the design handoff each arrived carrying a 5,758 byte
+      # C2PA manifest naming the tool that generated them, and every other gate was green.
+      #
+      # The whole tree, not the diff: the first run of this found metadata in a file that had been
+      # committed long before the change that added the check.
+      - name: Assets carry no provenance metadata
+        if: '!cancelled()'
+        run: python3 scripts/asset-provenance.py .
+
   audit:
     name: Audit dependencies
     if: github.event_name != 'schedule'

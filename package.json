@@ -11,6 +11,7 @@
         "start": "next start",
         "lint": "eslint",
         "test": "vitest",
+        "check:assets": "python3 scripts/asset-provenance.py .",
         "test:ui": "vitest --ui",
         "test:e2e": "playwright test",
         "test:e2e:ui": "playwright test --ui",
