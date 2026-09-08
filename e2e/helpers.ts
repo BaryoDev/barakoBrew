@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { SUPPORTED_CONTRACT } from '../src/lib/api-contract';
 
 // A structurally valid JWT the UI can decode (the client never verifies the signature). Lives here,
 // not in a *.spec.ts, because Playwright forbids one test file importing another.
@@ -23,9 +24,48 @@ export const MOCK_TOKEN = `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`;
  *
  * Call before page.goto.
  */
+/**
+ * The signed-out equivalent of {@link authed}: the API answers the bootstrap refresh with a 401,
+ * which is what really happens on the sign-in page, and carries its contract version while doing it.
+ *
+ * Needed because the console refuses to run against an API that has never reported a contract
+ * version, on the grounds that such an API predates the version that started reporting one. A spec
+ * that leaves the first response bare is simulating exactly that, and the console stops before the
+ * spec reaches its own assertions.
+ */
+export async function unauthed(page: Page) {
+    await page.route('**/api/auth/refresh', (route) =>
+        route.fulfill({
+            status: 401,
+            headers: {
+                'x-api-contract-version': String(SUPPORTED_CONTRACT.min),
+                'access-control-expose-headers': 'ETag,X-Api-Contract-Version',
+            },
+            json: { message: 'Unauthorized' },
+        })
+    );
+}
+
 export async function authed(page: Page) {
     await page.route('**/api/auth/refresh', (route) =>
         route.fulfill({
+            // The real API puts its contract version on every response, and the console refuses to
+            // run against one that has never reported it, on the grounds that such an API predates
+            // the version that started reporting. A fixture without it therefore looks like an API
+            // too old to drive, and the console stops before the spec gets anywhere.
+            //
+            // This is the first request any page makes, so setting it here answers the question for
+            // the whole run. It is not decoration: a fixture that omits what every real response
+            // carries is a fixture that disagrees with the server, which is the exact class of bug
+            // the unmocked pack in smoke/ exists to catch.
+            headers: {
+                'x-api-contract-version': String(SUPPORTED_CONTRACT.min),
+                // Exposed, because the console reads it from JavaScript and the API is a different
+                // origin. A fulfilled response still goes through the browser's CORS rules, so a
+                // header that is present but not exposed is invisible, which is exactly the bug
+                // that kept this check unbuildable until BaryoDev/barakoCMS#680.
+                'access-control-expose-headers': 'ETag,X-Api-Contract-Version',
+            },
             json: {
                 token: MOCK_TOKEN,
                 expiry: new Date(Date.now() + 900_000).toISOString(),
