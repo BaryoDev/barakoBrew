@@ -77,15 +77,17 @@ detection is never tripped. The access token lives in memory, not in local stora
 | --- | --- |
 | ![Workflows](assets/workflows.png) | ![Roles](assets/roles.png) |
 
-| Health | Dark mode |
+| Health | Per-field sensitivity |
 | --- | --- |
-| ![Health](assets/health.png) | ![Dark](assets/dark.png) |
+| ![Health](assets/health.png) | ![Field sensitivity](assets/field-sensitivity-list.png) |
 
 ## Stack
 
 - **Next.js 16** (App Router, React 19, standalone output)
 - **shadcn/ui** on Tailwind CSS v4. Every colour flows through theme tokens in
-  `src/app/globals.css` (warm paper light theme, roast dark theme)
+  `src/app/globals.css`. The theme is Signal: indigo on a near-white page, Sora for display and
+  Manrope for body, 14px panels. Light only, pinned in `src/app/layout.tsx`, because a Signal dark
+  palette has not been drawn
 - **Icons**: [Line Awesome by Icons8](https://icons8.com/line-awesome), vendored as inline-SVG
   React components in `src/components/icons/` (regenerate with `node scripts/gen-icons.mjs`)
 - **TanStack Query** for data, **axios** with auth and refresh interceptors (`src/lib/api.ts`)
