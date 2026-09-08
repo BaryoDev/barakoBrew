@@ -1,0 +1,36 @@
+# Who has to look at a change before it lands.
+#
+# Shaped after barakoCMS's: a catch-all, then explicit entries for the paths where a mistake is
+# most expensive. The explicit ones are redundant while the catch-all names the same person, and
+# they are kept anyway, so that narrowing the default later does not silently orphan them.
+#
+# The expensive paths here are not the API's. This is a browser client that ships as an image and
+# holds a session, so the costly mistakes are in what runs with repository credentials, what the
+# container does at start, and what decides whether the console will talk to a server at all.
+
+*                           @arnelirobles
+
+# CI, releases, and anything that runs with repository credentials. publish.yml alone touches a
+# GHCR token, Docker Hub credentials and the playground SSH key in one run.
+/.github/workflows/         @arnelirobles
+/.github/codeql/            @arnelirobles
+/scripts/                   @arnelirobles
+
+# Session-time execution surface on a contributor's machine. Nothing here yet, listed because the
+# moment there is, it should not arrive unreviewed.
+/.claude/                   @arnelirobles
+
+# The image and how it is configured at start. entrypoint.sh writes the file the browser reads its
+# API URL from, so a mistake here points the console at the wrong backend without changing a line
+# of application code.
+/Dockerfile                 @arnelirobles
+/entrypoint.sh              @arnelirobles
+/next.config.ts             @arnelirobles
+
+# Token handling and the refresh path. A wrong change here is a session bug for every user at once.
+/src/lib/api.ts             @arnelirobles
+/src/hooks/use-auth.ts      @arnelirobles
+
+# Whether the console agrees to run at all. Widening the supported contract range without meaning
+# to would let it drive an API it cannot, which is the failure this file exists to prevent.
+/src/lib/api-contract.ts    @arnelirobles
