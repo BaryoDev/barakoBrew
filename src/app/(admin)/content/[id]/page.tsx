@@ -105,6 +105,7 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
           status: status ?? content.status,
           version: content.version,
         },
+        etag: content.etag,
       },
       {
         onSuccess: () => toast.success(status === ContentStatus.Published ? 'Published' : 'Changes saved'),

@@ -3,6 +3,7 @@ import { api, type Paginated, type PageParams } from '@/lib/api';
 import type {
     ContentListItem,
     ContentDetail,
+    ContentDetailRead,
     ContentVersion,
     CreateContentRequest,
     UpdateContentRequest,
@@ -25,9 +26,12 @@ export function useContents(
 export function useContent(id: string) {
     return useQuery({
         queryKey: ['contents', 'detail', id],
-        queryFn: async () => {
+        queryFn: async (): Promise<ContentDetailRead> => {
             const response = await api.get<ContentDetail>(`/api/contents/${id}`);
-            return response.data;
+            // The ETag rides on the response headers, not in the body, and is what the save sends
+            // back as `If-Match`. Readable from a browser only because the API exposes it through
+            // CORS; without that header it is invisible to JavaScript and this is undefined.
+            return { ...response.data, etag: response.headers?.etag };
         },
         enabled: !!id,
     });
@@ -65,11 +69,28 @@ export function useUpdateContent() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async ({ id, data }: { id: string; data: UpdateContentRequest }) => {
-            const response = await api.put<{ id: string; version: number }>(`/api/contents/${id}`, {
-                id,
-                ...data,
-            });
+        mutationFn: async ({
+            id,
+            data,
+            etag,
+        }: {
+            id: string;
+            data: UpdateContentRequest;
+            etag?: string;
+        }) => {
+            // Both guards, on purpose. `If-Match` is the API's stronger one, bound to the
+            // document's own version; the `version` in the body is the older path and is what an
+            // API predating the ETag still checks. Sending both costs nothing and keeps a console
+            // pointed at an older server protected.
+            //
+            // Omitted entirely when there is no ETag rather than sent empty: `If-Match: ""` is
+            // refused as malformed with a 400, which would turn a working save into a broken one
+            // for every event-sourced type, since the server does not emit an ETag for those.
+            const response = await api.put<{ id: string; version: number }>(
+                `/api/contents/${id}`,
+                { id, ...data },
+                etag ? { headers: { 'If-Match': etag } } : undefined
+            );
             return response.data;
         },
         onSuccess: (_data, { id }) => {
