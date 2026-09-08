@@ -1,5 +1,14 @@
 # Audit: the barakoBrew 2026 redesign against the admin as it stands
 
+> **On this revision.** `README.md` and `github.md` here are the 8 Sept 2026 handoff, which
+> replaced the 1 Sept one: the site landing is gone, the deliverable prototype is
+> `barakoBrew - Admin design.dc.html` rather than the superseded Signal file, every admin screenshot
+> shifted down one, a philosophy and resources screen was added as `09-`, the builder carries all 20
+> field types instead of 8, and Scheduled is accent everywhere. The handoff is kept as delivered, so
+> it still writes `admin/src/...` for paths that are `src/...` here, and still describes the theme
+> swap and the sidebar as pending when both shipped. Where it contradicts the repository, the
+> repository wins.
+
 Companion to `README.md` in this directory, which is the design contract. This file answers one
 question per screen: is the change free with the token swap, is it a component rewrite, or does it
 need a route or a server change.
