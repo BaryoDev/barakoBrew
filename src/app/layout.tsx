@@ -32,6 +32,7 @@ declare global {
 }
 
 import QueryProvider from "@/components/query-provider";
+import { ContractGate } from "@/components/contract-gate";
 import { ThemeProvider } from "@/components/theme-provider";
 import ErrorReporter from "@/components/error-reporter";
 import { Toaster } from "sonner";
@@ -68,7 +69,10 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
           <QueryProvider>
             <ErrorReporter />
-            {children}
+            {/* Outside the routes, so it covers the sign-in page too: the API reports its contract
+                version on every response, 401s included, so the mismatch is known before anybody
+                has typed a password. */}
+            <ContractGate>{children}</ContractGate>
             <Toaster richColors position="top-right" />
           </QueryProvider>
         </ThemeProvider>

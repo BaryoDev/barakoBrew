@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { MOCK_TOKEN, stubShell, EMPTY_PAGE, pageOf, stubContentTypes } from './helpers';
+import { MOCK_TOKEN, stubShell, EMPTY_PAGE, pageOf, stubContentTypes, unauthed } from './helpers';
 
 
 test.describe('Login & Authentication', () => {
@@ -7,6 +7,9 @@ test.describe('Login & Authentication', () => {
         await page.addInitScript(() => {
             window.localStorage.clear();
         });
+        // The sign-in page still talks to the API before anybody types anything, and the console
+        // checks the contract version on whatever comes back.
+        await unauthed(page);
     });
 
     test('should show login page when unauthenticated', async ({ page }) => {

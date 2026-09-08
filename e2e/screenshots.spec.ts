@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { authed, stubShell, pageOf, stubContentTypes } from './helpers';
+import { authed, stubShell, pageOf, stubContentTypes, unauthed } from './helpers';
 
 /**
  * Release screenshots. Not a behaviour test — it drives the real UI to real states
@@ -76,6 +76,11 @@ test('entry form with the new field types', async ({ page }, testInfo) => {
 });
 
 test('sign in', async ({ page }, testInfo) => {
+    // The console checks the API's contract version on the first response, before anybody signs in,
+    // and refuses to run against an API that reports none. Answer the bootstrap refresh the way a
+    // real signed-out load is answered.
+    await unauthed(page);
+
     // The GitHub button only renders when the deployment reports the provider, so a shot of the
     // default deployment would not show one. This stubs the answer an ExternalAuth install gives.
     await page.route('**/api/auth/providers', (r) =>

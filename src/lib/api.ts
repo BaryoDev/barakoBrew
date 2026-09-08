@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { CONTRACT_HEADER, recordContractVersion } from './api-contract';
 
 export function getApiUrl(): string {
     return (
@@ -118,14 +119,21 @@ async function refreshAccessToken(): Promise<string | null> {
         // cannot read it, which is the entire point: an XSS arriving after sign-in has nothing to
         // steal. The response still contains a refresh token for non-browser callers, and it is
         // deliberately not stored.
-        const { data } = await axios.post(
+        const response = await axios.post(
             `${getApiUrl()}/api/auth/refresh`,
             {},
             { withCredentials: true, headers: tenant ? { 'X-Tenant': tenant } : undefined },
         );
-        tokenStore.set(data.token);
-        return data.token as string;
-    } catch {
+        // This call goes through raw axios rather than the instance, deliberately, so it cannot
+        // recurse through the 401 handler below. That also means it misses the interceptor that
+        // records the contract version, and it is often the very first request a page makes.
+        recordContractVersion(response.headers?.[CONTRACT_HEADER]);
+        tokenStore.set(response.data.token);
+        return response.data.token as string;
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+            recordContractVersion(error.response.headers?.[CONTRACT_HEADER]);
+        }
         tokenStore.clear();
         return null;
     }
@@ -160,9 +168,20 @@ export function __resetSessionBootstrapForTests() {
     bootstrapPromise = null;
 }
 
+// Every response, success or failure, carries the API's contract version, so this is where the
+// console learns whether it fits the server it is pointed at. Reading it here rather than from one
+// call at startup is what makes a rolling upgrade visible: the API can change under a live session
+// and the next response says so.
+//
+// Recorded before anything else happens to the response, including the 401 refresh path below, so
+// an API too old to speak this console's contract is noticed even when every call is failing.
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        recordContractVersion(response.headers?.[CONTRACT_HEADER]);
+        return response;
+    },
     async (error) => {
+        if (error.response) recordContractVersion(error.response.headers?.[CONTRACT_HEADER]);
         const original = error.config;
         if (
             error.response?.status === 401 &&
