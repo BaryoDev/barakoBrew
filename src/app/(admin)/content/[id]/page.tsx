@@ -13,7 +13,7 @@ import {
   useScheduleContent,
   useUpdateContentStatus,
 } from '@/hooks/use-contents';
-import { apiErrorMessage } from '@/lib/api';
+import { apiErrorMessage, isConflict } from '@/lib/api';
 import { ContentStatus, SENSITIVITY_META, statusMeta } from '@/types/content';
 import type { ContentDetail } from '@/types/content';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -30,25 +30,63 @@ import { IconArchive, IconHistory, IconRollback } from '@/components/icons';
 import { format } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
 
+/**
+ * Whether the form still holds exactly what was seeded into it.
+ *
+ * Identity per key, not a deep compare. Seeding sets `values` to the server object itself and
+ * DynamicForm replaces one key at a time, so an untouched field keeps its reference however deeply
+ * nested it is, and a touched one does not.
+ */
+function sameValues(a: Record<string, unknown>, b: Record<string, unknown>) {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+}
+
 export default function ContentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const { user } = useAuth();
   const { data: schemas } = useSchemas();
-  const { data: content, isLoading } = useContent(id);
+  const { data: content, isLoading, refetch: refetchContent } = useContent(id);
   const updateContent = useUpdateContent();
   const updateStatus = useUpdateContentStatus();
 
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [tab, setTab] = useState('edit');
 
-  // Re-seed the form whenever a different server version arrives (initial load,
-  // rollback, concurrent edit) — render-time state adjustment, not an effect.
-  const [seededVersion, setSeededVersion] = useState<number | null>(null);
-  if (content && seededVersion !== content.version) {
-    setSeededVersion(content.version);
-    setValues(content.data);
+  // What was last seeded from the server, kept whole so "has this editor changed anything" is
+  // answerable without comparing against a value that moves underneath the question.
+  //
+  // Re-seeding on any new version is right for a fresh load and for a rollback, and was wrong for
+  // the case it also caught: a background refetch. `staleTime` is a minute and TanStack refetches
+  // on window focus, so an editor who looked away and came back had everything they had typed
+  // replaced by whoever saved in between, with no error and no race. A newer version now re-seeds
+  // only when there is nothing to lose; otherwise it raises a conflict and the editor decides.
+  const [seeded, setSeeded] = useState<{ version: number; data: Record<string, unknown> } | null>(null);
+  const [conflict, setConflict] = useState(false);
+
+  const dirty = seeded !== null && !sameValues(values, seeded.data);
+
+  if (content && seeded?.version !== content.version) {
+    if (!dirty) {
+      setSeeded({ version: content.version, data: content.data });
+      setValues(content.data);
+      if (conflict) setConflict(false);
+    } else if (!conflict) {
+      setConflict(true);
+    }
   }
+
+  // Takes the server's version and discards the editor's, which is why nothing does it on their
+  // behalf. Reads through to the server rather than trusting the cache, because the 412 path gets
+  // here with a cached copy that is already known to be behind.
+  const takeTheirVersion = async () => {
+    const fresh = (await refetchContent()).data ?? content;
+    if (!fresh) return;
+    setSeeded({ version: fresh.version, data: fresh.data });
+    setValues(fresh.data);
+    setConflict(false);
+  };
 
   const schema = schemas?.find((s) => s.name === content?.contentType);
   const canRollback = user?.roles.some((r) => r === 'SuperAdmin' || r === 'Admin') ?? false;
@@ -70,7 +108,12 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
       },
       {
         onSuccess: () => toast.success(status === ContentStatus.Published ? 'Published' : 'Changes saved'),
-        onError: (error) => toast.error(apiErrorMessage(error, 'The entry could not be saved.')),
+        onError: (error) => {
+          // A refused save is the one failure where a toast is not enough: it is gone in seconds
+          // and it is the moment somebody has to choose between two versions of the entry.
+          if (isConflict(error)) setConflict(true);
+          toast.error(apiErrorMessage(error, 'The entry could not be saved.'));
+        },
       }
     );
   };
@@ -80,7 +123,10 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
       { id, status },
       {
         onSuccess: () => toast.success(label),
-        onError: (error) => toast.error(apiErrorMessage(error, 'The status could not be changed.')),
+        onError: (error) => {
+          if (isConflict(error)) setConflict(true);
+          toast.error(apiErrorMessage(error, 'The status could not be changed.'));
+        },
       }
     );
   };
@@ -121,6 +167,23 @@ export default function ContentDetailPage({ params }: { params: Promise<{ id: st
           </div>
         }
       />
+
+      {conflict && (
+        <div
+          role="alert"
+          className="border-warning/40 bg-[var(--warning-soft)] text-warning mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
+        >
+          <p className="text-sm font-semibold">
+            This entry changed while you were editing.{' '}
+            <span className="font-medium">
+              Nothing you typed has been lost, and nothing has been saved.
+            </span>
+          </p>
+          <Button size="sm" variant="outline" onClick={takeTheirVersion} disabled={updateContent.isPending}>
+            Reload their version
+          </Button>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

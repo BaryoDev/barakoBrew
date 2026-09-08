@@ -210,6 +210,17 @@ export interface PageParams {
     sortOrder?: 'asc' | 'desc';
 }
 
+/**
+ * A write the server refused because the thing being written has moved on since it was read.
+ *
+ * The API answers 412 for both of its concurrency checks: a stale `version` echoed in the body, and
+ * a stale `If-Match`. The caller has to be able to tell that apart from every other failure, because
+ * it is the one where the editor's own text is still worth something.
+ */
+export function isConflict(error: unknown): boolean {
+    return axios.isAxiosError(error) && error.response?.status === 412;
+}
+
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
     if (axios.isAxiosError(error)) {
         const data = error.response?.data;
