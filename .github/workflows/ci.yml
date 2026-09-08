@@ -145,22 +145,39 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      # WebKit as well as Chromium, because Mobile Safari is the only WebKit project and it is the
+      # one that covers the browser this console is otherwise never tested in.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
 
       # The job name promises an axe pass. A renamed or deleted accessibility spec would leave the
       # promise and remove the pass, so the listing is checked before anything runs.
-      - name: The accessibility spec is in the run
+      #
+      # The project list is checked for the same reason. `--project` fails silently by matching
+      # nothing, so a typo or a renamed project would quietly shrink the run to whatever was left,
+      # and a green tick would say the same thing either way.
+      - name: The accessibility spec and every project are in the run
         run: |
           set -euo pipefail
-          npx playwright test --list --project=chromium > listing.txt
+          npx playwright test --list > listing.txt
           grep -q 'accessibility.spec.ts' listing.txt || {
             echo "::error::e2e/accessibility.spec.ts is not in the Playwright listing; the axe pass would not run"; exit 1; }
 
+          for project in chromium 'Mobile Chrome' 'Mobile Safari'; do
+            grep -q "\[$project\]" listing.txt || {
+              echo "::error::no tests listed for project '$project'"; exit 1; }
+          done
+
       # Drives the real UI against a mocked API to catch the class of bug unit tests miss:
       # empty-vs-error states, routing, forms, per-field-type controls.
-      - name: E2E (full pack)
-        run: npx playwright test --project=chromium
+      #
+      # Every project, not just chromium. The config has always declared three, and running one of
+      # them meant the config described coverage nobody had: anyone reading it, or running
+      # `npx playwright test` locally with no argument, got a different answer from CI. Measured
+      # before switching it on rather than assumed: all three pass, 199 tests in 1.1 minutes against
+      # 70 in 28 seconds.
+      - name: E2E (full pack, every project)
+        run: npx playwright test
 
       - uses: actions/upload-artifact@v7
         if: failure()
