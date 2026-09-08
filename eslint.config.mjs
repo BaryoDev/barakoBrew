@@ -54,6 +54,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // `npm run lint` passes no path, so ESLint reads the whole tree. Everything under docs/ is
+    // reference material rather than source: the design handoff ships vendored single-file
+    // prototypes whose runtime is a bundled React that still calls ReactDOM.render and assigns to
+    // `module`. Linting them says nothing about this codebase and fails the build.
+    "docs/**",
   ]),
 ]);
 

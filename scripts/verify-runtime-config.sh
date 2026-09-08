@@ -4,7 +4,7 @@
 # that environment variables are correctly translated into public/env-config.js
 
 # 1. Setup
-ADMIN_DIR="/Users/arnelirobles/barakoCMS/admin"
+ADMIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP_ENV_CONFIG="$ADMIN_DIR/public/env-config.js.bak"
 
 # Backup existing config if it exists

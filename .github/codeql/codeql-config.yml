@@ -1,0 +1,11 @@
+name: barakoBrew
+
+# The same scope problem ESLint had. CodeQL reads every file it can parse, and `docs/` holds the
+# design handoff: vendored single-file prototypes carrying a bundled React runtime nobody here
+# wrote and nothing here serves. Its first run reported a missing origin check on a postMessage
+# handler inside one of them.
+#
+# A finding in reference material is not a finding about this console, and a Security tab that
+# carries one teaches people to skim the tab. Scope the analysis to what ships.
+paths-ignore:
+  - docs

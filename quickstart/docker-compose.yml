@@ -1,0 +1,70 @@
+# barakoBrew quickstart: Postgres, the barakoCMS API (the full suite image) and the console, from
+# published images. Nothing to build.
+#
+#   1.  cp .env.example .env
+#   2.  edit .env  (at minimum: DB_PASSWORD, JWT_KEY, ADMIN_PASSWORD)
+#   3.  docker compose up -d
+#
+# Console:   http://localhost:${ADMIN_PORT:-3000}
+# API:       http://localhost:${API_PORT:-5005}
+#
+# The API image carries every module; each stays off or on a mock until its keys are set. The API
+# repository's quickstart lists them: https://github.com/BaryoDev/barakoCMS/tree/master/quickstart
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-barakocms}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    # The suite: core plus every module. For the lean core swap in ghcr.io/baryodev/barako-cms-decaf.
+    image: ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-5005}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=${DB_NAME:-barakocms};Username=${DB_USER:-postgres};Password=${DB_PASSWORD}"
+      # Must be 32+ characters or the API refuses to start.
+      JWT__Key: ${JWT_KEY:?set a 32+ char JWT_KEY in .env}
+      InitialAdmin__Username: ${ADMIN_USERNAME:-admin}
+      InitialAdmin__Password: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      # The console's origin. The browser talks to the API directly, so this has to match where the
+      # console is served from.
+      CORS__AllowedOrigins: ${ALLOWED_ORIGINS:-http://localhost:${ADMIN_PORT:-3000}}
+      Seed__DemoContent: ${SEED_DEMO_CONTENT:-false}
+      Swagger__Enabled: ${SWAGGER_ENABLED:-false}
+      # The public URL of this deployment, used for every absolute link the API hands out. Leave it
+      # unset on localhost.
+      App__BaseUrl: ${APP_BASE_URL:-}
+      AllowedHosts: ${ALLOWED_HOSTS:-*}
+      ForwardedHeaders__Enabled: ${FORWARDED_HEADERS_ENABLED:-false}
+      ForwardedHeaders__KnownNetworks__0: ${TRUSTED_PROXY_NETWORK:-}
+
+  console:
+    image: ghcr.io/baryodev/barako-admin:${BARAKO_CONSOLE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${ADMIN_PORT:-3000}:3000"
+    environment:
+      # Where the browser reaches the API. Read at container start, so repointing is a restart.
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:${API_PORT:-5005}}
+
+volumes:
+  pgdata:

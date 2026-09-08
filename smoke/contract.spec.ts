@@ -147,6 +147,48 @@ test('the content list renders whatever the server actually returns', async () =
 });
 
 /**
+ * The History panel shows the entry's history.
+ *
+ * This is the worked example. It read `versions` from a response that returns `items`, so it
+ * rendered an empty list, which is indistinguishable from an entry that has no history. Creating
+ * the entry here means there is history to show, so an empty panel is unambiguous.
+ */
+test('the history panel shows history for an entry that has some', async () => {
+    await goToEntries();
+
+    // Asserted, not skipped. scripts/smoke-check.sh seeds an entry and fails if the API does not
+    // report it, so an empty table here means the admin cannot read the list rather than that there
+    // is nothing to read. The first version of this skipped on an empty table, which quietly turned
+    // the one test this whole pack exists for into a no-op: it reported 4 passed, 1 skipped, and
+    // the skip was the worked example.
+    const rows = page.getByRole('row');
+    await expect
+        .poll(async () => await rows.count(), { timeout: 20_000 })
+        .toBeGreaterThan(1);
+
+    await rows.nth(1).click();
+    await page.getByRole('tab', { name: /history/i }).click();
+
+    // Every entry has at least its own creation, so a history panel with nothing in it means the
+    // client and the server disagree about the shape rather than that nothing has happened.
+    //
+    // Asserted positively, on a rendered row. The negative assertions below cannot carry this on
+    // their own: absent text is also what a still-loading panel looks like, so they pass before the
+    // response has arrived. The first version of this checked for "no history" and "nothing here
+    // yet", neither of which the panel says. Its empty state reads "No earlier versions recorded.",
+    // so the check would have passed on the empty render it was written to catch.
+    const historyEntries = page
+        .locator('ol > li')
+        .filter({ hasText: /Created|Edited|Status set to|Scheduling changed|Sensitivity/ });
+    await expect
+        .poll(async () => await historyEntries.count(), { timeout: 20_000 })
+        .toBeGreaterThan(0);
+
+    await expect(page.locator('body')).not.toContainText(/No earlier versions recorded/i);
+    await expect(page.locator('body')).not.toContainText('[object Object]');
+});
+
+/**
  * A status reaches the browser as a name.
  *
  * `ContentStatus` was numeric on both sides, transcribed. `Draft` was `0`, which is falsy, so any
@@ -178,35 +220,4 @@ test('a content status crosses the wire as a name, not a number', async ({ reque
 
     expect(typeof body.items[0].status).toBe('string');
     expect(['Draft', 'Published', 'Archived', 'Scheduled']).toContain(body.items[0].status);
-});
-
-/**
- * The History panel shows the entry's history.
- *
- * This is the worked example. It read `versions` from a response that returns `items`, so it
- * rendered an empty list, which is indistinguishable from an entry that has no history. Creating
- * the entry here means there is history to show, so an empty panel is unambiguous.
- */
-test('the history panel shows history for an entry that has some', async () => {
-    await goToEntries();
-
-    // Asserted, not skipped. scripts/smoke-check.sh seeds an entry and fails if the API does not
-    // report it, so an empty table here means the admin cannot read the list rather than that there
-    // is nothing to read. The first version of this skipped on an empty table, which quietly turned
-    // the one test this whole pack exists for into a no-op: it reported 4 passed, 1 skipped, and
-    // the skip was the worked example.
-    const rows = page.getByRole('row');
-    await expect
-        .poll(async () => await rows.count(), { timeout: 20_000 })
-        .toBeGreaterThan(1);
-
-    await rows.nth(1).click();
-    await page.getByRole('tab', { name: /history/i }).click();
-
-    // Every entry has at least its own creation, so an empty history panel here means the client
-    // and the server disagree about the shape rather than that nothing has happened.
-    await expect(page.locator('body')).not.toContainText(/no history|nothing here yet/i, {
-        timeout: 20_000,
-    });
-    await expect(page.locator('body')).not.toContainText('[object Object]');
 });

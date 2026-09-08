@@ -26,7 +26,7 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Optional sub-path (e.g. /barakocms) when served behind a shared reverse proxy.
-# Must be baked in at build time — Next.js resolves basePath during the build.
+# Must be baked in at build time. Next.js resolves basePath during the build.
 ARG NEXT_BASE_PATH
 ENV NEXT_BASE_PATH=$NEXT_BASE_PATH
 
@@ -71,7 +71,7 @@ COPY --from=builder /app/public ./public
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
 
-# Automatically leverage output traces to reduce image size
+# Copy only the output traces, which keeps the image small
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static

@@ -1,0 +1,93 @@
+name: Bug report
+description: The console behaves differently than it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. The console talks to a separate API, so the question that
+        usually decides where a bug lives is whether the same action works against the API
+        directly. If you can check that before filing, please say so below.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw on screen, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that shows it, starting from which screen you were on.
+      placeholder: |
+        1. Open Entries
+        2. Filter by ...
+        3. The table shows ... , expected ...
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: The console version, and the API version it is pointed at. Both are shown in the console.
+      placeholder: "barakoBrew 1.0.0 against barakoCMS 4.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Sign in, sessions or MFA
+        - Entries and the entry editor
+        - Content types
+        - Workflows and runs
+        - Analytics
+        - Users, roles and groups
+        - Tenants and switching
+        - Settings, connectors or requests
+        - A module screen (say which below)
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api-direct
+    attributes:
+      label: Does the same thing work against the API directly?
+      description: A curl of the same endpoint is enough. This decides whether the bug is here or in barakoCMS.
+      options:
+        - The API is fine, only the console is wrong
+        - The API fails the same way (this probably belongs in barakoCMS)
+        - Have not checked
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser and version, OS, and how the console is running (image tag, or npm run dev).
+      placeholder: "Firefox 141, macOS 15, ghcr.io/baryodev/barako-admin:1.0.0"
+
+  - type: textarea
+    id: console-output
+    attributes:
+      label: Browser console and failing request
+      description: |
+        The browser console output, and the request and response from the network tab.
+        **Check it first**, do not include tokens, cookies, or real user data.
+      render: text
+
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Before you post
+      options:
+        - label: This is not a security vulnerability. (If it is, follow [SECURITY.md](https://github.com/BaryoDev/barakoBrew/blob/master/SECURITY.md) instead of filing publicly.)
+          required: true
