@@ -36,20 +36,30 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Three sequential steps, so a failure in the first would hide the state of the other two.
+      # That is how the console's typecheck and unit suite stayed invisible for the whole life of
+      # this repository: lint failed on a vendored file, the two steps after it were skipped, and
+      # the setup was abandoned without anyone learning whether they passed.
       - name: Typecheck
+        if: '!cancelled()'
         run: npx tsc --noEmit
 
       # A run that discovers no test files exits zero, so the count is asserted rather than the
       # status. Read from the JSON reporter, not the console output: the human output is
       # ANSI-coloured under CI and not under a local pipe, so a grep passes on a laptop and fails
       # on the runner.
+      #
+      # A floor rather than `> 0`, because `> 0` stays green when a whole directory drops out of
+      # the glob. 238 tests in 20 files pass today; 200 leaves room to delete a file on purpose and
+      # still fails if a directory disappears.
       - name: Unit tests
+        if: '!cancelled()'
         run: |
           set -o pipefail
           npx vitest run --reporter=default --reporter=json --outputFile.json=unit-results.json
           COUNT=$(jq -r '.numTotalTests // 0' unit-results.json)
-          [ "$COUNT" -gt 0 ] 2>/dev/null || {
-            echo "::error::vitest discovered no tests (numTotalTests=$COUNT)"; exit 1; }
+          [ "$COUNT" -ge 200 ] 2>/dev/null || {
+            echo "::error::vitest discovered $COUNT tests, below the floor of 200"; exit 1; }
           echo "unit tests: $COUNT" >> "$GITHUB_STEP_SUMMARY"
 
   audit:
