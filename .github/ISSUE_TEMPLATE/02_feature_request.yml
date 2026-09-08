@@ -1,0 +1,43 @@
+name: Feature request
+description: A screen, a control, or a capability the console should have
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The console renders what the API exposes. If the thing you want needs data the API does
+        not return yet, say so, because that half is filed in barakoCMS and the two have to land
+        in order.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task, not the control. What is hard or impossible today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should the console do instead?
+      description: A screen, a control, a default. Sketches and screenshots from other tools help.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api
+    attributes:
+      label: Does the API already return what this needs?
+      options:
+        - Yes, the data is already there
+        - No, the API needs a change too
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?
+      description: Including calling the API by hand, if that is the answer.
