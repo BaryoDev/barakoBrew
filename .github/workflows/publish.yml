@@ -33,10 +33,13 @@ jobs:
           case "$GITHUB_REF" in
             refs/tags/v*)
               V="${GITHUB_REF#refs/tags/v}"
-              case "$V" in
-                [0-9]*.[0-9]*.[0-9]*) ;;
-                *) echo "::error::tag v$V is not a version"; exit 1 ;;
-              esac
+              # Anchored, because a `case` glob is not. `[0-9]*.[0-9]*.[0-9]*` matches
+              # `1.2.3$(id)` and a value with a newline in it, and this one reaches a shell twice
+              # more: the tag list the image is pushed under, and the playground summary. A
+              # workflow holding registry credentials and an SSH key should not take a version it
+              # has not read.
+              [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] || {
+                echo "::error::tag v$V is not a version"; exit 1; }
               echo "version=$V" >> "$GITHUB_OUTPUT"
               echo "is_release=true" >> "$GITHUB_OUTPUT"
               ;;

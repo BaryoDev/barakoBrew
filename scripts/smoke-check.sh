@@ -116,18 +116,24 @@ docker run -d --name "$APIC" --network "$NET" -p "${API_PORT}:8080" \
     -e Kubernetes__Enabled=false \
     "$API_IMAGE" >/dev/null
 
+# Every request here is bounded. A container that accepts the connection and then sends nothing
+# leaves an unbounded curl waiting, and the readiness loop stops being a loop: it blocks on the
+# first attempt until the job's own timeout, which reports as "the job hung" rather than "the API
+# did not answer".
+CURL=(curl -s --connect-timeout 5 --max-time 15)
+
 for _ in $(seq 1 60); do
-    [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/health" 2>/dev/null)" = "200" ] && break
+    [ "$("${CURL[@]}" -o /dev/null -w '%{http_code}' "$API/health" 2>/dev/null)" = "200" ] && break
     sleep 2
 done
-[ "$(curl -s -o /dev/null -w '%{http_code}' "$API/health" 2>/dev/null)" = "200" ] || fail "the API never became healthy"
+[ "$("${CURL[@]}" -o /dev/null -w '%{http_code}' "$API/health" 2>/dev/null)" = "200" ] || fail "the API never became healthy"
 # Health answered, but by what? If the container we started is gone, something else is on that port.
 [ "$(docker inspect -f '{{.State.Running}}' "$APIC" 2>/dev/null)" = "true" ] || fail "the API container exited; whatever answered /health is not it"
-BUILD=$(curl -s "$API/health/build" 2>/dev/null || true)
+BUILD=$("${CURL[@]}" "$API/health/build" 2>/dev/null || true)
 echo "API image reports build: ${BUILD:-unknown}"
 
 step "seeding one content type and one entry"
-TOKEN=$(curl -s -X POST "$API/api/auth/login" -H 'Content-Type: application/json' \
+TOKEN=$("${CURL[@]}" -X POST "$API/api/auth/login" -H 'Content-Type: application/json' \
     -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))')
 [ -n "$TOKEN" ] || fail "could not log in as the seeded administrator, so the smoke run would test nothing"
@@ -137,17 +143,22 @@ TOKEN=$(curl -s -X POST "$API/api/auth/login" -H 'Content-Type: application/json
 # memory rather than localStorage, deliberately, so there is nothing for a test to read out of the
 # browser.
 
-curl -s -o /dev/null -X POST "$API/api/content-types" -H "Authorization: Bearer $TOKEN" \
+# --fail, because curl reports a 400 or a 401 as a successful transfer. Without it a refused seed
+# is only noticed at the count check below, which then blames the console for an empty list when
+# the entry was never created. Say which call failed, at the point it fails.
+"${CURL[@]}" --fail-with-body -o /dev/null -X POST "$API/api/content-types" -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' \
-    -d '{"name":"smokepost","displayName":"Smoke Post","fields":[{"name":"Title","type":"string"}]}'
+    -d '{"name":"smokepost","displayName":"Smoke Post","fields":[{"name":"Title","type":"string"}]}' \
+    || fail "the API refused the seed content type, so nothing below would be testing the console"
 
-curl -s -o /dev/null -X POST "$API/api/contents" -H "Authorization: Bearer $TOKEN" \
+"${CURL[@]}" --fail-with-body -o /dev/null -X POST "$API/api/contents" -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' \
-    -d '{"contentType":"smokepost","data":{"Title":"Smoke entry"},"status":"Draft"}'
+    -d '{"contentType":"smokepost","data":{"Title":"Smoke entry"},"status":"Draft"}' \
+    || fail "the API refused the seed entry, so nothing below would be testing the console"
 
 # The list has to have something in it, or "no rows" and "the client cannot read the envelope" look
 # the same from the browser, which is the ambiguity this whole script exists to remove.
-COUNT=$(curl -s "$API/api/contents?page=1&pageSize=5" -H "Authorization: Bearer $TOKEN" \
+COUNT=$("${CURL[@]}" "$API/api/contents?page=1&pageSize=5" -H "Authorization: Bearer $TOKEN" \
     | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("items",[])))')
 [ "${COUNT:-0}" -gt 0 ] || fail "seeding produced no content, so an empty console list would prove nothing"
 echo "seeded $COUNT entr(y|ies)"
@@ -155,7 +166,7 @@ echo "seeded $COUNT entr(y|ies)"
 # The browser sends X-Tenant. If the seeded entry is invisible under that header, the console shows
 # an empty list while the API has content, and every assertion below about the list would be
 # describing the empty state rather than the contract.
-TENANTED=$(curl -s "$API/api/contents?page=1&pageSize=5" -H "Authorization: Bearer $TOKEN" -H "X-Tenant: default" \
+TENANTED=$("${CURL[@]}" "$API/api/contents?page=1&pageSize=5" -H "Authorization: Bearer $TOKEN" -H "X-Tenant: default" \
     | python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("items",[])))')
 [ "${TENANTED:-0}" -gt 0 ] || fail "the seeded entry is not visible with X-Tenant: default, which is the header the console sends. Seeding and reading disagree about the tenant."
 echo "visible under X-Tenant: default: $TENANTED"
@@ -173,10 +184,10 @@ cp -R .next/static ".next/standalone/.next/static"
 ADMIN_PID=$!
 
 for _ in $(seq 1 60); do
-    curl -s -o /dev/null "http://127.0.0.1:${ADMIN_PORT}/login" && break
+    "${CURL[@]}" -o /dev/null "http://127.0.0.1:${ADMIN_PORT}/login" && break
     sleep 2
 done
-curl -s -o /dev/null "http://127.0.0.1:${ADMIN_PORT}/login" || fail "the console never started"
+"${CURL[@]}" -o /dev/null "http://127.0.0.1:${ADMIN_PORT}/login" || fail "the console never started"
 kill -0 "$ADMIN_PID" 2>/dev/null || fail "the console process exited; whatever answered is not it"
 
 step "running the unmocked pack"

@@ -45,8 +45,9 @@ services:
       InitialAdmin__Password: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
       # The console's origin. The browser talks to the API directly, so this has to match where the
       # console is served from.
-      CORS__AllowedOrigins: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      CORS__AllowedOrigins: ${ALLOWED_ORIGINS:-http://localhost:${ADMIN_PORT:-3000}}
       Seed__DemoContent: ${SEED_DEMO_CONTENT:-false}
+      Swagger__Enabled: ${SWAGGER_ENABLED:-false}
       # The public URL of this deployment, used for every absolute link the API hands out. Leave it
       # unset on localhost.
       App__BaseUrl: ${APP_BASE_URL:-}
@@ -63,7 +64,7 @@ services:
       - "${ADMIN_PORT:-3000}:3000"
     environment:
       # Where the browser reaches the API. Read at container start, so repointing is a restart.
-      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:5005}
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:${API_PORT:-5005}}
 
 volumes:
   pgdata:

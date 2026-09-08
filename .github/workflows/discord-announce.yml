@@ -13,6 +13,11 @@ on:
       version:
         required: true
         type: string
+    # Declared, so a caller can pass it by name. Without this block the only way in is
+    # `secrets: inherit`, and a caller that names the secret is rejected before the job starts.
+    secrets:
+      DISCORD_WEBHOOK:
+        required: true
   workflow_dispatch:
     inputs:
       version:
@@ -54,7 +59,16 @@ jobs:
             '{content: ("**" + $t + "** released"), embeds: [{title: $t, description: $d, color: 35514}]}' \
             > payload.json
 
-          code=$(curl -s -o /dev/null -w "%{http_code}" \
+          # The webhook carries the payload to a third party, so refuse a non-HTTPS value rather
+          # than posting a release announcement in the clear because a secret was pasted wrong.
+          case "$DISCORD_WEBHOOK" in
+            https://*) ;;
+            *) echo "::error::DISCORD_WEBHOOK must be an https URL"; exit 1 ;;
+          esac
+
+          # Bounded, or a webhook that accepts the connection and stalls holds the job until its
+          # own timeout, and the failure reads as a hung workflow rather than an unreachable Discord.
+          code=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w "%{http_code}" \
             -H "Content-Type: application/json" -X POST --data @payload.json "$DISCORD_WEBHOOK")
           echo "Discord responded $code"
           [ "$code" = "204" ] || { echo "Non-204 from Discord: $code" >&2; exit 1; }

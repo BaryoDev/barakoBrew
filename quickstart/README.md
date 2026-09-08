@@ -17,7 +17,7 @@ Then open:
 | Console | http://localhost:3000 |
 | API | http://localhost:5005 |
 | API health | http://localhost:5005/health |
-| Swagger | http://localhost:5005/swagger, when `Swagger__Enabled=true` on the API |
+| Swagger | http://localhost:5005/swagger, when `SWAGGER_ENABLED=true` in your `.env` |
 
 Sign in to the console with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
 
@@ -56,8 +56,11 @@ upgrades.
 
 ## Data
 
-Postgres data lives in the `pgdata` volume. Back it up with `pg_dump`:
+Postgres data lives in the `pgdata` volume. Back it up with `pg_dump`, reading the database
+name and user from the container rather than repeating them, so a changed `DB_NAME` or
+`DB_USER` cannot dump the wrong database:
 
 ```bash
-docker compose exec postgres pg_dump -U postgres barakocms > backup.sql
+docker compose exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup.sql
 ```

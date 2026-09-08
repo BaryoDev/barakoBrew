@@ -169,11 +169,22 @@ test('the history panel shows history for an entry that has some', async () => {
     await rows.nth(1).click();
     await page.getByRole('tab', { name: /history/i }).click();
 
-    // Every entry has at least its own creation, so an empty history panel here means the client
-    // and the server disagree about the shape rather than that nothing has happened.
-    await expect(page.locator('body')).not.toContainText(/no history|nothing here yet/i, {
-        timeout: 20_000,
-    });
+    // Every entry has at least its own creation, so a history panel with nothing in it means the
+    // client and the server disagree about the shape rather than that nothing has happened.
+    //
+    // Asserted positively, on a rendered row. The negative assertions below cannot carry this on
+    // their own: absent text is also what a still-loading panel looks like, so they pass before the
+    // response has arrived. The first version of this checked for "no history" and "nothing here
+    // yet", neither of which the panel says. Its empty state reads "No earlier versions recorded.",
+    // so the check would have passed on the empty render it was written to catch.
+    const historyEntries = page
+        .locator('ol > li')
+        .filter({ hasText: /Created|Edited|Status set to|Scheduling changed|Sensitivity/ });
+    await expect
+        .poll(async () => await historyEntries.count(), { timeout: 20_000 })
+        .toBeGreaterThan(0);
+
+    await expect(page.locator('body')).not.toContainText(/No earlier versions recorded/i);
     await expect(page.locator('body')).not.toContainText('[object Object]');
 });
 
