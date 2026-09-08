@@ -149,6 +149,13 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       IS_RELEASE: ${{ needs.version.outputs.is_release }}
     steps:
+      # This job only pushed manifests before and needed no tree. It runs
+      # scripts/check-image-platforms.sh now, so it needs one.
+      - uses: actions/checkout@v7
+        with:
+          # The script reads a registry, not the repository. Leave no token behind for it to find.
+          persist-credentials: false
+
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -196,19 +203,15 @@ jobs:
       # Checked on the pushed manifest rather than on the build config, because the config being
       # right is not evidence that the push was. A single-architecture image is invisible to
       # everyone except whoever pulls it on the wrong hardware.
+      #
+      # The check is a script rather than inline shell so that CI can run it against a known
+      # amd64-only tag and watch it fail. A gate whose only evidence is that it has never fired is
+      # not evidence (#37).
       - name: Every published tag serves both architectures
         run: |
           set -euo pipefail
-          IMG=ghcr.io/baryodev/barako-admin
           for t in ${{ steps.tags.outputs.tags }}; do
-            PLATFORMS=$(docker buildx imagetools inspect --raw "$IMG:$t" \
-              | jq -r '[.manifests[]? | select(.platform.os != "unknown") | "\(.platform.os)/\(.platform.architecture)"] | sort | join(",")')
-            case "$PLATFORMS" in
-              ''|*[!a-z0-9/,]*) echo "::error::could not read platforms for $IMG:$t, got '$PLATFORMS'"; exit 1 ;;
-            esac
-            echo "$IMG:$t serves $PLATFORMS" >> "$GITHUB_STEP_SUMMARY"
-            [ "$PLATFORMS" = "linux/amd64,linux/arm64" ] || {
-              echo "::error::$IMG:$t publishes '$PLATFORMS', expected linux/amd64,linux/arm64"; exit 1; }
+            bash scripts/check-image-platforms.sh "ghcr.io/baryodev/barako-admin:$t"
           done
 
       # imagetools create on a manifest list copies the list, so the mirror is multi-architecture
