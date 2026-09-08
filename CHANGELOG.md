@@ -35,6 +35,12 @@ from a commit anyone can point at.
   made them, and every text-reading check was green over them.
 - `docs/design/barakobrew-2026/`, the redesign handoff, its prototypes and an audit of every screen
   against the code as it stands.
+- A gate that refuses to publish a tag serving only one architecture, and a CI job that proves the
+  gate can fail. `barako-admin:3.21.0` is `linux/amd64` only, so `docker pull` of the version the
+  documentation pins fails on Ampere, Graviton and Apple Silicon. The check reads the pushed
+  manifest rather than the build config, because the config being right is not evidence the push
+  was, and CI runs it against that known-bad tag on every pull request so its failure has been
+  watched rather than assumed.
 
 ### Fixed
 

@@ -305,3 +305,42 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # Proves the release gate can fail, rather than trusting it because it has never fired.
+  #
+  # scripts/check-image-platforms.sh is what stands between a release and an amd64-only tag, and it
+  # runs only during a publish, which is the one place it is expensive to be wrong. So it is
+  # exercised here against two published tags whose shape is already known: barako-admin:3.21.0 is
+  # amd64 only, which is the defect #37 is about, and :latest carries both architectures.
+  #
+  # Both directions on purpose. A gate that refuses everything would satisfy the negative case
+  # alone and block every release.
+  image-platform-gate:
+    name: Image platform gate refuses an amd64-only tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The script only reads a public registry; leave no token behind for it to find.
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+
+      - name: An amd64-only tag is refused, and for the right reason
+        run: |
+          set -uo pipefail
+          # Actions runs this under bash -e. Capturing the status on the same line keeps -e from
+          # ending the step at the assignment, before the output is read.
+          code=0
+          out=$(bash scripts/check-image-platforms.sh ghcr.io/baryodev/barako-admin:3.21.0 2>&1) || code=$?
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "::error::the gate passed an amd64-only tag"; exit 1
+          fi
+          # A network error also exits 1. Only the mismatch message counts as the gate working.
+          echo "$out" | grep -q "serves 'linux/amd64', expected 'linux/amd64,linux/arm64'" || {
+            echo "::error::the gate failed, but not because the tag is amd64 only (exit $code)"; exit 1; }
+
+      - name: A multi-architecture tag is accepted
+        run: bash scripts/check-image-platforms.sh ghcr.io/baryodev/barako-admin:latest
