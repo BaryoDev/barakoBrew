@@ -3,7 +3,7 @@
 import { use } from 'react';
 import Link from 'next/link';
 import { useSchema, useSetPublicDelivery } from '@/hooks/use-schemas';
-import { FIELD_TYPES } from '@/types/schema';
+import { fieldTypeLabel } from '@/types/schema';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -43,8 +43,6 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
       />
     );
   }
-
-  const typeLabel = (type: string) => FIELD_TYPES.find((t) => t.value === type)?.label ?? type;
 
   return (
     <>
@@ -132,7 +130,7 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
                 <TableCell className="text-muted-foreground font-mono text-xs">{field.name}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="font-normal">
-                    {typeLabel(field.type)}
+                    {fieldTypeLabel(field.type)}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground text-right text-sm">

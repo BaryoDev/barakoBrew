@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import type { FieldDefinition } from '@/types/schema';
+import { resolveFieldType, type FieldDefinition, type FieldType } from '@/types/schema';
 
 interface DynamicFormProps {
     fields: FieldDefinition[];
@@ -64,7 +64,11 @@ function FieldControl({
         </Label>
     );
 
-    switch (field.type) {
+    // A definition can name a type by one of the registry's aliases, and the control has to follow
+    // the type it aliases: 'integer' is a number box, not the textarea the default would give it.
+    const type = resolveFieldType(field.type) ?? 'string';
+
+    switch (type) {
         case 'bool':
             return (
                 <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
@@ -86,13 +90,13 @@ function FieldControl({
                     <Input
                         id={field.name}
                         type="number"
-                        step={field.type === 'int' ? 1 : 'any'}
-                        inputMode={field.type === 'int' ? 'numeric' : 'decimal'}
+                        step={type === 'int' ? 1 : 'any'}
+                        inputMode={type === 'int' ? 'numeric' : 'decimal'}
                         value={value === null || value === undefined ? '' : String(value)}
                         onChange={(e) => {
                             const raw = e.target.value;
                             if (raw === '') return onChange(null);
-                            onChange(field.type === 'int' ? parseInt(raw, 10) : parseFloat(raw));
+                            onChange(type === 'int' ? parseInt(raw, 10) : parseFloat(raw));
                         }}
                         className="w-fit"
                     />
@@ -109,7 +113,7 @@ function FieldControl({
                     {label}
                     <Input
                         id={field.name}
-                        type={field.type === 'datetime' ? 'datetime-local' : field.type}
+                        type={type === 'datetime' ? 'datetime-local' : type}
                         value={(value as string) || ''}
                         onChange={(e) => onChange(e.target.value)}
                         className="w-fit"
@@ -119,22 +123,24 @@ function FieldControl({
             );
 
         // Single-line inputs. email/url get the matching native keyboard + hint;
-        // format is enforced server-side by FieldTypeRegistry.
+        // format is enforced server-side by FieldTypeRegistry. A reference is the id of
+        // another entry, so it reads like a uuid; that the target exists is checked on write.
         case 'email':
         case 'url':
         case 'slug':
         case 'uuid':
+        case 'reference':
             return (
                 <div className="space-y-2">
                     {label}
                     <Input
                         id={field.name}
-                        type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'}
-                        inputMode={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'}
-                        placeholder={PLACEHOLDERS[field.type]}
+                        type={type === 'email' ? 'email' : type === 'url' ? 'url' : 'text'}
+                        inputMode={type === 'email' ? 'email' : type === 'url' ? 'url' : 'text'}
+                        placeholder={PLACEHOLDERS[type]}
                         value={(value as string) || ''}
                         onChange={(e) => onChange(e.target.value)}
-                        className={field.type === 'uuid' || field.type === 'slug' ? 'font-mono' : undefined}
+                        className={type === 'email' || type === 'url' ? undefined : 'font-mono'}
                     />
                     <FieldError message={error} />
                 </div>
@@ -142,6 +148,7 @@ function FieldControl({
 
         // Longer free text. No rich editor bundled yet — a roomy textarea; the
         // value is stored/served as-is (HTML for richtext, Markdown for markdown).
+        case 'text':
         case 'richtext':
         case 'markdown':
             return (
@@ -152,18 +159,22 @@ function FieldControl({
                         rows={6}
                         value={(value as string) || ''}
                         onChange={(e) => onChange(e.target.value)}
-                        className={field.type === 'markdown' ? 'font-mono text-sm' : undefined}
+                        className={type === 'markdown' ? 'font-mono text-sm' : undefined}
                     />
                     <FieldError message={error} />
                 </div>
             );
 
+        // A geopoint is an object the server pins to { "lat": number, "lng": number }, so it
+        // belongs here rather than in a text box that would store the shape as a string.
         case 'json':
         case 'array':
         case 'object':
+        case 'geopoint':
             return (
                 <JsonField
                     field={field}
+                    type={type}
                     label={label}
                     value={value}
                     error={error}
@@ -188,21 +199,29 @@ function FieldControl({
     }
 }
 
-const PLACEHOLDERS: Partial<Record<FieldDefinition['type'], string>> = {
+const PLACEHOLDERS: Partial<Record<FieldType, string>> = {
     email: 'name@example.com',
     url: 'https://example.com',
     slug: 'my-post-title',
     uuid: '00000000-0000-0000-0000-000000000000',
+    reference: '00000000-0000-0000-0000-000000000000',
+};
+
+const JSON_HINTS: Partial<Record<FieldType, string>> = {
+    array: 'JSON list, e.g. ["one", "two"]',
+    geopoint: 'A position, e.g. {"lat": 14.5995, "lng": 120.9842}',
 };
 
 function JsonField({
     field,
+    type,
     label,
     value,
     error,
     onChange,
 }: {
     field: FieldDefinition;
+    type: FieldType;
     label: React.ReactNode;
     value: unknown;
     error?: string;
@@ -210,7 +229,7 @@ function JsonField({
 }) {
     const [text, setText] = useState(() =>
         value === undefined || value === null
-            ? field.type === 'array'
+            ? type === 'array'
                 ? '[]'
                 : '{}'
             : JSON.stringify(value, null, 2)
@@ -238,7 +257,7 @@ function JsonField({
                 className={cn('font-mono text-xs', parseError && 'border-warning')}
             />
             <p className="text-muted-foreground text-xs">
-                {field.type === 'array' ? 'JSON list, e.g. ["one", "two"]' : 'JSON object, e.g. {"key": "value"}'}
+                {JSON_HINTS[type] ?? 'JSON object, e.g. {"key": "value"}'}
             </p>
             <FieldError message={parseError ?? error} />
         </div>
