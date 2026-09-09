@@ -76,6 +76,11 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# The LGPL obligation attaches to what this image redistributes, not to what is in the repository,
+# so the notice has to travel with the image. next build traces sharp's prebuilt libvips binaries
+# into the standalone output above, and those are LGPL-3.0-or-later.
+COPY --chown=nextjs:nodejs THIRD-PARTY-NOTICES.md LICENSE ./
+
 # Ensure public directory is owned by nextjs for entrypoint script to write env-config.js
 RUN chown -R nextjs:nodejs ./public
 
