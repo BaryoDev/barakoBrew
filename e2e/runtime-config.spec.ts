@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { fillSignIn } from './helpers';
 
 test.describe('Runtime Configuration', () => {
     test('routes API calls to the URL from window._env_ (runtime config)', async ({ page }) => {
@@ -20,8 +21,7 @@ test.describe('Runtime Configuration', () => {
         });
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('u');
-        await page.getByLabel('Password', { exact: true }).fill('p');
+        await fillSignIn(page, 'u', 'p');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         // The request went to the runtime-configured host, not the build-time default.
@@ -46,8 +46,7 @@ test.describe('Runtime Configuration', () => {
         await page.goto('/login');
         expect(await page.evaluate(() => window['_env_']?.NEXT_PUBLIC_API_URL)).toBeUndefined();
 
-        await page.getByLabel('Username').fill('u');
-        await page.getByLabel('Password', { exact: true }).fill('p');
+        await fillSignIn(page, 'u', 'p');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         // The port the quickstart publishes, which is what somebody following it will have running.
