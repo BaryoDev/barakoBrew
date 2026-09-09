@@ -139,6 +139,9 @@ test.describe('accessibility', () => {
      * alpha wash and took their text colour from `--warning-foreground`, which is white, so a
      * warning badge was white on a 10% wash of white. Every status the table can show is here, plus
      * a row of a type that is not publicly deliverable, so the Private pill is scanned too.
+     *
+     * Every status means every one in the vocabulary, not only the four the enum has. Draft and
+     * Archived share a ground and differ in ink, so both greys are rows rather than one.
      */
     test('the content list, with a row of every status', async ({ page }) => {
         await authed(page);
@@ -163,6 +166,10 @@ test.describe('accessibility', () => {
                     // Scheduled uses the accent tint, which is a pair no other badge on this page
                     // uses, so leaving it out would mean the one new colour is the one never scanned.
                     row('c6', 'article', 'Scheduled', 'Autumn blend announcement'),
+                    // In review is in the vocabulary ahead of the API, so no real server sends it
+                    // yet. It is the only warning pair on this page now that Draft is grey, and a
+                    // state nothing renders is a state nothing scans.
+                    row('c7', 'article', 'InReview', 'Single-origin tasting piece'),
                 ]),
             })
         );
@@ -180,6 +187,8 @@ test.describe('accessibility', () => {
         await expect(rows.getByText('Draft', { exact: true })).toBeVisible();
         await expect(rows.getByText('Scheduled', { exact: true })).toBeVisible();
         await expect(rows.getByText('Posted', { exact: true })).toBeVisible();
+        // The label, not the wire value: the vocabulary spells this one differently on purpose.
+        await expect(rows.getByText('In review', { exact: true })).toBeVisible();
 
         // And the controls themselves, which this case now covers: an empty filter bar would let
         // the scan pass without ever looking at the search box or the segmented control.

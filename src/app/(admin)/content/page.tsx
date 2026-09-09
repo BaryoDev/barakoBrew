@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useContents } from '@/hooks/use-contents';
-import { ContentStatus, statusMeta } from '@/types/content';
+import { ContentStatus } from '@/types/content';
+import { STATUS_ORDER, STATUS_VOCABULARY, statusMeta } from '@/lib/status-vocabulary';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { StatusBadge } from '@/components/patterns/status-badge';
@@ -41,13 +42,19 @@ const ALL_TYPES = 'all';
  *
  * Undefined rather than an 'all' sentinel, so "no filter" is the absence of the parameter and the
  * server is never sent a status it would have to know to ignore.
+ *
+ * Built from the vocabulary rather than typed out, so the buttons and the badges cannot disagree
+ * about what a state is called. Filtered by what the enum has, because a value here goes to the
+ * server as a query parameter: the vocabulary carries In review ahead of the API, and a button
+ * asking for a status the server has never heard of is a button that returns nothing. It appears on
+ * its own once the enum gains the member.
  */
 const STATUS_FILTERS: { label: string; value: ContentStatus | undefined }[] = [
   { label: 'All', value: undefined },
-  { label: 'Published', value: ContentStatus.Published },
-  { label: 'Draft', value: ContentStatus.Draft },
-  { label: 'Scheduled', value: ContentStatus.Scheduled },
-  { label: 'Archived', value: ContentStatus.Archived },
+  ...STATUS_ORDER.filter((key) => key in ContentStatus).map((key) => ({
+    label: STATUS_VOCABULARY[key].label,
+    value: ContentStatus[key as keyof typeof ContentStatus],
+  })),
 ];
 
 /** 10.5px, 800, uppercase, on the sunken tint. The Signal column head. */

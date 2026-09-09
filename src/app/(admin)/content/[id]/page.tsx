@@ -14,7 +14,8 @@ import {
   useUpdateContentStatus,
 } from '@/hooks/use-contents';
 import { apiErrorMessage, isConflict } from '@/lib/api';
-import { ContentStatus, SENSITIVITY_META, statusMeta } from '@/types/content';
+import { ContentStatus, SENSITIVITY_META } from '@/types/content';
+import { statusMeta } from '@/lib/status-vocabulary';
 import type { ContentDetail } from '@/types/content';
 import { PageHeader } from '@/components/patterns/page-header';
 import { StatusBadge } from '@/components/patterns/status-badge';

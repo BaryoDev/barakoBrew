@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-export type Tone = 'success' | 'warning' | 'muted' | 'destructive' | 'accent';
+export type Tone = 'success' | 'warning' | 'muted' | 'subtle' | 'destructive' | 'accent';
 
 /**
  * The Signal tint pairs: a solid soft background with its measured ink on top, no border.
@@ -13,11 +13,17 @@ export type Tone = 'success' | 'warning' | 'muted' | 'destructive' | 'accent';
  * `--warning-foreground`, which is white, because that token exists for white-on-solid buttons. A
  * warning badge was therefore white text on a 10%-opacity wash of white, and nothing caught it: the
  * axe case for the content list stubs an empty page, so no badge ever rendered under the gate.
+ *
+ * `subtle` was added later, for Archived. It shares the sunken ground with `muted` and differs in
+ * ink: #63687D rather than #4A4E66, 4.98:1 rather than 7.37. The design separates Draft and Archived
+ * by exactly that, so one grey tone cannot serve both, and the quieter ink is the one that has to be
+ * left alone. globals.css records two prior attempts at lightening #63687D that failed the gate.
  */
 const TONE_CLASSES: Record<Tone, string> = {
   success: 'border-transparent bg-[var(--success-soft)] text-success',
   warning: 'border-transparent bg-[var(--warning-soft)] text-warning',
   muted: 'border-transparent bg-secondary text-secondary-foreground',
+  subtle: 'border-transparent bg-secondary text-muted-foreground',
   destructive: 'border-transparent bg-[var(--danger-soft)] text-destructive',
   accent: 'border-transparent bg-accent text-accent-foreground',
 };
