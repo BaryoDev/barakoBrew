@@ -47,6 +47,11 @@ export interface ScheduleContentRequest {
 // server's enum, so inserting a member there silently renumbered everything here. The switch is not
 // only a rename: ContentStatus.Draft was 0, which is falsy, and 'Draft' is not, so any truthiness
 // check written against the old values means the opposite now.
+//
+// The labels and tones for these are in src/lib/status-vocabulary.ts, not here. That vocabulary has
+// to cover In review, which this enum does not have because the API does not send it yet, and it has
+// to be reachable from screens that never touch a ContentStatus. Keeping it beside the enum meant a
+// second, shorter vocabulary, and the two drifted.
 export enum ContentStatus {
     Draft = 'Draft',
     Published = 'Published',
@@ -92,38 +97,6 @@ export interface ContentVersion {
     scheduledPublishAt?: string;
     scheduledUnpublishAt?: string;
     sensitivity?: SensitivityLevel;
-}
-
-/**
- * The badge tones a status may use, a subset of StatusBadge's own union.
- *
- * Written out rather than imported from the component so this file stays free of UI imports. Every
- * member here has to exist there, and `accent` is the measured 7.89:1 pair, not a new colour.
- */
-export type StatusTone = 'muted' | 'success' | 'warning' | 'accent';
-
-export const STATUS_META: Record<ContentStatus, { label: string; tone: StatusTone }> = {
-    [ContentStatus.Draft]: { label: 'Draft', tone: 'warning' },
-    [ContentStatus.Published]: { label: 'Published', tone: 'success' },
-    [ContentStatus.Archived]: { label: 'Archived', tone: 'muted' },
-    [ContentStatus.Scheduled]: { label: 'Scheduled', tone: 'accent' },
-};
-
-/**
- * The badge for a status, without inventing one the server did not send.
- *
- * Falling back to Draft looks harmless and is not: a row the server said nothing about renders as a
- * genuine Draft, with a warning badge, indistinguishable from a real one. Nobody can tell from the
- * screen that the field was missing.
- *
- * It is reachable rather than theoretical. The admin is its own deployable and picks its API at
- * runtime from window._env_, so it can point at an older server, and the content list only started
- * returning `status` in 4.0. A 4.0 admin against any currently released API would label every row
- * Draft. Showing the raw value is worse-looking and better: it says the two are out of step, which is
- * exactly the drift these changes exist to stop hiding.
- */
-export function statusMeta(status: string | undefined): { label: string; tone: StatusTone } {
-    return STATUS_META[status as ContentStatus] ?? { label: status ?? 'Unknown', tone: 'muted' };
 }
 
 export const SENSITIVITY_META: Record<SensitivityLevel, { label: string; description: string }> = {
