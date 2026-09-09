@@ -1,0 +1,6 @@
+{
+  "name": "@img/sharp-libvips-linux-x64",
+  "version": "1.3.3",
+  "license": "LGPL-3.0-or-later",
+  "_comment": "Fixture for scripts/check-image-licences.sh. The real package, trimmed to the fields the gate reads."
+}

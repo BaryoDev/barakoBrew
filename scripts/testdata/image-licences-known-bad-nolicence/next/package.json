@@ -1,0 +1,6 @@
+{
+  "name": "next",
+  "version": "16.1.0",
+  "license": "MIT",
+  "_comment": "A permissive package beside the refused one, so the gate is seen to refuse the right row."
+}

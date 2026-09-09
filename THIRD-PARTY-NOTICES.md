@@ -3,70 +3,55 @@
 barakoBrew is licensed under MPL-2.0, in `LICENSE`. That covers the code in this repository.
 
 The container image published as `ghcr.io/baryodev/barako-admin` also redistributes third party
-software, and two of those components are under the GNU Lesser General Public License. This file
-exists because that obligation attaches to the image rather than to the source, so it has to travel
-with the image. It is copied to `/app/THIRD-PARTY-NOTICES.md` in the container.
+software. All of it is under a permissive licence. This file ships at
+`/app/THIRD-PARTY-NOTICES.md` inside the image, because a statement about what an image
+redistributes is worth little if it only exists in a repository nobody pulls.
 
-## Components under the LGPL
+## The image carries no copyleft
 
-| Component | Version | Licence |
-| --- | --- | --- |
-| `@img/sharp-libvips-<platform>` | 1.3.x | LGPL-3.0-or-later |
-| `@img/sharp-wasm32` | 0.35.x | Apache-2.0 AND LGPL-3.0-or-later AND MIT |
+It used to. `sharp` is an optional dependency of Next.js itself, so `npm ci` installs it whatever
+this repository asks for, and `next build` traced its prebuilt [libvips](https://www.libvips.org/)
+binaries into the standalone output that the runtime stage copies. Those binaries are
+LGPL-3.0-or-later, and 27MB of them shipped in every image while an audit of this project's direct
+dependencies said there was no copyleft at all ([#76](https://github.com/BaryoDev/barakoBrew/issues/76)).
 
-These are the prebuilt [libvips](https://www.libvips.org/) binaries that
-[sharp](https://sharp.pixelplumbing.com) loads. Source, including the build scripts used to produce
-the binaries, is at <https://github.com/lovell/sharp-libvips>. libvips itself is at
-<https://github.com/libvips/libvips>.
+Nothing here renders a remote image, so the optimiser that wants `sharp` is off, and `@img` is
+excluded from output tracing in `next.config.ts`. Turning the optimiser off was not sufficient on its
+own: tracing copied the binaries either way.
 
-Only the binary for the image's own platform is present in a given image. This image is
-Alpine-based, so the package is the musl build: `@img/sharp-libvips-linuxmusl-x64` on
-`linux/amd64`, `@img/sharp-libvips-linuxmusl-arm64` on `linux/arm64`.
+## Checked rather than asserted
 
-### How they get here
+Two gates, because what comes in and what goes out are different questions.
 
-Nothing in this repository asks for them. `sharp` is an optional dependency of Next.js itself, used
-for image optimisation, and `next build` traces it into the standalone output that the runtime image
-copies. So they arrive through the framework rather than through a choice made here, which is why an
-audit of this project's direct dependencies did not see them.
+- `scripts/check-licences.sh` reads the installed tree and fails on anything outside the allow list
+  in `CONTRIBUTING.md`. It carries one named exception, the `@img/sharp-libvips-*` binaries, because
+  `npm ci` installs them regardless and the tree is not the artifact. It prints that exception on
+  every run.
+- `scripts/check-image-licences.sh` reads the image. It refuses copyleft, and it refuses a package
+  that does not say what it is licensed as. One named exception: `next/dist/compiled/busboy`, a copy
+  Next vendors with nothing but a name in its `package.json`. busboy is MIT and that copy is covered
+  by Next's own MIT licence. It is named rather than matched by directory, so a second licence-less
+  stub appearing under `dist/compiled` fails and gets looked at instead of inheriting the reasoning.
+  CI runs the gate on the image it builds, and two fixtures prove it refuses rather than leaving that
+  to trust.
 
-### Your rights under the LGPL
-
-LGPL-3.0 permits distribution of these libraries as part of a larger work under other terms, which
-is what this image does. The obligation it attaches is that you must be able to replace them with a
-modified version.
-
-You can. The libraries are ordinary files inside the image:
-
-```
-/app/node_modules/@img/sharp-libvips-linuxmusl-arm64/lib/libvips-cpp.so.8.18.6
-```
-
-To use your own build, mount or copy your version over that file, or over the directory holding it.
-Nothing is statically linked into the application and nothing verifies the library beyond loading
-it, so a replacement built from the upstream source is picked up on the next start.
-
-Confirmed against a built image rather than assumed:
-
-```
-$ docker run --rm --entrypoint sh ghcr.io/baryodev/barako-admin -c \
-    'ls /app/node_modules/@img/sharp-libvips-*/lib'
-glib-2.0
-index.js
-libvips-cpp.so.8.18.6
-```
-
-## Everything else
-
-Every other dependency in the image is under a permissive licence. That is not a claim anyone has
-to take on trust: `scripts/check-licences.sh` reads the licence of every package on disk and fails
-the build on anything outside the allow list in `CONTRIBUTING.md`. The two components above are the
-only exceptions, they are excepted **by package name rather than by allowing the LGPL**, and the
-script prints them on every run so the exception cannot go quiet.
-
-A full listing for a given image is available from that image:
+A listing for a given image is available from the image:
 
 ```bash
 docker run --rm --entrypoint sh ghcr.io/baryodev/barako-admin:latest \
   -c 'cat /app/THIRD-PARTY-NOTICES.md'
 ```
+
+## If `sharp` comes back
+
+Then this file needs its LGPL section again, and that section has to carry the relinking right:
+LGPL-3.0 permits distribution as part of a larger work, and attaches the obligation that a recipient
+can replace the library with their own build. Saying "you may replace it" is worth nothing without
+naming the file to replace, which for an Alpine image is
+`/app/node_modules/@img/sharp-libvips-linuxmusl-<arch>/lib/libvips-cpp.so.<version>`. Source for
+those builds is at <https://github.com/lovell/sharp-libvips>, and libvips itself is at
+<https://github.com/libvips/libvips>.
+
+Where image resizing belongs when the console needs it is
+[#80](https://github.com/BaryoDev/barakoBrew/issues/80). Whatever that decides, the image gate is
+what keeps this file honest.
