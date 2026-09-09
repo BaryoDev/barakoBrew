@@ -26,6 +26,8 @@ Fixes #
 - [ ] `npm run lint`, `npx tsc --noEmit` and `npx vitest run` are clean
 - [ ] Anything that reads an API response has an assertion in `smoke/`, or the PR says why not
 - [ ] Docs updated if behaviour or configuration changed
+- [ ] No new dependency, or it clears all three rules in CONTRIBUTING.md ("Adding a dependency"):
+      permissive licence, no runtime licence gate, still maintained. Say which above.
 
 ## Anything reviewers should know
 
