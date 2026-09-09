@@ -193,7 +193,7 @@ test.describe('accessibility', () => {
         // And the controls themselves, which this case now covers: an empty filter bar would let
         // the scan pass without ever looking at the search box or the segmented control.
         await expect(page.getByLabel('Search entries')).toBeVisible();
-        await expect(page.getByRole('group', { name: 'Filter by status' })).toBeVisible();
+        await expect(page.getByRole('radiogroup', { name: 'Filter by status' })).toBeVisible();
 
         await scan(page);
     });
