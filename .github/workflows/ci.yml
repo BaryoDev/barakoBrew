@@ -284,8 +284,11 @@ jobs:
       - name: The artifact licence gate refuses an LGPL package
         run: |
           set -uo pipefail
-          out=$(bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad 2>&1)
-          code=$?
+          # `|| code=$?` rather than a bare assignment and `$?` after it: the step's shell is
+          # `bash -e`, so an assignment from a command that exits non-zero ends the step there, and
+          # the gate failing is the whole point of this step.
+          code=0
+          out=$(bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad 2>&1) || code=$?
           echo "$out"
           [ "$code" -ne 0 ] || { echo "::error::the gate passed a tree holding an LGPL package"; exit 1; }
           echo "$out" | grep -q 'sharp-libvips-linux-x64 LGPL-3.0-or-later' || {
@@ -294,8 +297,11 @@ jobs:
       - name: The artifact licence gate refuses a package with no licence field
         run: |
           set -uo pipefail
-          out=$(bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad-nolicence 2>&1)
-          code=$?
+          # `|| code=$?` rather than a bare assignment and `$?` after it: the step's shell is
+          # `bash -e`, so an assignment from a command that exits non-zero ends the step there, and
+          # the gate failing is the whole point of this step.
+          code=0
+          out=$(bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad-nolicence 2>&1) || code=$?
           echo "$out"
           [ "$code" -ne 0 ] || { echo "::error::the gate passed a package with no licence field"; exit 1; }
           echo "$out" | grep -q 'mystery-package (UNKNOWN)' || {
