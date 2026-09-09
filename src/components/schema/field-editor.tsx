@@ -334,7 +334,7 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                                     <Select
                                         value={String(form.mask ?? FieldMask.Default)}
                                         onValueChange={(value) =>
-                                            setForm((f) => ({ ...f, mask: Number(value) as FieldMask }))
+                                            setForm((f) => ({ ...f, mask: value as FieldMask }))
                                         }
                                     >
                                         <SelectTrigger className="w-full">

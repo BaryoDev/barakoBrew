@@ -20,12 +20,24 @@ export interface FieldDefinition {
     mask?: FieldMask;
 }
 
-// Mirrors barakoCMS Models.FieldMask (numeric enum, serialized as numbers).
+/**
+ * Mirrors barakoCMS `Models.FieldMask`, which crosses the wire as a **name**, not a number.
+ *
+ * This was `Default = 0 … Last4 = 3` with a comment saying the API serialised numbers. It does not:
+ * its OpenAPI document publishes `["Default", "Remove", "Redact", "Last4"]` as a string enum, and a
+ * mask read back from `GET /api/content-types` arrives as `"Redact"`. The write path hid it, because
+ * the server accepts a number as well and stores the name either way, so creating a type looked
+ * correct. Reading one back did not: the editor compared `2` against `"Redact"`, matched nothing,
+ * and showed no mask for a field that has one.
+ *
+ * Found by `smoke/enums.spec.ts` on its first run, which is the same shape as the bug that gate
+ * exists for. `ContentStatus` was numeric on both sides too, until it was not.
+ */
 export enum FieldMask {
-    Default = 0, // Remove for Hidden, Redact for Sensitive
-    Remove = 1, // drop the field
-    Redact = 2, // replace with ***
-    Last4 = 3, // keep only the last 4 characters
+    Default = 'Default', // Remove for Hidden, Redact for Sensitive
+    Remove = 'Remove', // drop the field
+    Redact = 'Redact', // replace with ***
+    Last4 = 'Last4', // keep only the last 4 characters
 }
 
 export const FIELD_MASKS: { value: FieldMask; label: string }[] = [

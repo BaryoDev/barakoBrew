@@ -20,9 +20,16 @@
 #   5. run smoke/, which contains no page.route and must not
 #
 # The API comes from ghcr.io/baryodev/barako-cms rather than from source, because this repository
-# holds no source for it. BARAKO_API_TAG picks the tag; the default is :playground, the build that
-# runs playground.baryo.dev. That tag is arm64 only, so on an amd64 host set BARAKO_API_TAG=latest
-# or run this on an arm64 machine, which is what CI does.
+# holds no source for it. BARAKO_API_TAG picks the tag.
+#
+# The default is :master, the build of the API's master branch, because that is what CI runs
+# (the BARAKO_API_TAG repository variable is set to it) and a local run that tests a different
+# server than CI is worse than no local run. It cost half an hour to learn that once: the pack
+# failed here and passed on CI, and the difference was the tag.
+#
+# It used to default to :playground, the build behind playground.baryo.dev. That tag lags, because
+# it moves when the playground is deployed rather than when the API changes, so it can be missing a
+# fix the console is already written against.
 #
 # Usage: scripts/smoke-check.sh
 
@@ -31,7 +38,7 @@ set -euo pipefail
 NET="smoke-check-net"
 PG="smoke-check-pg"
 APIC="smoke-check-api"
-API_IMAGE="ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG:-playground}"
+API_IMAGE="ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG:-master}"
 API_PORT="${API_PORT:-5099}"
 ADMIN_PORT="${ADMIN_PORT:-3200}"
 ADMIN_USERNAME='admin'
@@ -114,6 +121,7 @@ docker run -d --name "$APIC" --network "$NET" -p "${API_PORT}:8080" \
     -e "InitialAdmin__Password=${ADMIN_PASSWORD}" \
     -e "CORS__AllowedOrigins=http://127.0.0.1:${ADMIN_PORT}" \
     -e Kubernetes__Enabled=false \
+    -e Swagger__Enabled=true \
     "$API_IMAGE" >/dev/null
 
 # Every request here is bounded. A container that accepts the connection and then sends nothing
@@ -131,6 +139,12 @@ done
 [ "$(docker inspect -f '{{.State.Running}}' "$APIC" 2>/dev/null)" = "true" ] || fail "the API container exited; whatever answered /health is not it"
 BUILD=$("${CURL[@]}" "$API/health/build" 2>/dev/null || true)
 echo "API image reports build: ${BUILD:-unknown}"
+
+# The OpenAPI document is how smoke/enums.spec.ts checks the enums this console transcribes
+# against the server's own declaration of them. Asserted here rather than only in the spec, so a
+# missing document fails as "the API did not publish it" instead of as a puzzling assertion.
+[ "$("${CURL[@]}" -o /dev/null -w '%{http_code}' "$API/swagger/v1/swagger.json")" = "200" ] \
+    || fail "the API served no OpenAPI document, so the enum checks would compare against nothing"
 
 step "seeding one content type and one entry"
 TOKEN=$("${CURL[@]}" -X POST "$API/api/auth/login" -H 'Content-Type: application/json' \
