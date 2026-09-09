@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl, SegmentedControlItem } from '@/components/ui/segmented-control';
 import { AddWebsiteDialog } from '@/components/analytics/add-website-dialog';
 import { Sparkline } from '@/components/analytics/sparkline';
 import { IconAnalytics, IconRefresh } from '@/components/icons';
@@ -26,12 +27,7 @@ import {
   type StatValue,
 } from '@/hooks/use-analytics';
 
-const RANGES: { value: AnalyticsRange; label: string }[] = [
-  { value: '24h', label: 'Last 24 hours' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-  { value: '90d', label: 'Last 90 days' },
-];
+const RANGES: AnalyticsRange[] = ['24h', '7d', '30d', '90d'];
 
 const nf = new Intl.NumberFormat();
 
@@ -72,18 +68,18 @@ export default function AnalyticsPage() {
         actions={
           !unavailable && hasSites && (
             <div className="flex items-center gap-2">
-              <Select value={range} onValueChange={(v) => setRange(v as AnalyticsRange)}>
-                <SelectTrigger className="w-40" size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RANGES.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SegmentedControl
+                aria-label="Date range"
+                size="sm"
+                value={range}
+                onValueChange={(v) => setRange(v as AnalyticsRange)}
+              >
+                {RANGES.map((r) => (
+                  <SegmentedControlItem key={r} value={r}>
+                    {r}
+                  </SegmentedControlItem>
+                ))}
+              </SegmentedControl>
               <AddWebsiteDialog onCreated={setWebsiteId} />
             </div>
           )

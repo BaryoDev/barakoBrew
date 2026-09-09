@@ -51,12 +51,34 @@ export const MOCK_TOKEN = `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`;
  */
 export async function fillSignIn(page: Page, username: string, password: string) {
     const user = page.getByLabel('Username');
-    await expect(user).toBeFocused({ timeout: 15000 });
 
-    await user.fill(username);
-    await page.getByLabel('Password', { exact: true }).fill(password);
+    // Fill until it sticks, rather than trying to detect the moment it will.
+    //
+    // The first attempt at this waited for the username to be focused, on the reasoning that
+    // autofocus is applied by the client component so focus proves React is running. That is wrong,
+    // and the failure output says so: the element is `<input autofocus="" ...>`. `autofocus` is a
+    // plain attribute in the server-rendered HTML, so the browser applies it while parsing the
+    // document, long before hydration. Waiting for it proves the page arrived, nothing more.
+    //
+    // It narrowed the window enough to look fixed on a fast machine and came back as one failure
+    // and eight flakes on Mobile Safari. There is no reliable signal here for "React has taken
+    // over": every candidate is either in the server HTML too, or an implementation detail of the
+    // framework. So this stops guessing and retries, which is what the race actually needs.
+    await expect
+        .poll(
+            async () => {
+                await user.fill(username);
+                return user.inputValue();
+            },
+            { timeout: 20_000, message: 'the username field kept losing what was typed into it' }
+        )
+        .toBe(username);
 
-    await expect(user).toHaveValue(username);
+    // Only ever the first field was lost, because by the time it sticks React is running, but this
+    // one is asserted too rather than assumed on that reasoning.
+    const pass = page.getByLabel('Password', { exact: true });
+    await pass.fill(password);
+    await expect(pass).toHaveValue(password);
 }
 
 export async function unauthed(page: Page) {

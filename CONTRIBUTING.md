@@ -169,7 +169,9 @@ with no exceptions, and CI proves it refuses by running it against a fixture hol
 shipped.
 
 Keeping sharp out of the image is why the image optimiser is off and why `next.config.ts` excludes
-`@img` from output tracing. Where image resizing belongs when the redesign needs it is
+`@img` from output tracing. `THIRD-PARTY-NOTICES.md` states the artifact's position and ships inside
+the image, because a claim about what an image redistributes has to travel with it. Where image
+resizing belongs when the redesign needs it is
 [#80](https://github.com/BaryoDev/barakoBrew/issues/80).
 
 **2. No runtime licence gates.** A permissive licence is not sufficient. The failure mode that

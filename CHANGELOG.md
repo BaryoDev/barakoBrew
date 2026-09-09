@@ -74,7 +74,10 @@ from a commit anyone can point at.
   there was no copyleft. The optimiser is off, because nothing here renders a remote image: the one
   `<img>` is an MFA QR code delivered as a data URL. Turning it off is not sufficient on its own, so
   `sharp` is excluded from output tracing as well, and a CI gate now reads the built image rather than
-  the dependency tree. Where resizing belongs when the redesign needs it is an open spike.
+  the dependency tree, refusing copyleft and anything that does not say what it is licensed as.
+  `THIRD-PARTY-NOTICES.md` states the artifact's position and ships at `/app/` inside the image, since
+  a claim about what an image redistributes is worth little if it only exists in a repository nobody
+  pulls. Where resizing belongs when the redesign needs it is an open spike.
 - The field picker carries all 20 field types, grouped, and resolves the registry's aliases. It was
   three short, so three types the API accepts could not be chosen here.
 - The five status states live in one module instead of being spelled out per screen, which is what let
