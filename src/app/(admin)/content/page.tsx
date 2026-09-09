@@ -30,18 +30,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
+import { SegmentedControl, SegmentedControlItem } from '@/components/ui/segmented-control';
 import { IconContent, IconLock, IconPlus } from '@/components/icons';
 import { useDebounced } from '@/hooks/use-debounced';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
 
 const ALL_TYPES = 'all';
+const ALL_STATUSES = 'all';
 
 /**
- * The segmented control, in the design's order.
+ * The status filter, in the design's order.
  *
  * Undefined rather than an 'all' sentinel, so "no filter" is the absence of the parameter and the
- * server is never sent a status it would have to know to ignore.
+ * server is never sent a status it would have to know to ignore. The sentinel exists only inside
+ * the control, which needs a value per option.
  *
  * Built from the vocabulary rather than typed out, so the buttons and the badges cannot disagree
  * about what a state is called. Filtered by what the enum has, because a value here goes to the
@@ -167,30 +170,18 @@ function ContentListInner() {
           className="h-[38px] w-full sm:w-[280px]"
         />
 
-        <div
-          role="group"
+        <SegmentedControl
           aria-label="Filter by status"
-          className="bg-secondary inline-flex h-[38px] items-center gap-0.5 rounded-lg p-1"
+          className="h-[38px]"
+          value={status ?? ALL_STATUSES}
+          onValueChange={(v) => changeStatus(v === ALL_STATUSES ? undefined : (v as ContentStatus))}
         >
-          {STATUS_FILTERS.map((option) => {
-            const active = status === option.value;
-            return (
-              <button
-                key={option.label}
-                type="button"
-                aria-pressed={active}
-                onClick={() => changeStatus(option.value)}
-                className={`focus-visible:ring-ring rounded-md px-2.5 py-1 text-[12px] font-bold outline-none focus-visible:ring-[3px] ${
-                  active
-                    ? 'bg-card text-foreground shadow-[var(--shadow-card)]'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
+          {STATUS_FILTERS.map((option) => (
+            <SegmentedControlItem key={option.label} value={option.value ?? ALL_STATUSES}>
+              {option.label}
+            </SegmentedControlItem>
+          ))}
+        </SegmentedControl>
 
         <Select value={contentType ?? ALL_TYPES} onValueChange={setType}>
           {/* No visible label by design, so the name has to come from aria-label. The placeholder
