@@ -60,6 +60,7 @@ python3 - "$TREE" > "$REPORT" <<'PY'
 import json, os, sys
 
 root = sys.argv[1]
+VENDORED_BY_NEXT = os.path.join('next', 'dist', 'compiled', 'busboy')
 for dirpath, dirnames, filenames in os.walk(root):
     if 'package.json' not in filenames:
         continue
@@ -69,25 +70,43 @@ for dirpath, dirnames, filenames in os.walk(root):
             pkg = json.load(fh)
     except Exception:
         # A package.json that will not parse is reported, not skipped. Unreadable must not mean clean.
-        print(f"{os.path.relpath(dirpath, root)}\tUNREADABLE")
+        rel = os.path.relpath(dirpath, root)
+        print(f"{rel}\tUNREADABLE\t{rel}")
         continue
-    name = pkg.get('name') or os.path.relpath(dirpath, root)
+    rel = os.path.relpath(dirpath, root)
+    name = pkg.get('name') or rel
     lic = pkg.get('license') or pkg.get('licence')
     if isinstance(lic, dict):
         lic = lic.get('type', 'UNKNOWN')
     if not lic and isinstance(pkg.get('licenses'), list):
         lic = ' OR '.join(x.get('type', str(x)) if isinstance(x, dict) else str(x) for x in pkg['licenses'])
-    print(f"{name}\t{lic or 'UNKNOWN'}")
+    if not lic and rel == VENDORED_BY_NEXT:
+        # Next vendors a copy of busboy under dist/compiled with nothing but a name in its
+        # package.json. busboy is MIT and the copy is covered by Next's own MIT licence, not
+        # separately distributed. Named rather than matched by directory: a second licence-less stub
+        # appearing in there should fail and be looked at, not inherit this reasoning silently.
+        lic = 'MIT (vendored by next)'
+    print(f"{name}\t{lic or 'UNKNOWN'}\t{rel}")
 PY
 
 COUNT=$(wc -l < "$REPORT" | tr -d ' ')
 # A tool that produced nothing must not wave an artifact through, same reasoning as the audit gate.
 [ "$COUNT" -gt 0 ] || { echo "::error::read no packages out of $TREE, refusing to call it clean"; exit 1; }
 
+# A package that does not say what it is licensed as is refused, which is what CONTRIBUTING.md says
+# about anything with no machine-readable licence field. Separated from the refusal below so the
+# message says which of the two happened.
+INVALID=$(awk -F'\t' '$2 == "UNKNOWN" || $2 == "UNREADABLE"' "$REPORT" || true)
+if [ -n "$INVALID" ]; then
+    echo "::error::the artifact ships a package with no readable licence:"
+    echo "$INVALID" | awk -F'\t' '{print "  " $1 " (" $2 ") at " $3}'
+    exit 1
+fi
+
 HITS=$(grep -Ei "	.*($REFUSED)" "$REPORT" || true)
 if [ -n "$HITS" ]; then
     echo "::error::the artifact ships a refused licence:"
-    echo "$HITS" | sed 's/^/  /'
+    echo "$HITS" | awk -F'\t' '{print "  " $1 " " $2 " at " $3}'
     echo
     echo "Inspected $COUNT packages. See #80 before adding an exception."
     exit 1

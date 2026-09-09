@@ -279,14 +279,27 @@ jobs:
         run: bash scripts/check-image-licences.sh --image barako-admin:ci
 
       # Proven to fail, against a fixture holding the package that actually shipped. A gate nobody
-      # has watched refuse is a gate nobody should trust.
+      # has watched refuse is a gate nobody should trust, and a non-zero exit on its own is not
+      # evidence: a typo in the script exits non-zero too. Both cases assert the reason.
       - name: The artifact licence gate refuses an LGPL package
         run: |
-          set -euo pipefail
-          if bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad; then
-            echo "::error::the gate passed a tree holding an LGPL package"; exit 1
-          fi
-          echo "refused, as it should"
+          set -uo pipefail
+          out=$(bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad 2>&1)
+          code=$?
+          echo "$out"
+          [ "$code" -ne 0 ] || { echo "::error::the gate passed a tree holding an LGPL package"; exit 1; }
+          echo "$out" | grep -q 'sharp-libvips-linux-x64 LGPL-3.0-or-later' || {
+            echo "::error::the gate failed, but not because of the LGPL fixture"; exit 1; }
+
+      - name: The artifact licence gate refuses a package with no licence field
+        run: |
+          set -uo pipefail
+          out=$(bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad-nolicence 2>&1)
+          code=$?
+          echo "$out"
+          [ "$code" -ne 0 ] || { echo "::error::the gate passed a package with no licence field"; exit 1; }
+          echo "$out" | grep -q 'mystery-package (UNKNOWN)' || {
+            echo "::error::the gate failed, but not because of the unlicensed fixture"; exit 1; }
 
       # A build that succeeds is not a container that starts. entrypoint.sh has to write
       # env-config.js from NEXT_PUBLIC_API_URL and the standalone server has to answer, or the
