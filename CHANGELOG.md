@@ -9,19 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
-### Added
+## [1.0.0] - 2026-09-09
 
-- A licence gate. `scripts/check-licences.sh` reads the installed tree and fails on anything
-  outside the permissive allow list, and the CI job proves it can fail by running it against a
-  scratch install of `ffmpeg-static`, which is GPL-3.0-or-later. Rules that cannot be automated,
-  no runtime licence gates and a maintenance check, are a checklist in `CONTRIBUTING.md` and a line
-  in the pull request template.
-
-## [1.0.0] - 2026-09-08
-
-**Works against barakoCMS 4.0.0.** It cannot drive 3.21: 4.0 moved enums to strings, put lists in an
-`items` envelope, returns ProblemDetails, answers 401 on a failed sign-in, and serves content types
-at `/api/content-types`.
+**Works against barakoCMS 4.0.1 and later.** It cannot drive 3.21: 4.0 moved enums to strings, put
+lists in an `items` envelope, returns ProblemDetails, answers 401 on a failed sign-in, and serves
+content types at `/api/content-types`. It refuses 4.0.0 from a different origin to the API, which is
+every ordinary deployment: the console reads the contract version from a response header, and 4.0.0
+sends that header without exposing it to script, so the console cannot see it and stops rather than
+half-working. 4.0.1 exposes it.
 
 The first release of the console as its own product. The code is not new, it shipped inside the API
 repository for a year, but nothing about how it was built, tested or published survived the split
@@ -31,7 +26,7 @@ from a commit anyone can point at.
 
 ### Added
 
-- A CI suite that actually runs on `master`: lint, typecheck, 241 unit tests, Playwright with an axe
+- A CI suite that actually runs on `master`: lint, typecheck, 291 unit tests, Playwright with an axe
   pass, an image build, an SBOM, and an unmocked run of the console against a real API image.
 - CodeQL, Dependabot for npm and Actions, issue and pull request templates.
 - `LICENSE` (MPL-2.0), `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CLA.md` and `CONTRIBUTING.md`, with
@@ -49,12 +44,45 @@ from a commit anyone can point at.
   manifest rather than the build config, because the config being right is not evidence the push
   was, and CI runs it against that known-bad tag on every pull request so its failure has been
   watched rather than assumed.
+- The console refuses to start against an API whose contract version it does not speak, naming both
+  numbers and which one to change. barakoCMS sends `X-Api-Contract-Version` on every response, 401s
+  included, so the check needs no request of its own and covers the sign-in page too. A missing header
+  counts as incompatible: it means an API old enough to predate the contract version entirely.
+- A test that checks every enum this console mirrors against the server's own declaration, so a value
+  added on one side cannot sit unnoticed on the other.
+- Two licence gates. `scripts/check-licences.sh` reads the installed tree and fails on anything
+  outside the permissive allow list, proven in CI against a scratch install of `ffmpeg-static`, which
+  is GPL-3.0-or-later. `scripts/check-image-licences.sh` reads the published image, which is a
+  different question: the runtime stage copies Next's traced output rather than `node_modules`, so the
+  tree being clean is not evidence the image is. Rules that cannot be automated, no runtime licence
+  gates and a maintenance check, are a checklist in `CONTRIBUTING.md` and a line in the pull request
+  template.
+- `CODEOWNERS`.
 
 ### Fixed
 
 - The editor no longer loses an unsaved draft. A newer version of an entry arriving in the
   background (a refetch after `staleTime`, on window focus) replaced every field with the other
   person's values, with no error and no race involved. It now keeps what you typed and asks.
+- Two editors no longer overwrite each other. The entry editor sends `If-Match` with the `ETag` it
+  loaded, so a save against a version somebody else has already changed is refused and the editor
+  says so, rather than the last writer winning in silence. It needs barakoCMS 4.0.1, which is the
+  first release to let a browser read that header.
+- The image ships no LGPL binary. Next's image optimiser wants `sharp`, whose prebuilt libvips
+  binaries are LGPL-3.0-or-later, and it arrives as an optional dependency of Next itself, so 27MB of
+  it was traced into the published image while the licence audit read direct dependencies and said
+  there was no copyleft. The optimiser is off, because nothing here renders a remote image: the one
+  `<img>` is an MFA QR code delivered as a data URL. Turning it off is not sufficient on its own, so
+  `sharp` is excluded from output tracing as well, and a CI gate now reads the built image rather than
+  the dependency tree. Where resizing belongs when the redesign needs it is an open spike.
+- The field picker carries all 20 field types, grouped, and resolves the registry's aliases. It was
+  three short, so three types the API accepts could not be chosen here.
+- The five status states live in one module instead of being spelled out per screen, which is what let
+  them drift apart.
+- The default API URL is port 5005, the port the quickstart actually publishes. It was 5006, so the
+  first thing a newcomer saw was a console that could not reach its API.
+- Both configured Playwright projects run. They were declared and never selected, so a second browser
+  was carried in the config and exercised nowhere.
 - A refused save says so on the page rather than only in a toast that has gone in four seconds.
 - `scripts/verify-runtime-config.sh` restores `public/env-config.js` when the verification fails.
   It moved the real file aside and exited before the restore, so a failing run left the working tree
