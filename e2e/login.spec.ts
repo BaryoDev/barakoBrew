@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { MOCK_TOKEN, stubShell, EMPTY_PAGE, pageOf, stubContentTypes, unauthed } from './helpers';
+import { MOCK_TOKEN, stubShell, EMPTY_PAGE, pageOf, stubContentTypes, unauthed, fillSignIn } from './helpers';
 
 
 test.describe('Login & Authentication', () => {
@@ -32,8 +32,7 @@ test.describe('Login & Authentication', () => {
         });
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('wronguser');
-        await page.getByLabel('Password', { exact: true }).fill('wrongpass');
+        await fillSignIn(page, 'wronguser', 'wrongpass');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         // Errors surface as a sonner toast with the API's message.
@@ -62,8 +61,7 @@ test.describe('Login & Authentication', () => {
         await page.route('**/api/contents**', (r) => r.fulfill({ json: EMPTY_PAGE }));
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('admin');
-        await page.getByLabel('Password', { exact: true }).fill('admin');
+        await fillSignIn(page, 'admin', 'admin');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await expect(page).toHaveURL('/', { timeout: 10000 });
@@ -86,8 +84,7 @@ test.describe('Login & Authentication', () => {
         );
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('admin');
-        await page.getByLabel('Password', { exact: true }).fill('correct-password');
+        await fillSignIn(page, 'admin', 'correct-password');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         // Must stay on /login showing the code step — not navigate, and not store a session.
@@ -122,8 +119,7 @@ test.describe('Login & Authentication', () => {
         await page.route('**/api/contents**', (r) => r.fulfill({ json: EMPTY_PAGE }));
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('admin');
-        await page.getByLabel('Password', { exact: true }).fill('correct-password');
+        await fillSignIn(page, 'admin', 'correct-password');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await page.getByLabel('Authentication code').fill('123456');
@@ -149,8 +145,7 @@ test.describe('Login & Authentication', () => {
         );
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('admin');
-        await page.getByLabel('Password', { exact: true }).fill('correct-password');
+        await fillSignIn(page, 'admin', 'correct-password');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         // Before this existed the page showed a toast and stopped, so turning on
@@ -190,8 +185,7 @@ test.describe('Login & Authentication', () => {
         await page.route('**/api/contents**', (r) => r.fulfill({ json: EMPTY_PAGE }));
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('admin');
-        await page.getByLabel('Password', { exact: true }).fill('correct-password');
+        await fillSignIn(page, 'admin', 'correct-password');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await page.getByLabel('Device approval code').fill('123456');
@@ -234,8 +228,7 @@ test.describe('Login & Authentication', () => {
         );
 
         await page.goto('/login');
-        await page.getByLabel('Username').fill('admin');
-        await page.getByLabel('Password', { exact: true }).fill('correct-password');
+        await fillSignIn(page, 'admin', 'correct-password');
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await page.getByLabel('Device approval code').fill('123456');

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { authed, stubShell, pageOf, stubContentTypes, unauthed } from './helpers';
+import { authed, stubShell, pageOf, stubContentTypes, unauthed, fillSignIn } from './helpers';
 
 /**
  * Release screenshots. Not a behaviour test — it drives the real UI to real states
@@ -92,8 +92,7 @@ test('sign in', async ({ page }, testInfo) => {
         timeout: 15000,
     });
     await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
-    await page.getByLabel('Username').fill('demo_admin');
-    await page.getByLabel('Password', { exact: true }).fill('passwordpassword');
+    await fillSignIn(page, 'demo_admin', 'passwordpassword');
 
     await page.screenshot({ path: `${testInfo.project.outputDir}/screenshots/sign-in.png` });
 });

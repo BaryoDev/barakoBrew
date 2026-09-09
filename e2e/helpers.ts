@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { SUPPORTED_CONTRACT } from '../src/lib/api-contract';
 
@@ -33,6 +34,31 @@ export const MOCK_TOKEN = `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`;
  * that leaves the first response bare is simulating exactly that, and the console stops before the
  * spec reaches its own assertions.
  */
+/**
+ * Fills the sign-in form, after the page can actually keep what is typed into it.
+ *
+ * The username input is `autoFocus` and both inputs are React-controlled, so a fill that lands
+ * before hydration is thrown away the moment React takes over and re-renders them from state. On a
+ * fast machine the fill wins that race and nobody notices; on a slower one it loses.
+ *
+ * That is exactly what Mobile Safari found on CI, nine failures out of nine with the same
+ * signature: the username empty, the password holding its value, and the username reported as
+ * `[active]` because autofocus arrived after the typing did. Only the first field was ever lost.
+ *
+ * Waiting for focus is the honest gate, because autofocus is applied by the client component: once
+ * it has landed, React is running and a fill will stick. The value is then asserted rather than
+ * assumed, so a future regression fails here rather than three assertions later.
+ */
+export async function fillSignIn(page: Page, username: string, password: string) {
+    const user = page.getByLabel('Username');
+    await expect(user).toBeFocused({ timeout: 15000 });
+
+    await user.fill(username);
+    await page.getByLabel('Password', { exact: true }).fill(password);
+
+    await expect(user).toHaveValue(username);
+}
+
 export async function unauthed(page: Page) {
     await page.route('**/api/auth/refresh', (route) =>
         route.fulfill({
