@@ -41,9 +41,13 @@ ALLOWED='[
 # These are the prebuilt libvips binaries that sharp loads, and sharp is an optional dependency of
 # Next.js itself, so they arrive with the framework rather than with anything written here. They are
 # native libraries loaded at runtime, never inlined by a bundler, which is the case LGPL's linking
-# allowance is written for and the case #39's blanket refusal of LGPL was not weighing. Shipping
-# them still carries the LGPL relinking obligation. Whether the console keeps sharp is a decision
-# for a person, not for this script, so the carve-out is printed on every run.
+# allowance is written for and the case #39's blanket refusal of LGPL was not weighing.
+#
+# The carve-out is about this tree, not about the artifact. They used to be the same answer: the
+# binaries were traced into .next/standalone and shipped (#76). They are excluded from tracing now,
+# so nothing published carries them, and scripts/check-image-licences.sh reads the image to say so
+# rather than inferring it from here. Printed on every run anyway, because an exception nobody sees
+# is an exception nobody revisits.
 EXCEPTIONS='["@img/sharp-libvips-", "@img/sharp-win32-", "@img/sharp-wasm32"]'
 
 REPORT=$(mktemp)

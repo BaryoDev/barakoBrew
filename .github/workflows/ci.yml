@@ -271,6 +271,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # What the image redistributes, read out of the image. The tree gate in the licences job
+      # answers what comes in, and the two differ: the runtime stage copies Next's traced output,
+      # not node_modules, which is how 27MB of LGPL libvips shipped while the tree gate was green
+      # (#76).
+      - name: The image ships no copyleft
+        run: bash scripts/check-image-licences.sh --image barako-admin:ci
+
+      # Proven to fail, against a fixture holding the package that actually shipped. A gate nobody
+      # has watched refuse is a gate nobody should trust.
+      - name: The artifact licence gate refuses an LGPL package
+        run: |
+          set -euo pipefail
+          if bash scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad; then
+            echo "::error::the gate passed a tree holding an LGPL package"; exit 1
+          fi
+          echo "refused, as it should"
+
       # A build that succeeds is not a container that starts. entrypoint.sh has to write
       # env-config.js from NEXT_PUBLIC_API_URL and the standalone server has to answer, or the
       # image is a tarball nobody can run.

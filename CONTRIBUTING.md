@@ -157,9 +157,20 @@ allowance is meaningless once a bundler inlines the code. AGPL is the one that w
 money later: `CLA.md` names it as what enterprise buyers refuse, and the console is the part a
 company deploys.
 
-`scripts/check-licences.sh` is the gate, and the `licences` CI job runs it. It carries one named
-exception: the `@img/sharp-libvips-*` prebuilt binaries are LGPL-3.0-or-later and arrive as an
-optional dependency of Next.js itself. The script prints that carve-out on every run.
+Two gates, because "what comes in" and "what goes out" are different questions and #39 only asked
+the first. `scripts/check-licences.sh` reads the installed tree, and carries one named exception: the
+`@img/sharp-libvips-*` prebuilt binaries are LGPL-3.0-or-later and arrive as an optional dependency
+of Next.js itself, so `npm ci` installs them whatever this repository asks for. The script prints
+that carve-out on every run. `scripts/check-image-licences.sh` reads the published image, which the
+tree gate cannot speak for: the runtime stage copies Next's traced output rather than `node_modules`,
+and output tracing pulled 27MB of libvips in behind a green tree gate
+([#76](https://github.com/BaryoDev/barakoBrew/issues/76)). The image gate refuses copyleft outright,
+with no exceptions, and CI proves it refuses by running it against a fixture holding the package that
+shipped.
+
+Keeping sharp out of the image is why the image optimiser is off and why `next.config.ts` excludes
+`@img` from output tracing. Where image resizing belongs when the redesign needs it is
+[#80](https://github.com/BaryoDev/barakoBrew/issues/80).
 
 **2. No runtime licence gates.** A permissive licence is not sufficient. The failure mode that
 costs money is a package whose shipped code holds a licence key, phones home, or gates features at
