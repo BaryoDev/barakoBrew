@@ -27,9 +27,13 @@ Two gates, because what comes in and what goes out are different questions.
   in `CONTRIBUTING.md`. It carries one named exception, the `@img/sharp-libvips-*` binaries, because
   `npm ci` installs them regardless and the tree is not the artifact. It prints that exception on
   every run.
-- `scripts/check-image-licences.sh` reads the image. No exceptions: it refuses copyleft, and it
-  refuses a package that does not say what it is licensed as. CI runs it on the image it builds, and
-  two fixtures prove it refuses rather than leaving that to trust.
+- `scripts/check-image-licences.sh` reads the image. It refuses copyleft, and it refuses a package
+  that does not say what it is licensed as. One named exception: `next/dist/compiled/busboy`, a copy
+  Next vendors with nothing but a name in its `package.json`. busboy is MIT and that copy is covered
+  by Next's own MIT licence. It is named rather than matched by directory, so a second licence-less
+  stub appearing under `dist/compiled` fails and gets looked at instead of inheriting the reasoning.
+  CI runs the gate on the image it builds, and two fixtures prove it refuses rather than leaving that
+  to trust.
 
 A listing for a given image is available from the image:
 
