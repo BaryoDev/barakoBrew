@@ -9,7 +9,9 @@ export { SensitivityLevel };
 export interface FieldDefinition {
     name: string; // PascalCase enforced by the backend
     displayName: string;
-    type: FieldType;
+    // The wire carries whatever spelling the definition was written with, alias included, so this
+    // is wider than what the picker offers. Put it through resolveFieldType before switching on it.
+    type: FieldType | FieldTypeAlias;
     isRequired: boolean;
     defaultValue?: unknown;
     validationRules?: Record<string, unknown>;
@@ -49,6 +51,7 @@ export const FIELD_MASKS: { value: FieldMask; label: string }[] = [
 
 export type FieldType =
     | 'string'
+    | 'text'
     | 'int'
     | 'decimal'
     | 'money'
@@ -60,11 +63,22 @@ export type FieldType =
     | 'url'
     | 'slug'
     | 'uuid'
+    | 'reference'
     | 'richtext'
     | 'markdown'
     | 'json'
     | 'array'
-    | 'object';
+    | 'object'
+    | 'geopoint';
+
+/** Historical spellings the registry still accepts. Never offered as a type of its own. */
+export type FieldTypeAlias = 'integer' | 'number' | 'boolean';
+
+export const FIELD_TYPE_ALIASES: Record<FieldTypeAlias, FieldType> = {
+    integer: 'int',
+    number: 'int',
+    boolean: 'bool',
+};
 
 export interface ContentTypeDefinition {
     id?: string;
@@ -101,28 +115,92 @@ export interface CreateSchemaRequest {
     isPubliclyDeliverable?: boolean;
 }
 
-export const FIELD_TYPES: { value: FieldType; label: string; description: string }[] = [
-    // Text
-    { value: 'string', label: 'Text', description: 'A line or block of text' },
-    { value: 'richtext', label: 'Rich text', description: 'Formatted content (HTML)' },
-    { value: 'markdown', label: 'Markdown', description: 'Markdown-formatted text' },
-    // Numbers
-    { value: 'int', label: 'Whole number', description: 'Counts and quantities' },
-    { value: 'decimal', label: 'Decimal number', description: 'Ratings, measurements' },
-    { value: 'money', label: 'Money', description: 'A monetary amount' },
-    // Boolean
-    { value: 'bool', label: 'Yes / No', description: 'A true-or-false toggle' },
-    // Date & time
-    { value: 'date', label: 'Date', description: 'A calendar date' },
-    { value: 'datetime', label: 'Date & time', description: 'A point in time' },
-    { value: 'time', label: 'Time', description: 'A time of day' },
-    // Validated formats
-    { value: 'email', label: 'Email', description: 'A valid email address' },
-    { value: 'url', label: 'URL', description: 'A web link (http/https)' },
-    { value: 'slug', label: 'Slug', description: 'URL-friendly identifier, e.g. my-post' },
-    { value: 'uuid', label: 'UUID', description: 'A unique identifier' },
-    // Structured
-    { value: 'json', label: 'JSON', description: 'An arbitrary JSON object or array' },
-    { value: 'array', label: 'List', description: 'Multiple values in one field' },
-    { value: 'object', label: 'Nested object', description: 'Structured JSON data' },
+/**
+ * Every field type the API accepts, grouped the way the Add-a-field panel groups them.
+ *
+ * The source of truth is the server's Core/Validation/FieldTypeRegistry.cs, and this is a copy of
+ * it kept by hand. It has to be: the registry is a static C# array, and the API publishes it
+ * neither as an endpoint nor as an enum in its OpenAPI document, so nothing here can be checked
+ * against the server the way smoke/enums.spec.ts checks the enums that are published. A type added
+ * there has to be added here, and src/types/schema.test.ts pins this list by name so the copy fails
+ * loudly rather than quietly offering nineteen of twenty.
+ */
+export const FIELD_TYPE_GROUPS: {
+    label: string;
+    types: { value: FieldType; label: string; description: string }[];
+}[] = [
+    {
+        label: 'Text',
+        types: [
+            { value: 'string', label: 'Text', description: 'A single line of text' },
+            { value: 'text', label: 'Long text', description: 'A block of plain text' },
+            { value: 'richtext', label: 'Rich text', description: 'Formatted content (HTML)' },
+            { value: 'markdown', label: 'Markdown', description: 'Markdown-formatted text' },
+            { value: 'slug', label: 'Slug', description: 'URL-friendly identifier, e.g. my-post' },
+            { value: 'uuid', label: 'UUID', description: 'A unique identifier' },
+        ],
+    },
+    {
+        label: 'Numbers',
+        types: [
+            { value: 'int', label: 'Whole number', description: 'Counts and quantities' },
+            { value: 'decimal', label: 'Decimal number', description: 'Ratings, measurements' },
+            { value: 'money', label: 'Money', description: 'A monetary amount' },
+        ],
+    },
+    {
+        label: 'Time',
+        types: [
+            { value: 'date', label: 'Date', description: 'A calendar date' },
+            { value: 'datetime', label: 'Date & time', description: 'A point in time' },
+            { value: 'time', label: 'Time', description: 'A time of day' },
+        ],
+    },
+    {
+        label: 'True or false',
+        types: [{ value: 'bool', label: 'Yes / No', description: 'A true-or-false toggle' }],
+    },
+    {
+        label: 'Structured',
+        types: [
+            { value: 'array', label: 'List', description: 'Multiple values in one field' },
+            { value: 'object', label: 'Nested object', description: 'Structured JSON data' },
+            { value: 'json', label: 'JSON', description: 'An arbitrary JSON object or array' },
+            { value: 'geopoint', label: 'Location', description: 'A latitude and longitude pair' },
+        ],
+    },
+    {
+        // The server checks the format of these on write and rejects a value that does not fit.
+        label: 'Checked on write',
+        types: [
+            { value: 'email', label: 'Email', description: 'A valid email address' },
+            { value: 'url', label: 'URL', description: 'A web link (http/https)' },
+            { value: 'reference', label: 'Reference', description: 'The id of another entry' },
+        ],
+    },
 ];
+
+/** The same types, flat, for looking one up by value. */
+export const FIELD_TYPES: { value: FieldType; label: string; description: string }[] =
+    FIELD_TYPE_GROUPS.flatMap((group) => group.types);
+
+const BY_VALUE = new Map(FIELD_TYPES.map((type) => [type.value, type]));
+
+/**
+ * The canonical type behind a name the API sent, or undefined if this console does not know it.
+ *
+ * Case-insensitive, because the registry lookup is: the server accepts 'Integer' and stores the
+ * spelling it was handed. Undefined rather than a fallback to string, so a caller can tell a type
+ * it cannot render from one it can.
+ */
+export function resolveFieldType(type: string): FieldType | undefined {
+    const key = type.toLowerCase();
+    if (BY_VALUE.has(key as FieldType)) return key as FieldType;
+    return FIELD_TYPE_ALIASES[key as FieldTypeAlias];
+}
+
+/** What to call a field type on screen. One this console does not know shows as the server sent it. */
+export function fieldTypeLabel(type: string): string {
+    const resolved = resolveFieldType(type);
+    return resolved ? BY_VALUE.get(resolved)!.label : type;
+}

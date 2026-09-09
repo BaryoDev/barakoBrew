@@ -8,7 +8,9 @@ import { Switch } from '@/components/ui/switch';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
@@ -31,9 +33,11 @@ import {
 } from '@/components/icons';
 import {
     FIELD_MASKS,
-    FIELD_TYPES,
+    FIELD_TYPE_GROUPS,
     FieldMask,
     SensitivityLevel,
+    fieldTypeLabel,
+    resolveFieldType,
     type FieldDefinition,
     type FieldType,
 } from '@/types/schema';
@@ -110,8 +114,6 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
         onChange(next);
     };
 
-    const typeLabel = (type: FieldType) => FIELD_TYPES.find((t) => t.value === type)?.label ?? type;
-
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -173,7 +175,7 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                                     )}
                                 </div>
                                 <p className="text-muted-foreground text-xs">
-                                    <code className="font-mono">{field.name}</code> · {typeLabel(field.type)}
+                                    <code className="font-mono">{field.name}</code> · {fieldTypeLabel(field.type)}
                                 </p>
                             </div>
                             <Button
@@ -247,20 +249,29 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                             )}
                         </div>
                         <div className="space-y-2">
-                            <Label>Type</Label>
+                            <Label htmlFor="field-type">Type</Label>
                             <Select
-                                value={form.type}
+                                // A definition can carry an alias ('integer' for 'int'), which is not a
+                                // value the picker offers, so an unresolved one would show as empty.
+                                value={resolveFieldType(form.type) ?? 'string'}
                                 onValueChange={(value) => setForm((f) => ({ ...f, type: value as FieldType }))}
                             >
-                                <SelectTrigger className="w-full">
+                                <SelectTrigger id="field-type" className="w-full">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {FIELD_TYPES.map((type) => (
-                                        <SelectItem key={type.value} value={type.value}>
-                                            <span className="font-medium">{type.label}</span>
-                                            <span className="text-muted-foreground ml-1.5 text-xs">{type.description}</span>
-                                        </SelectItem>
+                                    {FIELD_TYPE_GROUPS.map((group) => (
+                                        <SelectGroup key={group.label}>
+                                            <SelectLabel>{group.label}</SelectLabel>
+                                            {group.types.map((type) => (
+                                                <SelectItem key={type.value} value={type.value}>
+                                                    <span className="font-medium">{type.label}</span>
+                                                    <span className="text-muted-foreground ml-1.5 text-xs">
+                                                        {type.description}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
                                     ))}
                                 </SelectContent>
                             </Select>
