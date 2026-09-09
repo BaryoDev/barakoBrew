@@ -161,6 +161,14 @@ company deploys.
 exception: the `@img/sharp-libvips-*` prebuilt binaries are LGPL-3.0-or-later and arrive as an
 optional dependency of Next.js itself. The script prints that carve-out on every run.
 
+**The image is not only what this repository asks for.** Next.js pulls `sharp` as an optional
+dependency and `next build` traces its prebuilt libvips binaries into the standalone output, so
+`ghcr.io/baryodev/barako-admin` redistributes LGPL-3.0-or-later code that nothing here depends on
+directly. That is recorded in `THIRD-PARTY-NOTICES.md`, which ships inside the image because the
+obligation attaches to the image. The gate excepts those packages **by name, not by allowing the
+LGPL**, so a new copyleft dependency still fails, and it prints the exception on every run. See
+[#76](https://github.com/BaryoDev/barakoBrew/issues/76).
+
 **2. No runtime licence gates.** A permissive licence is not sufficient. The failure mode that
 costs money is a package whose shipped code holds a licence key, phones home, or gates features at
 runtime, because the bill arrives after you have built on it. Refuse it if any of these hold:
