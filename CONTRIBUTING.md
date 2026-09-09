@@ -139,6 +139,68 @@ expect(rows.every(r => r.status === 'Draft')).toBe(true);
 - `npm audit` runs in CI and fails on Critical or High. If a finding has no fix, say so in the PR
   rather than lowering the gate.
 
+### Adding a dependency
+
+Three rules, from [#39](https://github.com/BaryoDev/barakoBrew/issues/39). CI enforces the first
+one. The other two need a person, so they are a checklist rather than a job.
+
+**1. The licence must be permissive.** MPL-2.0 is file-level copyleft and §3.3 lets MPL files be
+combined into a Larger Work under other terms, so the line is narrower than "MIT only".
+
+Allowed: MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, MPL-2.0, Unlicense, CC0-1.0, and the
+permissive licences already in the tree that the audit in #39 missed because it read direct
+dependencies only: 0BSD, MIT-0, BlueOak-1.0.0, Python-2.0, CC-BY-4.0.
+
+Refused: GPL, AGPL, LGPL, SSPL, BUSL, Elastic, "fair source", and anything with no
+machine-readable licence field. LGPL is refused despite its dynamic-linking allowance, because that
+allowance is meaningless once a bundler inlines the code. AGPL is the one that would actually cost
+money later: `CLA.md` names it as what enterprise buyers refuse, and the console is the part a
+company deploys.
+
+`scripts/check-licences.sh` is the gate, and the `licences` CI job runs it. It carries one named
+exception: the `@img/sharp-libvips-*` prebuilt binaries are LGPL-3.0-or-later and arrive as an
+optional dependency of Next.js itself. The script prints that carve-out on every run.
+
+**2. No runtime licence gates.** A permissive licence is not sufficient. The failure mode that
+costs money is a package whose shipped code holds a licence key, phones home, or gates features at
+runtime, because the bill arrives after you have built on it. Refuse it if any of these hold:
+
+- [ ] your code must hold a licence key or token for it to work correctly
+- [ ] the shipped bundle validates entitlement or contacts the vendor at runtime
+- [ ] a feature you need exists only in a paid package, with the OSS one as a lead magnet
+- [ ] unlicensed use degrades the product (watermark, console errors, nag)
+
+`ag-grid-community` is the standing example and is banned. It is genuinely MIT, but enterprise
+features ship in the same install gated by a key, and unlicensed use puts a watermark over your
+grid and errors in the console. That was discovered in production, not in review.
+
+A vendor selling something is not disqualifying, or this rule eats Next.js, React and TanStack.
+What matters is whether the thing you ship can be switched off by someone else. Check the published
+tarball, not the pricing page:
+
+```bash
+npm pack <pkg> && tar -xzf *.tgz
+grep -rioE "licen[sc]e[- ]?key|validateLicense|entitlement|telemetry" package/dist
+grep -rhoE "https?://[^\"' ]+" package/dist | sort -u    # outbound URLs
+```
+
+An inspection proves that *this version* is clean, not that the next one will be. The durable
+protection is a permissive licence plus a committed lockfile plus the ability to fork.
+
+**3. Maintenance is part of the check.** Abandonment strands you the same way a paywall does, and
+no cheque fixes it.
+
+- [ ] last publish is recent, and releases have a cadence
+- [ ] open "is this still maintained?" issues have maintainer answers
+- [ ] the docs and the code are in repositories that are not archived
+
+`@dnd-kit/core` fails this today: its docs repo was archived in February 2026 and a direct
+maintenance question ([dnd-kit#1830](https://github.com/clauderic/dnd-kit/issues/1830)) was closed
+with no maintainer reply.
+
+Put the answers to rules 2 and 3 in the PR body. A dependency nobody explained is one nobody can
+review.
+
 ## Licence
 
 barakoBrew is released under the [Mozilla Public License 2.0](LICENSE), and your contribution ships

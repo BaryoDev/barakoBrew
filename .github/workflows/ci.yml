@@ -128,6 +128,65 @@ jobs:
             exit 1
           fi
 
+  # Licence gate (#39). MPL-2.0 is file-level copyleft and §3.3 lets MPL files be combined into a
+  # Larger Work under other terms, so permissive dependencies are fine. What must not enter the tree
+  # is GPL, AGPL, LGPL, SSPL, BUSL, Elastic, "fair source", or a package with no machine-readable
+  # licence field. AGPL is the one that costs money later: CLA.md names it as what enterprise buyers
+  # refuse, and the console is the part a company deploys.
+  #
+  # Both directions in one job, the same shape as image-platform-gate below. A gate that has only
+  # ever been green is not evidence that it works.
+  licences:
+    name: Licence gate
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A floor on the package count, for the same reason the unit suite asserts one: a report that
+      # covers nothing still exits 0. 569 packages install on a developer machine today, and the
+      # runner installs a different set of platform binaries, so 400 leaves room for that without
+      # accepting a report that saw almost nothing.
+      - name: Every licence in the tree is on the allow list
+        run: bash scripts/check-licences.sh . 400
+
+      # The gate proved against a package that must be refused. ffmpeg-static is genuinely
+      # GPL-3.0-or-later and small, and pinning the version keeps this from turning red the day the
+      # package relicenses. --ignore-scripts because its postinstall downloads an ffmpeg binary that
+      # has nothing to do with the licence field.
+      #
+      # The scratch install lives outside the checkout, so the probe cannot reach the real
+      # node_modules the step above just checked.
+      - name: The gate refuses a GPL dependency
+        run: |
+          set -uo pipefail
+          probe=$(mktemp -d)
+          (cd "$probe" && npm init -y >/dev/null && \
+            npm install --ignore-scripts --no-audit --no-fund ffmpeg-static@5.3.0 >/dev/null)
+
+          # Actions runs this under bash -e. Capturing the status on the same line keeps -e from
+          # ending the step at the assignment, before the output is read.
+          code=0
+          out=$(bash scripts/check-licences.sh "$probe" 2>&1) || code=$?
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "::error::the gate passed a tree holding a GPL package"; exit 1
+          fi
+          # A registry or jq failure also exits 1. Only the refusal message counts as the gate
+          # working, and it has to name the package or a maintainer cannot act on it.
+          echo "$out" | grep -q "ffmpeg-static@5.3.0 is GPL-3.0-or-later" || {
+            echo "::error::the gate failed, but not because of the GPL package (exit $code)"; exit 1; }
+
   e2e:
     name: End to end (Playwright and axe)
     if: github.event_name != 'schedule'

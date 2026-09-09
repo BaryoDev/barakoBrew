@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- A licence gate. `scripts/check-licences.sh` reads the installed tree and fails on anything
+  outside the permissive allow list, and the CI job proves it can fail by running it against a
+  scratch install of `ffmpeg-static`, which is GPL-3.0-or-later. Rules that cannot be automated,
+  no runtime licence gates and a maintenance check, are a checklist in `CONTRIBUTING.md` and a line
+  in the pull request template.
+
 ## [1.0.0] - 2026-09-08
 
 **Works against barakoCMS 4.0.0.** It cannot drive 3.21: 4.0 moved enums to strings, put lists in an
