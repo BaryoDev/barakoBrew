@@ -375,12 +375,48 @@ test.describe('accessibility', () => {
     test('the entry form, which is the page an editor spends the most time in', async ({ page }) => {
         await authed(page);
         await stubShell(page);
-        await stubContentTypes(page, [SCHEMA]);
-        await page.route('**/api/contents**', (r) => r.fulfill({ json: pageOf([]) }));
+        // With a reference field on it, because the picker that field renders is a dialog over a
+        // list and is the newest thing on this page that a keyboard has to get through.
+        await stubContentTypes(page, [
+            {
+                ...SCHEMA,
+                fields: [
+                    ...SCHEMA.fields,
+                    {
+                        name: 'Author',
+                        displayName: 'Author',
+                        type: 'reference',
+                        referenceType: 'article',
+                        isRequired: false,
+                    },
+                ],
+            },
+        ]);
+        await page.route('**/api/contents**', (r) =>
+            r.fulfill({
+                json: pageOf([
+                    {
+                        id: '11111111-1111-4111-8111-111111111111',
+                        contentType: 'article',
+                        data: { Title: 'An earlier article' },
+                        status: 'Published',
+                        sensitivity: 'Public',
+                        version: 1,
+                        createdAt: '2026-09-01T00:00:00Z',
+                        updatedAt: '2026-09-01T00:00:00Z',
+                    },
+                ]),
+            })
+        );
 
         await page.goto('/content/new?type=article');
         // The form only appears once the schema resolves.
         await expect(page.locator('#Title')).toBeVisible({ timeout: 15000 });
+        await scan(page);
+
+        // And again with the picker open, since a dialog's own markup is not on the page until it is.
+        await page.locator('#Author').click();
+        await expect(page.getByRole('option', { name: /An earlier article/ })).toBeVisible();
         await scan(page);
     });
 });

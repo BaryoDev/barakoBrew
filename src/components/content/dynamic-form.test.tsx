@@ -34,8 +34,10 @@ describe('the types the picker was short of', () => {
         expect(renderField({ name: 'Body', type: 'text' }).tagName).toBe('TEXTAREA');
     });
 
-    it('gives a reference a single-line input, not a textarea', () => {
-        // A reference is the id of another entry. The server checks it parses as a GUID.
+    it('gives a reference with no target type a single-line input, not a textarea', () => {
+        // A reference is the id of another entry, and one whose definition does not name the type it
+        // points at has nothing to search, so it keeps the id box. A definition that does name one
+        // gets the picker, which reference-field.test.tsx covers.
         const control = renderField({ name: 'Author', type: 'reference' });
         expect(control.tagName).toBe('INPUT');
         expect(control).toHaveAttribute('type', 'text');

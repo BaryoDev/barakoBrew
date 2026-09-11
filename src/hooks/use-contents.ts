@@ -12,7 +12,10 @@ import type {
 } from '@/types/content';
 
 export function useContents(
-    params: PageParams & { contentType?: string; search?: string; status?: ContentStatus } = {}
+    params: PageParams & { contentType?: string; search?: string; status?: ContentStatus } = {},
+    // Off keeps the list unfetched, for a caller that only needs it once a control is opened. The
+    // default is the behaviour every existing caller already has.
+    enabled = true
 ) {
     return useQuery({
         queryKey: ['contents', 'list', params],
@@ -20,10 +23,14 @@ export function useContents(
             const response = await api.get<Paginated<ContentListItem>>('/api/contents', { params });
             return response.data;
         },
+        enabled,
     });
 }
 
-export function useContent(id: string) {
+// enabled is for a caller that already has the entry and only needs this when it does not, such as
+// a reference picker resolving an id it has not listed. The default is every existing caller's
+// behaviour.
+export function useContent(id: string, enabled = true) {
     return useQuery({
         queryKey: ['contents', 'detail', id],
         queryFn: async (): Promise<ContentDetailRead> => {
@@ -33,7 +40,7 @@ export function useContent(id: string) {
             // CORS; without that header it is invisible to JavaScript and this is undefined.
             return { ...response.data, etag: response.headers?.etag };
         },
-        enabled: !!id,
+        enabled: !!id && enabled,
     });
 }
 

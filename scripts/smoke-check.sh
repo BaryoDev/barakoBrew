@@ -160,10 +160,23 @@ TOKEN=$("${CURL[@]}" -X POST "$API/api/auth/login" -H 'Content-Type: application
 # --fail, because curl reports a 400 or a 401 as a successful transfer. Without it a refused seed
 # is only noticed at the count check below, which then blames the console for an empty list when
 # the entry was never created. Say which call failed, at the point it fails.
+# The type a reference points at, created first so the reference below has a target that exists.
 "${CURL[@]}" --fail-with-body -o /dev/null -X POST "$API/api/content-types" -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' \
-    -d '{"name":"smokepost","displayName":"Smoke Post","fields":[{"name":"Title","type":"string"}]}' \
+    -d '{"name":"smokeauthor","displayName":"Smoke Author","fields":[{"name":"Name","type":"string"}]}' \
+    || fail "the API refused the reference target type, so the reference field below could not be seeded"
+
+# Author is a reference, because the console reads referenceType off the definition to know what to
+# offer in its picker, and a definition without one would leave that unchecked here.
+"${CURL[@]}" --fail-with-body -o /dev/null -X POST "$API/api/content-types" -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"smokepost","displayName":"Smoke Post","fields":[{"name":"Title","type":"string"},{"name":"Author","type":"reference","referenceType":"smokeauthor"}]}' \
     || fail "the API refused the seed content type, so nothing below would be testing the console"
+
+"${CURL[@]}" --fail-with-body -o /dev/null -X POST "$API/api/contents" -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"contentType":"smokeauthor","data":{"Name":"Smoke author"},"status":"Published"}' \
+    || fail "the API refused the seed author, so the reference picker would have nothing to list"
 
 "${CURL[@]}" --fail-with-body -o /dev/null -X POST "$API/api/contents" -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' \

@@ -9,6 +9,16 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- A reference field is a search over the content type it points at, not a box for pasting a GUID
+  into. The API has always sent `referenceType` naming that type, and the console's
+  `FieldDefinition` dropped it on the way in, so Author, Category and every other relation could
+  only be set by typing an id. Entries read as their titles now, the search runs on the server, and
+  a definition that names no target type keeps the id box it had. Additive: no contract change, and
+  the supported API range does not move. `smoke/reference-fields.spec.ts` holds the server to
+  sending the field, since nothing mocked can.
+
 ## [1.0.0] - 2026-09-09
 
 **Works against barakoCMS 4.0.1 and later.** It cannot drive 3.21: 4.0 moved enums to strings, put
