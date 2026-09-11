@@ -123,6 +123,23 @@ async function scan(page: import('@playwright/test').Page) {
     ).toBe('');
 }
 
+/**
+ * Every scan in this file runs in a reduced-motion context, so the audit sees the resting page.
+ *
+ * axe reads the colour an element actually composites to. A Radix dialog or a button coming back
+ * from disabled is mid-animation for the first hundred or so milliseconds, drawn at partial opacity
+ * over whatever is behind it, and a scan that lands there reports contrast failures the settled page
+ * does not have. That is the worst kind of gate: red often enough to be switched off. It cost a
+ * two-in-three failure rate on the entry form picker, on chromium and on Mobile Chrome.
+ *
+ * `globals.css` honours `prefers-reduced-motion` by cutting animations to 0.01ms rather than to
+ * none, so enter and exit still complete and dialogs still unmount. The resting state is the state
+ * worth auditing anyway, and putting this here rather than in one test covers every animated thing
+ * added to these routes later. It stays out of `playwright.config.ts` on purpose: the other specs
+ * test behaviour, not composited colour, and they should keep running the animations a person sees.
+ */
+test.use({ reducedMotion: 'reduce' });
+
 test.describe('accessibility', () => {
     test('the sign-in page', async ({ page }) => {
         await stubShell(page);

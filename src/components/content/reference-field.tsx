@@ -55,7 +55,7 @@ export function ReferenceField({
 
     const selectedId = typeof value === 'string' ? value : '';
 
-    const { data: schemas } = useSchemas();
+    const { data: schemas, isPending: typesLoading } = useSchemas();
     // referenceType and the type's own name are compared case-insensitively by the API, and a
     // definition can spell it either way, but the entry list filters on an exact match. So query
     // with the spelling the type itself carries, and fall back to what the definition said when the
@@ -66,9 +66,13 @@ export function ReferenceField({
 
     // Only once the dialog is open. A form can carry several references, and fetching a page of
     // every target type on load is work for lists nobody has asked to see.
+    //
+    // And only once the type list has settled, or the fallback above would ask with the definition's
+    // spelling while the real one was still in flight: a wasted request, and a list that reads empty
+    // for as long as it takes to come back.
     const { data: page, isLoading } = useContents(
         { contentType: queryType, search: query || undefined, page: 1, pageSize: 20 },
-        open
+        open && !typesLoading
     );
     const entries = page?.items ?? [];
 
@@ -137,6 +141,12 @@ export function ReferenceField({
             )}
             <FieldError message={error} />
 
+            {/* Dialog and Command by hand rather than the CommandDialog primitive the command menu
+                uses, for two reasons the primitive cannot be asked for from outside. It renders the
+                Command itself and forwards no `shouldFilter`, so cmdk would filter the page the
+                server already searched. And its sr-only DialogHeader sits outside DialogContent, so
+                the title renders into the page whether the dialog is open or not: a form with three
+                reference fields would carry three stray headings a screen reader reads. */}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="overflow-hidden p-0">
                     <DialogHeader className="sr-only">
@@ -155,7 +165,7 @@ export function ReferenceField({
                             placeholder={`Search ${targetLabel}`}
                         />
                         <CommandList>
-                            {isLoading ? (
+                            {isLoading || typesLoading ? (
                                 <p className="text-muted-foreground py-6 text-center text-sm">
                                     Searching…
                                 </p>

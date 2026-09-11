@@ -15,7 +15,8 @@
 #
 #   1. stand up Postgres in a container
 #   2. start the published API image, seeder on, so there is an administrator
-#   3. seed one content type and one entry, through the API, so there is something to list
+#   3. seed two content types and two entries, through the API, so there is something to list and
+#      a reference with a target that exists
 #   4. build and start the console from the working tree, pointed at that API
 #   5. run smoke/, which contains no page.route and must not
 #
@@ -146,7 +147,7 @@ echo "API image reports build: ${BUILD:-unknown}"
 [ "$("${CURL[@]}" -o /dev/null -w '%{http_code}' "$API/swagger/v1/swagger.json")" = "200" ] \
     || fail "the API served no OpenAPI document, so the enum checks would compare against nothing"
 
-step "seeding one content type and one entry"
+step "seeding two content types and two entries"
 TOKEN=$("${CURL[@]}" -X POST "$API/api/auth/login" -H 'Content-Type: application/json' \
     -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))')

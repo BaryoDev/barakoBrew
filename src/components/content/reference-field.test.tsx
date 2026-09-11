@@ -56,16 +56,25 @@ function entry(id: string) {
     };
 }
 
-/** The search terms the entry list was asked for, in order. */
-function searchesAsked(): (string | undefined)[] {
+function listParams(): { contentType?: string; search?: string }[] {
     return vi
         .mocked(api.get)
         .mock.calls.filter(([url]) => url === '/api/contents')
-        .map(([, config]) => (config as { params: { search?: string } }).params.search);
+        .map(([, config]) => (config as { params: { contentType?: string; search?: string } }).params);
+}
+
+/** The search terms the entry list was asked for, in order. */
+function searchesAsked(): (string | undefined)[] {
+    return listParams().map((p) => p.search);
+}
+
+/** The content types the entry list was asked for, in order. */
+function typesAsked(): (string | undefined)[] {
+    return listParams().map((p) => p.contentType);
 }
 
 function listCalls(): number {
-    return searchesAsked().length;
+    return listParams().length;
 }
 
 // cmdk measures its list, and jsdom has no ResizeObserver, so the dialog cannot open without this.
@@ -77,7 +86,14 @@ beforeAll(() => {
     };
 });
 
-beforeEach(() => {
+/**
+ * The API as the console meets it: one content type named `author`, and the entries it holds.
+ *
+ * The entry list is filtered on `contentType === 'author'` exactly, the way the server's list
+ * endpoint does, so asking for any other spelling of the name comes back empty rather than coming
+ * back anyway.
+ */
+function stubApi(entries: typeof ENTRIES) {
     vi.mocked(api.get).mockReset();
     vi.mocked(api.get).mockImplementation(async (url: string, config?: unknown) => {
         if (url === '/api/content-types') {
@@ -87,7 +103,7 @@ beforeEach(() => {
         }
         if (url === '/api/contents') {
             const params = (config as { params: { contentType?: string; search?: string } }).params;
-            const matching = ENTRIES.filter(
+            const matching = entries.filter(
                 (e) =>
                     params.contentType === 'author' &&
                     (!params.search ||
@@ -100,6 +116,10 @@ beforeEach(() => {
         }
         throw new Error(`unstubbed GET ${url}`);
     });
+}
+
+beforeEach(() => {
+    stubApi(ENTRIES);
 });
 
 const AUTHOR_FIELD: FieldDefinition = {
@@ -199,6 +219,33 @@ describe('a reference field whose definition names the type it points at', () =>
         expect(options[0]).toHaveTextContent('Juan dela Cruz');
     });
 
+    it('says so when the target type holds no entries at all', async () => {
+        stubApi([]);
+        const control = renderForm(AUTHOR_FIELD);
+
+        fireEvent.click(control);
+
+        expect(await screen.findByText('There are no Author entries yet.')).toBeInTheDocument();
+        expect(screen.queryAllByRole('option')).toHaveLength(0);
+    });
+
+    it('says so when a search matches none of them, rather than showing the last page again', async () => {
+        const control = renderForm(AUTHOR_FIELD);
+        fireEvent.click(control);
+        // A live list first, so the copy below cannot pass on a dialog that never listed anything.
+        expect(await screen.findAllByRole('option')).toHaveLength(2);
+
+        fireEvent.change(await screen.findByPlaceholderText('Search Author'), {
+            target: { value: 'nobody' },
+        });
+
+        await waitFor(() => expect(searchesAsked()).toContain('nobody'));
+        expect(
+            await screen.findByText('No Author entries match that search.')
+        ).toBeInTheDocument();
+        expect(screen.queryAllByRole('option')).toHaveLength(0);
+    });
+
     it('clears the value rather than leaving an id nobody can read', async () => {
         const onChange = vi.fn();
         renderForm(AUTHOR_FIELD, { Author: AUTHOR_ID }, onChange);
@@ -206,6 +253,26 @@ describe('a reference field whose definition names the type it points at', () =>
         fireEvent.click(await screen.findByRole('button', { name: 'Clear Author' }));
 
         expect(onChange).toHaveBeenCalledWith({ Author: null });
+    });
+});
+
+describe('a reference field whose definition spells the target type differently', () => {
+    /**
+     * `referenceType: 'Author'` against a type named `author`, which the API allows: it compares the
+     * two case-insensitively when it validates a reference. The entry list does not, it filters on an
+     * exact match, so the picker has to ask with the name the type itself carries. Asking with the
+     * definition's spelling returns an empty list and the picker offers nothing.
+     */
+    const FIELD: FieldDefinition = { ...AUTHOR_FIELD, referenceType: 'Author' };
+
+    it('asks the entry list for the name the content type itself carries', async () => {
+        const control = renderForm(FIELD);
+
+        fireEvent.click(control);
+
+        const options = await screen.findAllByRole('option');
+        expect(options).toHaveLength(2);
+        expect(typesAsked()).toEqual(['author']);
     });
 });
 
