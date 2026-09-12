@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { ContentStatus, SensitivityLevel } from '@/types/content';
@@ -41,9 +42,33 @@ function pageOf<T>(items: T[]) {
     };
 }
 
+/**
+ * A real AxiosError, not an object shaped like one.
+ *
+ * `axios.isAxiosError` checks a marker the constructor sets, so a hand-rolled `{ response: { status } }`
+ * is invisible to every helper in `lib/api` that reads a status. A stub that throws one would let the
+ * component treat a 404 as a transport failure and the test would never notice.
+ */
+function axiosFailure(status: number, data: unknown = {}) {
+    const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST');
+    error.response = {
+        data,
+        status,
+        statusText: '',
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+    };
+    return error;
+}
+
+/** What axios throws when the request never got an answer: no response at all. */
+function networkFailure() {
+    return new AxiosError('Network Error', 'ERR_NETWORK');
+}
+
 function entry(id: string) {
     const found = ENTRIES.find((e) => e.id === id);
-    if (!found) throw Object.assign(new Error('Not found'), { response: { status: 404 } });
+    if (!found) throw axiosFailure(404, { message: 'Content not found' });
     return {
         id: found.id,
         contentType: 'author',
@@ -87,13 +112,22 @@ beforeAll(() => {
 });
 
 /**
+ * Per-request failures a test can inject. Each returns the error to throw, or nothing to let the
+ * request through, so a test can fail a call once and then let the retry succeed.
+ */
+interface Failures {
+    list?: () => unknown;
+    detail?: () => unknown;
+}
+
+/**
  * The API as the console meets it: one content type named `author`, and the entries it holds.
  *
  * The entry list is filtered on `contentType === 'author'` exactly, the way the server's list
  * endpoint does, so asking for any other spelling of the name comes back empty rather than coming
  * back anyway.
  */
-function stubApi(entries: typeof ENTRIES) {
+function stubApi(entries: typeof ENTRIES, fail: Failures = {}) {
     vi.mocked(api.get).mockReset();
     vi.mocked(api.get).mockImplementation(async (url: string, config?: unknown) => {
         if (url === '/api/content-types') {
@@ -102,6 +136,8 @@ function stubApi(entries: typeof ENTRIES) {
             } as never;
         }
         if (url === '/api/contents') {
+            const thrown = fail.list?.();
+            if (thrown) throw thrown;
             const params = (config as { params: { contentType?: string; search?: string } }).params;
             const matching = entries.filter(
                 (e) =>
@@ -112,6 +148,8 @@ function stubApi(entries: typeof ENTRIES) {
             return { data: pageOf(matching) } as never;
         }
         if (url.startsWith('/api/contents/')) {
+            const thrown = fail.detail?.();
+            if (thrown) throw thrown;
             return { data: entry(url.slice('/api/contents/'.length)), headers: {} } as never;
         }
         throw new Error(`unstubbed GET ${url}`);
@@ -253,6 +291,101 @@ describe('a reference field whose definition names the type it points at', () =>
         fireEvent.click(await screen.findByRole('button', { name: 'Clear Author' }));
 
         expect(onChange).toHaveBeenCalledWith({ Author: null });
+    });
+});
+
+describe('a reference field whose reads fail', () => {
+    /**
+     * The distinction these hold: a 404 is a fact about the value, anything else is a fact about the
+     * connection. The component used to report both as "this id does not resolve", which told an
+     * editor their reference was broken every time the network blinked and sent them off to change
+     * data that was fine.
+     */
+
+    it('separates an id that is not there from an id it could not check', async () => {
+        stubApi(ENTRIES, { detail: () => networkFailure() });
+        renderForm(AUTHOR_FIELD, { Author: AUTHOR_ID });
+
+        expect(await screen.findByText(/could not be read/)).toBeInTheDocument();
+        expect(
+            screen.queryByText(/does not resolve to an entry this console can read/)
+        ).not.toBeInTheDocument();
+    });
+
+    it('offers the reader the retry that a transport failure actually calls for', async () => {
+        let attempts = 0;
+        stubApi(ENTRIES, { detail: () => (attempts++ === 0 ? networkFailure() : null) });
+        const control = renderForm(AUTHOR_FIELD, { Author: AUTHOR_ID });
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+        await waitFor(() => expect(control).toHaveTextContent('Arnel Robles'));
+        expect(screen.queryByText(/could not be read/)).not.toBeInTheDocument();
+    });
+
+    it('does not offer a retry for a 404, because trying again cannot find it', async () => {
+        const missing = '33333333-3333-4333-8333-333333333333';
+        renderForm(AUTHOR_FIELD, { Author: missing });
+
+        expect(
+            await screen.findByText(/does not resolve to an entry this console can read/)
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    });
+
+    it('says the list could not be read, rather than that the type holds nothing', async () => {
+        stubApi(ENTRIES, { list: () => axiosFailure(503, { message: 'The database is unavailable.' }) });
+        const control = renderForm(AUTHOR_FIELD);
+
+        fireEvent.click(control);
+
+        // The server's own sentence, the way every other refused request in this console renders.
+        expect(await screen.findByText('The database is unavailable.')).toBeInTheDocument();
+        // The claim the empty branch would have made on the same state, which it had no grounds for.
+        expect(screen.queryByText('There are no Author entries yet.')).not.toBeInTheDocument();
+        expect(screen.queryAllByRole('option')).toHaveLength(0);
+    });
+
+    it('retries the list from that state and shows the entries', async () => {
+        let attempts = 0;
+        stubApi(ENTRIES, { list: () => (attempts++ === 0 ? axiosFailure(503) : null) });
+        const control = renderForm(AUTHOR_FIELD);
+
+        fireEvent.click(control);
+        fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+        const options = await screen.findAllByRole('option');
+        expect(options).toHaveLength(2);
+    });
+});
+
+describe('the keyboard, once the picker closes', () => {
+    /**
+     * The dialog is opened from a plain button rather than a DialogTrigger, and choosing an entry
+     * closes it from inside the list. What focus returns to is then whatever radix happened to record
+     * at mount, so it is pinned explicitly and held here on both exits. Losing it drops a keyboard
+     * user at the top of the document, in a form they were part way through.
+     */
+
+    it('returns focus to the field after an entry is chosen', async () => {
+        const control = renderForm(AUTHOR_FIELD);
+        control.focus();
+        fireEvent.click(control);
+
+        fireEvent.click(await screen.findByText('Juan dela Cruz'));
+
+        await waitFor(() => expect(document.activeElement).toBe(control));
+    });
+
+    it('returns focus to the field after the dialog is dismissed', async () => {
+        const control = renderForm(AUTHOR_FIELD);
+        control.focus();
+        fireEvent.click(control);
+        await screen.findAllByRole('option');
+
+        fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+        await waitFor(() => expect(document.activeElement).toBe(control));
     });
 });
 

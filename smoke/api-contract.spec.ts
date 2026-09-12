@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { SUPPORTED_CONTRACT } from '../src/lib/api-contract';
+import { smokeApiUrl } from './api-url';
 
 /**
  * The API's contract version, held against the range this console speaks.
@@ -22,7 +23,7 @@ import { SUPPORTED_CONTRACT } from '../src/lib/api-contract';
  */
 
 // The API, not the console. The pack's baseURL is the admin under test.
-const API = process.env.SMOKE_API_URL || 'http://127.0.0.1:5099';
+const API = smokeApiUrl();
 
 test('the API reports a contract version this console speaks', async ({ request }) => {
     // No Authorization header, so this answers 401, and the header under test is on that too.

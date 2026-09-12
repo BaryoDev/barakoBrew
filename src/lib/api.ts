@@ -244,6 +244,19 @@ export function isConflict(error: unknown): boolean {
     return axios.isAxiosError(error) && error.response?.status === 412;
 }
 
+/**
+ * A read the server answered, saying the thing is not there.
+ *
+ * Worth a helper because the alternative is conflating it with every other way a read can fail. A
+ * 404 means the id is wrong or the entry is gone, which is a fact about the data and something the
+ * person can act on. A timeout, a CORS refusal, a 500 or a dropped connection mean nothing at all
+ * about the id, and telling someone their reference is broken because the network blinked sends them
+ * off to fix data that was always fine.
+ */
+export function isNotFound(error: unknown): boolean {
+    return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
     if (axios.isAxiosError(error)) {
         const data = error.response?.data;

@@ -32,6 +32,17 @@ moved. Which API a console works against is stated per release instead.
   a definition that names no target type keeps the id box it had. Additive: no contract change, and
   the supported API range does not move. `smoke/reference-fields.spec.ts` holds the server to
   sending the field, since nothing mocked can.
+- A reference that could not be read says which of the two things happened. "This id does not
+  resolve to an entry" used to be the answer to every failure, including a timeout or a 500, which
+  told an editor their data was broken when the connection was. A 404 keeps that sentence, anything
+  else renders the server's own and offers a retry, and a failed entry list now says so instead of
+  reporting that the target type holds no entries. Closing the picker returns focus to the field
+  that opened it, on both exits, rather than dropping a keyboard user at the top of the form.
+- The smoke pack refuses to send the seeded administrator's token over plain HTTP to anywhere but
+  this machine. `SMOKE_API_URL` is an override four specs read, and it could name any origin, so an
+  `http://` value pointing off-box put a working administrator credential on the wire in clear and
+  the run passed. `smoke/api-url.ts` checks it once for all four: https anywhere, plain http to
+  loopback only, and a failed run naming the reason otherwise.
 
 ## [1.0.0] - 2026-09-09
 

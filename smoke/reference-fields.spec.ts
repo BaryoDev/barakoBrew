@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { ContentTypeDefinition } from '../src/types/schema';
+import { smokeApiUrl } from './api-url';
 
 /**
  * The one thing a reference field needs from the server, read off the real server.
@@ -17,7 +18,7 @@ import type { ContentTypeDefinition } from '../src/types/schema';
  * the five auth requests the API allows per fifteen minutes.
  */
 
-const API = process.env.SMOKE_API_URL || 'http://127.0.0.1:5099';
+const API = smokeApiUrl();
 const TOKEN = process.env.SMOKE_TOKEN || '';
 
 let types: ContentTypeDefinition[];

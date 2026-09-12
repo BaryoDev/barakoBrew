@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Command,
@@ -22,6 +22,7 @@ import { useContent, useContents } from '@/hooks/use-contents';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useDebounced } from '@/hooks/use-debounced';
 import { contentTitle } from '@/lib/content-title';
+import { apiErrorMessage, isNotFound } from '@/lib/api';
 import type { FieldDefinition } from '@/types/schema';
 
 interface ReferenceFieldProps {
@@ -51,6 +52,7 @@ export function ReferenceField({
 }: ReferenceFieldProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
+    const triggerRef = useRef<HTMLButtonElement>(null);
     const query = useDebounced(search, 300);
 
     const selectedId = typeof value === 'string' ? value : '';
@@ -70,7 +72,13 @@ export function ReferenceField({
     // And only once the type list has settled, or the fallback above would ask with the definition's
     // spelling while the real one was still in flight: a wasted request, and a list that reads empty
     // for as long as it takes to come back.
-    const { data: page, isLoading } = useContents(
+    const {
+        data: page,
+        isLoading,
+        isError: listFailed,
+        error: listError,
+        refetch: refetchList,
+    } = useContents(
         { contentType: queryType, search: query || undefined, page: 1, pageSize: 20 },
         open && !typesLoading
     );
@@ -81,7 +89,12 @@ export function ReferenceField({
 
     // One that is not. A value loaded with the entry being edited is usually not in the page a
     // search happens to return, and the trigger has to read as a title before anything is opened.
-    const { data: fetched, isError: selectedFailed } = useContent(selectedId, !listed);
+    const {
+        data: fetched,
+        isError: selectedFailed,
+        error: selectedError,
+        refetch: refetchSelected,
+    } = useContent(selectedId, !listed);
 
     const resolved = listed ?? fetched;
     const selectedTitle = resolved ? contentTitle(resolved.data, resolved.id) : '';
@@ -102,6 +115,7 @@ export function ReferenceField({
             {label}
             <div className="flex items-center gap-2">
                 <Button
+                    ref={triggerRef}
                     type="button"
                     id={field.name}
                     variant="outline"
@@ -135,8 +149,27 @@ export function ReferenceField({
                 )}
             </div>
             {selectedId && selectedFailed && (
+                /*
+                 * Two different sentences, because the two failures ask for different things. A 404
+                 * is a fact about the value: the entry is gone or the id is wrong, and the fix is to
+                 * pick another. Anything else says nothing about the id at all, and reporting it as a
+                 * broken reference sends the editor off to change data that was never the problem.
+                 */
                 <p className="text-muted-foreground text-xs">
-                    This id does not resolve to an entry this console can read.
+                    {isNotFound(selectedError) ? (
+                        'This id does not resolve to an entry this console can read.'
+                    ) : (
+                        <>
+                            {apiErrorMessage(selectedError, 'This entry could not be read.')}{' '}
+                            <button
+                                type="button"
+                                className="underline underline-offset-2"
+                                onClick={() => void refetchSelected()}
+                            >
+                                Try again
+                            </button>
+                        </>
+                    )}
                 </p>
             )}
             <FieldError message={error} />
@@ -148,7 +181,21 @@ export function ReferenceField({
                 the title renders into the page whether the dialog is open or not: a form with three
                 reference fields would carry three stray headings a screen reader reads. */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="overflow-hidden p-0">
+                <DialogContent
+                    className="overflow-hidden p-0"
+                    onCloseAutoFocus={(event) => {
+                        /*
+                         * Back to the control that opened it. The dialog is opened from a plain
+                         * button rather than a DialogTrigger, and choosing an entry closes it from
+                         * inside the list, so what radix returns focus to depends on what happened
+                         * to be focused when it mounted. Pinning it here means a keyboard user lands
+                         * back on the field they were filling in, on both exits, rather than at the
+                         * top of the document.
+                         */
+                        event.preventDefault();
+                        triggerRef.current?.focus();
+                    }}
+                >
                     <DialogHeader className="sr-only">
                         <DialogTitle>Choose {targetLabel}</DialogTitle>
                         <DialogDescription>
@@ -169,6 +216,32 @@ export function ReferenceField({
                                 <p className="text-muted-foreground py-6 text-center text-sm">
                                     Searching…
                                 </p>
+                            ) : listFailed ? (
+                                /*
+                                 * Before the empty branch, not instead of it. A failed list leaves
+                                 * `entries` empty too, so without this the dialog reports that the
+                                 * type holds no entries, which is a claim about the data it has no
+                                 * grounds for and which sends somebody to create one that exists.
+                                 */
+                                <div
+                                    role="alert"
+                                    className="flex flex-col items-center gap-2 py-6 text-center"
+                                >
+                                    <p className="text-muted-foreground text-sm">
+                                        {apiErrorMessage(
+                                            listError,
+                                            `The ${targetLabel} entries could not be read.`
+                                        )}
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => void refetchList()}
+                                    >
+                                        Try again
+                                    </Button>
+                                </div>
                             ) : entries.length === 0 ? (
                                 <CommandEmpty>
                                     {query
