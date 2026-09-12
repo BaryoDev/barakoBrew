@@ -16,6 +16,26 @@ updates:
         patterns: ["*"]
         update-types: ["major"]
 
+    # Two majors this toolchain cannot take yet, and neither is ours to fix.
+    #
+    # One blocked package stops the whole admin-major group, not just its own bump, because the group
+    # is one pull request. So these are named here rather than left to be reproposed every week as a
+    # pull request that cannot go green, which is how a gate stops being read.
+    #
+    # Both are gated on the same thing: eslint-config-next 16.3.4 vendors typescript-eslint 8.68.0
+    # and the eslint plugins, and Next pins that config. Remove an entry when the vendored versions
+    # move, which is what BaryoDev/barakoBrew#97 tracks.
+    ignore:
+      # typescript-eslint 8.68.0 supports typescript >=4.8.4 <6.1.0 and refuses anything outside it,
+      # so `npm run lint` exits 2 with "typescript-eslint does not support TS 7.0". Not a warning.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # eslint 10 is outside the peer range of three plugins eslint-config-next pulls:
+      # eslint-plugin-import 2.32.0, eslint-plugin-jsx-a11y 6.10.2 and eslint-plugin-react 7.37.5 all
+      # stop at 9. `npm ls` reports it invalid, and the SBOM job runs `npm ls` and fails on that.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+
   # Keep the Actions themselves current. The same concern the npm gate exists for applies to
   # third-party Actions too.
   - package-ecosystem: "github-actions"
