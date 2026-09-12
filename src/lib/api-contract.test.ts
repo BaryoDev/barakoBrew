@@ -72,17 +72,35 @@ describe('recording what the last response said', () => {
     it('notices the answer changing under a running session', () => {
         // A rolling upgrade: the API this console has been talking to is replaced mid-session. The
         // header is on every response precisely so this is visible.
-        recordContractVersion('1');
-        expect(getContractState()).toEqual({ kind: 'ok', version: 1 });
+        //
+        // Derived from the range rather than written as a number, because the number that is one
+        // past the range changes every time the range widens, and a literal here would have turned
+        // into an assertion that a supported version is a mismatch.
+        const tooNew = SUPPORTED_CONTRACT.max + 1;
 
-        recordContractVersion('2');
-        expect(getContractState()).toEqual({ kind: 'api-newer', version: 2 });
+        recordContractVersion(String(SUPPORTED_CONTRACT.min));
+        expect(getContractState()).toEqual({ kind: 'ok', version: SUPPORTED_CONTRACT.min });
+
+        recordContractVersion(String(tooNew));
+        expect(getContractState()).toEqual({ kind: 'api-newer', version: tooNew });
+    });
+
+    it('keeps running when a rolling upgrade moves the API across the range', () => {
+        // The coordinated release this range exists for: old pods answer with one version and new
+        // pods with the next while the rollout is in flight, so a session sees both. Both are
+        // supported, so the console must not blink.
+        recordContractVersion(String(SUPPORTED_CONTRACT.min));
+        recordContractVersion(String(SUPPORTED_CONTRACT.max));
+        expect(getContractState()).toEqual({ kind: 'ok', version: SUPPORTED_CONTRACT.max });
+        expect(isIncompatible(getContractState())).toBe(false);
     });
 
     it('keeps a mismatch when a later response carries no header', () => {
-        recordContractVersion('2');
+        const tooNew = SUPPORTED_CONTRACT.max + 1;
+
+        recordContractVersion(String(tooNew));
         recordContractVersion(undefined);
-        expect(getContractState()).toEqual({ kind: 'api-newer', version: 2 });
+        expect(getContractState()).toEqual({ kind: 'api-newer', version: tooNew });
         expect(isIncompatible(getContractState())).toBe(true);
     });
 
@@ -90,9 +108,9 @@ describe('recording what the last response said', () => {
         // Every response from this API carries the version, so a bare one is far more likely to be
         // a proxy stripping headers, or a cached or synthetic response, than the API having become
         // older halfway through a session.
-        recordContractVersion('1');
+        recordContractVersion(String(SUPPORTED_CONTRACT.min));
         recordContractVersion(undefined);
-        expect(getContractState()).toEqual({ kind: 'ok', version: 1 });
+        expect(getContractState()).toEqual({ kind: 'ok', version: SUPPORTED_CONTRACT.min });
         expect(isIncompatible(getContractState())).toBe(false);
     });
 
@@ -115,5 +133,29 @@ describe('recording what the last response said', () => {
 
         recordContractVersion('2');
         expect(calls).toBe(2);
+    });
+});
+
+/**
+ * Which versions this build actually speaks, written as numbers.
+ *
+ * Everything above derives its input from SUPPORTED_CONTRACT, so it passes whatever the range holds
+ * and proves nothing about the range itself. These are literal on purpose: 1 is what every released
+ * barakoCMS sends, 2 is what the release enforcing slug uniqueness sends
+ * (BaryoDev/barakoCMS#717), and a console that speaks only one of them goes blank against the other.
+ */
+describe('the contract versions this build speaks', () => {
+    it('speaks 1 and 2', () => {
+        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 2 });
+    });
+
+    it('accepts both of them from a response', () => {
+        expect(classifyContract('1')).toEqual({ kind: 'ok', version: 1 });
+        expect(classifyContract('2')).toEqual({ kind: 'ok', version: 2 });
+    });
+
+    it('still refuses 0 as too old and 3 as too new', () => {
+        expect(classifyContract('0')).toEqual({ kind: 'api-older', version: 0 });
+        expect(classifyContract('3')).toEqual({ kind: 'api-newer', version: 3 });
     });
 });

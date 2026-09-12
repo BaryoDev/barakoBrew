@@ -26,9 +26,18 @@ export const CONTRACT_HEADER = 'x-api-contract-version';
  *
  * One place, so widening it is one edit. It is a range rather than a list of barakoCMS releases on
  * purpose: the console supports a contract, and which releases carry that contract is a question
- * for humans reading ROADMAP.md.
+ * for humans reading CHANGELOG.md, which states the API range every console release works against.
+ *
+ * Both ends are live, not one end with history behind it. A rolling upgrade of the API answers with
+ * the old version and the new one at the same time, so a console that dropped the lower end would
+ * refuse half the responses for the length of the rollout.
+ *
+ * Typed as numbers rather than left `as const`. Under `as const` the ends are the literal types 1 and
+ * 2, and the screen that renders the range compares them to decide whether to print one number or
+ * two, which the compiler then reads as a comparison that can never be true (TS2367). These are the
+ * ends of a range that moves, not two constants.
  */
-export const SUPPORTED_CONTRACT = { min: 1, max: 1 } as const;
+export const SUPPORTED_CONTRACT: { readonly min: number; readonly max: number } = { min: 1, max: 2 };
 
 export type ContractState =
     /** Nothing seen yet. No request has come back, so there is nothing to judge. */

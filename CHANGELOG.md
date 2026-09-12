@@ -9,6 +9,20 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **The console speaks API contract 2 as well as contract 1, and has to ship with the barakoCMS
+  release that moves to 2.** That release enforces slug uniqueness within a content type, so a
+  create, an update, a rollback or an import row carrying a slug another entry already holds is
+  refused with 400. Tightening request validation is a breaking change to the HTTP surface, so the
+  API moves `X-Api-Contract-Version` to 2 (BaryoDev/barakoCMS#717). The console refuses to render at
+  all against a contract version it does not speak, so a console pinned to 1 shows one page of
+  explanation instead of the product the moment that API is deployed. Contract 1 stays supported:
+  every released API sends it, and a rolling upgrade answers with both at once. Nothing else about
+  the console changes, because contract 2's only behavioural difference is a refusal, and the entry
+  form, the version rollback and the importer already render the server's own sentence when a write
+  is refused.
+
 ### Fixed
 
 - A reference field is a search over the content type it points at, not a box for pasting a GUID
