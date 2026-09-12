@@ -17,6 +17,16 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
     testDir: './smoke',
+    /*
+     * `.spec.ts` only, which is what every file in here is already called.
+     *
+     * Playwright's default testMatch takes `*.test.ts` as well, and vitest collects that pattern
+     * across the whole repository. A unit test for a helper these specs share is therefore claimed by
+     * both runners, and Playwright loads it and dies on `import ... from 'vitest'` before running a
+     * single spec. Naming the one convention here keeps each runner to its own files, and
+     * `src/test/runner-globs.test.ts` fails the fast job if that stops being true.
+     */
+    testMatch: '**/*.spec.ts',
     fullyParallel: false,
     workers: 1,
     forbidOnly: !!process.env.CI,

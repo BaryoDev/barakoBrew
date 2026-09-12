@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { FieldError } from '@/components/content/field-error';
+import { ReferenceField } from '@/components/content/reference-field';
 import { cn } from '@/lib/utils';
 import { resolveFieldType, type FieldDefinition, type FieldType } from '@/types/schema';
 
@@ -68,6 +70,22 @@ function FieldControl({
     // the type it aliases: 'integer' is a number box, not the textarea the default would give it.
     const type = resolveFieldType(field.type) ?? 'string';
 
+    // A reference is stored as the id of another entry, and the definition names the type that id
+    // has to belong to, so it can be searched for instead of pasted. A definition with no target
+    // names nothing to search, so that one keeps the id box it has always had.
+    if (type === 'reference' && field.referenceType?.trim()) {
+        return (
+            <ReferenceField
+                field={field}
+                referenceType={field.referenceType.trim()}
+                label={label}
+                value={value}
+                error={error}
+                onChange={onChange}
+            />
+        );
+    }
+
     switch (type) {
         case 'bool':
             return (
@@ -123,8 +141,9 @@ function FieldControl({
             );
 
         // Single-line inputs. email/url get the matching native keyboard + hint;
-        // format is enforced server-side by FieldTypeRegistry. A reference is the id of
-        // another entry, so it reads like a uuid; that the target exists is checked on write.
+        // format is enforced server-side by FieldTypeRegistry. A reference only reaches here when
+        // its definition names no target type, and then it reads like a uuid; that the target
+        // exists is checked on write.
         case 'email':
         case 'url':
         case 'slug':
@@ -262,9 +281,4 @@ function JsonField({
             <FieldError message={parseError ?? error} />
         </div>
     );
-}
-
-function FieldError({ message }: { message?: string | null }) {
-    if (!message) return null;
-    return <p className="text-destructive text-xs">{message}</p>;
 }

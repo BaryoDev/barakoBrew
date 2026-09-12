@@ -23,6 +23,34 @@ moved. Which API a console works against is stated per release instead.
   form, the version rollback and the importer already render the server's own sentence when a write
   is refused.
 
+### Fixed
+
+- A reference field is a search over the content type it points at, not a box for pasting a GUID
+  into. The API has always sent `referenceType` naming that type, and the console's
+  `FieldDefinition` dropped it on the way in, so Author, Category and every other relation could
+  only be set by typing an id. Entries read as their titles now, the search runs on the server, and
+  a definition that names no target type keeps the id box it had. Additive: no contract change, and
+  the supported API range does not move. `smoke/reference-fields.spec.ts` holds the server to
+  sending the field, since nothing mocked can.
+- A reference that could not be read says which of the two things happened. "This id does not
+  resolve to an entry" used to be the answer to every failure, including a timeout or a 500, which
+  told an editor their data was broken when the connection was. A 404 keeps that sentence, anything
+  else renders the server's own and offers a retry, and a failed entry list now says so instead of
+  reporting that the target type holds no entries. Closing the picker returns focus to the field
+  that opened it, on both exits, rather than dropping a keyboard user at the top of the form.
+- The smoke pack refuses to send the seeded administrator's token over plain HTTP to anywhere but
+  this machine. `SMOKE_API_URL` is an override four specs read, and it could name any origin, so an
+  `http://` value pointing off-box put a working administrator credential on the wire in clear and
+  the run passed. `smoke/api-url.ts` checks it once for all four: https anywhere, plain http to
+  loopback only, and a failed run naming the reason otherwise.
+- `scripts/preflight.sh` runs every gate a laptop can run, in the order CI runs them, and names the
+  ones it could not. CI's jobs are independent and the unmocked pack takes twelve minutes to stand up
+  a database and build the console, so a mistake the thirty second job could have caught was costing
+  a push and a wait. The two Playwright configs now pin `testMatch` to `.spec.ts` and
+  `src/test/runner-globs.test.ts` holds that line, because vitest collects `*.test.ts` everywhere and
+  Playwright's default collects it too: a unit test written next to a pack's specs was loaded by
+  Playwright, which died importing vitest before running one of them.
+
 ## [1.0.0] - 2026-09-09
 
 **Works against barakoCMS 4.0.1 and later.** It cannot drive 3.21: 4.0 moved enums to strings, put

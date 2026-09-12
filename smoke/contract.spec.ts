@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { smokeApiUrl } from './api-url';
 
 /**
  * The admin, unmocked, against a real API and a real database.
@@ -200,7 +201,7 @@ test('a content status crosses the wire as a name, not a number', async ({ reque
     // browser, because the admin keeps its access token in memory rather than localStorage: that is
     // a deliberate choice recorded in api.ts, and reading it back would be testing a weakness.
     const token = process.env.SMOKE_TOKEN;
-    const api = process.env.SMOKE_API_URL || 'http://127.0.0.1:5099';
+    const api = smokeApiUrl();
     expect(token, 'SMOKE_TOKEN must be set by scripts/smoke-check.sh').toBeTruthy();
 
     const response = await request.get(`${api}/api/contents?page=1&pageSize=1`, {

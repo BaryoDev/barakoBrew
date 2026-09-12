@@ -123,6 +123,23 @@ async function scan(page: import('@playwright/test').Page) {
     ).toBe('');
 }
 
+/**
+ * Every scan in this file runs in a reduced-motion context, so the audit sees the resting page.
+ *
+ * axe reads the colour an element actually composites to. A Radix dialog or a button coming back
+ * from disabled is mid-animation for the first hundred or so milliseconds, drawn at partial opacity
+ * over whatever is behind it, and a scan that lands there reports contrast failures the settled page
+ * does not have. That is the worst kind of gate: red often enough to be switched off. It cost a
+ * two-in-three failure rate on the entry form picker, on chromium and on Mobile Chrome.
+ *
+ * `globals.css` honours `prefers-reduced-motion` by cutting animations to 0.01ms rather than to
+ * none, so enter and exit still complete and dialogs still unmount. The resting state is the state
+ * worth auditing anyway, and putting this here rather than in one test covers every animated thing
+ * added to these routes later. It stays out of `playwright.config.ts` on purpose: the other specs
+ * test behaviour, not composited colour, and they should keep running the animations a person sees.
+ */
+test.use({ reducedMotion: 'reduce' });
+
 test.describe('accessibility', () => {
     test('the sign-in page', async ({ page }) => {
         await stubShell(page);
@@ -375,12 +392,48 @@ test.describe('accessibility', () => {
     test('the entry form, which is the page an editor spends the most time in', async ({ page }) => {
         await authed(page);
         await stubShell(page);
-        await stubContentTypes(page, [SCHEMA]);
-        await page.route('**/api/contents**', (r) => r.fulfill({ json: pageOf([]) }));
+        // With a reference field on it, because the picker that field renders is a dialog over a
+        // list and is the newest thing on this page that a keyboard has to get through.
+        await stubContentTypes(page, [
+            {
+                ...SCHEMA,
+                fields: [
+                    ...SCHEMA.fields,
+                    {
+                        name: 'Author',
+                        displayName: 'Author',
+                        type: 'reference',
+                        referenceType: 'article',
+                        isRequired: false,
+                    },
+                ],
+            },
+        ]);
+        await page.route('**/api/contents**', (r) =>
+            r.fulfill({
+                json: pageOf([
+                    {
+                        id: '11111111-1111-4111-8111-111111111111',
+                        contentType: 'article',
+                        data: { Title: 'An earlier article' },
+                        status: 'Published',
+                        sensitivity: 'Public',
+                        version: 1,
+                        createdAt: '2026-09-01T00:00:00Z',
+                        updatedAt: '2026-09-01T00:00:00Z',
+                    },
+                ]),
+            })
+        );
 
         await page.goto('/content/new?type=article');
         // The form only appears once the schema resolves.
         await expect(page.locator('#Title')).toBeVisible({ timeout: 15000 });
+        await scan(page);
+
+        // And again with the picker open, since a dialog's own markup is not on the page until it is.
+        await page.locator('#Author').click();
+        await expect(page.getByRole('option', { name: /An earlier article/ })).toBeVisible();
         await scan(page);
     });
 });

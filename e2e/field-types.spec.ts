@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { authed, stubShell, stubContentTypes } from './helpers';
+import { authed, stubShell, stubContentTypes, pageOf } from './helpers';
 
 /**
  * F.1/F.2 — field types. The browser-level mirror of the live API check: a content
@@ -27,13 +27,64 @@ const SCHEMA = {
         { name: 'Meeting', displayName: 'Meeting', type: 'datetime', isRequired: false },
         { name: 'Bio', displayName: 'Bio', type: 'richtext', isRequired: false },
         { name: 'Prefs', displayName: 'Prefs', type: 'json', isRequired: false },
+        // referenceType is what turns this from a GUID box into a picker, and it is what the
+        // console used to drop on the way in.
+        {
+            name: 'Author',
+            displayName: 'Author',
+            type: 'reference',
+            referenceType: 'author',
+            isRequired: false,
+        },
     ],
 };
+
+// The type the reference points at, so the picker has something to search and a display name to
+// call it by.
+const AUTHOR_TYPE = {
+    id: 'ct-2',
+    name: 'author',
+    displayName: 'Author',
+    description: 'Someone who writes',
+    fields: [{ name: 'Name', displayName: 'Name', type: 'string', isRequired: true }],
+};
+
+const AUTHORS = [
+    { id: '11111111-1111-4111-8111-111111111111', name: 'Arnel Robles' },
+    { id: '22222222-2222-4222-8222-222222222222', name: 'Juan dela Cruz' },
+].map((a) => ({
+    id: a.id,
+    contentType: 'author',
+    data: { Name: a.name },
+    status: 'Published',
+    sensitivity: 'Public',
+    version: 1,
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z',
+}));
 
 async function gotoNewEntry(page: import('@playwright/test').Page) {
     await authed(page);
     await stubShell(page);
-    await stubContentTypes(page, [SCHEMA]);
+    await stubContentTypes(page, [SCHEMA, AUTHOR_TYPE]);
+    // The entry list, answering the picker's search the way the server does: filtered by content
+    // type, and by the search term when there is one.
+    await page.route(/\/api\/contents\?/, (route) => {
+        const params = new URL(route.request().url()).searchParams;
+        if (params.get('contentType') !== 'author') return route.fulfill({ json: pageOf([]) });
+        const search = (params.get('search') ?? '').toLowerCase();
+        return route.fulfill({
+            json: pageOf(AUTHORS.filter((a) => a.data.Name.toLowerCase().includes(search))),
+        });
+    });
+    // One entry by id, which is how a reference already on an entry resolves to a title.
+    await page.route(/\/api\/contents\/[0-9a-f-]{36}$/, (route) => {
+        const id = route.request().url().split('/').pop();
+        const found = AUTHORS.find((a) => a.id === id);
+        return found
+            ? route.fulfill({ json: found })
+            : route.fulfill({ status: 404, json: { message: 'Not found' } });
+    });
     await page.goto('/content/new?type=memberprofile_ft');
     // The form only appears once the schema resolves.
     await expect(page.locator('#Email')).toBeVisible({ timeout: 15000 });
@@ -61,6 +112,39 @@ test.describe('F.1 — the entry form renders the right control per field type',
 
         // Email input carries a helpful placeholder (the editor-hint made it through).
         await expect(page.locator('#Email')).toHaveAttribute('placeholder', /@/);
+    });
+});
+
+test.describe('F.1 reference fields: a picker over the type it points at', () => {
+    test('an entry is chosen by title and keeps reading as that title', async ({ page }) => {
+        await gotoNewEntry(page);
+
+        const picker = page.locator('#Author');
+        // A button, not the input it used to be, and it names the target type by its display name.
+        await expect(picker).toHaveText(/Choose Author/);
+
+        await picker.click();
+        await page.getByPlaceholder('Search Author').fill('juan');
+
+        // The server does the filtering, so one option comes back, not two filtered in the browser.
+        const options = page.getByRole('option');
+        await expect(options).toHaveCount(1);
+        await options.first().click();
+
+        await expect(picker).toHaveText(/Juan dela Cruz/);
+        // The id is what gets saved, not what the editor reads.
+        await expect(picker).not.toContainText('22222222');
+    });
+
+    test('the chosen entry can be cleared', async ({ page }) => {
+        await gotoNewEntry(page);
+
+        await page.locator('#Author').click();
+        await page.getByRole('option', { name: /Arnel Robles/ }).click();
+        await expect(page.locator('#Author')).toHaveText(/Arnel Robles/);
+
+        await page.getByRole('button', { name: 'Clear Author' }).click();
+        await expect(page.locator('#Author')).toHaveText(/Choose Author/);
     });
 });
 

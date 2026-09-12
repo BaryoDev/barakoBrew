@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { ContentStatus, SensitivityLevel } from '../src/types/content';
 import { FieldMask } from '../src/types/schema';
+import { smokeApiUrl } from './api-url';
 
 /**
  * Every enum this console transcribes, held against the server's own declaration of it.
@@ -55,7 +56,7 @@ let document: OpenApiDocument;
 
 // The API, not the console. The pack's baseURL is the admin under test, so an absolute URL is
 // needed here or this asks the console for the server's description of itself.
-const API = process.env.SMOKE_API_URL || 'http://127.0.0.1:5099';
+const API = smokeApiUrl();
 
 test.beforeAll(async ({ request }) => {
     const response = await request.get(`${API}/swagger/v1/swagger.json`);

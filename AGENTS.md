@@ -73,12 +73,27 @@ to get a screen through; fix the markup.
 ## 4. Testing
 
 ```bash
+scripts/preflight.sh                             # every gate a laptop can run, in CI's order
+scripts/preflight.sh --all                       # plus both Playwright packs
+
 npm run lint                                     # eslint, jsx-a11y on
 npx tsc --noEmit                                 # types
 npx vitest run                                   # units
 npx playwright test --project=chromium           # e2e, mocked API
 bash scripts/smoke-check.sh                      # smoke, real API in Docker
 ```
+
+**Run `scripts/preflight.sh` before pushing.** It runs lint, the typecheck, the unit suite with the
+same discovered-test floor CI asserts, both Playwright packs' file discovery, the asset and licence
+gates and the production build, reads each gate's own exit code, and ends by naming what it could
+not check. CI's jobs are independent and its slowest takes twelve minutes, so without this the
+cheapest way to find a mistake is to push and wait.
+
+**Two test runners share this tree.** vitest collects `**/*.test.{ts,tsx}` repository-wide;
+Playwright collects from `e2e/` and `smoke/`, and its default patterns include `*.test.ts` too. So a
+unit test for a helper a Playwright pack shares goes in `src/test/`, not next to the specs, or
+Playwright loads it and dies importing vitest before it runs anything. Both configs pin
+`testMatch: '**/*.spec.ts'` and `src/test/runner-globs.test.ts` fails if either stops.
 
 **The smoke pack needs Docker.** It pulls `ghcr.io/baryodev/barako-cms` and `postgres`. Set
 `BARAKO_API_TAG` to test against a different API tag.

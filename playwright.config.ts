@@ -5,6 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
     testDir: './e2e',
+    // `.spec.ts` only; see the note in playwright.smoke.config.ts. `helpers.ts` is shared code,
+    // not a spec, and a unit test for anything in here belongs to vitest.
+    testMatch: '**/*.spec.ts',
     /* Run tests in files in parallel */
     fullyParallel: true,
     /* Fail the build on CI if you accidentally left test.only in the source code. */

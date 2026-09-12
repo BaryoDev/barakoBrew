@@ -12,6 +12,14 @@ export interface FieldDefinition {
     // The wire carries whatever spelling the definition was written with, alias included, so this
     // is wider than what the picker offers. Put it through resolveFieldType before switching on it.
     type: FieldType | FieldTypeAlias;
+    /**
+     * For a `reference` field, the content type its value points at.
+     *
+     * The API requires it on a reference and refuses one without it, so a definition the server
+     * accepted always carries it. Optional here because every other field type leaves it out, and
+     * because a console can be reading a definition written before the API enforced it.
+     */
+    referenceType?: string;
     isRequired: boolean;
     defaultValue?: unknown;
     validationRules?: Record<string, unknown>;
