@@ -132,6 +132,12 @@ Test names read as sentences describing the behaviour: `a rejected login shows a
 - **Confirm which branch you are on** before drawing a conclusion from a search.
 - **Before you claim something works, run it.** "Tests pass" means on the branch you are
   proposing, after your last change.
+- **A pull request red only because its base is old fixes itself.** When master moves,
+  `.github/workflows/refresh-stale-prs.yml` updates the branch of every open pull request that is
+  behind it *and* failing, then lets CI run again. It never merges and never retries a job: a retry
+  hides a flake, where rebuilding on a newer base rules out one cause and leaves a real failure
+  visible. Green-but-behind is left alone. Label a pull request `no-self-heal` to pin it to its
+  current base.
 
 ## 6. Comments
 

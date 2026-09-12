@@ -22,6 +22,13 @@ moved. Which API a console works against is stated per release instead.
   the console changes, because contract 2's only behavioural difference is a refusal, and the entry
   form, the version rollback and the importer already render the server's own sentence when a write
   is refused.
+- A pull request red only because its base is old now fixes itself. When master moves, any open
+  pull request that is behind it and failing gets its branch updated and CI runs again. `minio/minio`
+  being removed from Docker Hub failed the API repository's integration suite on every branch at
+  once, and after the fix landed there two pull requests stayed red for a reason that was already
+  fixed until somebody worked it out by hand. Nothing is merged and no job is retried: a retry hides
+  a flake, where rebuilding on a newer base rules out one cause and leaves a real failure visible.
+  Green-but-behind is left alone, and the `no-self-heal` label opts a branch out.
 
 ### Fixed
 
