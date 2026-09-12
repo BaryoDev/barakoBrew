@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { smokeApiUrl } from './api-url';
+import { smokeApiUrl } from '../../smoke/api-url';
 
 /**
- * These run in the unit suite, not the smoke pack, because the thing under test is the guard itself
- * and it must be checked without a stack behind it.
+ * These run in the unit suite, not the smoke pack, and they live here rather than beside the helper
+ * for a mechanical reason: vitest collects `*.test.ts` everywhere, Playwright's smoke pack collects
+ * from `smoke/`, and a file both runners claim is loaded by Playwright, which has no vitest to import.
+ * `src/test/runner-globs.test.ts` holds that line. The thing under test is a guard, so it is checked
+ * without a stack behind it.
  *
  * The guard exists because every spec in `smoke/` sends the seeded administrator's token to whatever
  * `SMOKE_API_URL` names. A plain-http override pointing off-box would have put that credential on the

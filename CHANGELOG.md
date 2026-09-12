@@ -43,6 +43,13 @@ moved. Which API a console works against is stated per release instead.
   `http://` value pointing off-box put a working administrator credential on the wire in clear and
   the run passed. `smoke/api-url.ts` checks it once for all four: https anywhere, plain http to
   loopback only, and a failed run naming the reason otherwise.
+- `scripts/preflight.sh` runs every gate a laptop can run, in the order CI runs them, and names the
+  ones it could not. CI's jobs are independent and the unmocked pack takes twelve minutes to stand up
+  a database and build the console, so a mistake the thirty second job could have caught was costing
+  a push and a wait. The two Playwright configs now pin `testMatch` to `.spec.ts` and
+  `src/test/runner-globs.test.ts` holds that line, because vitest collects `*.test.ts` everywhere and
+  Playwright's default collects it too: a unit test written next to a pack's specs was loaded by
+  Playwright, which died importing vitest before running one of them.
 
 ## [1.0.0] - 2026-09-09
 
