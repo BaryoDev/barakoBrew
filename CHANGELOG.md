@@ -9,7 +9,18 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-12
+
 ### Changed
+
+- **The console speaks API contract 3, and has to ship with barakoCMS 4.1.0.** That release refuses
+  a role named `SuperAdmin`, `Admin`, `HR` or `User` on create and on update, because a custom role
+  taking one of those names inherited a full authorisation bypass and, through the role claim in the
+  JWT, switched off field-level sensitivity masking as well (GHSA-2522-rpv2-6p99). Refusing a request
+  the API used to accept tightens validation, so `X-Api-Contract-Version` moves to 3
+  (BaryoDev/barakoCMS#740). Nothing else in the console changed: the refusal arrives as a 400 with a
+  ProblemDetails reason, which `apiErrorMessage` already reads, the same path that surfaces the
+  slug-uniqueness refusal below. Contracts 1 and 2 stay supported.
 
 - **The console speaks API contract 2 as well as contract 1, and has to ship with the barakoCMS
   release that moves to 2.** That release enforces slug uniqueness within a content type, so a
