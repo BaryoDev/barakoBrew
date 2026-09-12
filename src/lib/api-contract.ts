@@ -37,7 +37,7 @@ export const CONTRACT_HEADER = 'x-api-contract-version';
  * two, which the compiler then reads as a comparison that can never be true (TS2367). These are the
  * ends of a range that moves, not two constants.
  */
-export const SUPPORTED_CONTRACT: { readonly min: number; readonly max: number } = { min: 1, max: 2 };
+export const SUPPORTED_CONTRACT: { readonly min: number; readonly max: number } = { min: 1, max: 3 };
 
 export type ContractState =
     /** Nothing seen yet. No request has come back, so there is nothing to judge. */
