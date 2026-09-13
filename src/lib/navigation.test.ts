@@ -77,6 +77,23 @@ describe('nav visibility', () => {
         expect(seen).not.toContain('Users');
     });
 
+    // Gated like the screen: GET /api/files needs upload_files, which is seeded to Admin.
+    it('offers Files to Admin and SuperAdmin, and not to a plain user', () => {
+        const files = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === '/files');
+        expect(files).toBeDefined();
+        expect(files!.title).toBe('Files');
+
+        expect(titles(['Admin'])).toContain('Files');
+        expect(titles(['SuperAdmin'])).toContain('Files');
+        expect(titles(['User'])).not.toContain('Files');
+        // Paired with the line above so it cannot pass on an empty nav.
+        expect(titles(['User']).length).toBeGreaterThan(0);
+    });
+
+    it('titles the files crumb rather than showing the raw segment', () => {
+        expect(breadcrumbsFor('/files')).toEqual([{ title: 'Files', href: '/files' }]);
+    });
+
     it('drops a group whose every item was filtered out', () => {
         // Otherwise the sidebar renders an "Access" heading with nothing under it.
         for (const g of visibleGroups(NAV_GROUPS, ['User'])) {
