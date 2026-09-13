@@ -92,6 +92,12 @@ api.interceptors.request.use((config) => {
     // The refresh cookie is httpOnly and scoped to /api/auth/refresh, so it only rides along there,
     // but the flag has to be on for the browser to send it at all.
     config.withCredentials = true;
+    // The JSON default above would make axios serialise a FormData body to JSON, and the file in it
+    // would be lost. With no content type, axios leaves the form alone and the browser sets
+    // multipart/form-data with its boundary.
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+        config.headers.delete('Content-Type');
+    }
     const token = tokenStore.token;
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
