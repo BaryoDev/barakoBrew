@@ -138,6 +138,40 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+/** Where a single-entry type is edited. The type name is a slug, so encoding is only a guard. */
+export function singletonHref(typeName: string): string {
+  return `/content/singleton/${encodeURIComponent(typeName)}`;
+}
+
+/**
+ * Adds a rail item per single-entry type, directly under Entries, with the same roles.
+ *
+ * Under Entries rather than in a group of their own, because they are entries: a type holding the
+ * site's address is edited as often as any list, and a heading over it would name an API flag
+ * rather than anything the reader recognises. When Entries was filtered out, nothing is added.
+ */
+export function withSingletons(
+  groups: NavGroup[],
+  types: readonly { name: string; displayName: string; isSingleton?: boolean }[] | undefined,
+): NavGroup[] {
+  const singletons = (types ?? []).filter((t) => t.isSingleton === true);
+  if (singletons.length === 0) return groups;
+
+  return groups.map((group) => {
+    const at = group.items.findIndex((i) => i.href === '/content');
+    if (at === -1) return group;
+
+    const entries = group.items[at];
+    const added: NavItem[] = singletons.map((t) => ({
+      title: t.displayName || t.name,
+      href: singletonHref(t.name),
+      icon: IconContent,
+      roles: entries.roles,
+    }));
+    return { ...group, items: [...group.items.slice(0, at + 1), ...added, ...group.items.slice(at + 1)] };
+  });
+}
+
 const SEGMENT_TITLES: Record<string, string> = {
   email: 'Email',
   schemas: 'Content types',
@@ -167,13 +201,28 @@ const SEGMENT_TITLES: Record<string, string> = {
 
 export function breadcrumbsFor(pathname: string): { title: string; href: string }[] {
   const segments = pathname.split('/').filter(Boolean);
-  return segments.map((segment, i) => ({
-    title: SEGMENT_TITLES[segment] ?? decodeURIComponent(segment),
-    href: '/' + segments.slice(0, i + 1).join('/'),
-  }));
+  return segments
+    .map((segment, i) => ({
+      title: SEGMENT_TITLES[segment] ?? decodeURIComponent(segment),
+      href: '/' + segments.slice(0, i + 1).join('/'),
+    }))
+    // /content/singleton has no page of its own, so it is not offered as a crumb to click.
+    .filter((_, i) => !(segments[i] === 'singleton' && segments[i - 1] === 'content'));
 }
 
 export function isNavItemActive(href: string, pathname: string): boolean {
   if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(href + '/');
+}
+
+/**
+ * The one item the rail marks active: the longest href that matches.
+ *
+ * Prefix matching alone marks Entries active on a single-entry type's screen as well as the type's
+ * own item, and Settings active on every screen under /settings beside the item for that screen.
+ */
+export function activeNavHref(hrefs: readonly string[], pathname: string): string | undefined {
+  return hrefs
+    .filter((href) => isNavItemActive(href, pathname))
+    .sort((a, b) => b.length - a.length)[0];
 }

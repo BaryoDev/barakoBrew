@@ -1,11 +1,12 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useCreateContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
+import { singletonHref } from '@/lib/navigation';
 import { ContentStatus, SensitivityLevel, SENSITIVITY_META } from '@/types/content';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
@@ -32,6 +33,12 @@ function NewContentInner() {
   const [sensitivity, setSensitivity] = useState(SensitivityLevel.Public);
 
   const schema = schemas?.find((s) => s.name === contentType);
+  const singleton = schema?.isSingleton === true;
+
+  // A second entry of a single-entry type is refused, and the first is created from its own screen.
+  useEffect(() => {
+    if (schema && singleton) router.replace(singletonHref(schema.name));
+  }, [schema, singleton, router]);
 
   const submit = (status: ContentStatus) => {
     createContent.mutate(
@@ -98,7 +105,7 @@ function NewContentInner() {
           </div>
         </div>
 
-        {schema && (
+        {schema && !singleton && (
           <>
             <Separator />
             <DynamicForm fields={schema.fields} values={values} onChange={setValues} />

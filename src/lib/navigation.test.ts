@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { NAV_GROUPS, visibleGroups } from './navigation';
+import {
+    NAV_GROUPS,
+    activeNavHref,
+    breadcrumbsFor,
+    singletonHref,
+    visibleGroups,
+    withSingletons,
+} from './navigation';
 
 const count = (roles: string[] | undefined) =>
     visibleGroups(NAV_GROUPS, roles).reduce((n, g) => n + g.items.length, 0);
@@ -84,5 +91,59 @@ describe('nav visibility', () => {
         // destinations with no roles declared, so they are the whole expected set.
         expect(titles(undefined)).toEqual(['Overview', 'Health']);
         expect(titles([])).toEqual(['Overview', 'Health']);
+    });
+});
+
+describe('single-entry types in the rail', () => {
+    const TYPES = [
+        { name: 'article', displayName: 'Article', isSingleton: false },
+        { name: 'sitesettings', displayName: 'Site settings', isSingleton: true },
+        { name: 'legacy', displayName: 'Legacy' },
+        { name: 'footer', displayName: 'Footer', isSingleton: true },
+    ];
+
+    const primaryTitles = (groups: typeof NAV_GROUPS) => groups[0].items.map((i) => i.title);
+
+    it('lists each one directly under Entries, and no other type', () => {
+        const titles = primaryTitles(withSingletons(visibleGroups(NAV_GROUPS, ['Admin']), TYPES));
+        const at = titles.indexOf('Entries');
+
+        expect(at).toBeGreaterThanOrEqual(0);
+        expect(titles.slice(at, at + 4)).toEqual(['Entries', 'Site settings', 'Footer', 'Content types']);
+        expect(titles).not.toContain('Article');
+        expect(titles).not.toContain('Legacy');
+    });
+
+    it('links each one to its edit screen, gated like Entries', () => {
+        const items = withSingletons(NAV_GROUPS, TYPES).flatMap((g) => g.items);
+        const entries = items.find((i) => i.href === '/content')!;
+        const site = items.find((i) => i.title === 'Site settings');
+
+        expect(site).toBeDefined();
+        expect(site!.href).toBe('/content/singleton/sitesettings');
+        expect(site!.roles).toEqual(entries.roles);
+    });
+
+    it('adds nothing when the caller cannot see Entries', () => {
+        const groups = visibleGroups(NAV_GROUPS, ['User']);
+        expect(groups.flatMap((g) => g.items).length).toBeGreaterThan(0);
+        expect(withSingletons(groups, TYPES)).toEqual(groups);
+    });
+
+    it('marks only the type as active on its screen, not Entries as well', () => {
+        const hrefs = withSingletons(NAV_GROUPS, TYPES).flatMap((g) => g.items.map((i) => i.href));
+
+        expect(activeNavHref(hrefs, singletonHref('sitesettings'))).toBe('/content/singleton/sitesettings');
+        expect(activeNavHref(hrefs, '/content/6fb1d0c6-5217-4381-8bc8-4bb45302db0b')).toBe('/content');
+        expect(activeNavHref(hrefs, '/')).toBe('/');
+    });
+
+    it('gives the edit screen no crumb for a list that does not exist', () => {
+        expect(breadcrumbsFor('/content/singleton/sitesettings')).toEqual([
+            { title: 'Entries', href: '/content' },
+            { title: 'sitesettings', href: '/content/singleton/sitesettings' },
+        ]);
+        // Every other path keeps one crumb per segment.
+        expect(breadcrumbsFor('/content/new')).toHaveLength(2);
     });
 });

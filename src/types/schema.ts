@@ -98,6 +98,11 @@ export interface ContentTypeDefinition {
     isPubliclyDeliverable?: boolean;
     /** This type's own lifecycle, or absent for Draft, Published and Archived. */
     lifecycle?: LifecycleDefinition | null;
+    /**
+     * Holds exactly one entry, so the console shows one edit screen for it rather than a list. The
+     * API refuses a second create. Absent from an API older than the flag, which reads as false.
+     */
+    isSingleton?: boolean;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -121,6 +126,7 @@ export interface CreateSchemaRequest {
     description?: string;
     fields: FieldDefinition[];
     isPubliclyDeliverable?: boolean;
+    isSingleton?: boolean;
 }
 
 /**

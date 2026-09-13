@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { singletonHref } from '@/lib/navigation';
 import {
   Table,
   TableBody,
@@ -50,20 +51,29 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
         title={schema.displayName}
         description={schema.description || `API name: ${schema.name}`}
         actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/content?type=${schema.name}`}>
-                <IconContent />
-                View entries
-              </Link>
-            </Button>
+          schema.isSingleton ? (
             <Button asChild size="sm">
-              <Link href={`/content/new?type=${schema.name}`}>
-                <IconPlus />
-                New entry
+              <Link href={singletonHref(schema.name)}>
+                <IconContent />
+                Edit entry
               </Link>
             </Button>
-          </>
+          ) : (
+            <>
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/content?type=${schema.name}`}>
+                  <IconContent />
+                  View entries
+                </Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href={`/content/new?type=${schema.name}`}>
+                  <IconPlus />
+                  New entry
+                </Link>
+              </Button>
+            </>
+          )
         }
       />
 
