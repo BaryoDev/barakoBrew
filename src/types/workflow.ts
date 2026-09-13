@@ -4,6 +4,8 @@
 export interface WorkflowAction {
     type: string; // Email | SMS | Webhook | CreateTask | UpdateField | Conditional
     parameters: Record<string, string>; // values support {{template}} variables
+    /** Read only. The API reports whether a Secret is stored and never returns the value. */
+    secretSet?: boolean;
 }
 
 export interface WorkflowDefinition {
