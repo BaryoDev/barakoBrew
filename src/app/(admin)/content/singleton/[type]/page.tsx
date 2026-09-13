@@ -124,7 +124,7 @@ function FirstEntry({
         description="Nothing saved yet. Saving creates the entry, and this screen edits it from then on."
       />
       <div className="max-w-2xl">
-        <DynamicForm fields={schema.fields} values={values} onChange={setValues} />
+        <DynamicForm fields={schema.fields} values={values} onChange={setValues} contentType={schema.name} />
         <Separator className="my-6" />
         <div className="flex items-center gap-2">
           <Button onClick={() => submit(ContentStatus.Published)} disabled={createContent.isPending}>

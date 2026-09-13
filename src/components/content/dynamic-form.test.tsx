@@ -60,3 +60,34 @@ describe('a type this console has never heard of', () => {
         );
     });
 });
+
+describe('the Items field of a menu', () => {
+    const fields = [{ name: 'Items', displayName: 'Items', type: 'json', isRequired: false }] as FieldDefinition[];
+
+    it('is a list with move buttons, not a JSON textarea', () => {
+        render(
+            <DynamicForm
+                contentType="menu"
+                fields={fields}
+                values={{ Items: [{ Label: 'Blog', Url: '/blog' }, { Label: 'Docs', Url: '/docs' }] }}
+                onChange={() => {}}
+            />,
+        );
+        expect(screen.getByRole('button', { name: 'Move Docs up' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: 'Move Blog up' })).toBeDisabled();
+        expect(document.querySelector('textarea')).toBeNull();
+    });
+
+    it('stays a JSON textarea on any other type', () => {
+        render(<DynamicForm contentType="article" fields={fields} values={{ Items: [] }} onChange={() => {}} />);
+        expect(document.getElementById('Items')?.tagName).toBe('TEXTAREA');
+    });
+
+    it('shows a value it cannot read as the JSON it is, rather than dropping part of it', () => {
+        const value = [{ Label: 'A', Children: [{ Label: 'B', Children: [{ Label: 'C' }] }] }];
+        render(<DynamicForm contentType="menu" fields={fields} values={{ Items: value }} onChange={() => {}} />);
+        const textarea = document.getElementById('Items') as HTMLTextAreaElement;
+        expect(textarea.tagName).toBe('TEXTAREA');
+        expect(JSON.parse(textarea.value)).toEqual(value);
+    });
+});

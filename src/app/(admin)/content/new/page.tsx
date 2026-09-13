@@ -108,7 +108,7 @@ function NewContentInner() {
         {schema && !singleton && (
           <>
             <Separator />
-            <DynamicForm fields={schema.fields} values={values} onChange={setValues} />
+            <DynamicForm fields={schema.fields} values={values} onChange={setValues} contentType={schema.name} />
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => submit(ContentStatus.Published)}

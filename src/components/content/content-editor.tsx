@@ -214,7 +214,7 @@ export function ContentEditor({
         <TabsContent value="edit" className="mt-4 max-w-2xl">
           {schema ? (
             <>
-              <DynamicForm fields={schema.fields} values={values} onChange={setValues} />
+              <DynamicForm fields={schema.fields} values={values} onChange={setValues} contentType={content.contentType} />
               <Separator className="my-6" />
               <div className="flex items-center gap-2">
                 <Button onClick={() => save()} disabled={updateContent.isPending}>

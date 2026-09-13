@@ -438,4 +438,46 @@ test.describe('accessibility', () => {
         await expect(page.getByRole('option', { name: /An earlier article/ })).toBeVisible();
         await scan(page);
     });
+
+    test('the menu editor, with a submenu open', async ({ page }) => {
+        const id = '5f1d7c2a-3b4e-4a6f-8c9d-0e1f2a3b4c5d';
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [
+            {
+                id: 'ct-menu',
+                name: 'menu',
+                displayName: 'Menu',
+                fields: [
+                    { name: 'Name', displayName: 'Name', type: 'string', isRequired: true },
+                    { name: 'Items', displayName: 'Items', type: 'json', isRequired: false },
+                ],
+            },
+        ]);
+        await page.route(`**/api/contents/${id}`, (r) =>
+            r.fulfill({
+                json: {
+                    id,
+                    contentType: 'menu',
+                    data: {
+                        Name: 'Main',
+                        Items: [
+                            { Label: 'Blog', Url: '/blog', OpenInNewTab: false },
+                            { Label: 'Docs', Url: '/docs', Children: [{ Label: 'Guide', Url: '/docs/guide' }] },
+                        ],
+                    },
+                    status: 'Published',
+                    sensitivity: 'Public',
+                    version: 1,
+                    createdAt: '2026-09-01T00:00:00Z',
+                    updatedAt: '2026-09-01T00:00:00Z',
+                },
+            })
+        );
+        await page.route(`**/api/contents/${id}/history**`, (r) => r.fulfill({ json: EMPTY_PAGE }));
+
+        await page.goto(`/content/${id}`);
+        await expect(page.getByRole('button', { name: 'Move Guide out of Docs' })).toBeVisible({ timeout: 15000 });
+        await scan(page);
+    });
 });
