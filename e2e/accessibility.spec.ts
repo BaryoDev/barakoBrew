@@ -408,6 +408,9 @@ test.describe('accessibility', () => {
                         referenceType: 'article',
                         isRequired: false,
                     },
+                    // And a markdown field, whose composer has a tab list, a toolbar and a preview
+                    // that puts rendered markup into the form.
+                    { name: 'Body', displayName: 'Body', type: 'markdown', isRequired: false },
                 ],
             },
         ]);
@@ -436,6 +439,18 @@ test.describe('accessibility', () => {
         // And again with the picker open, since a dialog's own markup is not on the page until it is.
         await page.locator('#Author').click();
         await expect(page.getByRole('option', { name: /An earlier article/ })).toBeVisible();
+        await scan(page);
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('option', { name: /An earlier article/ })).toHaveCount(0);
+
+        // And with the markdown preview showing, since its rendered markup is not on the page until then.
+        await page.locator('#Body').fill(
+            '# Spring roast\n\nSome **bold** text, a [link](https://example.com) and `code`.\n\n- one\n- two\n\n```\nconst x = 1;\n```\n'
+        );
+        await page.getByRole('tab', { name: 'Preview' }).click();
+        await expect(
+            page.getByRole('tabpanel', { name: 'Preview' }).getByRole('heading', { name: 'Spring roast' })
+        ).toBeVisible();
         await scan(page);
     });
 });

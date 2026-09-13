@@ -18,6 +18,11 @@ moved. Which API a console works against is stated per release instead.
   to open the list or the new entry form for such a type (the type's own page, `/content?type=`,
   `/content/new?type=`) land on that screen instead, and a type can be created with the flag on
   (#89).
+- **A markdown field is a composer with a preview, not a bare textarea.** Write and Preview tabs,
+  a toolbar for bold, italic, heading, link, list and code, and a word count. The preview renders
+  with barakoPress's rules, so raw HTML shows as text and a link that is not http, https, mailto or
+  relative keeps its words and loses its destination. The saved value is the text as typed; toggling
+  the preview never writes to it. `text` and `richtext` fields are unchanged (#85).
 
 ### Changed
 

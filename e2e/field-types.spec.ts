@@ -26,6 +26,7 @@ const SCHEMA = {
         { name: 'JoinTime', displayName: 'Join Time', type: 'time', isRequired: false },
         { name: 'Meeting', displayName: 'Meeting', type: 'datetime', isRequired: false },
         { name: 'Bio', displayName: 'Bio', type: 'richtext', isRequired: false },
+        { name: 'Body', displayName: 'Body', type: 'markdown', isRequired: false },
         { name: 'Prefs', displayName: 'Prefs', type: 'json', isRequired: false },
         // referenceType is what turns this from a GUID box into a picker, and it is what the
         // console used to drop on the way in.
@@ -206,5 +207,76 @@ test.describe('F.1 — saving entries', () => {
         await page.locator('textarea#Prefs').fill('{ not valid json');
 
         await expect(page.getByText(/Not valid JSON yet/i)).toBeVisible({ timeout: 10000 });
+    });
+});
+
+test.describe('markdown fields: write, then preview what the site will render', () => {
+    test('typed markdown renders in the preview, unsafe parts neutralised, and saves as typed', async ({
+        page,
+    }) => {
+        await gotoNewEntry(page);
+
+        let posted: { data?: Record<string, unknown> } | null = null;
+        await page.route('**/api/contents**', (route) => {
+            if (route.request().method() === 'POST') {
+                posted = route.request().postDataJSON();
+                return route.fulfill({
+                    json: { id: 'new-entry-2', version: 1, message: 'Content created successfully' },
+                });
+            }
+            return route.fulfill({
+                json: {
+                    id: 'new-entry-2',
+                    contentType: 'memberprofile_ft',
+                    data: { FullName: 'Arnel R', Email: 'arnel@baryo.dev' },
+                    status: 'Draft',
+                    version: 1,
+                },
+            });
+        });
+
+        // Trailing spaces make a markdown line break, so they are part of what has to survive.
+        const source = [
+            '# Spring roast',
+            '',
+            'Two things:  ',
+            '',
+            '- beans',
+            '- water',
+            '',
+            '[Brew guide](https://example.com/guide) and [not a link](javascript:window.__pwned=1)',
+            '',
+            '<script>window.__pwned = 1</script>',
+            '',
+        ].join('\n');
+
+        await page.locator('#FullName').fill('Arnel R');
+        await page.locator('#Email').fill('arnel@baryo.dev');
+        await page.locator('textarea#Body').fill(source);
+
+        await page.getByRole('tab', { name: 'Preview' }).click();
+        const preview = page.getByRole('tabpanel', { name: 'Preview' });
+
+        await expect(preview.getByRole('heading', { level: 1, name: 'Spring roast' })).toBeVisible();
+        await expect(preview.getByRole('listitem')).toHaveCount(2);
+        await expect(preview.getByRole('link', { name: 'Brew guide' })).toHaveAttribute(
+            'href',
+            'https://example.com/guide'
+        );
+        // The unsafe link keeps its words and loses its destination.
+        await expect(preview.getByText('not a link')).toBeVisible();
+        await expect(preview.getByRole('link')).toHaveCount(1);
+        // The script is shown as text, not run.
+        await expect(preview.locator('script')).toHaveCount(0);
+        await expect(preview).toContainText('<script>window.__pwned = 1</script>');
+        expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
+
+        await page.getByRole('tab', { name: 'Write' }).click();
+        await expect(page.locator('textarea#Body')).toHaveValue(source);
+
+        await page.getByRole('button', { name: 'Publish' }).click();
+        await page.waitForURL('**/content/new-entry-2', { timeout: 15000 });
+        expect(posted).not.toBeNull();
+        expect(posted!.data?.Body).toBe(source);
     });
 });
