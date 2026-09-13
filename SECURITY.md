@@ -19,7 +19,7 @@ A problem in the API (authorisation, tokens, rate limits) belongs to
 
 ## Supported versions
 
-The console is versioned by git tag and released as `ghcr.io/baryodev/barako-admin:<version>`. The
+The console is versioned by git tag and released as `ghcr.io/baryodev/barako-brew:<version>`. The
 newest tag is supported. A fix ships as a new tag; there is no backport line for the console,
 because upgrading it is pulling a new image and nothing else.
 

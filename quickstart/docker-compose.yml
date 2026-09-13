@@ -56,7 +56,7 @@ services:
       ForwardedHeaders__KnownNetworks__0: ${TRUSTED_PROXY_NETWORK:-}
 
   console:
-    image: ghcr.io/baryodev/barako-admin:${BARAKO_CONSOLE_TAG:-latest}
+    image: ghcr.io/baryodev/barako-brew:${BARAKO_CONSOLE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       - api

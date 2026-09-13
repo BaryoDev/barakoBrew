@@ -7,7 +7,7 @@
 # libvips binaries arrive as an optional dependency of Next itself, the tree gate passed them with a
 # carve-out, and 27MB of them were traced into the image nobody had looked inside.
 #
-#   scripts/check-image-licences.sh --image barako-admin:ci
+#   scripts/check-image-licences.sh --image barako-brew:ci
 #   scripts/check-image-licences.sh --dir .next/standalone/node_modules
 #   scripts/check-image-licences.sh --dir scripts/testdata/image-licences-known-bad   # must fail
 #
