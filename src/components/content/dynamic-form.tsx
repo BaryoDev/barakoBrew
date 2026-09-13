@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { FieldError } from '@/components/content/field-error';
 import { MarkdownField } from '@/components/content/markdown-field';
 import { ReferenceField } from '@/components/content/reference-field';
+import { MenuItemsField } from '@/components/content/menu-items-field';
+import { isMenuItemsField } from '@/lib/menu-tree';
 import { cn } from '@/lib/utils';
 import { resolveFieldType, type FieldDefinition, type FieldType } from '@/types/schema';
 
@@ -16,12 +18,14 @@ interface DynamicFormProps {
     values: Record<string, unknown>;
     onChange: (values: Record<string, unknown>) => void;
     errors?: Record<string, string>;
+    /** The type the entry belongs to, which is how a menu's Items field gets the menu editor. */
+    contentType?: string;
 }
 
 // Renders a form control per field type. The accepted set is defined server-side
 // in FieldTypeRegistry; each type here maps to a sensible input (native pickers
 // for dates/times, typed inputs for email/url, a JSON editor for structured data).
-export function DynamicForm({ fields, values, onChange, errors }: DynamicFormProps) {
+export function DynamicForm({ fields, values, onChange, errors, contentType }: DynamicFormProps) {
     const setField = (name: string, value: unknown) => {
         onChange({ ...values, [name]: value });
     };
@@ -40,6 +44,7 @@ export function DynamicForm({ fields, values, onChange, errors }: DynamicFormPro
                 <FieldControl
                     key={field.name}
                     field={field}
+                    contentType={contentType}
                     value={values[field.name]}
                     error={errors?.[field.name]}
                     onChange={(v) => setField(field.name, v)}
@@ -51,11 +56,13 @@ export function DynamicForm({ fields, values, onChange, errors }: DynamicFormPro
 
 function FieldControl({
     field,
+    contentType,
     value,
     error,
     onChange,
 }: {
     field: FieldDefinition;
+    contentType?: string;
     value: unknown;
     error?: string;
     onChange: (value: unknown) => void;
@@ -83,6 +90,30 @@ function FieldControl({
                 value={value}
                 error={error}
                 onChange={onChange}
+            />
+        );
+    }
+
+    // By convention rather than by a hint on the definition, which the API has no place for yet.
+    // docs/menus.md is where a person modelling a menu reads it.
+    if (type === 'json' && isMenuItemsField(contentType, field.name)) {
+        return (
+            <MenuItemsField
+                fieldName={field.name}
+                displayName={field.displayName}
+                label={label}
+                value={value}
+                error={error}
+                onChange={onChange}
+                json={
+                    <JsonField
+                        field={field}
+                        type="array"
+                        label={null}
+                        value={value}
+                        onChange={onChange}
+                    />
+                }
             />
         );
     }

@@ -11,6 +11,12 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **A navigation menu is reordered without editing JSON.** The `Items` field of a `menu` entry is
+  a list now: add and remove items, move them up and down, nest one under the item above and move it
+  back out, all from the keyboard. The saved value keeps each item's keys and casing and changes only
+  order and nesting, one level deep, which is what `public.menu()` in the client reads. A value the
+  list cannot show without losing part of it stays in the JSON editor. The shape and the naming
+  convention are in `docs/menus.md` (#86).
 - **A content type that holds one entry is edited on one screen, not a list.** barakoCMS 4.1.0
   marks such a type with `isSingleton` and refuses a second create. The console now lists each one
   in the rail under Entries and opens it at `/content/singleton/{type}`. With no entry yet, the first
