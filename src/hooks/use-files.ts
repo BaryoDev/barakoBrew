@@ -56,21 +56,12 @@ export function useFiles(page: number) {
     });
 }
 
-/**
- * Sends the file as multipart form data.
- *
- * The content type is set explicitly because the shared client defaults to `application/json`, and
- * axios turns a FormData body into JSON when the header says JSON. The API would then find no file
- * and answer "A file is required." In the browser axios drops the header again before sending, so
- * the boundary is filled in.
- */
+/** Sends the file as multipart form data. The shared client drops its JSON default for a form. */
 export async function uploadFile(file: File, isPublic: boolean): Promise<UploadedFile> {
     const form = new FormData();
     form.append('file', file);
     form.append('isPublic', isPublic ? 'true' : 'false');
-    const response = await api.post<UploadedFile>('/api/files', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.post<UploadedFile>('/api/files', form);
     return response.data;
 }
 

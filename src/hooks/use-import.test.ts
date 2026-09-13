@@ -1,5 +1,45 @@
-import { describe, expect, it } from 'vitest';
-import { toRecords, type SheetPreview } from './use-import';
+import { afterEach, describe, expect, it } from 'vitest';
+import React from 'react';
+import { renderHook } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { InternalAxiosRequestConfig } from 'axios';
+import { api } from '@/lib/api';
+import { toRecords, useAnalyzeSheet, type SheetPreview } from './use-import';
+
+const originalAdapter = api.defaults.adapter;
+
+afterEach(() => {
+    api.defaults.adapter = originalAdapter;
+});
+
+describe('useAnalyzeSheet', () => {
+    it('sends the spreadsheet as form data with a file part, not as JSON', async () => {
+        const seen: InternalAxiosRequestConfig[] = [];
+        api.defaults.adapter = async (config) => {
+            seen.push(config);
+            return {
+                data: { rowCount: 0, columnCount: 0, suggestedHeaderRow: -1, truncated: false, rows: [] },
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                config,
+            };
+        };
+        const client = new QueryClient();
+        const { result } = renderHook(() => useAnalyzeSheet(), {
+            wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+        });
+
+        await result.current.mutateAsync(new File(['Title,Body\nfirst,one'], 'posts.csv', { type: 'text/csv' }));
+
+        expect(seen).toHaveLength(1);
+        expect(seen[0].url).toBe('/api/import/analyze');
+        const body = seen[0].data;
+        expect(body).toBeInstanceOf(FormData);
+        expect(((body as FormData).get('file') as File).name).toBe('posts.csv');
+        expect(String(seen[0].headers.getContentType() ?? '')).not.toContain('application/json');
+    });
+});
 
 function cell(value: string) {
     return { kind: 'Text', value };

@@ -40,6 +40,7 @@ describe('uploadFile', () => {
         expect(body).toBeInstanceOf(FormData);
         expect(((body as FormData).get('file') as File).name).toBe('cover.png');
         expect((body as FormData).get('isPublic')).toBe('true');
+        expect(String(seen[0].headers.getContentType() ?? '')).not.toContain('application/json');
     });
 
     it('sends isPublic false when the switch is off, rather than leaving it out', async () => {

@@ -47,6 +47,14 @@ moved. Which API a console works against is stated per release instead.
   move compose files and deploy scripts to `barako-brew` before then. Tags already pulled under the
   old name stay resolvable (#84).
 
+### Fixed
+
+- **Import a spreadsheet sends the file.** The shared API client defaults to a JSON content type,
+  and axios turned the upload form into JSON, so the analyze request reached the API with no file.
+  The client now drops that default for any form body, so the browser sends multipart form data
+  with its boundary. File uploads used to work around this on their own request and now rely on the
+  same rule (#119).
+
 ## [1.1.0] - 2026-09-12
 
 ### Changed
