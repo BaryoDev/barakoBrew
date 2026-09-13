@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { FieldError } from '@/components/content/field-error';
+import { MarkdownField } from '@/components/content/markdown-field';
 import { ReferenceField } from '@/components/content/reference-field';
 import { cn } from '@/lib/utils';
 import { resolveFieldType, type FieldDefinition, type FieldType } from '@/types/schema';
@@ -165,11 +166,16 @@ function FieldControl({
                 </div>
             );
 
-        // Longer free text. No rich editor bundled yet — a roomy textarea; the
-        // value is stored/served as-is (HTML for richtext, Markdown for markdown).
+        // Markdown gets a composer whose preview renders the way barakoPress renders a post. The
+        // value is still the text as typed. richtext stores HTML, and an editor for it waits on
+        // the sanitising decision in #45, so it stays a plain textarea like text.
+        case 'markdown':
+            return (
+                <MarkdownField field={field} label={label} value={value} error={error} onChange={onChange} />
+            );
+
         case 'text':
         case 'richtext':
-        case 'markdown':
             return (
                 <div className="space-y-2">
                     {label}
@@ -178,7 +184,6 @@ function FieldControl({
                         rows={6}
                         value={(value as string) || ''}
                         onChange={(e) => onChange(e.target.value)}
-                        className={type === 'markdown' ? 'font-mono text-sm' : undefined}
                     />
                     <FieldError message={error} />
                 </div>
