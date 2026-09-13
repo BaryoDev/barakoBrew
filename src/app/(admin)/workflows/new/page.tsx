@@ -11,6 +11,7 @@ import {
 } from '@/hooks/use-workflows';
 import { useSchemas } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
+import { parameterFields, withoutBlankOptional } from '@/lib/workflow-parameters';
 import type { TriggerEvent, WorkflowAction, WorkflowDefinition } from '@/types/workflow';
 import { PageHeader } from '@/components/patterns/page-header';
 import { ActionIcon } from '@/components/workflow/action-icon';
@@ -55,7 +56,13 @@ export default function NewWorkflowPage() {
     conditions: Object.fromEntries(
       conditions.filter((c) => c.field.trim()).map((c) => [c.field.trim(), c.value])
     ),
-    actions,
+    actions: actions.map((a) => ({
+      ...a,
+      parameters: withoutBlankOptional(
+        a.parameters,
+        actionTypes?.find((m) => m.type === a.type)
+      ),
+    })),
   });
 
   const canSave = name.trim() && triggerContentType && actions.length > 0;
@@ -99,7 +106,7 @@ export default function NewWorkflowPage() {
     <>
       <PageHeader
         title="New workflow"
-        description="Runs after an entry of the chosen type is created or updated — it never blocks saving."
+        description="Runs after an entry of the chosen type is created, updated, published or moved through a transition. It never blocks saving."
       />
 
       <div className="max-w-2xl space-y-6">
@@ -115,7 +122,7 @@ export default function NewWorkflowPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>When an entry of type…</Label>
+            <Label htmlFor="wf-trigger-type">When an entry of type…</Label>
             <Select
               value={triggerContentType}
               onValueChange={(v) => {
@@ -125,7 +132,7 @@ export default function NewWorkflowPage() {
                 if (triggerEvent.startsWith('transition:')) setTriggerEvent('Created');
               }}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="wf-trigger-type" className="w-full">
                 <SelectValue placeholder="Choose a content type" />
               </SelectTrigger>
               <SelectContent>
@@ -138,14 +145,15 @@ export default function NewWorkflowPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>…is</Label>
+            <Label htmlFor="wf-trigger-event">…is</Label>
             <Select value={triggerEvent} onValueChange={(v) => setTriggerEvent(v as TriggerEvent)}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="wf-trigger-event" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Created">Created</SelectItem>
                 <SelectItem value="Updated">Updated</SelectItem>
+                <SelectItem value="Published">Published</SelectItem>
                 {transitions.map((t) => (
                   <SelectItem key={t.name} value={`transition:${t.name}`}>
                     {t.name} ({t.from} to {t.to})
@@ -223,7 +231,7 @@ export default function NewWorkflowPage() {
               </p>
             </div>
             <Select value="" onValueChange={addAction}>
-              <SelectTrigger size="sm" className="w-40">
+              <SelectTrigger size="sm" className="w-40" aria-label="Add an action">
                 <SelectValue placeholder="Add an action" />
               </SelectTrigger>
               <SelectContent>
@@ -264,19 +272,34 @@ export default function NewWorkflowPage() {
                 {meta?.description && (
                   <p className="text-muted-foreground text-xs">{meta.description}</p>
                 )}
-                {Object.keys(action.parameters).map((param) => (
-                  <div key={param} className="space-y-1.5">
-                    <Label htmlFor={`action-${i}-${param}`} className="text-xs">
-                      {param}
-                    </Label>
-                    <Input
-                      id={`action-${i}-${param}`}
-                      value={action.parameters[param]}
-                      className="font-mono text-xs"
-                      onChange={(e) => setActionParam(i, param, e.target.value)}
-                    />
-                  </div>
-                ))}
+                {parameterFields(meta, action.parameters).map((field) => {
+                  const id = `action-${i}-${field.name}`;
+                  return (
+                    <div key={field.name} className="space-y-1.5">
+                      <Label htmlFor={id} className="text-xs">
+                        {field.name}{' '}
+                        {!field.required && (
+                          <span className="text-muted-foreground font-normal">(optional)</span>
+                        )}
+                      </Label>
+                      <Input
+                        id={id}
+                        type={field.secret ? 'password' : 'text'}
+                        autoComplete={field.secret ? 'new-password' : undefined}
+                        spellCheck={field.secret ? false : undefined}
+                        aria-describedby={field.secret ? `${id}-hint` : undefined}
+                        value={action.parameters[field.name] ?? ''}
+                        className="font-mono text-xs"
+                        onChange={(e) => setActionParam(i, field.name, e.target.value)}
+                      />
+                      {field.secret && (
+                        <p id={`${id}-hint`} className="text-muted-foreground text-xs">
+                          Stored encrypted and never shown again, so keep a copy for the receiving end.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}

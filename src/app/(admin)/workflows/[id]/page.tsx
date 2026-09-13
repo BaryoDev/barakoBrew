@@ -100,6 +100,11 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
                         ))}
                       </dl>
                     )}
+                    {action.secretSet && (
+                      <p className="text-muted-foreground mt-1.5 font-mono text-xs">
+                        Secret: set, not shown
+                      </p>
+                    )}
                   </li>
                 ))}
               </ol>

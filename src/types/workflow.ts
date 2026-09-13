@@ -6,6 +6,8 @@ export interface WorkflowAction {
     // module can add more, so the console must not keep its own list of names.
     type: string;
     parameters: Record<string, string>; // values support {{template}} variables
+    /** Read only. The API reports whether a Secret is stored and never returns the value. */
+    secretSet?: boolean;
 }
 
 export interface WorkflowDefinition {
