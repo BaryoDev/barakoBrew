@@ -17,6 +17,14 @@ moved. Which API a console works against is stated per release instead.
   order and nesting, one level deep, which is what `public.menu()` in the client reads. A value the
   list cannot show without losing part of it stays in the JSON editor. The shape and the naming
   convention are in `docs/menus.md` (#86).
+- **Files has a screen.** `/files` lists the tenant's uploads 20 at a time with name, type, size,
+  visibility and upload date. Upload states the API's rules (PNG, JPEG, GIF, WebP, AVIF or PDF, up
+  to 10 MB) and refuses a file that breaks them before sending it; a refusal from the server, such
+  as the virus scanner's, is shown in the dialog. Delete asks first, and when entries still use the
+  file it names them and deletes only on "Delete anyway". A public file has a copy link button.
+  Delete is offered on a file to its uploader, Admin and SuperAdmin, which is who the API allows.
+  An account the API refuses the list to is told so, with no upload control. The rail lists Files
+  under Modules for Admin and SuperAdmin (#3).
 - **A content type that holds one entry is edited on one screen, not a list.** barakoCMS 4.1.0
   marks such a type with `isSingleton` and refuses a second create. The console now lists each one
   in the rail under Entries and opens it at `/content/singleton/{type}`. With no entry yet, the first

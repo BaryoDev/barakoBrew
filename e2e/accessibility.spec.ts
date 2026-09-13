@@ -293,6 +293,52 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
+    test('the files screen, with a public and a private file and the upload dialog open', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        const file = (id: string, fileName: string, isPublic: boolean, contentType: string) => ({
+            id,
+            fileName,
+            contentType,
+            size: 482_133,
+            isPublic,
+            publicUrl: null,
+            alt: null,
+            caption: null,
+            uploadedBy: '00000000-0000-0000-0000-000000000001',
+            createdAt: new Date(Date.now() - 3600_000).toISOString(),
+        });
+        await page.route(/\/api\/files(\?|$)/, (r) =>
+            r.fulfill({
+                json: pageOf([
+                    file('f1', 'spring-roast-cover.jpg', true, 'image/jpeg'),
+                    file('f2', 'guild-bylaws-2026.pdf', false, 'application/pdf'),
+                ]),
+            })
+        );
+
+        await page.goto('/files');
+        await expect(page.getByRole('heading', { name: 'Files', exact: true })).toBeVisible({ timeout: 15000 });
+
+        // Both visibility pills and the row actions, so the scan sees each tone and every button.
+        const rows = page.getByRole('table');
+        await expect(rows.getByText('Public', { exact: true })).toBeVisible();
+        await expect(rows.getByText('Private', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Copy link to spring-roast-cover.jpg' })).toBeVisible();
+        await scan(page);
+
+        await page.getByRole('button', { name: 'Upload file' }).click();
+        await expect(page.getByLabel('Choose a file')).toBeVisible();
+        await page.getByLabel('Choose a file').setInputFiles({
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            buffer: Buffer.from('not an image'),
+        });
+        // The refusal is the one piece of text in the destructive tone in the dialog.
+        await expect(page.getByRole('alert')).toBeVisible();
+        await scan(page);
+    });
+
     test('the content types list', async ({ page }) => {
         await authed(page);
         await stubShell(page);
