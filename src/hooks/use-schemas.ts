@@ -2,7 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
 import type { ContentTypeDefinition, CreateSchemaRequest } from '@/types/schema';
 
-export function useSchemas() {
+// enabled is for chrome that only needs the list when the caller may read it. The default is every
+// existing caller's behaviour.
+export function useSchemas(enabled = true) {
     return useQuery({
         queryKey: ['schemas'],
         queryFn: async () => {
@@ -11,6 +13,7 @@ export function useSchemas() {
             // keeps the page components out of the pagination contract entirely.
             return response.data.items;
         },
+        enabled,
     });
 }
 

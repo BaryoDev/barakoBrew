@@ -5,7 +5,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { BrandMark, BrandWordmark } from '@/components/brand';
-import { NAV_GROUPS, isNavItemActive, visibleGroups, type NavGroup, type NavItem } from '@/lib/navigation';
+import {
+  NAV_GROUPS,
+  activeNavHref,
+  visibleGroups,
+  withSingletons,
+  type NavGroup,
+  type NavItem,
+} from '@/lib/navigation';
+import { useSchemas } from '@/hooks/use-schemas';
 import { useNavMetrics, type NavMetrics } from '@/hooks/use-nav-metrics';
 import { CommandMenu } from '@/components/command-menu';
 import { IconMore, IconSignOut } from '@/components/icons';
@@ -84,18 +92,18 @@ function NavMetricLabel({ item, metrics }: { item: NavItem; metrics: NavMetrics 
 function NavList({
   group,
   primary,
-  pathname,
+  activeHref,
   metrics,
 }: {
   group: NavGroup;
   primary: boolean;
-  pathname: string;
+  activeHref: string | undefined;
   metrics: NavMetrics;
 }) {
   return (
     <SidebarMenu className="gap-0.5">
       {group.items.map((item) => {
-        const active = isNavItemActive(item.href, pathname);
+        const active = item.href === activeHref;
         return (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
@@ -132,16 +140,25 @@ export function AppSidebar() {
   // Filtered rather than rendered whole. Every item used to be shown to every role, so a User saw
   // all nineteen destinations and sixteen of them answered 403 on arrival. The backend was never
   // the problem; the sidebar was advertising doors it knew were locked.
-  const groups = visibleGroups(NAV_GROUPS, user?.roles);
+  const allowed = visibleGroups(NAV_GROUPS, user?.roles);
   const { data: meta } = useApiMeta();
   const [aboutOpen, setAboutOpen] = useState(false);
 
   // Only the destinations that survived filtering get a count fetched for them.
   const visibleHrefs = useMemo(
-    () => new Set(groups.flatMap((g) => g.items.map((i) => i.href))),
-    [groups]
+    () => new Set(allowed.flatMap((g) => g.items.map((i) => i.href))),
+    [allowed]
   );
   const metrics = useNavMetrics(visibleHrefs);
+
+  // Only fetched for a caller the rail already offers Content types to, since the API answers 403
+  // to anyone else. The list is the one the schema screens cache, so this is rarely a request.
+  const { data: types } = useSchemas(visibleHrefs.has('/schemas'));
+  const groups = withSingletons(allowed, types);
+  const activeHref = activeNavHref(
+    groups.flatMap((g) => g.items.map((i) => i.href)),
+    pathname
+  );
 
   return (
     <Sidebar collapsible="offcanvas" className="border-none">
@@ -178,7 +195,7 @@ export function AppSidebar() {
                 </SidebarGroupLabel>
               )}
               <SidebarGroupContent>
-                <NavList group={group} primary={primary} pathname={pathname} metrics={metrics} />
+                <NavList group={group} primary={primary} activeHref={activeHref} metrics={metrics} />
               </SidebarGroupContent>
             </SidebarGroup>
           );

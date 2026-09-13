@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
@@ -35,6 +35,7 @@ import { IconContent, IconLock, IconPlus } from '@/components/icons';
 import { useDebounced } from '@/hooks/use-debounced';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
+import { singletonHref } from '@/lib/navigation';
 
 const ALL_TYPES = 'all';
 const ALL_STATUSES = 'all';
@@ -97,6 +98,13 @@ function ContentListInner() {
   const filtered = query.length > 0 || status !== undefined;
 
   const { data: schemas } = useSchemas();
+
+  // A single-entry type has no list. Links and bookmarks that filter by it land on its edit screen.
+  const singleton = schemas?.find((s) => s.name === contentType && s.isSingleton === true);
+  useEffect(() => {
+    if (singleton) router.replace(singletonHref(singleton.name));
+  }, [singleton, router]);
+
   const {
     data: contents,
     isLoading,

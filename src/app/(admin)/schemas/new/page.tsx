@@ -27,6 +27,7 @@ export default function NewSchemaPage() {
   const [nameEdited, setNameEdited] = useState(false);
   const [description, setDescription] = useState('');
   const [publiclyDeliverable, setPubliclyDeliverable] = useState(false);
+  const [singleton, setSingleton] = useState(false);
   const [fields, setFields] = useState<FieldDefinition[]>([]);
 
   const canSave = displayName.trim() && name.trim() && fields.length > 0;
@@ -35,7 +36,7 @@ export default function NewSchemaPage() {
     e.preventDefault();
     if (!canSave) return;
     createSchema.mutate(
-      { name, displayName, description: description || undefined, fields, isPubliclyDeliverable: publiclyDeliverable },
+      { name, displayName, description: description || undefined, fields, isPubliclyDeliverable: publiclyDeliverable, isSingleton: singleton },
       {
         onSuccess: () => {
           toast.success(`Content type “${displayName}” created`);
@@ -112,6 +113,18 @@ export default function NewSchemaPage() {
             checked={publiclyDeliverable}
             onCheckedChange={setPubliclyDeliverable}
           />
+        </div>
+
+        <div className="flex items-start justify-between gap-6 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label htmlFor="singleton">One entry only</Label>
+            <p className="text-sm text-muted-foreground">
+              For values the site has one of, like its address or footer text. The type is edited on
+              one screen instead of a list, and a second entry is refused. This cannot be changed
+              later.
+            </p>
+          </div>
+          <Switch id="singleton" checked={singleton} onCheckedChange={setSingleton} />
         </div>
 
         <Separator />

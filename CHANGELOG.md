@@ -9,6 +9,16 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **A content type that holds one entry is edited on one screen, not a list.** barakoCMS 4.1.0
+  marks such a type with `isSingleton` and refuses a second create. The console now lists each one
+  in the rail under Entries and opens it at `/content/singleton/{type}`. With no entry yet, the first
+  save creates it; after that the same screen edits it, with schedule and history. Links that used
+  to open the list or the new entry form for such a type (the type's own page, `/content?type=`,
+  `/content/new?type=`) land on that screen instead, and a type can be created with the flag on
+  (#89).
+
 ### Changed
 
 - **The image is published as `ghcr.io/baryodev/barako-brew`.** It was the last place the old name
