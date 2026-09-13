@@ -2,7 +2,9 @@
 // workflows are content-event triggers that run a list of actions, not a state machine.
 
 export interface WorkflowAction {
-    type: string; // Email | SMS | Webhook | CreateTask | UpdateField | Conditional
+    // Server-owned. GET /api/workflows/actions lists the kinds this API instance registers, and a
+    // module can add more, so the console must not keep its own list of names.
+    type: string;
     parameters: Record<string, string>; // values support {{template}} variables
 }
 

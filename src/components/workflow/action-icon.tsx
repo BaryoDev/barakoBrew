@@ -13,6 +13,7 @@ const ACTION_ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
   Email: IconEnvelope,
   SMS: IconSms,
   Webhook: IconWebhook,
+  Request: IconWebhook,
   CreateTask: IconTasks,
   UpdateField: IconFieldEdit,
   Conditional: IconConditional,

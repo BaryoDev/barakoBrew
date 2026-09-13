@@ -55,7 +55,7 @@ an nginx rule redirecting the other way will loop. Proxy the bare path instead o
 | Overview | Live stats, latest entries, health summary, quick actions, command palette |
 | Content types | Browse and define schemas with the API's typed fields |
 | Entries | Create, edit, publish, archive, filter by type, paginate, version history with rollback |
-| Workflows | Trigger builder, conditions, actions (Email, SMS, Webhook, CreateTask, UpdateField, Conditional), template variables, validation, dry run, execution logs and runs |
+| Workflows | Trigger builder, conditions, actions from whatever the API registers (barakoCMS ships Email, SMS, Webhook, Request, CreateTask, UpdateField and Conditional), template variables, validation, dry run, execution logs and runs |
 | Connectors | Outbound requests and the connectors screen |
 | Users | Assign and remove roles and groups inline |
 | Roles | Full CRUD with a per-content-type Create/Read/Update/Delete permission matrix |
