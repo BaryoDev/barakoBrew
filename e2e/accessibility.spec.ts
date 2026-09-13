@@ -101,6 +101,16 @@ function row(id: string, contentType: string, status: string, title: string, ver
 
 /** Serious and critical only. Minor and moderate are reported in the failure message, not failed on. */
 async function scan(page: import('@playwright/test').Page) {
+    // Refuse to audit a page that is still moving, rather than trusting every caller to remember.
+    // The first check fails a scan run outside the reduced-motion context below, which is how a case
+    // copied into another file would lose it. The second covers the frame between an animation
+    // starting and its 0.01ms duration elapsing, and anything driven from script rather than CSS.
+    expect(
+        await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+        'scan() ran without reducedMotion: reduce, so it would read colours mid-animation'
+    ).toBe(true);
+    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
+
     const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze();
@@ -135,7 +145,7 @@ async function scan(page: import('@playwright/test').Page) {
  * `globals.css` honours `prefers-reduced-motion` by cutting animations to 0.01ms rather than to
  * none, so enter and exit still complete and dialogs still unmount. The resting state is the state
  * worth auditing anyway, and putting this here rather than in one test covers every animated thing
- * added to these routes later. It stays out of `playwright.config.ts` on purpose: the other specs
+ * added to these routes later. scan() checks the setting is in effect, so it cannot be lost quietly. It stays out of `playwright.config.ts` on purpose: the other specs
  * test behaviour, not composited colour, and they should keep running the animations a person sees.
  */
 test.use({ reducedMotion: 'reduce' });
@@ -376,16 +386,8 @@ test.describe('accessibility', () => {
         await page.getByRole('button', { name: 'Preview' }).click();
         await expect(page.getByRole('cell', { name: 'ana@example.com' })).toBeVisible();
 
-        // Settled first, and this is a real trap rather than a sprinkle of patience. The Run again
-        // button comes back from disabled when the rows land, and Button transitions opacity, so for
-        // about 150ms its near-black text is drawn at half opacity. axe reads the composited colour
-        // and measures 4.09:1 against the card, which is a serious contrast failure the settled page
-        // does not have. Without this the case fails perhaps one run in three, and a gate that fails
-        // at random gets switched off.
-        await page.waitForFunction(() =>
-            document.getAnimations().every((a) => a.playState === 'finished')
-        );
-
+        // The Run again button comes back from disabled when the rows land, and Button transitions
+        // opacity, so mid-transition axe measures 4.09:1 against the card. scan() waits that out.
         await scan(page);
     });
 
