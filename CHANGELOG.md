@@ -9,6 +9,15 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **The image is published as `ghcr.io/baryodev/barako-brew`.** It was the last place the old name
+  survived. Every tag (`latest`, `<version>`, `dev`, `dev-<sha>`, `playground`,
+  `playground-<version>`) is also pushed as `ghcr.io/baryodev/barako-admin` pointing at the same
+  digest, and the publish job fails if the two names disagree. **`barako-admin` stops at 2.0.0**;
+  move compose files and deploy scripts to `barako-brew` before then. Tags already pulled under the
+  old name stay resolvable (#84).
+
 ## [1.1.0] - 2026-09-12
 
 ### Changed

@@ -2,7 +2,7 @@
 
 The console for [barakoCMS](https://github.com/BaryoDev/barakoCMS). barakoCMS is the API, and the
 only surface it ships with is Swagger. barakoBrew is where you design content types, roles,
-workflows and integrations against that API. It is published as `ghcr.io/baryodev/barako-admin`.
+workflows and integrations against that API. It is published as `ghcr.io/baryodev/barako-brew`.
 
 **Live demo: <https://playground.baryo.dev/barakocms>**, sign in as `demo_admin` / `BarakoDemo2026!`
 
@@ -15,7 +15,7 @@ The image needs no build step. Point it at a running barakoCMS:
 ```bash
 docker run -p 3000:3000 \
   -e NEXT_PUBLIC_API_URL=http://localhost:5005 \
-  ghcr.io/baryodev/barako-admin:latest
+  ghcr.io/baryodev/barako-brew:latest
 ```
 
 Open <http://localhost:3000> and sign in with the initial admin account (`InitialAdmin__Username` /
@@ -28,7 +28,7 @@ images.
 `NEXT_PUBLIC_API_URL` is read at container start by `entrypoint.sh`, which writes
 `public/env-config.js`. Repointing the console at another API never needs a rebuild.
 
-Tags on `ghcr.io/baryodev/barako-admin`:
+Tags on `ghcr.io/baryodev/barako-brew`:
 
 | Tag | Built from |
 | --- | --- |
@@ -36,13 +36,16 @@ Tags on `ghcr.io/baryodev/barako-admin`:
 | `dev`, `dev-<sha>` | every merge to master, both architectures |
 | `playground`, `playground-<version>` | the base-path build that runs playground.baryo.dev, arm64 |
 
+Every tag is also pushed as `ghcr.io/baryodev/barako-admin`, the old name, at the same digest.
+That name stops at 2.0.0.
+
 ### Serving under a sub-path
 
 To host the console at something like `example.com/barakocms`, bake the base path in at build
 time (Next.js resolves `basePath` during the build):
 
 ```bash
-docker build --build-arg NEXT_BASE_PATH=/barakocms -t barako-admin:subpath .
+docker build --build-arg NEXT_BASE_PATH=/barakocms -t barako-brew:subpath .
 ```
 
 Then proxy `/barakocms/` to the container. Next.js 308-redirects `/barakocms/` to `/barakocms`, so

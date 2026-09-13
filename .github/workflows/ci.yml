@@ -265,7 +265,7 @@ jobs:
           file: Dockerfile
           push: false
           load: true
-          tags: barako-admin:ci
+          tags: barako-brew:ci
           build-args: |
             BARAKO_VERSION=0.0.0-ci
           cache-from: type=gha
@@ -276,7 +276,7 @@ jobs:
       # not node_modules, which is how 27MB of LGPL libvips shipped while the tree gate was green
       # (#76).
       - name: The image ships no copyleft
-        run: bash scripts/check-image-licences.sh --image barako-admin:ci
+        run: bash scripts/check-image-licences.sh --image barako-brew:ci
 
       # Proven to fail, against a fixture holding the package that actually shipped. A gate nobody
       # has watched refuse is a gate nobody should trust, and a non-zero exit on its own is not
@@ -314,7 +314,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run -d --name ci-admin -p 3300:3000 \
-            -e NEXT_PUBLIC_API_URL=http://api.example.test:5005 barako-admin:ci
+            -e NEXT_PUBLIC_API_URL=http://api.example.test:5005 barako-brew:ci
           for _ in $(seq 1 30); do
             [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3300/login || true)" = "200" ] && break
             sleep 2
@@ -338,7 +338,7 @@ jobs:
           set -euo pipefail
           docker compose -f quickstart/docker-compose.yml config > quickstart.resolved
           grep -q 'ghcr.io/baryodev/barako-cms:' quickstart.resolved
-          grep -q 'ghcr.io/baryodev/barako-admin:' quickstart.resolved
+          grep -q 'ghcr.io/baryodev/barako-brew:' quickstart.resolved
           if grep -qE '^[[:space:]]+build:' quickstart.resolved; then
             echo "::error::quickstart/docker-compose.yml resolves to a build step; it must run published images"; exit 1
           fi
@@ -366,8 +366,8 @@ jobs:
           set -euo pipefail
           npm ci --ignore-scripts
           mkdir -p sbom
-          npx --yes @cyclonedx/cyclonedx-npm --output-file sbom/barako-admin.cdx.json package.json
-          f=sbom/barako-admin.cdx.json
+          npx --yes @cyclonedx/cyclonedx-npm --output-file sbom/barako-brew.cdx.json package.json
+          f=sbom/barako-brew.cdx.json
           [ -s "$f" ] || { echo "::error::$f is missing or empty."; exit 1; }
           COMPONENTS=$(python3 -c "import json; print(len(json.load(open('$f')).get('components', [])))")
           [ "$COMPONENTS" -gt 0 ] || { echo "::error::$f lists no components, so it describes nothing."; exit 1; }

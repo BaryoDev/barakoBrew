@@ -1,9 +1,12 @@
 name: Publish
 
-# Every merge to master pushes ghcr.io/baryodev/barako-admin:dev and :dev-<sha>. A v* tag pushes
+# Every merge to master pushes ghcr.io/baryodev/barako-brew:dev and :dev-<sha>. A v* tag pushes
 # :latest and :<version>, then builds the base-path image playground.baryo.dev runs, pushes it as
 # :playground and :playground-<version>, and deploys it there over SSH. Tagging is the release
 # switch; nothing else publishes.
+#
+# Every tag is also pushed as ghcr.io/baryodev/barako-admin, the name the console shipped under
+# until 1.2.0, pointing at the same digest. That second name stops at 2.0.0 (#84).
 #
 # Both architectures, always. The playground VM is arm64 and an amd64-only image has bitten this
 # project before. Each architecture is built on a runner of that architecture and pushed by digest,
@@ -114,7 +117,8 @@ jobs:
           build-args: |
             BARAKO_VERSION=${{ needs.version.outputs.version }}
           labels: org.opencontainers.image.source=https://github.com/BaryoDev/barakoBrew
-          outputs: type=image,name=ghcr.io/baryodev/barako-admin,push-by-digest=true,name-canonical=true,push=true
+          # Pushed under both names so each repository holds the blobs its manifest list refers to.
+          outputs: type=image,"name=ghcr.io/baryodev/barako-brew,ghcr.io/baryodev/barako-admin",push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
 
@@ -182,7 +186,8 @@ jobs:
         id: tags
         run: |
           set -euo pipefail
-          IMG=ghcr.io/baryodev/barako-admin
+          IMG=ghcr.io/baryodev/barako-brew
+          OLD=ghcr.io/baryodev/barako-admin
           REFS=""
           for arch in amd64 arm64; do
             F="/tmp/digests/$arch"
@@ -197,6 +202,10 @@ jobs:
           ARGS=""
           for t in $TAGS; do ARGS="$ARGS --tag $IMG:$t"; done
           docker buildx imagetools create $ARGS $REFS
+          # Copied from the new name rather than built again, so both names resolve to one digest.
+          for t in $TAGS; do
+            docker buildx imagetools create --tag "$OLD:$t" "$IMG:$t"
+          done
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
           echo "pushed: $TAGS" >> "$GITHUB_STEP_SUMMARY"
 
@@ -211,7 +220,11 @@ jobs:
         run: |
           set -euo pipefail
           for t in ${{ steps.tags.outputs.tags }}; do
+            bash scripts/check-image-platforms.sh "ghcr.io/baryodev/barako-brew:$t"
             bash scripts/check-image-platforms.sh "ghcr.io/baryodev/barako-admin:$t"
+            new=$(docker buildx imagetools inspect "ghcr.io/baryodev/barako-brew:$t" --format '{{json .Manifest.Digest}}')
+            old=$(docker buildx imagetools inspect "ghcr.io/baryodev/barako-admin:$t" --format '{{json .Manifest.Digest}}')
+            [ "$new" = "$old" ] || { echo "::error::barako-brew:$t is $new but barako-admin:$t is $old"; exit 1; }
           done
 
       # imagetools create on a manifest list copies the list, so the mirror is multi-architecture
@@ -224,7 +237,19 @@ jobs:
           docker buildx imagetools create \
             --tag "arnelirobles/barako-admin:latest" \
             --tag "arnelirobles/barako-admin:$VERSION" \
-            "ghcr.io/baryodev/barako-admin:$VERSION"
+            "ghcr.io/baryodev/barako-brew:$VERSION"
+
+      # A separate step, and allowed to fail, because the Docker Hub repository under the new name
+      # may not exist yet and the mirror is optional. The old name above keeps working meanwhile.
+      - name: Mirror to Docker Hub under the new name
+        if: env.IS_RELEASE == 'true' && steps.dockerhub.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "arnelirobles/barako-brew:latest" \
+            --tag "arnelirobles/barako-brew:$VERSION" \
+            "ghcr.io/baryodev/barako-brew:$VERSION"
 
   # The release itself, after the tags are pushed and proven multi-architecture, because a release
   # pointing at an image that does not exist is worse than a late release. Notes come out of
@@ -261,7 +286,7 @@ jobs:
             echo
             echo "---"
             echo
-            echo "Image: \`ghcr.io/baryodev/barako-admin:$VERSION\`, linux/amd64 and linux/arm64."
+            echo "Image: \`ghcr.io/baryodev/barako-brew:$VERSION\`, linux/amd64 and linux/arm64. Also pushed as \`ghcr.io/baryodev/barako-admin:$VERSION\` until 2.0.0."
           } >> notes.md
 
           gh release create "v$VERSION" \
@@ -299,7 +324,11 @@ jobs:
             NEXT_BASE_PATH=/barakocms
             NEXT_PUBLIC_API_URL=https://playground.baryo.dev/barakocms-api
             BARAKO_VERSION=${{ needs.version.outputs.version }}
+          # The VM's deploy script pulls barako-admin:playground, so that name has to keep moving
+          # until the script is switched to barako-brew.
           tags: |
+            ghcr.io/baryodev/barako-brew:playground
+            ghcr.io/baryodev/barako-brew:playground-${{ needs.version.outputs.version }}
             ghcr.io/baryodev/barako-admin:playground
             ghcr.io/baryodev/barako-admin:playground-${{ needs.version.outputs.version }}
           labels: org.opencontainers.image.source=https://github.com/BaryoDev/barakoBrew
@@ -347,7 +376,7 @@ jobs:
           {
             echo "## Playground deploy"
             echo ""
-            echo "- image: \`ghcr.io/baryodev/barako-admin:playground-${{ needs.version.outputs.version }}\`"
+            echo "- image: \`ghcr.io/baryodev/barako-brew:playground-${{ needs.version.outputs.version }}\`"
             echo "- url: https://playground.baryo.dev/barakocms"
             echo "- result: ${{ job.status }}"
             echo ""

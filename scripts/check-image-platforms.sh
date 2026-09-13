@@ -12,7 +12,7 @@
 # mismatch or when the manifest cannot be read. Attestation manifests (os "unknown") are ignored.
 #
 # The same script as barakoCMS's, deliberately. That issue (barakoCMS #394) turned up that this
-# repository owns the barako-admin release, so barakoCMS's gate cannot reach this image. Two
+# repository owns the console image release, so barakoCMS's gate cannot reach this image. Two
 # scripts that drift is worse than one copied on purpose.
 set -euo pipefail
 

@@ -2,7 +2,7 @@
 
 barakoBrew is licensed under MPL-2.0, in `LICENSE`. That covers the code in this repository.
 
-The container image published as `ghcr.io/baryodev/barako-admin` also redistributes third party
+The container image published as `ghcr.io/baryodev/barako-brew` also redistributes third party
 software. All of it is under a permissive licence. This file ships at
 `/app/THIRD-PARTY-NOTICES.md` inside the image, because a statement about what an image
 redistributes is worth little if it only exists in a repository nobody pulls.
@@ -38,7 +38,7 @@ Two gates, because what comes in and what goes out are different questions.
 A listing for a given image is available from the image:
 
 ```bash
-docker run --rm --entrypoint sh ghcr.io/baryodev/barako-admin:latest \
+docker run --rm --entrypoint sh ghcr.io/baryodev/barako-brew:latest \
   -c 'cat /app/THIRD-PARTY-NOTICES.md'
 ```
 

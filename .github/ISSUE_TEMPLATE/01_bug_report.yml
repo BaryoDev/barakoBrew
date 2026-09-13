@@ -73,7 +73,7 @@ body:
     attributes:
       label: Environment
       description: Browser and version, OS, and how the console is running (image tag, or npm run dev).
-      placeholder: "Firefox 141, macOS 15, ghcr.io/baryodev/barako-admin:1.0.0"
+      placeholder: "Firefox 141, macOS 15, ghcr.io/baryodev/barako-brew:1.2.0"
 
   - type: textarea
     id: console-output
