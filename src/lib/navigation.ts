@@ -7,6 +7,7 @@ import {
   IconContent,
   IconContentTypes,
   IconDashboard,
+  IconDisk,
   IconEnvelope,
   IconFilter,
   IconFlag,
@@ -112,6 +113,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Analytics', href: '/analytics', icon: IconAnalytics , roles: ['SuperAdmin', 'Admin'] },
       { title: 'Email events', href: '/email-events', icon: IconEnvelope, metric: 'recentBounces', tone: 'warning', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Feature flags', href: '/feature-flags', icon: IconFlag , roles: ['SuperAdmin', 'Admin'] },
+      // upload_files, which BarakoCMS.Files seeds to Admin and also lets SuperAdmin through. A custom
+      // role granted it is not visible here, since the token carries roles and not capabilities.
+      { title: 'Files', href: '/files', icon: IconDisk, roles: ['SuperAdmin', 'Admin'] },
       { title: 'PWA installs', href: '/pwa', icon: IconMobile , roles: ['SuperAdmin', 'Admin'] },
     ],
   },
@@ -190,6 +194,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   audit: 'Audit log',
   'email-events': 'Email events',
   'feature-flags': 'Feature flags',
+  files: 'Files',
   pwa: 'PWA installs',
   devices: 'Devices',
   portability: 'Export and import',
