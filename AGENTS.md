@@ -95,8 +95,9 @@ unit test for a helper a Playwright pack shares goes in `src/test/`, not next to
 Playwright loads it and dies importing vitest before it runs anything. Both configs pin
 `testMatch: '**/*.spec.ts'` and `src/test/runner-globs.test.ts` fails if either stops.
 
-**The smoke pack needs Docker.** It pulls `ghcr.io/baryodev/barako-cms` and `postgres`. Set
-`BARAKO_API_TAG` to test against a different API tag.
+**The smoke pack needs Docker.** It pulls `ghcr.io/baryodev/barako-cms` and `postgres`. It runs
+the release in `.github/barako-api-version`, which is what pull requests run; set
+`BARAKO_API_TAG=master` for what the nightly runs, or to any other tag.
 
 ### Tests for a bug fix must fail before the fix
 

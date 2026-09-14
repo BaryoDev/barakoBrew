@@ -14,6 +14,8 @@ on:
   # there never pushes here. This is how an API change surfaces without anyone pushing.
   schedule:
     - cron: "23 18 * * *"
+  # Runs the nightly on demand: the smoke job picks the same API tag for this event as for schedule.
+  workflow_dispatch:
 
 jobs:
   console:
@@ -381,8 +383,17 @@ jobs:
   # `items` since the envelope change, rendered an empty list rather than failing, and every mocked
   # spec stayed green because the mock returned `versions` too.
   #
-  # An arm runner, because ghcr.io/baryodev/barako-cms:playground is built for the Ampere VM and
-  # exists only as arm64. Free for public repositories.
+  # Which API image it runs depends on the event, because the two want opposite things (#58):
+  #
+  #   pull_request, merge_group, push   the release in .github/barako-api-version. A red run means
+  #                                     the console changed, never that an image was rebuilt elsewhere.
+  #   schedule, workflow_dispatch       :master, published on every barakoCMS master push. A red run
+  #                                     means the API moved, and the nightly-issue job below says so.
+  #
+  # The pin moves by pull request, so the bump runs this job against the new release before it lands.
+  #
+  # An arm runner. Both tags are published for arm64 and amd64; arm is what this job was proven on,
+  # and it is free for public repositories.
   smoke:
     name: Console against the real API
     runs-on: ubuntu-24.04-arm
@@ -402,12 +413,26 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      # Which API image the pack runs against is a repository variable, so pointing it at a newer
-      # tag is a settings change rather than a pull request. Unset, it is :playground, the build
-      # that runs playground.baryo.dev.
+      # An event with no rule fails here rather than falling back to a tag, so a new trigger has to
+      # say which API it means.
+      - name: Pick the API image for this event
+        id: api
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            pull_request|merge_group|push) tag=$(tr -d '[:space:]' < .github/barako-api-version) ;;
+            schedule|workflow_dispatch) tag=master ;;
+            *) echo "::error::no API tag is defined for the $EVENT event"; exit 1 ;;
+          esac
+          [ -n "$tag" ] || { echo "::error::.github/barako-api-version is empty"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "API image for $EVENT: ghcr.io/baryodev/barako-cms:$tag" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Stand up the stack and run the unmocked pack
         env:
-          BARAKO_API_TAG: ${{ vars.BARAKO_API_TAG || 'playground' }}
+          BARAKO_API_TAG: ${{ steps.api.outputs.tag }}
         run: bash scripts/smoke-check.sh
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -417,6 +442,41 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # A failed nightly opens one tracking issue, or comments on it if it is already open. Pull
+  # requests run the pinned release, so they stay green while :master is red, and without this a
+  # stale pin or an API change the console has to follow would only show as a red run nobody opened.
+  nightly-issue:
+    name: Report a failed nightly
+    needs: smoke
+    if: github.event_name == 'schedule' && failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or comment on the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Nightly: console against barako-cms:master failed"
+          body="The unmocked pack failed against \`ghcr.io/baryodev/barako-cms:master\`: $RUN_URL
+
+          Pull requests run the release pinned in \`.github/barako-api-version\`, so they stay green while this is red. Either the API changed in a way the console has to follow, or the pin is behind. Close this once the nightly is green again."
+
+          # An exact title match over the open issues, not a search: search is indexed with a delay
+          # and matches words, so it can miss the issue or find a different one.
+          number=$(gh issue list --state open --limit 500 --json number,title \
+            | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')
+
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+            echo "commented on #$number"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
 
   # Proves the release gate can fail, rather than trusting it because it has never fired.
   #
