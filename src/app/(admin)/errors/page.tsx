@@ -8,6 +8,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api';
 import {
   Table,
   TableBody,
@@ -20,6 +24,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -33,6 +38,9 @@ import {
 import {
   useClientErrors,
   useResolveClientError,
+  referenceHref,
+  MAX_NOTE_LENGTH,
+  MAX_REFERENCE_LENGTH,
   type ClientErrorDto,
   type ErrorSeverity,
 } from '@/hooks/use-errors';
@@ -78,12 +86,97 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
+function ResolveDialog({
+  error,
+  onOpenChange,
+}: {
+  error: ClientErrorDto | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const resolve = useResolveClientError();
+  const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
+
+  function reset() {
+    setReference('');
+    setNote('');
+    resolve.reset();
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!error || resolve.isPending) return;
+    try {
+      await resolve.mutateAsync({ id: error.id, reference, note });
+      toast.success('Error resolved');
+      reset();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Could not resolve the error.'));
+    }
+  }
+
+  return (
+    <Dialog
+      open={!!error}
+      onOpenChange={(open) => {
+        if (!open) reset();
+        onOpenChange(open);
+      }}
+    >
+      <DialogContent>
+        <form onSubmit={submit}>
+          <DialogHeader>
+            <DialogTitle>Resolve error</DialogTitle>
+            <DialogDescription className="font-mono break-words">{error?.message}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="resolve-reference">Reference (optional)</Label>
+              <Input
+                id="resolve-reference"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                maxLength={MAX_REFERENCE_LENGTH}
+                placeholder="Pull request or ticket link, or a number like AB#1234 or PROJ-42"
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- focus belongs in a dialog the moment it opens, which is what WAI-ARIA authoring practices ask for. The rule is aimed at autofocus on page load.
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="resolve-note">Remarks (optional)</Label>
+              <Textarea
+                id="resolve-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={MAX_NOTE_LENGTH}
+                placeholder="What was done about it"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={resolve.isPending}>
+              {resolve.isPending ? 'Resolving...' : 'Resolve'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ErrorsPage() {
   const [status, setStatus] = useState<StatusFilter>('unresolved');
   const [severity, setSeverity] = useState<SeverityFilter>('all');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ClientErrorDto | null>(null);
+  const [resolving, setResolving] = useState<ClientErrorDto | null>(null);
 
   const { data, isLoading, isError } = useClientErrors({
     page,
@@ -93,7 +186,6 @@ export default function ErrorsPage() {
     q: q.trim() || undefined,
   });
 
-  const resolve = useResolveClientError();
   const showResolve = status !== 'resolved';
   const rows = data?.items ?? [];
 
@@ -234,10 +326,9 @@ export default function ErrorsPage() {
                         <Button
                           size="xs"
                           variant="outline"
-                          disabled={resolve.isPending}
                           onClick={(e) => {
                             e.stopPropagation();
-                            resolve.mutate(row.id);
+                            setResolving(row);
                           }}
                         >
                           Resolve
@@ -281,6 +372,23 @@ export default function ErrorsPage() {
                 <Detail className="col-span-full" label="User agent" value={selected.userAgent} />
               </dl>
 
+              {selected.resolved && (
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-3 text-sm">
+                  <Detail label="Resolved by" value={selected.resolvedBy} />
+                  <Detail label="Resolved at" value={formatDate(selected.resolvedAt)} />
+                  <div className="col-span-full">
+                    <dt className="text-muted-foreground text-xs">Reference</dt>
+                    <dd className="break-words">
+                      <ReferenceValue reference={selected.resolutionReference} />
+                    </dd>
+                  </div>
+                  <div className="col-span-full">
+                    <dt className="text-muted-foreground text-xs">Remarks</dt>
+                    <dd className="break-words whitespace-pre-wrap">{selected.resolutionNote || '—'}</dd>
+                  </div>
+                </dl>
+              )}
+
               {selected.stack && (
                 <div>
                   <p className="text-muted-foreground mb-1 text-xs font-medium">Stack trace</p>
@@ -293,7 +401,20 @@ export default function ErrorsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ResolveDialog error={resolving} onOpenChange={(open) => !open && setResolving(null)} />
     </>
+  );
+}
+
+function ReferenceValue({ reference }: { reference?: string | null }) {
+  if (!reference) return <>—</>;
+  const href = referenceHref(reference);
+  if (!href) return <span className="font-mono">{reference}</span>;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
+      {reference}
+    </a>
   );
 }
 
