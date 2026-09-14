@@ -144,8 +144,10 @@ expect(rows.every(r => r.status === 'Draft')).toBe(true);
 Three rules, from [#39](https://github.com/BaryoDev/barakoBrew/issues/39). CI enforces the first
 one. The other two need a person, so they are a checklist rather than a job.
 
-**1. The licence must be permissive.** MPL-2.0 is file-level copyleft and §3.3 lets MPL files be
-combined into a Larger Work under other terms, so the line is narrower than "MIT only".
+**1. The licence must be permissive.** This is about the dependency's licence, not barakoBrew's,
+which is MIT. MPL-2.0 is file-level copyleft and §3.3 lets MPL files be combined into a Larger Work
+under other terms, so an MPL dependency stays MPL in its own files and the line is narrower than
+"MIT only".
 
 Allowed: MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, MPL-2.0, Unlicense, CC0-1.0, and the
 permissive licences already in the tree that the audit in #39 missed because it read direct
@@ -216,6 +218,7 @@ review.
 
 ## Licence
 
-barakoBrew is released under the [Mozilla Public License 2.0](LICENSE), and your contribution ships
-under whatever licence the release carries. The [contributor terms](CLA.md) bound that to
-OSI-approved licences, so a release containing your work is always open source.
+barakoBrew is released under [MIT](LICENSE), and your contribution ships under it. Releases up to
+and including 1.2.0 were MPL-2.0 and keep that licence. The [contributor terms](CLA.md) bound any
+future release to MIT or MPL-2.0 and carry an explicit patent grant, since MIT has none, so a release
+containing your work is always open source.

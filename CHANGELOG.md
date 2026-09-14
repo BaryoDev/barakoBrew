@@ -60,6 +60,14 @@ moved. Which API a console works against is stated per release instead.
   an http or https reference as a link. Needs BaryoDev/barakoCMS#790 to store them; an older API
   ignores the extra fields and resolves as before. (#130)
 
+### Changed
+
+- **barakoBrew is MIT.** `LICENSE`, the `license` field in `package.json` and the image's
+  `org.opencontainers.image.licenses` label say MIT from this release. Releases up to and including
+  1.2.0 keep MPL-2.0. The contributor terms in `CLA.md` now name barakoBrew rather than barakoCMS,
+  state MIT, and grant a patent licence of their own, since MIT carries none. Follows the licence
+  rule in BaryoDev/barakoCMS#815. (#135)
+
 ### Fixed
 
 - **The PWA installs screen crashed on load** with `filter is not a function`. It read

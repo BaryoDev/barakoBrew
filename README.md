@@ -149,8 +149,8 @@ quickstart/             # docker compose for Postgres + API + console
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) first; the coding standard is [AGENTS.md](AGENTS.md).
-Opening a pull request means you agree to the [contributor terms](CLA.md). Licensed under the
-[Mozilla Public License 2.0](LICENSE).
+Opening a pull request means you agree to the [contributor terms](CLA.md). Licensed under
+[MIT](LICENSE); releases up to 1.2.0 were MPL-2.0 and keep it.
 
 If barakoCMS is useful to you, a star on the [API repository](https://github.com/BaryoDev/barakoCMS)
 helps other people find it.
