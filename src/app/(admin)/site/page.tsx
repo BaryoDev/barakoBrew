@@ -1,6 +1,8 @@
 'use client';
 
 import { SiteForm } from '@/components/site/site-form';
+import { ShareLinksPanel } from '@/components/site/share-links-panel';
+import { SiteModeSection } from '@/components/site/site-mode-section';
 import { ImageUrlField } from '@/components/site/image-url-field';
 import { LinkList, PairList, Section, Structured, TextField } from '@/components/site/editors';
 import { Button } from '@/components/ui/button';
@@ -21,10 +23,10 @@ export default function SitePage() {
     return (
         <SiteForm
             title="Site"
-            description="This tenant's name, images, header, footer and social links, read by the site on each request."
+            description="This tenant's name, mode, images, header, footer and social links, read by the site on each request."
             problem={siteProblem}
         >
-            {({ values, set }) => (
+            {({ values, set, entry, schema }) => (
                 <>
                     <Section title="Identity">
                         <TextField id="site-name" label="Site name (required)" value={values.Name} onChange={(v) => set('Name', v)} />
@@ -58,6 +60,8 @@ export default function SitePage() {
                             onChange={(v) => set('Copyright', v)}
                         />
                     </Section>
+
+                    <SiteModeSection values={values} set={set} schema={schema} />
 
                     <Section title="Images" description="Uploaded files or any absolute address.">
                         <ImageUrlField id="site-logo" label="Logo" value={values.Logo} onChange={(v) => set('Logo', v)} />
@@ -154,6 +158,8 @@ export default function SitePage() {
                             )}
                         </Structured>
                     </Section>
+
+                    <ShareLinksPanel siteUrl={entry?.data?.Url} />
                 </>
             )}
         </SiteForm>
