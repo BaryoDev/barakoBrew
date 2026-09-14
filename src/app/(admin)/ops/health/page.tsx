@@ -6,6 +6,8 @@ import {
   useMetrics,
 } from '@/hooks/use-monitoring';
 import { PageHeader } from '@/components/patterns/page-header';
+import { Button } from '@/components/ui/button';
+import { isNotFound } from '@/lib/api';
 import { StatusBadge, type Tone } from '@/components/patterns/status-badge';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,7 +28,12 @@ const ENTRY_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGEleme
 
 export default function HealthPage() {
   const { data: health, isLoading: healthLoading } = useHealthStatus();
-  const { data: k8s } = useKubernetesStatus();
+  const {
+    data: k8s,
+    error: k8sError,
+    refetch: refetchK8s,
+  } = useKubernetesStatus();
+  const k8sNotFound = isNotFound(k8sError);
   const { data: metrics } = useMetrics();
 
   return (
@@ -80,43 +87,54 @@ export default function HealthPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-medium">
-              <IconServer className="text-primary size-4" />
-              Kubernetes
-            </CardTitle>
-            <CardAction>
-              <StatusBadge tone={k8s?.isConnected ? 'success' : 'muted'}>
-                {k8s?.isConnected ? 'Connected' : 'Not connected'}
-              </StatusBadge>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {!k8s?.isConnected ? (
-              <p className="text-muted-foreground text-xs">
-                {k8s?.error || 'The API is not running inside a cluster, or the integration is turned off in Settings.'}
-              </p>
-            ) : (
-              <>
-                {k8s.nodes?.map((node) => (
-                  <div key={node.name} className="flex items-center justify-between">
-                    <span className="font-mono text-xs">{node.name}</span>
-                    <StatusBadge tone={healthTone(node.status)}>{node.status}</StatusBadge>
-                  </div>
-                ))}
-                {k8s.deployments?.map((deployment) => (
-                  <div key={deployment.name} className="text-muted-foreground flex items-center justify-between text-xs">
-                    <span className="font-mono">{deployment.namespace}/{deployment.name}</span>
-                    <span>
-                      {deployment.availableReplicas}/{deployment.replicas} replicas
-                    </span>
-                  </div>
-                ))}
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {!k8sNotFound && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <IconServer className="text-primary size-4" />
+                Kubernetes
+              </CardTitle>
+              <CardAction>
+                <StatusBadge tone={k8s?.isConnected ? 'success' : 'muted'}>
+                  {k8s?.isConnected ? 'Connected' : 'Not connected'}
+                </StatusBadge>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {k8sError ? (
+                <div className="space-y-2">
+                  <p className="text-destructive text-xs">
+                    Could not load Kubernetes status.
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => refetchK8s()}>
+                    Retry
+                  </Button>
+                </div>
+              ) : !k8s?.isConnected ? (
+                <p className="text-muted-foreground text-xs">
+                  {k8s?.error || 'The API is not running inside a cluster, or the integration is turned off in Settings.'}
+                </p>
+              ) : (
+                <>
+                  {k8s.nodes?.map((node) => (
+                    <div key={node.name} className="flex items-center justify-between">
+                      <span className="font-mono text-xs">{node.name}</span>
+                      <StatusBadge tone={healthTone(node.status)}>{node.status}</StatusBadge>
+                    </div>
+                  ))}
+                  {k8s.deployments?.map((deployment) => (
+                    <div key={deployment.name} className="text-muted-foreground flex items-center justify-between text-xs">
+                      <span className="font-mono">{deployment.namespace}/{deployment.name}</span>
+                      <span>
+                        {deployment.availableReplicas}/{deployment.replicas} replicas
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );
