@@ -2,7 +2,14 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { useTenants, useCreateTenant } from '@/hooks/use-tenants';
+import {
+  domainClash,
+  domainProblems,
+  useCreateTenant,
+  useTenants,
+  useUpdateTenantDomains,
+  type Tenant,
+} from '@/hooks/use-tenants';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -13,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -168,9 +176,93 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 }
 
+function DomainsDialog({ tenant, onOpenChange }: { tenant: Tenant | null; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Dialog open={tenant !== null} onOpenChange={onOpenChange}>
+      <DialogContent>{tenant && <DomainsForm key={tenant.slug} tenant={tenant} onDone={() => onOpenChange(false)} />}</DialogContent>
+    </Dialog>
+  );
+}
+
+function DomainsForm({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
+  const update = useUpdateTenantDomains();
+  const [text, setText] = useState((tenant.domains ?? []).join('\n'));
+  const [clash, setClash] = useState<string | null>(null);
+
+  const domains = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  const problems = domainProblems(domains);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (problems.length > 0) return;
+    setClash(null);
+    try {
+      await update.mutateAsync({ tenant, domains });
+      toast.success(domains.length ? `Domains saved for ${tenant.name}` : `Domains cleared for ${tenant.name}`);
+      onDone();
+    } catch (err) {
+      const message = domainClash(err);
+      if (message) setClash(message);
+      else toast.error(apiErrorMessage(err, 'The domains could not be saved.'));
+    }
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <DialogHeader>
+        <DialogTitle>Domains for {tenant.name}</DialogTitle>
+        <DialogDescription>
+          The hosts this tenant answers on, one per line, such as example.com. A domain belongs to one tenant.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-2 py-4">
+        <Label htmlFor="tenant-domains">Domains</Label>
+        <Textarea
+          id="tenant-domains"
+          rows={5}
+          spellCheck={false}
+          className="font-mono text-xs"
+          value={text}
+          aria-invalid={problems.length > 0 || clash !== null ? true : undefined}
+          onChange={(e) => {
+            setText(e.target.value);
+            setClash(null);
+          }}
+        />
+        {problems.length > 0 ? (
+          <ul className="text-warning space-y-0.5 text-xs">
+            {problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted-foreground text-xs">Leave it empty to clear every domain. Up to 20.</p>
+        )}
+        {clash && (
+          <p role="alert" className="text-destructive text-sm font-medium">
+            {clash}
+          </p>
+        )}
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={problems.length > 0 || update.isPending}>
+          {update.isPending ? 'Saving…' : 'Save domains'}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
 export default function TenantsPage() {
   const { data: tenants, isLoading, isError, refetch } = useTenants();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingDomains, setEditingDomains] = useState<Tenant | null>(null);
 
   const newButton = (
     <Button size="sm" onClick={() => setDialogOpen(true)}>
@@ -205,6 +297,7 @@ export default function TenantsPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Handle</TableHead>
+                <TableHead>Domains</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -213,6 +306,18 @@ export default function TenantsPage() {
                 <TableRow key={t.id}>
                   <TableCell className="font-medium">{t.name}</TableCell>
                   <TableCell className="text-muted-foreground font-mono text-xs">{t.slug}</TableCell>
+                  <TableCell>
+                    {t.domains === undefined ? (
+                      <span className="text-muted-foreground text-xs">Not reported by this API</span>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs">{t.domains.length ? t.domains.join(', ') : 'None'}</span>
+                        <Button variant="ghost" size="xs" onClick={() => setEditingDomains(t)}>
+                          Edit<span className="sr-only"> domains for {t.name}</span>
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={t.isActive ? 'default' : 'secondary'}>
                       {t.isActive ? 'Active' : 'Inactive'}
@@ -228,6 +333,7 @@ export default function TenantsPage() {
       <TenantMembers />
 
       <CreateTenantDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <DomainsDialog tenant={editingDomains} onOpenChange={(open) => !open && setEditingDomains(null)} />
     </>
   );
 }

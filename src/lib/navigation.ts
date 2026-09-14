@@ -11,6 +11,8 @@ import {
   IconEnvelope,
   IconFilter,
   IconFlag,
+  IconSun,
+  IconCube,
   IconGroups,
   IconHealth,
   IconHistory,
@@ -27,6 +29,7 @@ import {
   IconTable,
   IconWebhook,
 } from '@/components/icons';
+import { SITE_TYPE } from '@/lib/site-settings';
 
 /**
  * Names a live number the rail may show beside an item. It is an identifier, not a value: the
@@ -100,6 +103,15 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Site',
+    items: [
+      // Admin and SuperAdmin, the roles GET /api/content-types answers for, since both screens find
+      // the site type through it before they read or write the entry.
+      { title: 'Site', href: '/site', icon: IconCube, roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Theme', href: '/site/theme', icon: IconSun, roles: ['SuperAdmin', 'Admin'] },
+    ],
+  },
+  {
     label: 'Access',
     items: [
       { title: 'Tenants', href: '/tenants', icon: IconServer , roles: ['SuperAdmin'] },
@@ -161,7 +173,8 @@ export function withSingletons(
   groups: NavGroup[],
   types: readonly { name: string; displayName: string; isSingleton?: boolean }[] | undefined,
 ): NavGroup[] {
-  const singletons = (types ?? []).filter((t) => t.isSingleton === true);
+  // The site type has Site and Theme of its own, so a second rail item for it would be a duplicate.
+  const singletons = (types ?? []).filter((t) => t.isSingleton === true && t.name !== SITE_TYPE);
   if (singletons.length === 0) return groups;
 
   return groups.map((group) => {
@@ -205,6 +218,8 @@ const SEGMENT_TITLES: Record<string, string> = {
   connectors: 'Connectors',
   requests: 'Outbound requests',
   settings: 'Settings',
+  site: 'Site',
+  theme: 'Theme',
   new: 'New',
 };
 

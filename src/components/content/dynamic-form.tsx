@@ -307,7 +307,7 @@ const JSON_HINTS: Partial<Record<FieldType, string>> = {
     geopoint: 'A position, e.g. {"lat": 14.5995, "lng": 120.9842}',
 };
 
-function JsonField({
+export function JsonField({
     field,
     type,
     label,

@@ -41,6 +41,19 @@ moved. Which API a console works against is stated per release instead.
   field filter. Needs BaryoDev/barakoCMS#820; an API without the choice
   type refuses the content type and the page shows its message. (#136)
 
+- **Site and Theme screens.** Site edits a tenant's name, tagline, address, locale, logo, footer logo,
+  favicon, share image, top bar, header links, footer columns and social links; image fields can pick a
+  public image from Files. Theme edits the colour slots and site colours, fonts, corner radii, widths,
+  visitor variants and colours per option, with a preview of a header, card, dark band and prose block.
+  Each text colour is measured against its background, and a pair below WCAG AA is flagged but never
+  blocks the save. Both edit the one entry of the `site` type and send the whole stored document back,
+  so neither wipes what the other saved. A tenant without the type is offered the site blueprint, which
+  needs barakoCMS after 4.1.0 (BaryoDev/barakoCMS#797). A link the renderer would drop is flagged, and a
+  stored value not in the documented shape is shown as JSON rather than trimmed to fit. (#134)
+- **Tenants shows and edits each tenant's domains.** A domain another tenant holds is refused inline with
+  the API's own sentence naming that tenant. The save sends the rest of the tenant back unchanged, since
+  the endpoint overwrites every profile field. Needs BaryoDev/barakoCMS#796; an API that reports no
+  domains shows that instead of an edit button. (#134)
 - **Resolving an error asks for a reference and remarks.** Resolve on the Errors screen opens a dialog
   with an optional reference (a pull request or ticket link, or a number such as `AB#1234` or
   `PROJ-42`) and optional remarks. The error details show who resolved it, when, and both fields, with
