@@ -7,6 +7,7 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { useCreateContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
 import { singletonHref } from '@/lib/navigation';
+import { PAGE_FIELDS } from '@/lib/page-tree';
 import { ContentStatus, SensitivityLevel, SENSITIVITY_META } from '@/types/content';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
@@ -29,7 +30,11 @@ function NewContentInner() {
   const createContent = useCreateContent();
 
   const [contentType, setContentType] = useState(searchParams.get('type') ?? '');
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  // New page under a node on the Pages screen arrives with its parent already chosen.
+  const [values, setValues] = useState<Record<string, unknown>>(() => {
+    const parent = searchParams.get('parent');
+    return parent && searchParams.get('type') === PAGE_FIELDS.contentType ? { [PAGE_FIELDS.parent]: parent } : {};
+  });
   const [sensitivity, setSensitivity] = useState(SensitivityLevel.Public);
 
   const schema = schemas?.find((s) => s.name === contentType);

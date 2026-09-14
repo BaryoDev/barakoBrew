@@ -15,6 +15,7 @@ import {
   IconHealth,
   IconHistory,
   IconKey,
+  IconList,
   IconMobile,
   IconRoles,
   IconServer,
@@ -92,6 +93,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // Editor was removed when #373 took that grant off GET /api/content-types. Leaving it here
       // rendered a link the API answered 403 to, and nothing creates an Editor role anyway.
       { title: 'Content types', href: '/schemas', icon: IconContentTypes, metric: 'contentTypes', roles: ['SuperAdmin', 'Admin'] },
+      // Signed in is enough for GET /api/pages/tree, but moving a page is a content update, which is Admin's.
+      { title: 'Pages', href: '/pages', icon: IconList, roles: ['SuperAdmin', 'Admin'] },
       { title: 'Workflows', href: '/workflows', icon: IconWorkflows, metric: 'workflows', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Queries', href: '/queries', icon: IconFilter, roles: ['SuperAdmin', 'Admin'] },
     ],
@@ -180,6 +183,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   email: 'Email',
   schemas: 'Content types',
   content: 'Entries',
+  pages: 'Pages',
   workflows: 'Workflows',
   'workflow-runs': 'Workflow runs',
   queries: 'Queries',
