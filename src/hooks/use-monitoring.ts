@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, isNotFound } from '@/lib/api';
 
 export interface ClusterStatus {
     isInCluster: boolean;
@@ -52,7 +52,10 @@ export function useKubernetesStatus() {
             const response = await api.get<ClusterStatus>('/api/monitoring/k8s');
             return response.data;
         },
-        refetchInterval: 30000,
+        retry: (count, error) => !isNotFound(error) && count < 3,
+        refetchInterval: (_query) => {
+            return _query.state.error && isNotFound(_query.state.error) ? false : 30000;
+        },
     });
 }
 

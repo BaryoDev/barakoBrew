@@ -25,6 +25,10 @@ moved. Which API a console works against is stated per release instead.
   takes the device count from `totalItems`, saying so when there are more devices than the table
   shows. (#128)
 
+- **The Kubernetes health panel is hidden when the API has no Kubernetes endpoint.** A 404 from
+  `GET /api/monitoring/k8s` now hides the panel instead of showing an unnecessary error state.
+  Other API failures remain visible with a retry action. (#103)
+
 ## [1.2.0] - 2026-09-14
 
 **Works against barakoCMS 4.1.0, and speaks API contracts 1 to 3.** The grouped action picker below

@@ -95,8 +95,10 @@ export default function HealthPage() {
                 Kubernetes
               </CardTitle>
               <CardAction>
-                <StatusBadge tone={k8s?.isConnected ? 'success' : 'muted'}>
-                  {k8s?.isConnected ? 'Connected' : 'Not connected'}
+                <StatusBadge
+                  tone={k8sError ? 'destructive' : k8s?.isConnected ? 'success' : 'muted'}
+                >
+                  {k8sError ? 'Error' : k8s?.isConnected ? 'Connected' : 'Not connected'}
                 </StatusBadge>
               </CardAction>
             </CardHeader>

@@ -32,13 +32,7 @@ function httpError(status: number) {
 }
 
 function renderPage() {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
+  const client = new QueryClient();
 
   render(
     <QueryClientProvider client={client}>
@@ -124,11 +118,9 @@ describe('Kubernetes health panel', () => {
     expect(await screen.findByText('Kubernetes')).toBeInTheDocument();
 
     expect(
-      await screen.findByText('Could not load Kubernetes status.'),
+      await screen.findByText('Could not load Kubernetes status.', {}, { timeout: 10000 }),
     ).toBeInTheDocument();
 
-    expect(
-      screen.getByRole('button', { name: 'Retry' }),
-    ).toBeInTheDocument();
-  });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    }, 10000);
 });
