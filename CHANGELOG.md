@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The PWA installs screen crashed on load** with `filter is not a function`. It read
+  `GET /api/pwa/installs` as a bare list, but the API returns the paged envelope and has since
+  barakoCMS 4.0.0. The screen now reads `items`, asks for the largest page the API serves (100), and
+  takes the device count from `totalItems`, saying so when there are more devices than the table
+  shows. (#128)
+
 ## [1.2.0] - 2026-09-14
 
 **Works against barakoCMS 4.1.0, and speaks API contracts 1 to 3.** The grouped action picker below

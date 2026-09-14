@@ -222,3 +222,29 @@ test('a content status crosses the wire as a name, not a number', async ({ reque
     expect(typeof body.items[0].status).toBe('string');
     expect(['Draft', 'Published', 'Archived', 'Scheduled']).toContain(body.items[0].status);
 });
+
+/**
+ * PWA installs come back as the collection envelope.
+ *
+ * The installs screen read this response as a bare array and called `filter` on the envelope, so
+ * the page crashed on load against every API since 4.0.0 (#128). The mocked pack returned an array,
+ * which is why nothing caught it.
+ *
+ * Shape only. A fresh smoke database has no installs, so an empty `items` is the expected answer
+ * here, and asserting rows would test the seed rather than the contract.
+ */
+test('pwa installs are the collection envelope, not a bare array', async ({ request }) => {
+    const token = process.env.SMOKE_TOKEN;
+    const api = smokeApiUrl();
+    expect(token, 'SMOKE_TOKEN must be set by scripts/smoke-check.sh').toBeTruthy();
+
+    const response = await request.get(`${api}/api/pwa/installs?page=1&pageSize=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.ok(), `GET /api/pwa/installs returned ${response.status()}`).toBeTruthy();
+
+    const body = await response.json();
+    expect(Array.isArray(body), 'installs must not be a bare array').toBe(false);
+    expect(Array.isArray(body.items), 'items must be an array').toBe(true);
+    expect(typeof body.totalItems, 'totalItems must be a number').toBe('number');
+});
