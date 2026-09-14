@@ -111,6 +111,34 @@ describe('nav visibility', () => {
     });
 });
 
+describe('the site type in the rail', () => {
+    it('is reached through Site and Theme, not listed again as a single-entry type', () => {
+        const types = [
+            { name: 'site', displayName: 'Site', isSingleton: true },
+            { name: 'footer', displayName: 'Footer', isSingleton: true },
+        ];
+        const items = withSingletons(visibleGroups(NAV_GROUPS, ['Admin']), types).flatMap((g) => g.items);
+
+        expect(items.filter((i) => i.href === '/content/singleton/footer')).toHaveLength(1);
+        expect(items.filter((i) => i.href === '/content/singleton/site')).toHaveLength(0);
+        expect(items.map((i) => i.href)).toEqual(expect.arrayContaining(['/site', '/site/theme']));
+    });
+
+    it('offers Site and Theme to Admin and SuperAdmin only', () => {
+        const hrefs = (roles: string[]) => visibleGroups(NAV_GROUPS, roles).flatMap((g) => g.items.map((i) => i.href));
+
+        expect(hrefs(['Admin'])).toContain('/site/theme');
+        expect(hrefs(['SuperAdmin'])).toContain('/site');
+        expect(hrefs(['User'])).not.toContain('/site');
+    });
+
+    it('marks Theme active on its own screen, not Site as well', () => {
+        const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
+        expect(activeNavHref(hrefs, '/site/theme')).toBe('/site/theme');
+        expect(breadcrumbsFor('/site/theme').map((c) => c.title)).toEqual(['Site', 'Theme']);
+    });
+});
+
 describe('single-entry types in the rail', () => {
     const TYPES = [
         { name: 'article', displayName: 'Article', isSingleton: false },
