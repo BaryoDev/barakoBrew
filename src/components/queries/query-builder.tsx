@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { IconPlay, IconPlus, IconTimes, IconTrash, IconWarning } from '@/components/icons';
 import type { ContentTypeDefinition } from '@/types/schema';
+import { isChoiceField, optionLabel } from '@/lib/choice';
 
 const CARD = 'bg-card rounded-xl border p-6 shadow-[var(--shadow-card)]';
 
@@ -102,6 +103,22 @@ export function QueryBuilder({
         setFilters([]);
         setSortField('');
         setFields([]);
+    }
+
+    // A choice is matched by value, and one holding a list takes only is and is not.
+    function chooseFilterField(index: number, name: string) {
+        const field = allowed.find((f) => f.name === name);
+        if (field && isChoiceField(field)) {
+            setFilters((current) =>
+                current.map((filter, i) =>
+                    i === index
+                        ? { field: name, op: filter.op === 'ne' ? 'ne' : 'eq', value: '' }
+                        : filter,
+                ),
+            );
+            return;
+        }
+        updateFilter(index, { field: name });
     }
 
     function updateFilter(index: number, patch: Partial<QueryFilter>) {
@@ -222,7 +239,10 @@ export function QueryBuilder({
                         </p>
 
                         <div className="mt-3 space-y-2">
-                            {filters.map((filter, index) => (
+                            {filters.map((filter, index) => {
+                                const filterField = allowed.find((f) => f.name === filter.field);
+                                const choice = filterField && isChoiceField(filterField) ? filterField : null;
+                                return (
                                 // Position is the identity here: two filters can be identical, and keying on
                                 // the contents would make React reuse the wrong row as one is edited.
                                 <div key={index} className="flex flex-wrap items-center gap-2">
@@ -230,7 +250,7 @@ export function QueryBuilder({
                                         className={SELECT}
                                         aria-label={`Field for filter ${index + 1}`}
                                         value={filter.field}
-                                        onChange={(e) => updateFilter(index, { field: e.target.value })}
+                                        onChange={(e) => chooseFilterField(index, e.target.value)}
                                     >
                                         <option value="">Choose a field</option>
                                         {allowed.map((field) => (
@@ -248,22 +268,36 @@ export function QueryBuilder({
                                             updateFilter(index, { op: e.target.value as FilterOp })
                                         }
                                     >
-                                        {FILTER_OPS.map((op) => (
+                                        {FILTER_OPS.filter((op) => !choice || op.value === 'eq' || op.value === 'ne').map((op) => (
                                             <option key={op.value} value={op.value}>
                                                 {op.label}
                                             </option>
                                         ))}
                                     </select>
 
-                                    <Input
-                                        className="w-48 text-[13px]"
-                                        aria-label={`Value for filter ${index + 1}`}
-                                        value={filter.value}
-                                        placeholder={
-                                            allowed.find((f) => f.name === filter.field)?.type ?? 'value'
-                                        }
-                                        onChange={(e) => updateFilter(index, { value: e.target.value })}
-                                    />
+                                    {choice ? (
+                                        <select
+                                            className={SELECT}
+                                            aria-label={`Value for filter ${index + 1}`}
+                                            value={filter.value}
+                                            onChange={(e) => updateFilter(index, { value: e.target.value })}
+                                        >
+                                            <option value="">Choose an option</option>
+                                            {(choice.options ?? []).map((option) => (
+                                                <option key={option.value} value={option.value}>
+                                                    {optionLabel(option)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <Input
+                                            className="w-48 text-[13px]"
+                                            aria-label={`Value for filter ${index + 1}`}
+                                            value={filter.value}
+                                            placeholder={filterField?.type ?? 'value'}
+                                            onChange={(e) => updateFilter(index, { value: e.target.value })}
+                                        />
+                                    )}
 
                                     <Button
                                         type="button"
@@ -276,7 +310,8 @@ export function QueryBuilder({
                                         <IconTrash className="size-3.5" />
                                     </Button>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         <Button

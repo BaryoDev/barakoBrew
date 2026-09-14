@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FieldError } from '@/components/content/field-error';
 import { MarkdownField } from '@/components/content/markdown-field';
 import { ReferenceField } from '@/components/content/reference-field';
+import { ChoiceField } from '@/components/content/choice-field';
 import { MenuItemsField } from '@/components/content/menu-items-field';
 import { BlocksField } from '@/components/content/blocks-field';
 import { isBlocksField } from '@/lib/blocks';
@@ -28,7 +29,15 @@ export interface DynamicFormProps {
 // in FieldTypeRegistry; each type here maps to a sensible input (native pickers
 // for dates/times, typed inputs for email/url, a JSON editor for structured data).
 export function DynamicForm({ fields, values, onChange, errors, contentType }: DynamicFormProps) {
+    // Undefined removes the key, so a cleared optional value is left out of the save rather than
+    // sent as an empty string the API would check against the field's type.
     const setField = (name: string, value: unknown) => {
+        if (value === undefined) {
+            const next = { ...values };
+            delete next[name];
+            onChange(next);
+            return;
+        }
         onChange({ ...values, [name]: value });
     };
 
@@ -119,6 +128,10 @@ function FieldControl({
                 }
             />
         );
+    }
+
+    if (type === 'choice') {
+        return <ChoiceField field={field} value={value} error={error} onChange={onChange} />;
     }
 
     // By convention rather than by a hint on the definition, which the API has no place for yet.

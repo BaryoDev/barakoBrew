@@ -20,6 +20,10 @@ export interface FieldDefinition {
      * because a console can be reading a definition written before the API enforced it.
      */
     referenceType?: string;
+    /** For a `choice` field, the options it accepts, in display order. Refused on any other type. */
+    options?: FieldOption[];
+    /** For a `choice` field, whether an entry holds a list of values rather than one. */
+    multiple?: boolean;
     isRequired: boolean;
     defaultValue?: unknown;
     validationRules?: Record<string, unknown>;
@@ -28,6 +32,15 @@ export interface FieldDefinition {
     sensitivity?: SensitivityLevel;
     visibleToRoles?: string[];
     mask?: FieldMask;
+}
+
+/**
+ * One option a `choice` field accepts. The value is stored and matched exactly, case included; the
+ * label is what an editor sees, and can be reworded without touching an entry.
+ */
+export interface FieldOption {
+    value: string;
+    label: string;
 }
 
 /**
@@ -77,7 +90,8 @@ export type FieldType =
     | 'json'
     | 'array'
     | 'object'
-    | 'geopoint';
+    | 'geopoint'
+    | 'choice';
 
 /** Historical spellings the registry still accepts. Never offered as a type of its own. */
 export type FieldTypeAlias = 'integer' | 'number' | 'boolean';
@@ -190,6 +204,7 @@ export const FIELD_TYPE_GROUPS: {
             { value: 'email', label: 'Email', description: 'A valid email address' },
             { value: 'url', label: 'URL', description: 'A web link (http/https)' },
             { value: 'reference', label: 'Reference', description: 'The id of another entry' },
+            { value: 'choice', label: 'Choice', description: 'One or several values from a list you set' },
         ],
     },
 ];

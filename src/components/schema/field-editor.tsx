@@ -42,6 +42,8 @@ import {
     type FieldType,
 } from '@/types/schema';
 import { SENSITIVITY_META } from '@/types/content';
+import { OptionsEditor } from '@/components/schema/options-editor';
+import { hasOptionIssues, optionIssues } from '@/lib/choice';
 
 interface FieldEditorProps {
     fields: FieldDefinition[];
@@ -59,6 +61,22 @@ function toPascalCase(input: string): string {
 }
 
 const PASCAL_CASE = /^[A-Z][A-Za-z0-9]*$/;
+
+// The API refuses options and multiple on any type but choice, so they go when the type changes.
+function withType(field: FieldDefinition, type: FieldType): FieldDefinition {
+    if (type === 'choice') {
+        return {
+            ...field,
+            type,
+            options: field.options?.length ? field.options : [{ value: '', label: '' }],
+            multiple: field.multiple ?? false,
+        };
+    }
+    const next = { ...field, type };
+    delete next.options;
+    delete next.multiple;
+    return next;
+}
 
 const EMPTY_FIELD: FieldDefinition = {
     name: '',
@@ -79,7 +97,9 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
     const nameIsDuplicate = fields.some(
         (f, i) => f.name === form.name && i !== editingIndex
     );
-    const canSave = form.name && form.displayName && nameIsValid && !nameIsDuplicate;
+    const isChoice = resolveFieldType(form.type) === 'choice';
+    const optionsInvalid = isChoice && hasOptionIssues(optionIssues(form.options ?? []));
+    const canSave = form.name && form.displayName && nameIsValid && !nameIsDuplicate && !optionsInvalid;
 
     const openNew = () => {
         setForm(EMPTY_FIELD);
@@ -203,7 +223,7 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
             )}
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>{editingIndex !== null ? 'Edit field' : 'Add field'}</DialogTitle>
                         <DialogDescription>
@@ -254,7 +274,7 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                                 // A definition can carry an alias ('integer' for 'int'), which is not a
                                 // value the picker offers, so an unresolved one would show as empty.
                                 value={resolveFieldType(form.type) ?? 'string'}
-                                onValueChange={(value) => setForm((f) => ({ ...f, type: value as FieldType }))}
+                                onValueChange={(value) => setForm((f) => withType(f, value as FieldType))}
                             >
                                 <SelectTrigger id="field-type" className="w-full">
                                     <SelectValue />
@@ -276,6 +296,30 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                                 </SelectContent>
                             </Select>
                         </div>
+                        {isChoice && (
+                            <>
+                                <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="field-multiple">Holds several values</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            Checkboxes instead of one pick. This cannot be changed later.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="field-multiple"
+                                        checked={form.multiple ?? false}
+                                        onCheckedChange={(checked) => setForm((f) => ({ ...f, multiple: checked }))}
+                                    />
+                                </div>
+                                <fieldset className="space-y-2">
+                                    <legend className="text-sm font-medium">Options</legend>
+                                    <OptionsEditor
+                                        options={form.options ?? []}
+                                        onChange={(options) => setForm((f) => ({ ...f, options }))}
+                                    />
+                                </fieldset>
+                            </>
+                        )}
                         <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                             <Label htmlFor="field-required">Required</Label>
                             <Switch

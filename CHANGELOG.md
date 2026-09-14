@@ -18,6 +18,20 @@ moved. Which API a console works against is stated per release instead.
   row and the field. A block of a type the site does not list is shown read-only and saved as it was.
   Set `NEXT_PUBLIC_PRESS_URL` to turn it on; without it, or when the schema cannot be read, the field
   stays the JSON editor. See `docs/blocks.md`. (#90)
+
+- **Choice fields.** The content type designer offers a Choice type: options with a value and a
+  label, reordered by dragging or with the move buttons, and whether the field holds several values.
+  Values that differ only in case are flagged before the API refuses them. In the entry editor a
+  single choice is a radio group up to five options and a select beyond that, and a multiple choice
+  is checkboxes. Clearing an optional choice leaves the value out of the save. A stored value the
+  field no longer offers is marked "not offered any more" and the save waits until it is changed.
+  A type's detail screen edits a choice field's options later through
+  `PUT /api/content-types/{name}/fields/{field}/options`; when entries hold an option being removed,
+  the API's message and entry count are shown with a Remove anyway button that resends with `force`.
+  A saved query filters a choice by option; the entries list waits on BaryoDev/barakoCMS#825 for a
+  field filter. Needs BaryoDev/barakoCMS#820; an API without the choice
+  type refuses the content type and the page shows its message. (#136)
+
 - **Resolving an error asks for a reference and remarks.** Resolve on the Errors screen opens a dialog
   with an optional reference (a pull request or ticket link, or a number such as `AB#1234` or
   `PROJ-42`) and optional remarks. The error details show who resolved it, when, and both fields, with

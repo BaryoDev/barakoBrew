@@ -1,9 +1,11 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useSchema, useSetPublicDelivery } from '@/hooks/use-schemas';
-import { fieldTypeLabel } from '@/types/schema';
+import { fieldTypeLabel, type FieldDefinition } from '@/types/schema';
+import { isChoiceField, optionLabel } from '@/lib/choice';
+import { FieldOptionsDialog } from '@/components/schema/field-options-dialog';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -27,6 +29,7 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
   const { name } = use(params);
   const { data: schema, isLoading } = useSchema(name);
   const setPublicDelivery = useSetPublicDelivery(name);
+  const [editingOptions, setEditingOptions] = useState<FieldDefinition | null>(null);
 
   if (isLoading) return <TableSkeleton />;
 
@@ -81,8 +84,8 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
         <IconInfo className="mt-0.5 size-4 shrink-0" />
         <p>
           A content type&rsquo;s fields are permanent: the API has no update or delete for them. To
-          change the shape, create a new type and migrate entries. Public delivery, below, is the one
-          setting you can change afterwards.
+          change the shape, create a new type and migrate entries. Public delivery, below, and the options
+          of a choice field are what you can change afterwards.
         </p>
       </div>
 
@@ -141,7 +144,24 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
                 <TableCell>
                   <Badge variant="secondary" className="font-normal">
                     {fieldTypeLabel(field.type)}
+                    {isChoiceField(field) && field.multiple ? ', several' : ''}
                   </Badge>
+                  {isChoiceField(field) && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground text-xs">
+                        {(field.options ?? []).map(optionLabel).join(', ')}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Edit options for ${field.displayName}`}
+                        onClick={() => setEditingOptions(field)}
+                      >
+                        Edit options
+                      </Button>
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="text-muted-foreground text-right text-sm">
                   {field.isRequired ? 'Yes' : '—'}
@@ -151,6 +171,18 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
           </TableBody>
         </Table>
       </div>
+
+      {editingOptions && (
+        <FieldOptionsDialog
+          key={editingOptions.name}
+          typeName={schema.name}
+          field={editingOptions}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditingOptions(null);
+          }}
+        />
+      )}
     </>
   );
 }

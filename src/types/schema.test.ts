@@ -13,11 +13,13 @@ import {
  * on FIELD_TYPES). So the copy is pinned here by name rather than by count alone: a count assertion
  * on its own passes when one type is swapped for another.
  *
- * Every canonical name in Core/Validation/FieldTypeRegistry.cs, as of 4.0.
+ * Every canonical name in Core/Validation/FieldTypeRegistry.cs, as of 4.0, plus choice from
+ * BaryoDev/barakoCMS#820.
  */
 const REGISTRY_CANONICAL = [
     'array',
     'bool',
+    'choice',
     'date',
     'datetime',
     'decimal',
@@ -65,7 +67,7 @@ describe('the grouped picker', () => {
         Time: ['date', 'datetime', 'time'],
         'True or false': ['bool'],
         Structured: ['array', 'object', 'json', 'geopoint'],
-        'Checked on write': ['email', 'url', 'reference'],
+        'Checked on write': ['email', 'url', 'reference', 'choice'],
     };
 
     it('groups the types the way the design groups them', () => {

@@ -29,12 +29,14 @@ export default function NewSchemaPage() {
   const [publiclyDeliverable, setPubliclyDeliverable] = useState(false);
   const [singleton, setSingleton] = useState(false);
   const [fields, setFields] = useState<FieldDefinition[]>([]);
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   const canSave = displayName.trim() && name.trim() && fields.length > 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSave) return;
+    setRefusal(null);
     createSchema.mutate(
       { name, displayName, description: description || undefined, fields, isPubliclyDeliverable: publiclyDeliverable, isSingleton: singleton },
       {
@@ -42,7 +44,13 @@ export default function NewSchemaPage() {
           toast.success(`Content type “${displayName}” created`);
           router.push('/schemas');
         },
-        onError: (error) => toast.error(apiErrorMessage(error, 'The content type could not be created.')),
+        // Kept on the page as well as toasted. An API without a field type this console offers, such
+        // as choice, refuses the whole type, and the reason has to stay readable while it is fixed.
+        onError: (error) => {
+          const message = apiErrorMessage(error, 'The content type could not be created.');
+          setRefusal(message);
+          toast.error(message);
+        },
       }
     );
   };
@@ -130,6 +138,12 @@ export default function NewSchemaPage() {
         <Separator />
 
         <FieldEditor fields={fields} onChange={setFields} />
+
+        {refusal && (
+          <p role="alert" className="text-destructive text-sm">
+            {refusal}
+          </p>
+        )}
 
         <div className="flex items-center gap-2">
           <Button type="submit" disabled={!canSave || createSchema.isPending}>
