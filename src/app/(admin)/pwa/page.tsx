@@ -35,17 +35,17 @@ export default function PwaPage() {
   const stats = useMemo(() => {
     if (!data) return { total: 0, installed: 0, signedIn: 0 };
     return {
-      total: data.length,
-      installed: data.filter((d) => d.installed).length,
-      signedIn: data.filter((d) => d.username != null).length,
+      total: data.totalDevices,
+      installed: data.devices.filter((d) => d.installed).length,
+      signedIn: data.devices.filter((d) => d.username != null).length,
     };
   }, [data]);
 
   const rows = useMemo(() => {
     if (!data) return [];
-    if (filter === 'installed') return data.filter((d) => d.installed);
-    if (filter === 'anonymous') return data.filter((d) => d.username == null);
-    return data;
+    if (filter === 'installed') return data.devices.filter((d) => d.installed);
+    if (filter === 'anonymous') return data.devices.filter((d) => d.username == null);
+    return data.devices;
   }, [data, filter]);
 
   return (
@@ -80,7 +80,7 @@ export default function PwaPage() {
         </Card>
       ) : (
         <>
-          {data && data.length > 0 && (
+          {data && data.devices.length > 0 && (
             <div className="mb-4 grid grid-cols-3 gap-3">
               {[
                 { label: 'Total devices', value: stats.total },
@@ -95,6 +95,12 @@ export default function PwaPage() {
                 </Card>
               ))}
             </div>
+          )}
+          {data && data.totalDevices > data.devices.length && (
+            <p className="text-muted-foreground mb-4 text-xs">
+              Installed and signed-in counts, and the table, cover the {data.devices.length} most
+              recently seen of {data.totalDevices} devices.
+            </p>
           )}
 
           <Card>
