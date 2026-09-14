@@ -77,3 +77,36 @@ test('a Published webhook workflow with a Secret can be created, and the Secret 
     await expect(page.getByText('https://site.example/api/revalidate')).toBeVisible();
     await expect(page.getByText('shared-s3cret')).toHaveCount(0);
 });
+
+test('the action picker lists kinds under the group the API reports, ungrouped ones under Other', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubContentTypes(page, [{ id: 's1', name: 'post', displayName: 'Post', fields: [] }]);
+    await page.route('**/api/workflows/actions', (r) =>
+        r.fulfill({
+            json: [
+                { ...WEBHOOK_META, group: 'Delivery' },
+                { type: 'Conditional', description: '', requiredParameters: ['Condition'], exampleConfiguration: '{}', group: 'Flow' },
+                { type: 'Email', description: '', requiredParameters: ['To'], exampleConfiguration: '{}', group: 'Comms' },
+                { type: 'Custom', description: '', requiredParameters: ['Thing'], exampleConfiguration: '{}', group: null },
+            ],
+        })
+    );
+    await page.route('**/api/workflows/variables**', (r) =>
+        r.fulfill({ json: { systemVariables: [], dataFields: [] } })
+    );
+
+    await page.goto('/workflows/new');
+    await page.getByRole('combobox', { name: 'Add an action' }).click();
+
+    const listbox = page.getByRole('listbox');
+    await expect(listbox.getByRole('option')).toHaveCount(4);
+    await expect(listbox.getByRole('group')).toHaveCount(4);
+    for (const [group, kind] of [['Delivery', 'Webhook'], ['Comms', 'Email'], ['Flow', 'Conditional'], ['Other', 'Custom']]) {
+        await expect(listbox.getByRole('group', { name: group }).getByRole('option', { name: kind })).toBeVisible();
+    }
+    await expect(listbox.getByRole('group')).toHaveText(['DeliveryWebhook', 'CommsEmail', 'FlowConditional', 'OtherCustom']);
+
+    await listbox.getByRole('option', { name: 'Custom' }).click();
+    await expect(page.getByLabel(/^Thing/)).toBeVisible();
+});

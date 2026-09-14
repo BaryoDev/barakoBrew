@@ -29,6 +29,11 @@ export interface WorkflowActionMetadata {
     description: string;
     requiredParameters: string[];
     exampleConfiguration: string;
+    /**
+     * Content, Delivery, Comms, Data or Flow. Null for an action that declares none, and absent from
+     * an API older than the field.
+     */
+    group?: string | null;
 }
 
 export interface TemplateVariable {
