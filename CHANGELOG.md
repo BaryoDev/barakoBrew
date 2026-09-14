@@ -9,6 +9,13 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-14
+
+**Works against barakoCMS 4.1.0, and speaks API contracts 1 to 3.** The grouped action picker below
+needs a barakoCMS release that includes BaryoDev/barakoCMS#783, which reports a group for each
+workflow action kind. That is merged and not yet released. On 4.1.0 the picker shows the flat list
+it showed before, and nothing else depends on it.
+
 ### Added
 
 - **Files shows a thumbnail for each image.** It is the API's 160px copy (`?w=160`), never the
@@ -43,6 +50,21 @@ moved. Which API a console works against is stated per release instead.
   with barakoPress's rules, so raw HTML shows as text and a link that is not http, https, mailto or
   relative keeps its words and loses its destination. The saved value is the text as typed; toggling
   the preview never writes to it. `text` and `richtext` fields are unchanged (#85).
+- **A webhook workflow can be built from the new workflow form.** `Published` is offered as a
+  trigger next to Created, Updated and the type's transitions. An action's optional parameters get
+  inputs marked "(optional)", read from the example configuration the API publishes with each
+  action, which is where the Webhook action names `Secret`. A parameter the API redacts on read
+  (secret, token, password, API key and the like) is a password input with a hint that it will not
+  be shown again, and a blank optional parameter is left out of the request rather than sent empty.
+  The saved workflow says "Secret: set, not shown". The API never returns the value and has no
+  update endpoint, so replacing a Secret means recreating the workflow. The trigger selects and the
+  action picker have accessible names (part of #87).
+- **The action picker groups kinds under Content, Delivery, Comms, Data and Flow.** The console no
+  longer keeps its own list of action kinds: it shows what `GET /api/workflows/actions` returns,
+  keeps the API's order inside a group, leaves out empty groups, and puts a missing or unknown group
+  under Other, last. An API that sends no group, barakoCMS 4.1.0 included, gets the flat list with
+  no headings. The Request action is drawn with the connector icon rather than the fallback (part
+  of #50).
 
 ### Changed
 
@@ -52,6 +74,18 @@ moved. Which API a console works against is stated per release instead.
   digest, and the publish job fails if the two names disagree. **`barako-admin` stops at 2.0.0**;
   move compose files and deploy scripts to `barako-brew` before then. Tags already pulled under the
   old name stay resolvable (#84).
+- The unmocked pack runs against a pinned API image on pull requests, the merge queue and pushes
+  (`barako-cms:4.1.0`, read from `.github/barako-api-version`), and against `barako-cms:master`
+  nightly and on demand. A failed nightly opens or comments on one tracking issue.
+  `scripts/smoke-check.sh` defaults to the same pin (#58).
+- CodeQL runs on merge queue batches and on every pull request, markdown-only ones included, so it
+  can be a required check (part of #26).
+- Every third-party action in the workflows is pinned to a commit SHA, with its tag in a comment
+  (#59).
+- Every accessibility scan checks that reduced motion is on and waits for animations to settle
+  before it audits the page (#92).
+- CodeRabbit no longer reviews every pull request on its own, matching barakoCMS. Commenting
+  `@coderabbitai full review` still asks for one (#60).
 
 ### Fixed
 
@@ -211,5 +245,7 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.2.0
+[1.1.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.1.0
 [1.0.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.0.0
