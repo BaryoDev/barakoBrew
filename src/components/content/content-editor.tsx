@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator';
 import { IconArchive, IconHistory, IconRollback } from '@/components/icons';
 import { format } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
+import { choiceProblems } from '@/lib/choice';
 
 /**
  * Whether the form still holds exactly what was seeded into it.
@@ -109,6 +110,8 @@ export function ContentEditor({
   if (isLoading || !content) return <TableSkeleton />;
 
   const meta = statusMeta(content.status);
+  // A value the field stopped offering is refused by the API, so the save waits until it is changed.
+  const blocked = schema ? Object.keys(choiceProblems(schema.fields, values)).length > 0 : false;
   const sensitivityMeta = SENSITIVITY_META[content.sensitivity];
 
   const save = (status?: ContentStatus) => {
@@ -217,7 +220,7 @@ export function ContentEditor({
               <DynamicForm fields={schema.fields} values={values} onChange={setValues} contentType={content.contentType} />
               <Separator className="my-6" />
               <div className="flex items-center gap-2">
-                <Button onClick={() => save()} disabled={updateContent.isPending}>
+                <Button onClick={() => save()} disabled={updateContent.isPending || blocked}>
                   {updateContent.isPending ? 'Saving…' : 'Save changes'}
                 </Button>
                 {backHref && (
@@ -226,6 +229,11 @@ export function ContentEditor({
                   </Button>
                 )}
               </div>
+              {blocked && (
+                <p role="alert" className="text-destructive mt-3 text-sm">
+                  A choice above holds a value that is not offered any more. Pick another before saving.
+                </p>
+              )}
             </>
           ) : (
             <p className="text-muted-foreground text-sm">

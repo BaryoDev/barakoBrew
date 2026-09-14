@@ -82,3 +82,71 @@ describe('a field whose type is an alias', () => {
         expect(screen.getByRole('combobox', { name: 'Type' })).toHaveTextContent('Whole number');
     });
 });
+
+describe('a choice field', () => {
+    function startChoice() {
+        render(<FieldEditor fields={[]} onChange={() => {}} />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Add field' })[0]);
+        fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Entry type' } });
+        fireEvent.keyDown(screen.getByRole('combobox', { name: 'Type' }), { key: 'ArrowDown' });
+        const choice = within(screen.getByRole('listbox'))
+            .getAllByRole('option')
+            .find((o) => o.textContent?.startsWith('Choice'))!;
+        fireEvent.keyDown(choice, { key: 'Enter' });
+    }
+
+    function addButton() {
+        // The dialog's own button, the last of the matches; the list header and empty state come first.
+        const buttons = screen.getAllByRole('button', { name: 'Add field' });
+        return buttons[buttons.length - 1];
+    }
+
+    it('asks for options and whether it holds several', () => {
+        startChoice();
+
+        expect(screen.getByRole('switch', { name: 'Holds several values' })).toBeInTheDocument();
+        expect(screen.getByLabelText('Value for option 1')).toBeInTheDocument();
+    });
+
+    it('flags values that differ only in case before the API refuses them', () => {
+        startChoice();
+
+        fireEvent.change(screen.getByLabelText('Value for option 1'), { target: { value: 'FUN' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Add option' }));
+        fireEvent.change(screen.getByLabelText('Value for option 2'), { target: { value: 'fun' } });
+
+        expect(screen.getByText(/"fun" differs from "FUN" only in case/)).toBeInTheDocument();
+        expect(addButton()).toBeDisabled();
+
+        fireEvent.change(screen.getByLabelText('Value for option 2'), { target: { value: 'COMPETE' } });
+
+        expect(screen.queryByText(/only in case/)).not.toBeInTheDocument();
+        expect(addButton()).toBeEnabled();
+    });
+
+    it('saves the options with the field, and drops them if the type changes away from choice', () => {
+        const saved: FieldDefinition[][] = [];
+        render(<FieldEditor fields={[]} onChange={(f) => saved.push(f)} />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Add field' })[0]);
+        fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Kind' } });
+
+        const pick = (label: string) => {
+            fireEvent.keyDown(screen.getByRole('combobox', { name: 'Type' }), { key: 'ArrowDown' });
+            const option = within(screen.getByRole('listbox'))
+                .getAllByRole('option')
+                .find((o) => o.textContent?.startsWith(label))!;
+            fireEvent.keyDown(option, { key: 'Enter' });
+        };
+
+        pick('Choice');
+        fireEvent.change(screen.getByLabelText('Value for option 1'), { target: { value: 'A' } });
+        pick('Long text');
+        const buttons = screen.getAllByRole('button', { name: 'Add field' });
+        fireEvent.click(buttons[buttons.length - 1]);
+
+        expect(saved).toHaveLength(1);
+        expect(saved[0][0].type).toBe('text');
+        expect('options' in saved[0][0]).toBe(false);
+        expect('multiple' in saved[0][0]).toBe(false);
+    });
+});

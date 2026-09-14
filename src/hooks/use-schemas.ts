@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
-import type { ContentTypeDefinition, CreateSchemaRequest } from '@/types/schema';
+import type { ContentTypeDefinition, CreateSchemaRequest, FieldOption } from '@/types/schema';
 
 // enabled is for chrome that only needs the list when the caller may read it. The default is every
 // existing caller's behaviour.
@@ -53,6 +53,39 @@ export function useCreateSchema() {
     return useMutation({
         mutationFn: async (data: CreateSchemaRequest) => {
             const response = await api.post<{ id: string; name: string }>('/api/content-types', data);
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+export interface SetFieldOptionsResult {
+    name: string;
+    field: string;
+    options: FieldOption[];
+    /** Values that were options before the call and are not now. */
+    removed: string[];
+    /** Entries holding a removed value. Zero unless the call was forced. */
+    entriesHoldingRemoved: number;
+}
+
+/**
+ * Replaces a choice field's options with the full ordered list.
+ *
+ * Removing an option that entries hold is a 409 naming how many, unless `force` is set. Those
+ * entries keep their value and are refused on their next save until a value still offered is picked.
+ */
+export function useSetFieldOptions(name: string, field: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ options, force }: { options: FieldOption[]; force: boolean }) => {
+            const response = await api.put<SetFieldOptionsResult>(
+                `/api/content-types/${encodeURIComponent(name)}/fields/${encodeURIComponent(field)}/options`,
+                { options, force },
+            );
             return response.data;
         },
         onSuccess: () => {
