@@ -6,9 +6,13 @@ on:
   push:
     branches: ["master"]
     paths-ignore: ["**/*.md"]
+  # No paths filter on pull requests. CodeQL is a required check, and a required check that never
+  # starts on a docs-only pull request leaves it blocked with nothing to wait for.
   pull_request:
     branches: ["master"]
-    paths-ignore: ["**/*.md"]
+  # The merge queue only counts a required check that reports on the merge_group event, the same
+  # reason ci.yml declares it. Without this the queue waits for CodeQL forever.
+  merge_group:
   schedule:
     - cron: "27 3 * * 1" # weekly, so drift is caught even without a push
 
