@@ -11,6 +11,15 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Pages has a tree.** `/pages` shows the page tree from `GET /api/pages/tree`: drag a page, or use
+  its move buttons, to reorder it or put it under another page, with the new path shown while
+  dragging. Each move saves through the ordinary content update with `If-Match`, writing
+  `NavigationOrder` and `ParentPage`. The API's refusal (a cycle, too deep, a reserved slug) is shown
+  on the row, and a 412 reloads the tree and says someone else changed the page. Rows show status and
+  path, switch the navigation flag, change the slug, add a page under a page, and open the entry.
+  After a move or slug change that changes addresses, the screen offers a redirect from each old
+  path. A 404 says the Pages module is not enabled, and a contract other than 1 lists the pages flat.
+  Needs BaryoDev/barakoCMS#826. See `docs/pages.md`. (#91)
 - **A page's blocks are edited as blocks.** A json field named `Blocks` gets a list built from the
   block schema the site publishes at `/api/blocks`: add from a palette, drag or use Move up and Move
   down to reorder, remove, and a form per block using the same controls as entry fields, with blocks
