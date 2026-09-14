@@ -15,6 +15,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
 import { UPLOAD_RULES, canDeleteFile, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
+import { FileThumbnail } from '@/components/patterns/file-thumbnail';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -56,6 +57,9 @@ const HEAD =
   'h-auto bg-background py-3 text-[10.5px] font-extrabold tracking-[0.12em] uppercase text-[var(--faint)]';
 
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
+
+/** CSS pixels. Up to a 3x screen that is the API's 160 rung, the smallest it makes. */
+const THUMBNAIL_SIZE = 40;
 
 function UploadDialog({
   open,
@@ -273,8 +277,11 @@ export default function FilesPage() {
               <TableBody>
                 {files.map((file) => (
                   <TableRow key={file.id} className="hover:bg-background">
-                    <TableCell className="max-w-[18rem] truncate py-3.5 pl-6 text-[13.5px] font-bold">
-                      {file.fileName}
+                    <TableCell className="max-w-[18rem] py-3.5 pl-6 text-[13.5px] font-bold">
+                      <div className="flex items-center gap-3">
+                        <FileThumbnail file={file} size={THUMBNAIL_SIZE} />
+                        <span className="truncate">{file.fileName}</span>
+                      </div>
                     </TableCell>
                     <TableCell className={`${META} hidden py-3.5 sm:table-cell`}>{file.contentType}</TableCell>
                     <TableCell className={`${META} hidden py-3.5 text-right md:table-cell`}>

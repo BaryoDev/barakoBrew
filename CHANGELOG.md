@@ -11,6 +11,12 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Files shows a thumbnail for each image.** It is the API's 160px copy (`?w=160`), never the
+  original, so a page of uploads costs kilobytes rather than megabytes. A public image loads from
+  the anonymous route with a srcset; a private one is fetched with the session's token in a header
+  and shown from a local object URL, so the token never appears in a URL. PDF, GIF and AVIF files,
+  which the API does not resize, show an icon instead of downloading the original. The console
+  still has no image optimiser and ships no image binary (#80).
 - **A navigation menu is reordered without editing JSON.** The `Items` field of a `menu` entry is
   a list now: add and remove items, move them up and down, nest one under the item above and move it
   back out, all from the keyboard. The saved value keeps each item's keys and casing and changes only

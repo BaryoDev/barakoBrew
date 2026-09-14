@@ -94,3 +94,15 @@ export function deleteRefusal(error: unknown): DeleteRefusal | null {
 export function isForbidden(error: unknown): boolean {
     return axios.isAxiosError(error) && error.response?.status === 403;
 }
+
+/**
+ * The bytes behind an authenticated file URL, fetched through the shared client so the bearer rides
+ * in a header. Cached by URL, so a remount or a return to the same page does not download it again.
+ */
+export function useFileBlob(url: string) {
+    return useQuery({
+        queryKey: ['files', 'blob', url],
+        queryFn: async () => (await api.get<Blob>(url, { responseType: 'blob' })).data,
+        staleTime: Infinity,
+    });
+}

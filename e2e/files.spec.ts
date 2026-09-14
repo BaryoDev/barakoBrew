@@ -103,4 +103,57 @@ test.describe('files', () => {
         await expect.poll(() => deleted).toEqual(['99999999-9999-4999-8999-999999999999']);
         await expect(page.getByText('No files uploaded yet')).toBeVisible();
     });
+
+    test('thumbnails load the API image variant at 160px, never the original', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        const row = (id: string, fileName: string, contentType: string, isPublic: boolean): StoredFile => ({
+            id,
+            fileName,
+            contentType,
+            size: 4 * 1024 * 1024,
+            isPublic,
+            publicUrl: null,
+            alt: null,
+            caption: null,
+            uploadedBy: ME,
+            createdAt: new Date().toISOString(),
+        });
+        await stubFiles(page, [
+            row('pub-png', 'cover.png', 'image/png', true),
+            row('priv-jpg', 'draft.jpg', 'image/jpeg', false),
+            row('doc-pdf', 'bylaws.pdf', 'application/pdf', true),
+            row('pic-avif', 'hero.avif', 'image/avif', false),
+        ]);
+
+        // Every download of any file, public or authenticated, with the header it carried.
+        const downloads: { url: string; authorization: string | undefined }[] = [];
+        await page.route(/\/api\/(public\/)?files\/[^/?]+(\?.*)?$/, async (route) => {
+            const request = route.request();
+            if (request.method() !== 'GET') return route.fallback();
+            downloads.push({ url: request.url(), authorization: request.headers()['authorization'] });
+            return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+        });
+
+        await page.goto('/files');
+        await expect(page.getByRole('cell', { name: 'cover.png', exact: true })).toBeVisible({ timeout: 20000 });
+
+        const paths = () => downloads.map((d) => new URL(d.url)).map((u) => `${u.pathname}${u.search}`);
+        await expect.poll(paths).toHaveLength(2);
+        expect(paths().sort()).toEqual(['/api/files/priv-jpg?w=160', '/api/public/files/pub-png?w=160']);
+
+        // The private one went through the API client with the bearer, and the token is in a header,
+        // not in the URL.
+        const priv = downloads.find((d) => d.url.includes('priv-jpg'))!;
+        expect(priv.authorization).toMatch(/^Bearer /);
+        expect(priv.url).not.toContain('eyJ');
+        const pub = downloads.find((d) => d.url.includes('pub-png'))!;
+        expect(pub.authorization).toBeUndefined();
+
+        await expect(page.locator('img[src*="/api/public/files/pub-png?w=160"]')).toHaveAttribute(
+            'srcset',
+            /pub-png\?w=160 160w/,
+        );
+        await expect(page.locator('img[src^="blob:"]')).toHaveCount(1);
+    });
 });
