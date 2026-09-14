@@ -115,8 +115,15 @@ The mocked end-to-end pack in `e2e/` proves the console behaves given fixtures. 
 fixtures match the server, so `smoke/` is the unmocked pack: `scripts/smoke-check.sh` stands up
 Postgres and the published API image in Docker, seeds an administrator and an entry, builds the
 console against them and runs `smoke/`. It contains no `page.route` and the script refuses to run
-if one appears. CI runs it on every pull request and nightly, so an API change surfaces here
-without anyone pushing.
+if one appears.
+
+CI runs it against two API images, and which one went red says what changed. Pull requests and the
+merge queue run the barakoCMS release pinned in `.github/barako-api-version`, so a red pull request
+means the console changed. The nightly runs `ghcr.io/baryodev/barako-cms:master`, published on every
+barakoCMS master push, so an API change surfaces here without anyone pushing; when it fails, CI
+opens or comments on the issue "Nightly: console against barako-cms:master failed". Moving the pin
+is a pull request that edits that file. Locally the script runs the pinned release; set
+`BARAKO_API_TAG=master` to run what the nightly runs.
 
 ## Layout
 

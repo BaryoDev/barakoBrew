@@ -23,14 +23,10 @@
 # The API comes from ghcr.io/baryodev/barako-cms rather than from source, because this repository
 # holds no source for it. BARAKO_API_TAG picks the tag.
 #
-# The default is :master, the build of the API's master branch, because that is what CI runs
-# (the BARAKO_API_TAG repository variable is set to it) and a local run that tests a different
-# server than CI is worse than no local run. It cost half an hour to learn that once: the pack
-# failed here and passed on CI, and the difference was the tag.
-#
-# It used to default to :playground, the build behind playground.baryo.dev. That tag lags, because
-# it moves when the playground is deployed rather than when the API changes, so it can be missing a
-# fix the console is already written against.
+# The default is the release pinned in .github/barako-api-version, because that is what CI runs for
+# a pull request, and a local run that tests a different server than CI is worse than no local run.
+# It cost half an hour to learn that once: the pack failed here and passed on CI, and the difference
+# was the tag. BARAKO_API_TAG=master runs what the nightly runs.
 #
 # Usage: scripts/smoke-check.sh
 
@@ -39,7 +35,12 @@ set -euo pipefail
 NET="smoke-check-net"
 PG="smoke-check-pg"
 APIC="smoke-check-api"
-API_IMAGE="ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG:-master}"
+PINNED_TAG_FILE="$(cd "$(dirname "$0")/.." && pwd)/.github/barako-api-version"
+if [ -z "${BARAKO_API_TAG:-}" ]; then
+    BARAKO_API_TAG=$(tr -d '[:space:]' < "$PINNED_TAG_FILE" 2>/dev/null || true)
+    [ -n "$BARAKO_API_TAG" ] || { printf 'FAILED: %s holds no API tag\n' "$PINNED_TAG_FILE" >&2; exit 1; }
+fi
+API_IMAGE="ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG}"
 API_PORT="${API_PORT:-5099}"
 ADMIN_PORT="${ADMIN_PORT:-3200}"
 ADMIN_USERNAME='admin'
