@@ -32,6 +32,9 @@ function siteEntry(data: Record<string, unknown>) {
 
 async function serveSite(page: Page, entries: ReturnType<typeof siteEntry>[]) {
     const puts: unknown[] = [];
+    // An API without share links or the Pages module, so the Site screen hides the one and types the path.
+    await page.route('**/api/site/share-links', (route) => route.fulfill({ status: 404, json: {} }));
+    await page.route('**/api/pages/tree', (route) => route.fulfill({ status: 404, json: {} }));
     await page.route(/\/api\/contents(\?|$)/, (route) => {
         const type = new URL(route.request().url()).searchParams.get('contentType');
         return route.fulfill({ json: pageOf(type === 'site' ? entries : []) });

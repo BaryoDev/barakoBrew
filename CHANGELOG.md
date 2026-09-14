@@ -11,6 +11,15 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Site mode, the holding page and share links on the Site screen.** A Mode select (Live or
+  Holding, unset reads as Live, a choice field's own options when it has them) with a note that
+  Holding changes what visitors see and hides nothing at the API. A holding page picker from the page
+  tree, empty for the default holding page, typed as a path when the Pages module is off. A Share
+  links panel creates a link with a label and an expiry of 1, 7, 30 or 90 days, shows
+  `{site address}/_share#{key}` once with a copy button, lists each link as active, expired or
+  revoked with when it was last used, and revokes after a confirmation. Mode and holding page show
+  only when the site type has those fields, and the panel is hidden when
+  `/api/site/share-links` answers 404. Needs BaryoDev/barakoCMS#850. (#147)
 - **Pages has a tree.** `/pages` shows the page tree from `GET /api/pages/tree`: drag a page, or use
   its move buttons, to reorder it or put it under another page, with the new path shown while
   dragging. Each move saves through the ordinary content update with `If-Match`, writing
