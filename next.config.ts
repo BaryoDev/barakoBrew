@@ -11,10 +11,10 @@ const nextConfig: NextConfig = {
   // Next's image optimiser is the only thing that wants `sharp`, and sharp's prebuilt libvips
   // binaries are LGPL-3.0-or-later. Leaving the optimiser on traced 27MB of them into
   // `.next/standalone`, which is what the published image copies, so the image redistributed a
-  // copyleft binary while the licence audit said there was none (#76). Nothing here renders a
-  // remote image today: `next/image` is used nowhere and the one `<img>` is an MFA QR code
-  // delivered as a data URL, which the optimiser cannot touch anyway. Where resizing belongs when
-  // the redesign needs it is #80, not this line.
+  // copyleft binary while the licence audit said there was none (#76).
+  //
+  // It stays off for good (#80): the console resizes nothing and ships no image binary. User media
+  // is drawn from the API's own variants, `?w=` on the file routes, through `src/lib/image-variants.ts`.
   images: { unoptimized: true },
   // Turning the optimiser off is not enough on its own: `npm ci` still installs sharp, because it is
   // an optional dependency of Next itself, and output tracing still copied all 27MB of it into
