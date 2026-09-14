@@ -28,6 +28,10 @@ images.
 `NEXT_PUBLIC_API_URL` is read at container start by `entrypoint.sh`, which writes
 `public/env-config.js`. Repointing the console at another API never needs a rebuild.
 
+`NEXT_PUBLIC_PRESS_URL` is optional: the address of the barakoPress site that renders the pages. With
+it set, a page's `Blocks` field is edited as blocks built from the schema the site publishes at
+`/api/blocks`; without it, that field stays a JSON editor. See [`docs/blocks.md`](docs/blocks.md).
+
 Tags on `ghcr.io/baryodev/barako-brew`:
 
 | Tag | Built from |

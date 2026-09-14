@@ -9,11 +9,13 @@ import { FieldError } from '@/components/content/field-error';
 import { MarkdownField } from '@/components/content/markdown-field';
 import { ReferenceField } from '@/components/content/reference-field';
 import { MenuItemsField } from '@/components/content/menu-items-field';
+import { BlocksField } from '@/components/content/blocks-field';
+import { isBlocksField } from '@/lib/blocks';
 import { isMenuItemsField } from '@/lib/menu-tree';
 import { cn } from '@/lib/utils';
 import { resolveFieldType, type FieldDefinition, type FieldType } from '@/types/schema';
 
-interface DynamicFormProps {
+export interface DynamicFormProps {
     fields: FieldDefinition[];
     values: Record<string, unknown>;
     onChange: (values: Record<string, unknown>) => void;
@@ -90,6 +92,31 @@ function FieldControl({
                 value={value}
                 error={error}
                 onChange={onChange}
+            />
+        );
+    }
+
+    // A page's blocks, by the field name barakoPress reads them from. The editor is built from the
+    // schema the site publishes, and falls back to this same JSON editor when there is none.
+    // docs/blocks.md is where a person setting up pages reads it.
+    if (type === 'json' && isBlocksField(field.name)) {
+        return (
+            <BlocksField
+                displayName={field.displayName}
+                label={label}
+                value={value}
+                error={error}
+                onChange={onChange}
+                form={DynamicForm}
+                json={
+                    <JsonField
+                        field={field}
+                        type="array"
+                        label={null}
+                        value={value}
+                        onChange={onChange}
+                    />
+                }
             />
         );
     }

@@ -11,6 +11,13 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **A page's blocks are edited as blocks.** A json field named `Blocks` gets a list built from the
+  block schema the site publishes at `/api/blocks`: add from a palette, drag or use Move up and Move
+  down to reorder, remove, and a form per block using the same controls as entry fields, with blocks
+  nested in a `slots` field such as columns. What the site would refuse to render is marked on the
+  row and the field. A block of a type the site does not list is shown read-only and saved as it was.
+  Set `NEXT_PUBLIC_PRESS_URL` to turn it on; without it, or when the schema cannot be read, the field
+  stays the JSON editor. See `docs/blocks.md`. (#90)
 - **Resolving an error asks for a reference and remarks.** Resolve on the Errors screen opens a dialog
   with an optional reference (a pull request or ticket link, or a number such as `AB#1234` or
   `PROJ-42`) and optional remarks. The error details show who resolved it, when, and both fields, with
