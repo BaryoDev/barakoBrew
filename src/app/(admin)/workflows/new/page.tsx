@@ -12,6 +12,7 @@ import {
 import { useSchemas } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
 import { parameterFields, withoutBlankOptional } from '@/lib/workflow-parameters';
+import { groupActions, OTHER_ACTION_GROUP } from '@/lib/workflow-action-groups';
 import type { TriggerEvent, WorkflowAction, WorkflowDefinition } from '@/types/workflow';
 import { PageHeader } from '@/components/patterns/page-header';
 import { ActionIcon } from '@/components/workflow/action-icon';
@@ -23,7 +24,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -33,6 +36,9 @@ export default function NewWorkflowPage() {
   const router = useRouter();
   const { data: schemas } = useSchemas();
   const { data: actionTypes } = useWorkflowActions();
+  // An API older than the group field sends none, so everything lands in Other. Headings would add
+  // nothing then, so that case is listed flat, as it was before groups.
+  const actionGroups = groupActions(actionTypes ?? []);
   const createWorkflow = useCreateWorkflow();
   const validateWorkflow = useValidateWorkflow();
 
@@ -235,11 +241,22 @@ export default function NewWorkflowPage() {
                 <SelectValue placeholder="Add an action" />
               </SelectTrigger>
               <SelectContent>
-                {actionTypes?.map((meta) => (
-                  <SelectItem key={meta.type} value={meta.type}>
-                    {meta.type}
-                  </SelectItem>
-                ))}
+                {actionGroups.length === 1 && actionGroups[0].name === OTHER_ACTION_GROUP
+                  ? actionGroups[0].actions.map((meta) => (
+                      <SelectItem key={meta.type} value={meta.type}>
+                        {meta.type}
+                      </SelectItem>
+                    ))
+                  : actionGroups.map((group) => (
+                      <SelectGroup key={group.name}>
+                        <SelectLabel>{group.name}</SelectLabel>
+                        {group.actions.map((meta) => (
+                          <SelectItem key={meta.type} value={meta.type}>
+                            {meta.type}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
               </SelectContent>
             </Select>
           </div>

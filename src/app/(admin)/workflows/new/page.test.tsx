@@ -75,6 +75,70 @@ async function addWebhook() {
     return screen.findByLabelText(/^Url/);
 }
 
+describe('the action picker', () => {
+    const grouped: WorkflowActionMetadata[] = [
+        { ...ACTIONS[0], group: 'Delivery' },
+        { type: 'Conditional', description: '', requiredParameters: ['Condition'], exampleConfiguration: '{}', group: 'Flow' },
+        { type: 'Email', description: '', requiredParameters: ['To'], exampleConfiguration: '{}', group: 'Comms' },
+        { type: 'Custom', description: '', requiredParameters: ['Thing'], exampleConfiguration: '{}', group: null },
+    ];
+
+    function serve(actions: WorkflowActionMetadata[]) {
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation((async (url: string, ...rest: unknown[]) =>
+            url === '/api/workflows/actions'
+                ? { data: actions }
+                : (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest)) as typeof api.get);
+    }
+
+    async function openPicker() {
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/actions'));
+        fireEvent.keyDown(screen.getByRole('combobox', { name: 'Add an action' }), { key: 'ArrowDown' });
+        return within(await screen.findByRole('listbox'));
+    }
+
+    it('lists the kinds under their groups in library order, with an ungrouped kind under Other', async () => {
+        serve(grouped);
+        renderPage();
+        const listbox = await openPicker();
+
+        const groups = listbox.getAllByRole('group');
+        expect(groups).toHaveLength(4);
+        expect(groups.map((g) => [
+            g.querySelector('[data-slot="select-label"]')?.textContent,
+            within(g).getAllByRole('option').map((o) => o.textContent),
+        ])).toEqual([
+            ['Delivery', ['Webhook']],
+            ['Comms', ['Email']],
+            ['Flow', ['Conditional']],
+            ['Other', ['Custom']],
+        ]);
+    });
+
+    it('still offers every kind, without group headings, when the API sends no group', async () => {
+        serve([
+            ACTIONS[0],
+            { type: 'Email', description: '', requiredParameters: ['To'], exampleConfiguration: '{}' },
+        ]);
+        renderPage();
+        const listbox = await openPicker();
+
+        const options = listbox.getAllByRole('option');
+        expect(options).toHaveLength(2);
+        expect(options.map((o) => o.textContent)).toEqual(['Webhook', 'Email']);
+        expect(document.querySelectorAll('[data-slot="select-label"]')).toHaveLength(0);
+    });
+
+    it('adds a kind picked from a group, with its own required parameters', async () => {
+        serve(grouped);
+        renderPage();
+        await openPicker();
+        fireEvent.keyDown(screen.getByRole('option', { name: 'Custom' }), { key: 'Enter' });
+
+        expect(await screen.findByLabelText(/^Thing/)).toBeInTheDocument();
+    });
+});
+
 describe('the new workflow form', () => {
     it('offers Published as a trigger, alongside Created and Updated', async () => {
         renderPage();
