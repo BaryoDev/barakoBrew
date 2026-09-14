@@ -1,6 +1,7 @@
 # Third party notices
 
-barakoBrew is licensed under MPL-2.0, in `LICENSE`. That covers the code in this repository.
+barakoBrew is licensed under MIT, in `LICENSE`. That covers the code in this repository. Releases up to
+and including 1.2.0 were published under MPL-2.0 and keep it.
 
 The container image published as `ghcr.io/baryodev/barako-brew` also redistributes third party
 software. All of it is under a permissive licence. This file ships at

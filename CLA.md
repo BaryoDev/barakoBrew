@@ -1,7 +1,7 @@
 # Contributor terms
 
-barakoCMS is [MPL-2.0](LICENSE). Your contribution ships under it, you keep your copyright, and
-barakoCMS is not released as closed source.
+barakoBrew is [MIT](LICENSE). Your contribution ships under it, you keep your copyright, and
+barakoBrew is not released as closed source.
 
 Worth splitting that last part honestly, because it is a structural guarantee for some of the code
 and a commitment for the rest:
@@ -12,7 +12,7 @@ and a commitment for the rest:
   relicense, including commercially. Those rights exist and will not be exercised. That is a
   commitment rather than a structural limit, and it is stated plainly rather than papered over.
 
-That last point is about *our* releases. MPL-2.0 lets anyone, you included, use barakoCMS inside a
+That last point is about *our* releases. MIT lets anyone, you included, use barakoBrew inside a
 commercial or closed-source product. That is the licence working as intended and nothing here
 changes it.
 
@@ -21,20 +21,29 @@ There is nothing to sign. Opening a pull request means you agree to what is belo
 These terms apply from 23 August 2026 and are not retroactive: contributions made earlier stay
 under the terms published at the time.
 
+## What your contribution ships under
+
+Everything in this repository is MIT, from the release after 1.2.0. Releases up to and including
+1.2.0 were published under MPL-2.0 and keep that licence. barakoBrew is built on barakoCMS, whose
+core stays MPL-2.0; that licence applies to the API's files, not to this console.
+
+If code is ever copied into this repository from an MPL-2.0 project, those files keep their MPL-2.0
+notice. That is deliberate and reviewed, never incidental.
+
 ## What you are agreeing to
 
 **1. You give us permission to use your contribution.**
 A perpetual, worldwide, royalty-free licence to use, modify, distribute and sublicense what you
-contribute, so it can ship as part of barakoCMS and any project that includes it.
+contribute, so it can ship as part of barakoBrew and any project that includes it.
 
-**2. MPL-2.0 or MIT. Nothing else.**
-Releases containing your contribution are made under MPL-2.0, or under MIT if the project ever
+**2. MIT or MPL-2.0. Nothing else.**
+Releases containing your contribution are made under MIT, or under MPL-2.0 if the project ever
 moves. Those are the only two licences BaryoDev uses, and naming them is more useful than saying
 "an open source licence": that phrase covers AGPL, which many companies will not accept, so you
 would still have to ask what could happen. Now you do not.
 
-It was Apache-2.0 up to 3.1.1, so a move has happened once and is a real possibility rather than a
-hypothetical.
+barakoBrew was MPL-2.0 up to 1.2.0 and is MIT after it, so a move has happened and is a real
+possibility rather than a hypothetical.
 
 We cannot make a closed-source release of your work. Not "will not": the permission does not
 extend that far, so there is nothing to change our minds about later.
@@ -44,9 +53,13 @@ Nothing here transfers ownership. It is a licence, not an assignment. Your contr
 yours and you can use it anywhere else you like, including in commercial work of your own.
 
 **4. Patents.**
-MPL-2.0 section 2.1(b) is the patent grant and it applies to your contribution. Pointed at rather
-than restated, because a second definition alongside the licence's is a second one to keep in step.
-Its purpose is that a contribution cannot become a legal trap for everyone downstream.
+MIT says nothing about patents, so these terms say it instead. You grant everyone who receives
+barakoBrew a perpetual, worldwide, royalty-free, irrevocable licence under any patent claims you can
+license that your contribution necessarily infringes, alone or combined with the project it was
+contributed to, to make, use, sell, offer to sell, import and otherwise transfer it. If someone
+sues claiming that your contribution, or barakoBrew with it, infringes a patent, the licence this
+clause gave them ends on the date they file. Its purpose is that a contribution cannot become a
+legal trap for everyone downstream.
 
 **5. You have the right to contribute it.**
 Either you wrote it, or you have permission from whoever did. If your employer owns your work,
@@ -61,9 +74,9 @@ it, or fix it later. If you disappear tomorrow, that is fine and expected.
 
 **No copyright assignment.** Some projects ask you to hand over ownership. This one does not.
 
-**No right to relicense your work as proprietary.** An earlier version of this document granted
+**No right to relicense your work as proprietary.** An earlier version of these terms granted
 exactly that, and advertised commercial licensing and dual licensing as reasons for it. Both were
-removed because they contradicted what barakoCMS promises: free at any scale, with no paid edition
+removed because they contradicted what barakoBrew promises: free at any scale, with no paid edition
 and no threshold that starts a bill. A permission we would never use is a permission worth not
 holding.
 
