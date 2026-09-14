@@ -24,6 +24,48 @@ export interface ClientErrorDto {
   firstSeenAt: string;
   lastSeenAt: string;
   resolved?: boolean;
+  // Absent on an API older than BaryoDev/barakoCMS#790, which is why every one is optional.
+  resolvedAt?: string | null;
+  resolvedBy?: string | null;
+  resolutionReference?: string | null;
+  resolutionNote?: string | null;
+}
+
+/** The API's limits on what a resolve can carry, so the dialog refuses before the server does. */
+export const MAX_REFERENCE_LENGTH = 500;
+export const MAX_NOTE_LENGTH = 2000;
+
+export interface ResolveInput {
+  id: string;
+  reference?: string;
+  note?: string;
+}
+
+/** The resolve body: trimmed, with blank fields left off so an empty dialog resolves as before. */
+export function resolveBody(input: Pick<ResolveInput, 'reference' | 'note'>): {
+  reference?: string;
+  note?: string;
+} {
+  const body: { reference?: string; note?: string } = {};
+  const reference = input.reference?.trim();
+  const note = input.note?.trim();
+  if (reference) body.reference = reference;
+  if (note) body.note = note;
+  return body;
+}
+
+/**
+ * A reference as a link, or null when it is not one. Only http and https: a reference is typed by a
+ * person and rendered as an href, and a `javascript:` value there would run on click.
+ */
+export function referenceHref(reference?: string | null): string | null {
+  if (!reference) return null;
+  try {
+    const url = new URL(reference.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface ClientErrorsQuery {
@@ -94,8 +136,8 @@ export function useClientErrors(query: ClientErrorsQuery) {
 export function useResolveClientError() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      await api.post(`/api/client-errors/${id}/resolve`, {});
+    mutationFn: async ({ id, ...rest }: ResolveInput) => {
+      await api.post(`/api/client-errors/${id}/resolve`, resolveBody(rest));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-errors'] });

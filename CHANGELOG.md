@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **Resolving an error asks for a reference and remarks.** Resolve on the Errors screen opens a dialog
+  with an optional reference (a pull request or ticket link, or a number such as `AB#1234` or
+  `PROJ-42`) and optional remarks. The error details show who resolved it, when, and both fields, with
+  an http or https reference as a link. Needs BaryoDev/barakoCMS#790 to store them; an older API
+  ignores the extra fields and resolves as before. (#130)
+
 ### Fixed
 
 - **The PWA installs screen crashed on load** with `filter is not a function`. It read
