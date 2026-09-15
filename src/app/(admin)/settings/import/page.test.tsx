@@ -78,13 +78,13 @@ describe('importing a sheet longer than the preview', () => {
         await renderWithSheet(truncatedSheet());
 
         expect(
-            screen.getByText(/This sheet has 1200 rows\. Only the first 500 can be imported from the console, so the last 700 rows will not be imported\./),
+            screen.getByText(/This sheet has 1200 rows\. Only the first 500 can be imported from the console, so the last 700 rows, counting blank ones, will not be imported\./),
         ).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Import 499 entries' }));
 
         const dialog = await screen.findByRole('alertdialog');
-        expect(dialog).toHaveTextContent('The last 700 rows of the sheet will not be imported.');
+        expect(dialog).toHaveTextContent('The last 700 rows of the sheet, counting blank ones, will not be imported.');
         expect(importCalls()).toHaveLength(0);
 
         fireEvent.click(screen.getByRole('button', { name: 'Import 499 entries' }));

@@ -172,7 +172,7 @@ export default function ImportPage() {
                         <p className="text-muted-foreground mt-1 text-[13px]">
                             {preview.rowCount} {preview.rowCount === 1 ? 'row' : 'rows'}, {preview.columnCount}{' '}
                             {preview.columnCount === 1 ? 'column' : 'columns'}.
-                            {preview.truncated && ` Only the first ${preview.rows.length} are shown and can be imported.`}
+                            {preview.truncated && ` Only the first ${preview.rows.length} rows can be imported.`}
                         </p>
 
                         <div className="mt-4 overflow-x-auto">
@@ -283,8 +283,9 @@ export default function ImportPage() {
                                 <span>
                                     This sheet has {preview.rowCount} rows. Only the first {preview.rows.length} can
                                     be imported from the console, so the last {leftOut}{' '}
-                                    {leftOut === 1 ? 'row' : 'rows'} will not be imported. Split the sheet to import
-                                    the rest.
+                                    {leftOut === 1 ? 'row' : 'rows'}, counting blank ones, will not be imported. To
+                                    import the rest, split the sheet and repeat the heading row at the top of each
+                                    part.
                                 </span>
                             </p>
                         )}
@@ -293,7 +294,7 @@ export default function ImportPage() {
                             <ConfirmDialog
                                 trigger={importButton()}
                                 title="Import only part of this sheet?"
-                                description={`${records.length} ${records.length === 1 ? 'entry' : 'entries'} will be created from the first ${preview.rows.length} rows. The last ${leftOut} ${leftOut === 1 ? 'row' : 'rows'} of the sheet will not be imported.`}
+                                description={`${records.length} ${records.length === 1 ? 'entry' : 'entries'} will be created from the first ${preview.rows.length} rows. The last ${leftOut} ${leftOut === 1 ? 'row' : 'rows'} of the sheet, counting blank ones, will not be imported.`}
                                 confirmLabel={`Import ${records.length} ${records.length === 1 ? 'entry' : 'entries'}`}
                                 onConfirm={() => void onImport()}
                             />
