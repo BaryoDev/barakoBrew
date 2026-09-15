@@ -94,6 +94,10 @@ moved. Which API a console works against is stated per release instead.
   barakoCMS 4.0.0. The screen now reads `items`, asks for the largest page the API serves (100), and
   takes the device count from `totalItems`, saying so when there are more devices than the table
   shows. (#128)
+- **Import says when a large sheet cannot be imported in full.** The analyze step returns at most 500
+  rows and the import is built from those, so the rows after them were never imported while the page
+  said a large sheet was imported in full. The Import step now names how many rows will be left out
+  and asks for a confirmation first. Importing a whole sheet on the server is BaryoDev/barakoCMS#870.
 
 ## [1.2.0] - 2026-09-14
 
