@@ -76,4 +76,13 @@ describe('the new key dialog', () => {
         fireEvent.click(checkbox('content:destructive'));
         expect(warning()).toBeNull();
     });
+
+    it('warns for full content access too, since * includes the destructive scope', async () => {
+        await openDialog();
+        fireEvent.click(checkbox('*'));
+        expect(warning()).toBeInTheDocument();
+
+        fireEvent.click(checkbox('*'));
+        expect(warning()).toBeNull();
+    });
 });

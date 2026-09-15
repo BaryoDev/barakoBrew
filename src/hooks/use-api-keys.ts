@@ -40,8 +40,8 @@ export const API_KEY_SCOPES: { value: string; label: string; description: string
   { value: '*', label: 'Full content access', description: 'Everything on the content API' },
 ];
 
-/** Scopes that allow changes nobody can undo. Selecting one shows a warning before the key is created. */
-export const DESTRUCTIVE_API_KEY_SCOPES = ['content:destructive'];
+/** Scopes that allow changes nobody can undo, `*` included. Selecting one shows a warning before the key is created. */
+export const DESTRUCTIVE_API_KEY_SCOPES = ['content:destructive', '*'];
 
 export function useApiKeys() {
   return useQuery({

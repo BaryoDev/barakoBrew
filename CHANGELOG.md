@@ -18,6 +18,9 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **API keys offer the `content:destructive` scope.** Erasing an entry and rolling one back now need
+  it, and `content:write` says it does not cover them. The new key dialog warns when that scope or
+  `*` is picked. Needs BaryoDev/barakoCMS#863; an older API refuses the scope with its own message.
 - **Site mode, the holding page and share links on the Site screen.** A Mode select (Live or
   Holding, unset reads as Live, a choice field's own options when it has them) with a note that
   Holding changes what visitors see and hides nothing at the API. A holding page picker from the page
