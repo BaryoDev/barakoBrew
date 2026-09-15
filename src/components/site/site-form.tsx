@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApplySiteBlueprint, useSaveSite, useSiteEntry } from '@/hooks/use-site';
 import { apiErrorMessage, isConflict, isNotFound } from '@/lib/api';
+import { rebaseMapEdit } from '@/lib/site-settings';
 import { statusMeta } from '@/lib/status-vocabulary';
 import { ContentStatus, type ContentDetailRead } from '@/types/content';
 import type { ContentTypeDefinition } from '@/types/schema';
@@ -31,7 +32,9 @@ export interface SiteFormContext {
  *
  * Edits are held apart from the entry and laid over it, rather than copied from it once. A save
  * then sends only what this screen touched on top of whatever is stored, and a refetch after
- * someone else saved moves the untouched fields forward without losing what was typed.
+ * someone else saved moves the untouched fields forward without losing what was typed. A JSON map
+ * such as Colors is moved forward key by key, from the stored value it was first edited on, so
+ * their new key is kept beside the one changed here.
  */
 export function SiteForm({
     title,
@@ -53,6 +56,8 @@ export function SiteForm({
     const apply = useApplySiteBlueprint();
     const save = useSaveSite();
     const [edits, setEdits] = useState<Record<string, unknown>>({});
+    /** Each edited field's stored value when this screen last changed it. */
+    const [bases, setBases] = useState<Record<string, unknown>>({});
     const [conflict, setConflict] = useState(false);
 
     if (state.kind === 'loading') {
@@ -125,17 +130,30 @@ export function SiteForm({
         );
     }
 
-    const values = { ...(entry?.data ?? {}), ...edits };
-    const set = (field: string, value: unknown) => setEdits((current) => ({ ...current, [field]: value }));
+    const stored = entry?.data ?? {};
+    const changes = Object.fromEntries(
+        Object.entries(edits).map(([field, value]) => [field, rebaseMapEdit(bases[field], value, stored[field])]),
+    );
+    const values = { ...stored, ...changes };
+    const set = (field: string, value: unknown) => {
+        // The new value is built from what is shown, which already holds the stored value, so the
+        // stored value now is what this edit differs from.
+        setBases((current) => ({ ...current, [field]: stored[field] }));
+        setEdits((current) => ({ ...current, [field]: value }));
+    };
+    const clearEdits = () => {
+        setEdits({});
+        setBases({});
+    };
     const dirty = Object.keys(edits).length > 0;
     const refusal = problem?.(values) ?? null;
 
     const submit = (status?: ContentStatus) => {
         save.mutate(
-            { entry, changes: edits, status },
+            { entry, changes, status },
             {
                 onSuccess: () => {
-                    setEdits({});
+                    clearEdits();
                     setConflict(false);
                     toast.success(
                         status === ContentStatus.Published
@@ -207,7 +225,7 @@ export function SiteForm({
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                                setEdits({});
+                                clearEdits();
                                 setConflict(false);
                             }}
                         >

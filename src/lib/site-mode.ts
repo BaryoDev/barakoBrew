@@ -39,12 +39,21 @@ export interface HoldingPageOption {
     label: string;
 }
 
-/** Every page with a path, in tree order, labelled with its depth. Empty while the tree is unknown. */
+const published = (status: string | null) => status?.toLowerCase() === 'published';
+
+/**
+ * Every published page with a path, in tree order, labelled with its depth. Empty while the tree is
+ * unknown. A draft is left out because barakoPress resolves only published pages, so a holding path
+ * pointing at one would not render.
+ */
 export function holdingPageOptions(state: PageTreeState | undefined): HoldingPageOption[] {
     if (!state || state.kind === 'disabled') return [];
     if (state.kind === 'flat') {
         return state.rows
-            .filter((row): row is typeof row & { path: string } => typeof row.path === 'string' && row.path !== '')
+            .filter(
+                (row): row is typeof row & { path: string } =>
+                    typeof row.path === 'string' && row.path !== '' && published(row.status),
+            )
             .map((row) => ({ path: row.path, label: `${row.title ?? row.slug ?? row.path} (${row.path})` }));
     }
 
@@ -52,7 +61,7 @@ export function holdingPageOptions(state: PageTreeState | undefined): HoldingPag
     const visit = (id: string) => {
         const node = state.forest.byId.get(id);
         if (!node) return;
-        if (node.path) {
+        if (node.path && published(node.status)) {
             // Non-breaking, because a select collapses ordinary leading spaces and the nesting would vanish.
             const indent = '\u00A0\u00A0'.repeat(node.depth);
             out.push({ path: node.path, label: `${indent}${node.title ?? node.slug ?? node.path} (${node.path})` });

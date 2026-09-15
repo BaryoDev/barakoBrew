@@ -10,6 +10,8 @@ import {
 } from '@/lib/site-mode';
 import type { FieldDefinition } from '@/types/schema';
 
+const { readTree } = await import('@/lib/page-tree');
+
 const NOW = new Date('2026-09-14T12:00:00Z');
 
 describe('shareLinkStatus', () => {
@@ -84,7 +86,7 @@ describe('holdingPageOptions', () => {
         const forest = buildForest([
             {
                 id: 'about', title: 'About', slug: 'about', path: '/about', status: 'Published', showInNavigation: true, order: 1,
-                children: [{ id: 'team', title: 'Team', slug: 'team', path: '/about/team', status: 'Draft', showInNavigation: true, order: 1, children: [] }],
+                children: [{ id: 'team', title: 'Team', slug: 'team', path: '/about/team', status: 'Published', showInNavigation: true, order: 1, children: [] }],
             },
             { id: 'soon', title: 'Coming soon', slug: 'soon', path: '/soon', status: 'Published', showInNavigation: false, order: 2, children: [] },
             { id: 'orphan', title: 'Orphan', slug: 'orphan', path: null, status: 'Draft', showInNavigation: false, order: 3, children: [] },
@@ -94,6 +96,21 @@ describe('holdingPageOptions', () => {
         expect(options.map((o) => o.path)).toEqual(['/about', '/about/team', '/soon']);
         expect(options[0].label).toBe('About (/about)');
         expect(options[1].label).toBe('\u00A0\u00A0Team (/about/team)');
+    });
+
+    it('offers only published pages, since the site renders no draft', () => {
+        const items = [
+            { id: 'live', title: 'Live', slug: 'live', path: '/live', status: 'Published', showInNavigation: true, order: 1, children: [] },
+            { id: 'wip', title: 'Work in progress', slug: 'wip', path: '/wip', status: 'Draft', showInNavigation: false, order: 2, children: [] },
+        ];
+
+        const tree = holdingPageOptions(readTree({ contract: 1, truncated: false, items }));
+        expect(tree).toHaveLength(1);
+        expect(tree.map((o) => o.path)).toEqual(['/live']);
+
+        const flat = holdingPageOptions(readTree({ contract: 99, truncated: false, items }));
+        expect(flat).toHaveLength(1);
+        expect(flat.map((o) => o.path)).toEqual(['/live']);
     });
 
     it('is empty when the Pages module is not enabled', () => {

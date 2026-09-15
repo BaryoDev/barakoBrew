@@ -109,6 +109,26 @@ describe('share link mutations', () => {
         await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
     });
 
+    it('drops the created key from the mutation cache once the mutation is reset', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: { ...LINK, key: 'k-secret' } });
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+        const holdsKey = () =>
+            client.getMutationCache().getAll().some((m) => JSON.stringify(m.state.data ?? null).includes('k-secret'));
+
+        const { result } = renderHook(() => useCreateShareLink(), {
+            wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+        });
+        await act(async () => {
+            await result.current.mutateAsync({ label: 'Client preview' });
+        });
+        expect(client.getMutationCache().getAll()).toHaveLength(1);
+        expect(holdsKey()).toBe(true);
+
+        act(() => result.current.reset());
+
+        await waitFor(() => expect(holdsKey()).toBe(false));
+    });
+
     it('revoke deletes by id', async () => {
         vi.mocked(api.delete).mockResolvedValue({ status: 204 });
 

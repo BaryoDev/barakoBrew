@@ -35,6 +35,8 @@ export function useCreateShareLink() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (input: CreateShareLinkInput) => (await api.post<CreatedShareLink>(URL, input)).data,
+        // The result carries the key. Dropped from the mutation cache as soon as nothing observes it.
+        gcTime: 0,
         onSuccess: () => queryClient.invalidateQueries({ queryKey: SHARE_LINKS_KEY }),
     });
 }

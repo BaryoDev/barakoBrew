@@ -48,15 +48,17 @@ export default function ThemePage() {
             description="Colours, fonts, corner radii and widths for this tenant's site. Contrast problems are flagged here and never block a save."
             requireEntry
         >
-            {({ values, set, entry }) => <ThemeEditor key={entry?.id} values={values} set={set} />}
+            {({ values, set, entry }) => <ThemeEditor key={entry?.id} version={entry?.version} values={values} set={set} />}
         </SiteForm>
     );
 }
 
 function ThemeEditor({
+    version,
     values,
     set,
 }: {
+    version?: number;
     values: Record<string, unknown>;
     set: (field: string, value: unknown) => void;
 }) {
@@ -170,7 +172,9 @@ function ThemeEditor({
                     onChange={(v) => set('OptionColors', v)}
                 >
                     {(rows) => (
-                        <OptionColors initial={rows} colorNames={Object.keys(colors)} onChange={(next) => set('OptionColors', next)} />
+                        // Keyed on the version: the rows are held here, so a newer stored value has to
+                        // start them again or a later commit would drop what it added.
+                        <OptionColors key={version} initial={rows} colorNames={Object.keys(colors)} onChange={(next) => set('OptionColors', next)} />
                     )}
                 </Structured>
             </Section>
