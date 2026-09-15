@@ -37,8 +37,9 @@ refuses, for example because the old path already redirects somewhere, is named 
 
 ## Field names
 
-The API's `Modules:Pages` options name the type and fields. It does not report them, so the console
-uses the defaults, which match the blog blueprint's `page` type:
+The API's `Modules:Pages` options name the type and fields, and the tree response reports them as
+`options`. Moves, the navigation switch, the home path and the new page link use those names. An API
+that sends no `options` gets the defaults, which match the blog blueprint's `page` type:
 
 | Option                  | Default            |
 | ----------------------- | ------------------ |
@@ -48,9 +49,7 @@ uses the defaults, which match the blog blueprint's `page` type:
 | `OrderField`            | `NavigationOrder`  |
 | `HomeSlug`              | `home`             |
 
-The tree itself reads correctly whatever the options are. A site that renames the fields sees its
-tree, but moves and the navigation switch write the default names. The slug field is the page type's
-field of type `slug`.
+The slug field is the page type's field of type `slug`.
 
 ## When the tree is not available
 
@@ -59,4 +58,5 @@ field of type `slug`.
 - **A contract it does not read.** Each body carries `contract`. This console reads contract 1. Any
   other value, or none, lists the pages without nesting and turns moving off.
 - **`truncated`** means the site has more pages than the API reads for one tree (`MaxPages`, 1000 by
-  default). The screen says some pages are missing.
+  default). The screen says some pages are missing and turns moving off, since a move renumbers the
+  pages beside it and cannot renumber one it does not see.

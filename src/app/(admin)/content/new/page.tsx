@@ -33,7 +33,9 @@ function NewContentInner() {
   // New page under a node on the Pages screen arrives with its parent already chosen.
   const [values, setValues] = useState<Record<string, unknown>>(() => {
     const parent = searchParams.get('parent');
-    return parent && searchParams.get('type') === PAGE_FIELDS.contentType ? { [PAGE_FIELDS.parent]: parent } : {};
+    const field =
+      searchParams.get('parentField') ?? (searchParams.get('type') === PAGE_FIELDS.contentType ? PAGE_FIELDS.parent : null);
+    return parent && field ? { [field]: parent } : {};
   });
   const [sensitivity, setSensitivity] = useState(SensitivityLevel.Public);
 

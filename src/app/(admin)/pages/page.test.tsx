@@ -51,8 +51,17 @@ const CONTACT_ENTRY = {
     version: 4,
 };
 
+const TEAM_ENTRY = {
+    id: 'team',
+    contentType: 'page',
+    data: { Title: 'Team', Slug: 'team', ParentPage: 'about', NavigationOrder: 1 },
+    status: 'Published',
+    version: 2,
+};
+
 let treeResponse: () => Promise<unknown>;
 let entryParent: string | undefined;
+let entryOrder: number;
 
 beforeEach(() => {
     vi.mocked(api.get).mockReset();
@@ -60,6 +69,7 @@ beforeEach(() => {
     vi.mocked(api.post).mockReset();
     treeResponse = async () => ({ data: TREE });
     entryParent = undefined;
+    entryOrder = 2;
 
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url === '/api/pages/tree') return treeResponse();
@@ -67,9 +77,11 @@ beforeEach(() => {
             return { data: { items: [], page: 1, pageSize: 20, totalItems: 0, totalPages: 0, hasNextPage: false, hasPreviousPage: false } };
         }
         if (url === '/api/contents/contact') {
-            const data = entryParent ? { ...CONTACT_ENTRY.data, ParentPage: entryParent } : CONTACT_ENTRY.data;
+            const base = { ...CONTACT_ENTRY.data, NavigationOrder: entryOrder };
+            const data = entryParent ? { ...base, ParentPage: entryParent } : base;
             return { data: { ...CONTACT_ENTRY, data }, headers: { etag: '"v4"' } };
         }
+        if (url === '/api/contents/team') return { data: TEAM_ENTRY, headers: { etag: '"v2"' } };
         throw httpError(404);
     });
 });
@@ -133,7 +145,7 @@ describe('Pages screen', () => {
         expect(within(rowOf('Team')).getByText('Published')).toBeInTheDocument();
         expect(within(rowOf('About')).getByRole('link', { name: 'Add a page under About' })).toHaveAttribute(
             'href',
-            '/content/new?type=page&parent=about',
+            '/content/new?type=page&parent=about&parentField=ParentPage',
         );
     });
 
@@ -178,7 +190,8 @@ describe('Pages screen', () => {
             if (url === '/api/pages/tree') return { data: TREE };
             if (url === '/api/content-types') return { data: { items: [] } };
             const id = url.split('/').pop();
-            return { data: { id, data: { Title: id }, status: 'Published', version: 1 }, headers: {} };
+            const order = id === 'contact' ? 2 : 1;
+            return { data: { id, data: { Title: id, NavigationOrder: order }, status: 'Published', version: 1 }, headers: {} };
         });
 
         renderPage();
@@ -228,6 +241,99 @@ describe('Pages screen', () => {
         const alert = await within(rowOf('Contact')).findByRole('alert');
         expect(alert).toHaveTextContent('Someone else changed this page.');
         expect(api.put).not.toHaveBeenCalled();
+    });
+
+    it('writes the field names the tree response reports in options', async () => {
+        treeResponse = async () => ({
+            data: {
+                ...TREE,
+                options: {
+                    contentType: 'page',
+                    parentField: 'Parent',
+                    showInNavigationField: 'ShowInNavigation',
+                    orderField: 'NavigationOrder',
+                    titleField: 'Title',
+                    maxDepth: 8,
+                    reservedSlugs: [],
+                    homeSlug: 'home',
+                },
+            },
+        });
+        vi.mocked(api.put).mockResolvedValue({ data: {} });
+
+        renderPage();
+        fireEvent.click(await screen.findByRole('button', { name: 'Move Contact into the page above' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        const body = vi.mocked(api.put).mock.calls[0][1] as { data: Record<string, unknown> };
+        expect(body.data.Parent).toBe('about');
+        expect(body.data).not.toHaveProperty('ParentPage');
+    });
+
+    it('still offers the redirect when the moved page saved and a later write failed', async () => {
+        vi.mocked(api.put).mockResolvedValueOnce({ data: {} }).mockRejectedValueOnce(httpError(500));
+
+        renderPage();
+        fireEvent.click(await screen.findByRole('button', { name: 'Move Team out of About' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(api.put).mock.calls.map((c) => c[0])).toEqual(['/api/contents/team', '/api/contents/contact']);
+        const offer = await screen.findByRole('region', { name: 'A page address changed' });
+        expect(within(offer).getByText('/about/team')).toBeInTheDocument();
+        expect(within(offer).getByText('/team')).toBeInTheDocument();
+        expect(await within(rowOf('Contact')).findByRole('alert')).toHaveTextContent(
+            'Team was moved, but the order was only partly saved.',
+        );
+    });
+
+    it('does not save over an order someone else changed after the tree was read', async () => {
+        entryOrder = 5;
+
+        renderPage();
+        fireEvent.click(await screen.findByRole('button', { name: 'Move Contact into the page above' }));
+
+        const alert = await within(rowOf('Contact')).findByRole('alert');
+        expect(alert).toHaveTextContent('Someone else changed this page.');
+        expect(api.put).not.toHaveBeenCalled();
+    });
+
+    it('turns moving off, and says why, when the tree is missing pages', async () => {
+        treeResponse = async () => ({ data: { ...TREE, truncated: true } });
+
+        renderPage();
+        const up = await screen.findByRole('button', { name: 'Move Contact up' });
+
+        expect(screen.getByText(/Moving is off while pages are missing/)).toBeInTheDocument();
+        const moves = screen.getAllByRole('button', { name: /^Move / });
+        expect(moves).toHaveLength(12);
+        expect(moves.every((b) => b.getAttribute('aria-disabled') === 'true')).toBe(true);
+        fireEvent.click(up);
+        expect(api.get).not.toHaveBeenCalledWith('/api/contents/contact');
+        expect(api.put).not.toHaveBeenCalled();
+    });
+
+    it('puts focus back on the move button of the moved row once the move is saved', async () => {
+        const moved = {
+            ...TREE,
+            items: [item('about', 'About', '/about', 1, [item('team', 'Team', '/about/team', 1), item('contact', 'Contact', '/about/contact', 2)])],
+        };
+        let reads = 0;
+        treeResponse = async () => ({ data: reads++ === 0 ? TREE : moved });
+        vi.mocked(api.put).mockResolvedValue({ data: {} });
+
+        renderPage();
+        const button = await screen.findByRole('button', { name: 'Move Contact into the page above' });
+        button.focus();
+        fireEvent.click(button);
+
+        await waitFor(() => expect(reads).toBe(2));
+        await waitFor(() => expect(within(rowOf('Contact')).getByText('/about/contact')).toBeInTheDocument());
+        await waitFor(() =>
+            expect(document.activeElement).toBe(
+                within(rowOf('Contact')).getByRole('button', { name: 'Move Contact into the page above' }),
+            ),
+        );
+        expect(document.activeElement).not.toBe(button);
     });
 
     it('saves the navigation switch through the same update', async () => {

@@ -13,9 +13,22 @@ export interface PageTreeItem {
     children: PageTreeItem[];
 }
 
+/** The `Modules:Pages` names the API writes the tree through. */
+export interface PageTreeOptions {
+    contentType: string;
+    parentField: string;
+    showInNavigationField: string;
+    orderField: string;
+    titleField: string;
+    maxDepth: number;
+    reservedSlugs: string[];
+    homeSlug: string | null;
+}
+
 /** `contract` is the module's own version, independent of `X-Api-Contract-Version`. */
 export interface PageTreeResponse {
     contract: number;
     truncated: boolean;
+    options: PageTreeOptions;
     items: PageTreeItem[];
 }

@@ -19,13 +19,13 @@ import {
 import { statusMeta } from '@/lib/status-vocabulary';
 import {
     keyboardTarget,
-    PAGE_FIELDS,
     pathOf,
     planMove,
     type DropPosition,
     type KeyMove,
     type PageForest,
     type PageNode,
+    type PageOptions,
 } from '@/lib/page-tree';
 import { cn } from '@/lib/utils';
 
@@ -35,7 +35,12 @@ export function pageName(node: Pick<PageNode, 'title' | 'slug'>): string {
 
 export interface PageTreeActions {
     forest: PageForest;
+    options: PageOptions;
     busy: boolean;
+    /** False while the tree is missing pages. */
+    canMove: boolean;
+    /** The move button to put focus back on once a keyboard move has been saved. */
+    focus: { id: string; move: KeyMove } | null;
     /** A message per page id, shown on that page's row. */
     errors: Record<string, string>;
     onMove: (id: string, targetId: string, position: DropPosition, via: 'drag' | KeyMove) => void;
@@ -64,7 +69,7 @@ function positionAt(element: HTMLElement, clientY: number): DropPosition {
 }
 
 function PageRow({ id, ...actions }: PageTreeActions & { id: string }) {
-    const { forest, busy, errors, onMove, onToggleNavigation, onChangeSlug } = actions;
+    const { forest, options, busy, canMove, focus, errors, onMove, onToggleNavigation, onChangeSlug } = actions;
     const node = forest.byId.get(id);
     const switchId = useId();
     const rowRef = useRef<HTMLDivElement>(null);
@@ -94,7 +99,7 @@ function PageRow({ id, ...actions }: PageTreeActions & { id: string }) {
             }),
             dropTargetForElements({
                 element,
-                canDrop: ({ source }) => sourceId(source.data) !== null,
+                canDrop: ({ source }) => latest.current.canMove && sourceId(source.data) !== null,
                 getData: () => ({ pageId: id }),
                 onDrag: ({ source, location }) => {
                     const from = sourceId(source.data);
@@ -102,22 +107,31 @@ function PageRow({ id, ...actions }: PageTreeActions & { id: string }) {
                     const position = positionAt(element, location.current.input.clientY);
                     const { forest: tree } = latest.current;
                     const plan = planMove(tree, from, id, position);
+                    const parent = plan ? { id: from, parentId: plan.parentId } : null;
                     setDrop(
-                        plan
-                            ? { position, preview: pathOf(tree, from, { parent: { id: from, parentId: plan.parentId } }) }
-                            : null,
+                        parent ? { position, preview: pathOf(tree, from, { parent }, latest.current.options.homeSlug) } : null,
                     );
                 },
                 onDragLeave: () => setDrop(null),
                 onDrop: ({ source, location }) => {
                     setDrop(null);
                     const from = sourceId(source.data);
-                    if (!from || latest.current.busy) return;
+                    if (!from || latest.current.busy || !latest.current.canMove) return;
                     latest.current.onMove(from, id, positionAt(element, location.current.input.clientY), 'drag');
                 },
             }),
         );
     }, [id]);
+
+    // A move re-renders the tree, and a page that changed parent is a new row, so the button that was
+    // pressed is gone. Focus goes back to the same button on the new row, unless it has moved on.
+    const focusMove = focus?.id === id ? focus.move : null;
+    useEffect(() => {
+        if (busy || !focusMove) return;
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
+        rowRef.current?.querySelector<HTMLElement>(`[data-move="${focusMove}"]`)?.focus();
+    }, [busy, focusMove, forest]);
 
     if (!node) return null;
     const name = pageName(node);
@@ -189,16 +203,20 @@ function PageRow({ id, ...actions }: PageTreeActions & { id: string }) {
                 <div className="flex items-center">
                     {moves.map(({ move, label, icon }) => {
                         const target = keyboardTarget(forest, id, move);
+                        // aria-disabled rather than disabled: a disabled button drops keyboard focus.
+                        const off = busy || !canMove || !target;
                         return (
                             <Button
                                 key={move}
                                 type="button"
                                 variant="ghost"
                                 size="icon-sm"
+                                data-move={move}
                                 aria-label={label}
                                 title={label}
-                                disabled={busy || !target}
-                                onClick={() => target && onMove(id, target.targetId, target.position, move)}
+                                aria-disabled={off}
+                                className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                                onClick={() => !off && target && onMove(id, target.targetId, target.position, move)}
                             >
                                 {icon}
                             </Button>
@@ -219,7 +237,7 @@ function PageRow({ id, ...actions }: PageTreeActions & { id: string }) {
                     )}
                     <Button asChild variant="ghost" size="icon-sm">
                         <Link
-                            href={`/content/new?type=${encodeURIComponent(PAGE_FIELDS.contentType)}&parent=${encodeURIComponent(id)}`}
+                            href={`/content/new?type=${encodeURIComponent(options.contentType)}&parent=${encodeURIComponent(id)}&parentField=${encodeURIComponent(options.parent)}`}
                             aria-label={`Add a page under ${name}`}
                             title="Add a page under this one"
                         >

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     buildForest,
     keyboardTarget,
+    PAGE_FIELDS,
     pathOf,
     planMove,
     readTree,
@@ -63,6 +64,31 @@ describe('building the tree from the response', () => {
         expect(view.kind).toBe('tree');
         expect(view.truncated).toBe(true);
         if (view.kind === 'tree') expect(view.forest.byId.size).toBe(5);
+    });
+});
+
+describe('the field names the tree is written through', () => {
+    it('reads them from options, keeping the default for a name that is missing', () => {
+        const view = readTree({
+            contract: 1,
+            truncated: false,
+            options: { contentType: 'landing', parentField: 'Parent', orderField: 'MenuWeight', homeSlug: null },
+            items: ITEMS,
+        });
+
+        expect(view.kind === 'tree' && view.options).toEqual({
+            contentType: 'landing',
+            parent: 'Parent',
+            showInNavigation: 'ShowInNavigation',
+            order: 'MenuWeight',
+            homeSlug: null,
+        });
+    });
+
+    it('uses the defaults for a response without options', () => {
+        const view = readTree({ contract: 1, truncated: false, items: ITEMS });
+
+        expect(view.kind === 'tree' && view.options).toEqual(PAGE_FIELDS);
     });
 });
 
@@ -175,6 +201,21 @@ describe('path preview', () => {
 
         expect(pathOf(f, 'home')).toBe('/');
         expect(pathOf(f, 'contact', { parent: { id: 'contact', parentId: 'home' } })).toBe('/home/contact');
+    });
+
+    it('serves the home slug the API reports at /, and the default home slug at its own path', () => {
+        const view = readTree({
+            contract: 1,
+            truncated: false,
+            options: { homeSlug: 'start' },
+            items: [page('start', 'start', '/', 1), page('home', 'home', '/home', 2)],
+        });
+
+        expect(view.kind).toBe('tree');
+        if (view.kind !== 'tree') return;
+        expect(view.options.homeSlug).toBe('start');
+        expect(pathOf(view.forest, 'start', {}, view.options.homeSlug)).toBe('/');
+        expect(pathOf(view.forest, 'home', {}, view.options.homeSlug)).toBe('/home');
     });
 
     it('has no path when a slug is missing or the chain does not reach a root', () => {
