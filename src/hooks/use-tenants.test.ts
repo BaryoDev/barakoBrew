@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
-import { domainClash, domainProblems, tenantDomainsBody, type Tenant } from './use-tenants';
+import { domainClash, domainProblems, MAX_TENANT_DOMAINS, tenantDomainsBody, type Tenant } from './use-tenants';
 
 const TENANT: Tenant = {
     id: 't1',
@@ -56,6 +56,22 @@ describe('domainProblems', () => {
         expect(problems[3]).toContain('not a valid domain name');
         expect(problems[4]).toContain('not a valid domain name');
         expect(problems[5]).toBe('A domain cannot be empty.');
+    });
+
+    it('refuses a host of digit labels, which the API reads as a short IPv4 address', () => {
+        expect(domainProblems(['1.2', '127.1', 'www.1.2'])).toEqual([
+            "'1.2' is not a valid domain name.",
+            "'127.1' is not a valid domain name.",
+            "'www.1.2' is not a valid domain name.",
+        ]);
+        expect(domainProblems(['1password.com', '123.example'])).toEqual([]);
+    });
+
+    it('counts www. and the bare host as one domain toward the limit, as the API stores them', () => {
+        const many = Array.from({ length: MAX_TENANT_DOMAINS }, (_, i) => `site${i}.example.com`);
+        expect(many).toHaveLength(20);
+        expect(domainProblems([...many, 'www.site0.example.com'])).toEqual([]);
+        expect(domainProblems([...many, 'www.site20.example.com'])).toEqual(['A tenant can have at most 20 domains.']);
     });
 
     it('refuses more than twenty distinct domains', () => {

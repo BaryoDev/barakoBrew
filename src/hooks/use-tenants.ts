@@ -109,6 +109,10 @@ const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 /**
  * Why the API would refuse these domains, one message per problem, mirroring
  * `TenantDomains.Normalise`. A copy that can drift; the server still decides.
+ *
+ * A host is compared the way `TenantDomainMap.Normalise` stores it: trailing dots and a leading
+ * `www.` dropped, so `www.example.com` and `example.com` count as one domain. A host made only of
+ * digit labels is refused, since the API parses `1.2` and `127.1` as IPv4 addresses.
  */
 export function domainProblems(domains: readonly string[]): string[] {
   const problems: string[] = [];
@@ -123,10 +127,10 @@ export function domainProblems(domains: readonly string[]): string[] {
       problems.push(`'${typed}' is not a bare host. Enter it like example.com, without a scheme, port, path or wildcard.`);
       continue;
     }
-    const host = typed.toLowerCase().replace(/\.$/, '');
+    const host = typed.toLowerCase().replace(/\.+$/, '').replace(/^www\./, '');
     if (
       host.length > 253 ||
-      /^\d+(\.\d+){3}$/.test(host) ||
+      host.split('.').every((label) => /^\d+$/.test(label)) ||
       !host.includes('.') ||
       !host.split('.').every((label) => DOMAIN_LABEL.test(label))
     ) {
