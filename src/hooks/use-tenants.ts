@@ -107,12 +107,33 @@ export const MAX_TENANT_DOMAINS = 20;
 const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /**
+ * Whether .NET's `IPAddress.TryParse` reads the host as IPv4: one to four parts, each decimal, `0x`
+ * hex or `0` octal, with the last part filling the bytes that are left. So `127.1` and `0x7f.1` are
+ * addresses, and `999.1` and `1.2.3.4.5` are not.
+ */
+function isIPv4(host: string): boolean {
+  const parts = host.split('.');
+  if (parts.length > 4) return false;
+  return parts.every((part, i) => {
+    const value = /^0x[0-9a-f]+$/.test(part)
+      ? Number.parseInt(part.slice(2), 16)
+      : /^0[0-7]*$/.test(part)
+        ? Number.parseInt(part, 8)
+        : /^[1-9]\d*$/.test(part)
+          ? Number(part)
+          : Number.NaN;
+    const max = i < parts.length - 1 ? 255 : 256 ** (5 - parts.length) - 1;
+    return value <= max;
+  });
+}
+
+/**
  * Why the API would refuse these domains, one message per problem, mirroring
  * `TenantDomains.Normalise`. A copy that can drift; the server still decides.
  *
  * A host is compared the way `TenantDomainMap.Normalise` stores it: trailing dots and a leading
- * `www.` dropped, so `www.example.com` and `example.com` count as one domain. A host made only of
- * digit labels is refused, since the API parses `1.2` and `127.1` as IPv4 addresses.
+ * `www.` dropped, so `www.example.com` and `example.com` count as one domain. A host the API parses
+ * as an IPv4 address, short forms like `1.2` and `127.1` included, is refused.
  */
 export function domainProblems(domains: readonly string[]): string[] {
   const problems: string[] = [];
@@ -130,7 +151,7 @@ export function domainProblems(domains: readonly string[]): string[] {
     const host = typed.toLowerCase().replace(/\.+$/, '').replace(/^www\./, '');
     if (
       host.length > 253 ||
-      host.split('.').every((label) => /^\d+$/.test(label)) ||
+      isIPv4(host) ||
       !host.includes('.') ||
       !host.split('.').every((label) => DOMAIN_LABEL.test(label))
     ) {

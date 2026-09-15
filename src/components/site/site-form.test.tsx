@@ -58,6 +58,19 @@ function renderForm() {
                         <button type="button" onClick={() => set('Colors', { ...(values.Colors as object), a: 'mine' })}>
                             Change a
                         </button>
+                        <button type="button" onClick={() => set('Colors', { ...(values.Colors as object), a: 'mine again' })}>
+                            Change a again
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const { b: _removed, ...rest } = values.Colors as Record<string, unknown>;
+                                void _removed;
+                                set('Colors', rest);
+                            }}
+                        >
+                            Remove b
+                        </button>
                     </>
                 )}
             </SiteForm>
@@ -65,7 +78,52 @@ function renderForm() {
     );
 }
 
+async function loadTheirsAfterConflict() {
+    vi.mocked(api.put).mockRejectedValueOnce(httpError(412)).mockResolvedValueOnce({ data: { id: ID, version: 6 } });
+    renderForm();
+    fireEvent.click(await screen.findByRole('button', { name: 'Change a' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText(/Someone saved the site entry/)).toBeInTheDocument();
+    detail = { data: { Name: 'Club', Colors: { a: '1', b: 'theirs' } }, version: 5 };
+    fireEvent.click(screen.getByRole('button', { name: 'Load theirs under my changes' }));
+    await waitFor(() => expect(screen.getByTestId('colors')).toHaveTextContent('theirs'));
+}
+
+const savedColors = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+    return (vi.mocked(api.put).mock.calls[1][1] as { data: Record<string, unknown> }).data.Colors;
+};
+
 describe('SiteForm after someone else saved', () => {
+    it('removes a key they added when I remove it after loading theirs', async () => {
+        await loadTheirsAfterConflict();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove b' }));
+        await waitFor(() => expect(screen.getByTestId('colors')).not.toHaveTextContent('theirs'));
+
+        expect(await savedColors()).toEqual({ a: 'mine' });
+    });
+
+    it('does not count their value as mine when I edit the map again and they save once more', async () => {
+        await loadTheirsAfterConflict();
+        fireEvent.click(screen.getByRole('button', { name: 'Change a again' }));
+
+        detail = { data: { Name: 'Club', Colors: { a: '1', b: 'third' } }, version: 6 };
+        fireEvent.click(screen.getByRole('button', { name: 'Change a' }));
+        await waitFor(() => expect(screen.getByTestId('colors')).toHaveTextContent('mine'));
+        vi.mocked(api.put).mockReset().mockRejectedValueOnce(httpError(412)).mockResolvedValueOnce({ data: { id: ID, version: 7 } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+        expect(await screen.findByText(/Someone saved the site entry/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Load theirs under my changes' }));
+        await waitFor(() => expect(screen.getByTestId('colors')).toHaveTextContent('third'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+        const colors = (vi.mocked(api.put).mock.calls[1][1] as { data: Record<string, unknown> }).data.Colors;
+        expect(colors).toEqual({ a: 'mine', b: 'third' });
+    });
+
     it('keeps their new key in a map when my change to another key is loaded over theirs', async () => {
         vi.mocked(api.put).mockRejectedValueOnce(httpError(412)).mockResolvedValueOnce({ data: { id: ID, version: 6 } });
 

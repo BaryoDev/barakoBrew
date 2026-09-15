@@ -56,7 +56,7 @@ export function SiteForm({
     const apply = useApplySiteBlueprint();
     const save = useSaveSite();
     const [edits, setEdits] = useState<Record<string, unknown>>({});
-    /** Each edited field's stored value when this screen first changed it. */
+    /** Each edited field's stored value when this screen last changed it. */
     const [bases, setBases] = useState<Record<string, unknown>>({});
     const [conflict, setConflict] = useState(false);
 
@@ -136,7 +136,9 @@ export function SiteForm({
     );
     const values = { ...stored, ...changes };
     const set = (field: string, value: unknown) => {
-        setBases((current) => (field in current ? current : { ...current, [field]: stored[field] }));
+        // The new value is built from what is shown, which already holds the stored value, so the
+        // stored value now is what this edit differs from.
+        setBases((current) => ({ ...current, [field]: stored[field] }));
         setEdits((current) => ({ ...current, [field]: value }));
     };
     const clearEdits = () => {

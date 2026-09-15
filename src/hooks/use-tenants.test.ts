@@ -64,7 +64,9 @@ describe('domainProblems', () => {
             "'127.1' is not a valid domain name.",
             "'www.1.2' is not a valid domain name.",
         ]);
-        expect(domainProblems(['1password.com', '123.example'])).toEqual([]);
+        expect(domainProblems(['0x7f.1'])).toEqual(["'0x7f.1' is not a valid domain name."]);
+        // Not addresses to the API either, so it takes them as names.
+        expect(domainProblems(['1password.com', '123.example', '999.1', '1.2.3.4.5', '08.1'])).toEqual([]);
     });
 
     it('counts www. and the bare host as one domain toward the limit, as the API stores them', () => {

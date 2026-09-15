@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    rebaseMapEdit,
     isAbsoluteHttpUrl,
     isCssLength,
     isValidHref,
@@ -107,5 +108,20 @@ describe('setOrRemove', () => {
     it('removes a key set to empty instead of storing an empty string', () => {
         expect(setOrRemove({ accent: '#17458F', ink: '#1C1C1C' }, 'accent', '')).toEqual({ ink: '#1C1C1C' });
         expect(setOrRemove({}, 'accent', '#17458F')).toEqual({ accent: '#17458F' });
+    });
+});
+
+describe('rebaseMapEdit', () => {
+    it('moves a nested map forward key by key, so their change to another option is kept', () => {
+        const base = { Kind: { x: 'red', y: 'blue' } };
+        const mine = { Kind: { x: 'green', y: 'blue' } };
+        const theirs = { Kind: { x: 'red', y: 'pink' } };
+
+        expect(rebaseMapEdit(base, mine, theirs)).toEqual({ Kind: { x: 'green', y: 'pink' } });
+    });
+
+    it('replaces a value that is not a map whole', () => {
+        expect(rebaseMapEdit(['a'], ['b'], ['a', 'c'])).toEqual(['b']);
+        expect(rebaseMapEdit({ a: '1' }, { a: '2' }, 'text')).toEqual({ a: '2' });
     });
 });
