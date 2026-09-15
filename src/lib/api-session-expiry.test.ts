@@ -51,4 +51,13 @@ describe('a session that cannot be refreshed', () => {
         expect(axios.post).toHaveBeenCalledTimes(1);
         expect(location.href).toBe('https://example.com/barakocms/login');
     });
+
+    it('goes to /login at the root when the console is built without a base path', async () => {
+        vi.stubEnv('NEXT_PUBLIC_BASE_PATH', '');
+        const location = stubLocation('/content');
+
+        await expect(api.get('/api/content')).rejects.toThrow();
+
+        expect(location.href).toBe('/login');
+    });
 });
