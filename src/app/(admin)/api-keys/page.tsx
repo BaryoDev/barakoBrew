@@ -7,6 +7,7 @@ import {
   useCreateApiKey,
   useRevokeApiKey,
   API_KEY_SCOPES,
+  DESTRUCTIVE_API_KEY_SCOPES,
   type CreatedApiKey,
 } from '@/hooks/use-api-keys';
 import { apiErrorMessage } from '@/lib/api';
@@ -165,6 +166,11 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                     </label>
                   ))}
                 </div>
+                {scopes.some((s) => DESTRUCTIVE_API_KEY_SCOPES.includes(s)) && (
+                  <p role="alert" className="text-destructive text-xs">
+                    This key can erase entries and roll back versions. An erased entry cannot be recovered.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
