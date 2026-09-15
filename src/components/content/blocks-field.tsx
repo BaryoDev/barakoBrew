@@ -124,7 +124,11 @@ export function BlocksField({
                     )}
                 </>
             ) : (
-                json
+                // Typing while the schema loads keeps the JSON editor, so a half-typed value is not
+                // swapped out for the block list when the schema arrives.
+                <div className="contents" onChange={() => state.status === 'loading' && setAsJson(true)}>
+                    {json}
+                </div>
             )}
 
             <FieldError message={error} />

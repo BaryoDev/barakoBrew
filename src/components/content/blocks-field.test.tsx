@@ -267,7 +267,33 @@ describe('a page without a block schema', () => {
         expect(textarea.tagName).toBe('TEXTAREA');
         expect(JSON.parse(textarea.value)).toEqual(value);
         await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-        expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('gives the schema read a five second timeout', async () => {
+        const timeout = vi.spyOn(AbortSignal, 'timeout');
+        renderBlocks([]);
+
+        await screen.findByText('No blocks yet.');
+        expect(timeout).toHaveBeenCalledTimes(1);
+        expect(timeout).toHaveBeenCalledWith(5000);
+        expect(fetchMock.mock.calls[0][1].signal).toBe(timeout.mock.results[0].value);
+        timeout.mockRestore();
+    });
+
+    it('stays on the JSON editor when someone types into it before the schema arrives', async () => {
+        let answer: (value: unknown) => void = () => {};
+        fetchMock = vi.fn(() => new Promise((resolve) => (answer = resolve)));
+        vi.stubGlobal('fetch', fetchMock);
+        renderBlocks([]);
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+        const draft = '[{"type": "richText", "props": {"markdown": "draft';
+        fireEvent.change(document.getElementById('Blocks') as HTMLTextAreaElement, { target: { value: draft } });
+        answer({ ok: true, status: 200, json: async () => SCHEMA });
+
+        expect(await screen.findByRole('button', { name: 'Edit as blocks' })).toBeInTheDocument();
+        expect((document.getElementById('Blocks') as HTMLTextAreaElement).value).toBe(draft);
+        expect(screen.queryByText('No blocks yet.')).toBeNull();
     });
 
     it('falls back to the JSON editor when the schema cannot be read', async () => {
