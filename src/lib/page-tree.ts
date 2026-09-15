@@ -12,20 +12,48 @@ import type { PageTreeItem } from '@/types/pages';
 /** The contract versions of the Pages bodies this build reads, inclusive. */
 export const SUPPORTED_PAGES_CONTRACT: { readonly min: number; readonly max: number } = { min: 1, max: 1 };
 
+/** The type and field names the tree is written through, as `options` in the tree response names them. */
+export interface PageOptions {
+    contentType: string;
+    parent: string;
+    showInNavigation: string;
+    order: string;
+    /** Null when no page is served at `/`. */
+    homeSlug: string | null;
+}
+
 /**
- * The type and field names the tree is written through.
- *
- * These are the defaults of `Modules:Pages` on the API, which match the blog blueprint's `page`
- * type. The API does not report its options, so a site that renames them in `Modules:Pages` sees the
- * tree but moves write the default names. See docs/pages.md.
+ * The defaults of `Modules:Pages` on the API, which match the blog blueprint's `page` type. Used
+ * where no tree has been read, and for a response without `options`.
  */
-export const PAGE_FIELDS = {
+export const PAGE_FIELDS: PageOptions = {
     contentType: 'page',
     parent: 'ParentPage',
     showInNavigation: 'ShowInNavigation',
     order: 'NavigationOrder',
     homeSlug: 'home',
-} as const;
+};
+
+/**
+ * The names from a tree response's `options`. A name that is missing or blank keeps its default, and
+ * a response without `options` gets the defaults, which is what an API that sends none uses. A null
+ * or empty `homeSlug` inside `options` is the API saying no page is the home page.
+ */
+export function readOptions(value: unknown): PageOptions {
+    if (!isObject(value)) return PAGE_FIELDS;
+    const name = (raw: unknown, fallback: string) => (typeof raw === 'string' && raw.trim() !== '' ? raw : fallback);
+    return {
+        contentType: name(value.contentType, PAGE_FIELDS.contentType),
+        parent: name(value.parentField, PAGE_FIELDS.parent),
+        showInNavigation: name(value.showInNavigationField, PAGE_FIELDS.showInNavigation),
+        order: name(value.orderField, PAGE_FIELDS.order),
+        homeSlug: !('homeSlug' in value)
+            ? PAGE_FIELDS.homeSlug
+            : typeof value.homeSlug === 'string' && value.homeSlug.trim() !== ''
+              ? value.homeSlug.trim()
+              : null,
+    };
+}
 
 export interface PageNode {
     id: string;
@@ -55,7 +83,7 @@ export interface FlatPage {
 }
 
 export type TreeView =
-    | { kind: 'tree'; forest: PageForest; truncated: boolean; contract: number }
+    | { kind: 'tree'; forest: PageForest; truncated: boolean; contract: number; options: PageOptions }
     | { kind: 'flat'; rows: FlatPage[]; truncated: boolean; contract: number | null };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -129,7 +157,13 @@ export function readTree(body: unknown): TreeView {
         contract !== null && contract >= SUPPORTED_PAGES_CONTRACT.min && contract <= SUPPORTED_PAGES_CONTRACT.max;
 
     if (supported && Array.isArray(data.items)) {
-        return { kind: 'tree', forest: buildForest(data.items as PageTreeItem[]), truncated, contract };
+        return {
+            kind: 'tree',
+            forest: buildForest(data.items as PageTreeItem[]),
+            truncated,
+            contract,
+            options: readOptions(data.options),
+        };
     }
     return { kind: 'flat', rows: flatRows(data.items), truncated, contract };
 }
@@ -239,12 +273,17 @@ export interface PathChange {
 
 /**
  * A page's path after a change, built the way the API builds it: every slug from the root down,
- * and `/` for a top-level page whose slug is the home slug.
+ * and `/` for a top-level page whose slug is `homeSlug`, compared case-insensitively.
  *
  * Null when the chain has a page with no slug, or does not reach a root, which is when the API sends
  * no path either.
  */
-export function pathOf(forest: PageForest, id: string, change: PathChange = {}): string | null {
+export function pathOf(
+    forest: PageForest,
+    id: string,
+    change: PathChange = {},
+    homeSlug: string | null = PAGE_FIELDS.homeSlug,
+): string | null {
     const slugs: string[] = [];
     let current: string | null = id;
     for (let steps = 0; current !== null; steps++) {
@@ -261,7 +300,7 @@ export function pathOf(forest: PageForest, id: string, change: PathChange = {}):
         current = parentId;
     }
 
-    if (slugs.length === 1 && slugs[0].toLowerCase() === PAGE_FIELDS.homeSlug) return '/';
+    if (homeSlug && slugs.length === 1 && slugs[0].toLowerCase() === homeSlug.toLowerCase()) return '/';
     return '/' + slugs.join('/');
 }
 
@@ -274,12 +313,17 @@ export interface RedirectOffer {
  * One redirect per page whose path the change moves: the page itself and every page below it.
  * A redirect is one exact path, so a parent's rule does not cover its children.
  */
-export function redirectOffers(forest: PageForest, id: string, change: PathChange): RedirectOffer[] {
+export function redirectOffers(
+    forest: PageForest,
+    id: string,
+    change: PathChange,
+    homeSlug: string | null = PAGE_FIELDS.homeSlug,
+): RedirectOffer[] {
     const offers: RedirectOffer[] = [];
     const visit = (nodeId: string) => {
         const node = forest.byId.get(nodeId);
         if (!node) return;
-        const toPath = pathOf(forest, nodeId, change);
+        const toPath = pathOf(forest, nodeId, change, homeSlug);
         if (node.path && toPath && node.path !== toPath) offers.push({ fromPath: node.path, toPath });
         node.childIds.forEach(visit);
     };

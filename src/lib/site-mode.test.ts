@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildForest } from '@/lib/page-tree';
+import { buildForest, PAGE_FIELDS } from '@/lib/page-tree';
 import {
     holdingPageOptions,
     modeOptions,
@@ -89,7 +89,7 @@ describe('holdingPageOptions', () => {
             { id: 'soon', title: 'Coming soon', slug: 'soon', path: '/soon', status: 'Published', showInNavigation: false, order: 2, children: [] },
             { id: 'orphan', title: 'Orphan', slug: 'orphan', path: null, status: 'Draft', showInNavigation: false, order: 3, children: [] },
         ]);
-        const options = holdingPageOptions({ kind: 'tree', forest, truncated: false, contract: 1 });
+        const options = holdingPageOptions({ kind: 'tree', forest, truncated: false, contract: 1, options: PAGE_FIELDS });
         expect(options).toHaveLength(3);
         expect(options.map((o) => o.path)).toEqual(['/about', '/about/team', '/soon']);
         expect(options[0].label).toBe('About (/about)');

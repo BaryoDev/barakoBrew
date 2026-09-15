@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isNotFound } from '@/lib/api';
-import { fieldValue, PAGE_FIELDS, readTree, withField, type TreeView } from '@/lib/page-tree';
+import { fieldValue, readTree, withField, type TreeView } from '@/lib/page-tree';
 import type { ContentDetail } from '@/types/content';
 
 /** `disabled` is a 404 from the tree endpoint: the Pages module is not enabled on this API. */
@@ -27,8 +27,8 @@ export function usePageTree() {
  * Someone else moved the page after the tree was read.
  *
  * Raised for a 412 from the save, and also when the entry read back just before the save already has
- * a different parent from the one the tree showed. Without the second check the save would succeed
- * and quietly undo their move, since the read that supplies the version is newer than the tree.
+ * a different parent or order from the one the tree showed. Without the second check the save would
+ * succeed and quietly undo their move, since the read that supplies the version is newer than the tree.
  */
 export class PageChangedError extends Error {
     constructor() {
@@ -37,24 +37,40 @@ export class PageChangedError extends Error {
     }
 }
 
+/** Where the tree showed a page, and the field names that place is stored under. */
+export interface ExpectedPlace {
+    parentField: string;
+    parentId: string | null;
+    orderField: string;
+    order: number | null;
+}
+
+/** An order as the API reads it: an integer, or a string holding one. Anything else is no order. */
+function storedOrder(value: unknown): number | null {
+    if (typeof value === 'number') return Number.isInteger(value) ? value : null;
+    if (typeof value === 'string' && /^\s*[+-]?\d+\s*$/.test(value)) return Number.parseInt(value, 10);
+    return null;
+}
+
 /**
  * Sets fields on one page through the ordinary content update, with `If-Match`.
  *
  * `fields` maps a field name to its new value; undefined removes the field, which is how a page
- * becomes a top-level page. `expectedParent`, when given, is the parent the tree showed.
+ * becomes a top-level page. `expected`, when given, is where the tree showed the page.
  */
 export async function writePageFields(
     id: string,
     fields: Record<string, unknown>,
-    expectedParent?: string | null,
+    expected?: ExpectedPlace,
 ): Promise<void> {
     const read = await api.get<ContentDetail>(`/api/contents/${id}`);
     const entry = read.data;
 
-    if (expectedParent !== undefined) {
-        const stored = fieldValue(entry.data, PAGE_FIELDS.parent);
+    if (expected) {
+        const stored = fieldValue(entry.data, expected.parentField);
         const storedParent = typeof stored === 'string' && stored !== '' ? stored.toLowerCase() : null;
-        if (storedParent !== (expectedParent?.toLowerCase() ?? null)) throw new PageChangedError();
+        if (storedParent !== (expected.parentId?.toLowerCase() ?? null)) throw new PageChangedError();
+        if (storedOrder(fieldValue(entry.data, expected.orderField)) !== expected.order) throw new PageChangedError();
     }
 
     let data = entry.data;

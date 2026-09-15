@@ -19,6 +19,7 @@ import {
     SUPPORTED_PAGES_CONTRACT,
     type DropPosition,
     type FlatPage,
+    type KeyMove,
     type PageForest,
     type RedirectOffer,
 } from '@/lib/page-tree';
@@ -43,7 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import { IconList, IconPlus } from '@/components/icons';
 
-const NEW_PAGE_HREF = `/content/new?type=${encodeURIComponent(PAGE_FIELDS.contentType)}`;
+const newPageHref = (contentType: string) => `/content/new?type=${encodeURIComponent(contentType)}`;
 
 function failure(error: unknown, fallback: string): string {
     return error instanceof PageChangedError ? error.message : apiErrorMessage(error, fallback);
@@ -59,8 +60,10 @@ export default function PagesPage() {
     const [announcement, setAnnouncement] = useState('');
     const [offers, setOffers] = useState<RedirectOffer[] | null>(null);
     const [renaming, setRenaming] = useState<string | null>(null);
+    const [focus, setFocus] = useState<{ id: string; move: KeyMove; forest: PageForest } | null>(null);
 
-    const pageType = schemas?.find((s) => s.name.toLowerCase() === PAGE_FIELDS.contentType);
+    const options = data?.kind === 'tree' ? data.options : PAGE_FIELDS;
+    const pageType = schemas?.find((s) => s.name.toLowerCase() === options.contentType.toLowerCase());
     const slugField = pageType?.fields.find((f) => f.type.toLowerCase() === 'slug')?.name;
 
     const header = (
@@ -69,7 +72,7 @@ export default function PagesPage() {
             description="Drag a page, or use its move buttons, to reorder it or put it under another page."
             actions={
                 <Button asChild size="sm">
-                    <Link href={NEW_PAGE_HREF}>
+                    <Link href={newPageHref(options.contentType)}>
                         <IconPlus className="size-3.5" />
                         New page
                     </Link>
@@ -124,30 +127,48 @@ export default function PagesPage() {
     }
 
     const forest = data.forest;
+    // A move renumbers the pages it can see, so with some missing it would put them out of order.
+    const canMove = !data.truncated;
 
-    const move = async (id: string, targetId: string, position: DropPosition) => {
+    const move = async (id: string, targetId: string, position: DropPosition, via: 'drag' | KeyMove) => {
         const plan = planMove(forest, id, targetId, position);
         const node = forest.byId.get(id);
-        if (!plan || !node) return;
-        const pending = redirectOffers(forest, id, { parent: { id, parentId: plan.parentId } });
+        if (!canMove || !plan || !node) return;
+        const pending = redirectOffers(forest, id, { parent: { id, parentId: plan.parentId } }, options.homeSlug);
 
         setBusy(true);
         setErrors({});
         setOffers(null);
+        setFocus(via === 'drag' ? null : { id, move: via, forest });
         let current = id;
+        let movedSaved = false;
         try {
             for (const write of plan.writes) {
                 current = write.id;
-                const fields: Record<string, unknown> = { [PAGE_FIELDS.order]: write.order };
+                const fields: Record<string, unknown> = { [options.order]: write.order };
                 // Undefined removes the field, which is what a top-level page has.
-                if (write.parent) fields[PAGE_FIELDS.parent] = write.parent.id ?? undefined;
-                await writePageFields(write.id, fields, forest.byId.get(write.id)?.parentId ?? null);
+                if (write.parent) fields[options.parent] = write.parent.id ?? undefined;
+                const shown = forest.byId.get(write.id);
+                await writePageFields(write.id, fields, {
+                    parentField: options.parent,
+                    parentId: shown?.parentId ?? null,
+                    orderField: options.order,
+                    order: shown?.order ?? null,
+                });
+                if (write.id === id) movedSaved = true;
             }
             const parent = plan.parentId ? forest.byId.get(plan.parentId) : undefined;
             setAnnouncement(`${pageName(node)} moved ${parent ? `under ${pageName(parent)}` : 'to the top level'}.`);
             if (pending.length > 0) setOffers(pending);
         } catch (error) {
-            setErrors({ [current]: failure(error, 'The page could not be moved.') });
+            const message = failure(error, 'The page could not be moved.');
+            if (movedSaved) {
+                // The moved page's own write went through, so its address has changed whatever happened after.
+                setErrors({ [current]: `${message} ${pageName(node)} was moved, but the order was only partly saved.` });
+                if (pending.length > 0) setOffers(pending);
+            } else {
+                setErrors({ [current]: message });
+            }
         } finally {
             invalidate();
             setBusy(false);
@@ -158,7 +179,7 @@ export default function PagesPage() {
         setBusy(true);
         setErrors({});
         try {
-            await writePageFields(id, { [PAGE_FIELDS.showInNavigation]: value });
+            await writePageFields(id, { [options.showInNavigation]: value });
             const node = forest.byId.get(id);
             setAnnouncement(`${node ? pageName(node) : 'Page'} ${value ? 'shown in' : 'hidden from'} navigation.`);
         } catch (error) {
@@ -173,6 +194,11 @@ export default function PagesPage() {
         <>
             {header}
             {truncatedNotice}
+            {!canMove && (
+                <p className="text-muted-foreground mb-4 text-sm">
+                    Moving is off while pages are missing, because a move renumbers the pages next to it.
+                </p>
+            )}
             {offers && <RedirectOfferPanel offers={offers} onDone={() => setOffers(null)} />}
             {forest.rootIds.length === 0 ? (
                 <EmptyState
@@ -181,16 +207,20 @@ export default function PagesPage() {
                     description="Create the first page, then add pages under it to build the tree."
                     action={
                         <Button asChild size="sm">
-                            <Link href={NEW_PAGE_HREF}>New page</Link>
+                            <Link href={newPageHref(options.contentType)}>New page</Link>
                         </Button>
                     }
                 />
             ) : (
                 <PageTree
                     forest={forest}
+                    options={options}
                     busy={busy}
+                    canMove={canMove}
+                    focus={focus}
+                    onFocused={() => setFocus(null)}
                     errors={errors}
-                    onMove={(id, targetId, position) => void move(id, targetId, position)}
+                    onMove={(id, targetId, position, via) => void move(id, targetId, position, via)}
                     onToggleNavigation={(id, value) => void toggleNavigation(id, value)}
                     onChangeSlug={slugField ? setRenaming : undefined}
                 />
@@ -203,6 +233,7 @@ export default function PagesPage() {
                     forest={forest}
                     id={renaming}
                     slugField={slugField}
+                    homeSlug={options.homeSlug}
                     onClose={() => setRenaming(null)}
                     onSaved={(next) => {
                         setRenaming(null);
@@ -324,12 +355,14 @@ function ChangeSlugDialog({
     forest,
     id,
     slugField,
+    homeSlug,
     onClose,
     onSaved,
 }: {
     forest: PageForest;
     id: string;
     slugField: string;
+    homeSlug: string | null;
     onClose: () => void;
     onSaved: (offers: RedirectOffer[]) => void;
 }) {
@@ -341,14 +374,14 @@ function ChangeSlugDialog({
 
     if (!node) return null;
     const trimmed = slug.trim();
-    const preview = trimmed ? pathOf(forest, id, { slug: { id, slug: trimmed } }) : null;
+    const preview = trimmed ? pathOf(forest, id, { slug: { id, slug: trimmed } }, homeSlug) : null;
 
     const save = async () => {
         setSaving(true);
         setError(null);
         try {
             await writePageFields(id, { [slugField]: trimmed });
-            onSaved(redirectOffers(forest, id, { slug: { id, slug: trimmed } }));
+            onSaved(redirectOffers(forest, id, { slug: { id, slug: trimmed } }, homeSlug));
         } catch (e) {
             setError(failure(e, 'The slug could not be saved.'));
             setSaving(false);
