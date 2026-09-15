@@ -39,8 +39,12 @@ export interface PageTreeActions {
     busy: boolean;
     /** False while the tree is missing pages. */
     canMove: boolean;
-    /** The move button to put focus back on once a keyboard move has been saved. */
-    focus: { id: string; move: KeyMove } | null;
+    /**
+     * The move button to put focus back on once a keyboard move has been saved, and the tree it was
+     * pressed in. It is applied once, to the tree read after the move, then cleared through `onFocused`.
+     */
+    focus: { id: string; move: KeyMove; forest: PageForest } | null;
+    onFocused: () => void;
     /** A message per page id, shown on that page's row. */
     errors: Record<string, string>;
     onMove: (id: string, targetId: string, position: DropPosition, via: 'drag' | KeyMove) => void;
@@ -124,14 +128,17 @@ function PageRow({ id, ...actions }: PageTreeActions & { id: string }) {
     }, [id]);
 
     // A move re-renders the tree, and a page that changed parent is a new row, so the button that was
-    // pressed is gone. Focus goes back to the same button on the new row, unless it has moved on.
-    const focusMove = focus?.id === id ? focus.move : null;
+    // pressed is gone. Focus goes back to the same button on the new row, unless it has moved on, and
+    // only once: a later refetch must not pull focus back to it.
+    const pending = focus?.id === id && focus.forest !== forest ? focus.move : null;
     useEffect(() => {
-        if (busy || !focusMove) return;
+        if (busy || !pending) return;
         const active = document.activeElement;
-        if (active && active !== document.body) return;
-        rowRef.current?.querySelector<HTMLElement>(`[data-move="${focusMove}"]`)?.focus();
-    }, [busy, focusMove, forest]);
+        if (!active || active === document.body) {
+            rowRef.current?.querySelector<HTMLElement>(`[data-move="${pending}"]`)?.focus();
+        }
+        latest.current.onFocused();
+    }, [busy, pending, forest]);
 
     if (!node) return null;
     const name = pageName(node);

@@ -60,7 +60,7 @@ export default function PagesPage() {
     const [announcement, setAnnouncement] = useState('');
     const [offers, setOffers] = useState<RedirectOffer[] | null>(null);
     const [renaming, setRenaming] = useState<string | null>(null);
-    const [focus, setFocus] = useState<{ id: string; move: KeyMove } | null>(null);
+    const [focus, setFocus] = useState<{ id: string; move: KeyMove; forest: PageForest } | null>(null);
 
     const options = data?.kind === 'tree' ? data.options : PAGE_FIELDS;
     const pageType = schemas?.find((s) => s.name.toLowerCase() === options.contentType.toLowerCase());
@@ -139,7 +139,7 @@ export default function PagesPage() {
         setBusy(true);
         setErrors({});
         setOffers(null);
-        setFocus(via === 'drag' ? null : { id, move: via });
+        setFocus(via === 'drag' ? null : { id, move: via, forest });
         let current = id;
         let movedSaved = false;
         try {
@@ -218,6 +218,7 @@ export default function PagesPage() {
                     busy={busy}
                     canMove={canMove}
                     focus={focus}
+                    onFocused={() => setFocus(null)}
                     errors={errors}
                     onMove={(id, targetId, position, via) => void move(id, targetId, position, via)}
                     onToggleNavigation={(id, value) => void toggleNavigation(id, value)}

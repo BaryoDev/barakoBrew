@@ -334,6 +334,13 @@ describe('Pages screen', () => {
             ),
         );
         expect(document.activeElement).not.toBe(button);
+
+        // Applied once: a later refetch does not pull focus back after it has moved on.
+        (document.activeElement as HTMLElement).blur();
+        fireEvent.click(within(rowOf('Contact')).getByRole('switch'));
+        await waitFor(() => expect(reads).toBe(3));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+        expect(document.activeElement).toBe(document.body);
     });
 
     it('saves the navigation switch through the same update', async () => {
