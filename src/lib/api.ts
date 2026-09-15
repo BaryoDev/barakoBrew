@@ -208,8 +208,9 @@ api.interceptors.response.use(
                 original.headers.Authorization = `Bearer ${token}`;
                 return api(original);
             }
-            if (!window.location.pathname.startsWith('/login')) {
-                window.location.href = '/login';
+            const login = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/login`;
+            if (!window.location.pathname.startsWith(login)) {
+                window.location.href = login;
             }
         }
         return Promise.reject(error);

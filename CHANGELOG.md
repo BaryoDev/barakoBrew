@@ -86,6 +86,9 @@ moved. Which API a console works against is stated per release instead.
 
 ### Fixed
 
+- **An expired session keeps the base path.** When a token refresh failed, the console sent the
+  browser to `/login` at the domain root, so a build with `NEXT_BASE_PATH` (the playground and
+  barakocms.com) left the console. It now goes to `{base path}/login`.
 - **The PWA installs screen crashed on load** with `filter is not a function`. It read
   `GET /api/pwa/installs` as a bare list, but the API returns the paged envelope and has since
   barakoCMS 4.0.0. The screen now reads `items`, asks for the largest page the API serves (100), and
