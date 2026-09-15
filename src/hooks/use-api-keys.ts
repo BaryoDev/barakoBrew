@@ -29,11 +29,19 @@ export interface CreatedApiKey extends ApiKey {
 /** The scopes a key can hold. Mirrors the backend ApiKeyScopes; content surface only. */
 export const API_KEY_SCOPES: { value: string; label: string; description: string }[] = [
   { value: 'content:read', label: 'Read content', description: 'List and read entries' },
-  { value: 'content:write', label: 'Write content', description: 'Create, update, delete entries' },
+  { value: 'content:write', label: 'Write content', description: 'Create, update and delete entries (not erase or rollback)' },
+  {
+    value: 'content:destructive',
+    label: 'Erase and roll back content',
+    description: 'Erase entries permanently and roll back versions',
+  },
   { value: 'contenttype:read', label: 'Read content types', description: 'Read schemas' },
   { value: 'contenttype:write', label: 'Write content types', description: 'Create, update schemas' },
   { value: '*', label: 'Full content access', description: 'Everything on the content API' },
 ];
+
+/** Scopes that allow changes nobody can undo, `*` included. Selecting one shows a warning before the key is created. */
+export const DESTRUCTIVE_API_KEY_SCOPES = ['content:destructive', '*'];
 
 export function useApiKeys() {
   return useQuery({
