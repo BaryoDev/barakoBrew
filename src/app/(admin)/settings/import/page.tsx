@@ -12,6 +12,7 @@ import {
 import { useSchemas } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
+import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { IconTable, IconWarning } from '@/components/icons';
 
@@ -77,6 +78,10 @@ export default function ImportPage() {
 
     const mapped = Object.values(mapping).filter((field) => field !== SKIP).length;
 
+    // The import is built from the preview rows because the bulk create takes records, not a file, so
+    // rows the analyze step did not send back cannot be imported from here (barakoCMS#870).
+    const leftOut = preview?.truncated ? Math.max(preview.rowCount - preview.rows.length, 0) : 0;
+
     async function onFile(file: File) {
         setReport(null);
         try {
@@ -108,6 +113,20 @@ export default function ImportPage() {
         }
     }
 
+    function importButton(onClick?: () => void) {
+        return (
+            <Button
+                className="mt-4"
+                disabled={!contentType || mapped === 0 || records.length === 0 || bulkCreate.isPending}
+                onClick={onClick}
+            >
+                {bulkCreate.isPending
+                    ? 'Importing...'
+                    : `Import ${records.length} ${records.length === 1 ? 'entry' : 'entries'}`}
+            </Button>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <PageHeader
@@ -118,8 +137,8 @@ export default function ImportPage() {
             <section className={CARD}>
                 <h2 className="text-[15px] font-bold">1. Choose a file</h2>
                 <p className="text-muted-foreground mt-1 text-[13px]">
-                    Parsed here and shown back to you. A large sheet is previewed in part and imported in
-                    full.
+                    Parsed here and shown back to you. A very large sheet is only read in part, and the
+                    page says how many of its rows can be imported before you import.
                 </p>
 
                 <input
@@ -153,7 +172,7 @@ export default function ImportPage() {
                         <p className="text-muted-foreground mt-1 text-[13px]">
                             {preview.rowCount} {preview.rowCount === 1 ? 'row' : 'rows'}, {preview.columnCount}{' '}
                             {preview.columnCount === 1 ? 'column' : 'columns'}.
-                            {preview.truncated && ' Only the first part is previewed.'}
+                            {preview.truncated && ` Only the first ${preview.rows.length} are shown and can be imported.`}
                         </p>
 
                         <div className="mt-4 overflow-x-auto">
@@ -258,15 +277,29 @@ export default function ImportPage() {
                             </p>
                         )}
 
-                        <Button
-                            className="mt-4"
-                            disabled={!contentType || mapped === 0 || records.length === 0 || bulkCreate.isPending}
-                            onClick={() => void onImport()}
-                        >
-                            {bulkCreate.isPending
-                                ? 'Importing...'
-                                : `Import ${records.length} ${records.length === 1 ? 'entry' : 'entries'}`}
-                        </Button>
+                        {leftOut > 0 && (
+                            <p className="mt-3 flex items-start gap-2 text-[13px]" role="status">
+                                <IconWarning className="mt-0.5 size-4 shrink-0" />
+                                <span>
+                                    This sheet has {preview.rowCount} rows. Only the first {preview.rows.length} can
+                                    be imported from the console, so the last {leftOut}{' '}
+                                    {leftOut === 1 ? 'row' : 'rows'} will not be imported. Split the sheet to import
+                                    the rest.
+                                </span>
+                            </p>
+                        )}
+
+                        {leftOut > 0 ? (
+                            <ConfirmDialog
+                                trigger={importButton()}
+                                title="Import only part of this sheet?"
+                                description={`${records.length} ${records.length === 1 ? 'entry' : 'entries'} will be created from the first ${preview.rows.length} rows. The last ${leftOut} ${leftOut === 1 ? 'row' : 'rows'} of the sheet will not be imported.`}
+                                confirmLabel={`Import ${records.length} ${records.length === 1 ? 'entry' : 'entries'}`}
+                                onConfirm={() => void onImport()}
+                            />
+                        ) : (
+                            importButton(() => void onImport())
+                        )}
 
                         {report && <ReportSummary report={report} />}
                     </section>
