@@ -25,11 +25,15 @@ export type BlockSchemaState =
     | { status: 'unavailable'; url: string }
     | { status: 'ready'; url: string; schema: BlockSchema };
 
+/** How long the schema read waits for the site before the field is edited as JSON. */
+export const BLOCK_SCHEMA_TIMEOUT_MS = 5000;
+
 /**
  * The block schema the site publishes at `/api/blocks`.
  *
  * A plain fetch and not the API client: the document is public, lives on another origin, and must
- * never be sent the session's bearer token.
+ * never be sent the session's bearer token. It has its own timeout, since a site that accepts the
+ * connection and never answers would otherwise leave the field loading for good.
  */
 export function useBlockSchema(): BlockSchemaState {
     const base = getPressUrl();
@@ -38,7 +42,11 @@ export function useBlockSchema(): BlockSchemaState {
         queryKey: ['block-schema', url],
         enabled: url !== null,
         queryFn: async () => {
-            const response = await fetch(url!, { credentials: 'omit', headers: { accept: 'application/json' } });
+            const response = await fetch(url!, {
+                credentials: 'omit',
+                headers: { accept: 'application/json' },
+                signal: AbortSignal.timeout(BLOCK_SCHEMA_TIMEOUT_MS),
+            });
             if (!response.ok) throw new Error(`GET ${url} answered ${response.status}`);
             const schema = parseBlockSchema(await response.json());
             if (!schema) throw new Error(`${url} is not a block schema this console reads`);
