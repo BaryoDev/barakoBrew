@@ -142,25 +142,28 @@ describe('recording what the last response said', () => {
  * Everything above derives its input from SUPPORTED_CONTRACT, so it passes whatever the range holds
  * and proves nothing about the range itself. These are literal on purpose: 1 is what barakoCMS sent
  * up to 4.0.1, 2 is what the release enforcing slug uniqueness sends (BaryoDev/barakoCMS#717), 3 is
- * 4.1.0, which refuses the seeded role names (BaryoDev/barakoCMS#740), and a console that speaks
+ * 4.1.0, which refuses the seeded role names (BaryoDev/barakoCMS#740), 4 is 4.2.0, which answers a locked
+ * account like a wrong password (BaryoDev/barakoCMS#640) and caps fields per content type
+ * (BaryoDev/barakoCMS#650), and a console that speaks
  * only some of them goes blank against the rest.
  *
  * Widening the range is a decision about what this build handles, not a number carried along, so
  * these have to be edited by hand when it moves.
  */
 describe('the contract versions this build speaks', () => {
-    it('speaks 1, 2 and 3', () => {
-        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 3 });
+    it('speaks 1, 2, 3 and 4', () => {
+        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 4 });
     });
 
     it('accepts both of them from a response', () => {
         expect(classifyContract('1')).toEqual({ kind: 'ok', version: 1 });
         expect(classifyContract('2')).toEqual({ kind: 'ok', version: 2 });
         expect(classifyContract('3')).toEqual({ kind: 'ok', version: 3 });
+        expect(classifyContract('4')).toEqual({ kind: 'ok', version: 4 });
     });
 
-    it('still refuses 0 as too old and 4 as too new', () => {
+    it('still refuses 0 as too old and 5 as too new', () => {
         expect(classifyContract('0')).toEqual({ kind: 'api-older', version: 0 });
-        expect(classifyContract('4')).toEqual({ kind: 'api-newer', version: 4 });
+        expect(classifyContract('5')).toEqual({ kind: 'api-newer', version: 5 });
     });
 });

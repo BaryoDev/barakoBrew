@@ -9,6 +9,13 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **Speaks API contracts 1 to 4.** barakoCMS 4.2.0 moves the contract to 4: a locked account is answered
+  like a wrong password (BaryoDev/barakoCMS#640) and a content type holds at most 200 fields
+  (BaryoDev/barakoCMS#650). This console works against 4.1.x and 4.2.0, so upgrade the console before
+  the API.
+
 ### Added
 
 - **Site mode, the holding page and share links on the Site screen.** A Mode select (Live or
