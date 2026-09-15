@@ -61,8 +61,8 @@ function idPart(value: string) {
  * A page's blocks, edited as a list built from the block schema the site publishes.
  *
  * Every move is a button as well as a drag, so the list works from the keyboard. A block the schema
- * does not list is shown with its props and kept on save. Without a schema, or with a value that is
- * not a list, the field is the JSON editor it was before.
+ * does not list is shown with its props and kept on save. Without a schema, while it is still being
+ * read, or with a value that is not a list, the field is the JSON editor it was before.
  */
 export function BlocksField({
     displayName,
@@ -108,7 +108,7 @@ export function BlocksField({
 
             <SchemaNote state={state} readable={blocks !== null} />
 
-            {state.status === 'loading' ? null : listed ? (
+            {listed ? (
                 <>
                     <BlockList
                         ctx={{ schema: state.schema, form, announce: setAnnouncement }}

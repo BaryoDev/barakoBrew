@@ -256,6 +256,20 @@ describe('a page without a block schema', () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('keeps the JSON editor while the schema is still being read, and gives the read a timeout', async () => {
+        fetchMock = vi.fn(() => new Promise(() => {}));
+        vi.stubGlobal('fetch', fetchMock);
+        const value = [{ type: 'richText', props: { markdown: 'Hi' } }];
+        renderBlocks(value);
+
+        expect(screen.getByText(/Reading the blocks/)).toBeInTheDocument();
+        const textarea = document.getElementById('Blocks') as HTMLTextAreaElement;
+        expect(textarea.tagName).toBe('TEXTAREA');
+        expect(JSON.parse(textarea.value)).toEqual(value);
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+        expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    });
+
     it('falls back to the JSON editor when the schema cannot be read', async () => {
         serve({ ok: false, status: 404 });
         const value = [{ type: 'pricing', props: { plan: 'Pro' } }];
