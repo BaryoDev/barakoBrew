@@ -34,6 +34,9 @@ const nextConfig: NextConfig = {
   // and ignores this.
   allowedDevOrigins: ["127.0.0.1"],
   ...(basePath ? { basePath, assetPrefix: basePath } : {}),
+  // basePath is applied by the router and Link only. Code that sets window.location itself needs the
+  // prefix too, and this inlines it into the client bundle. Not a secret: it is in every URL.
+  env: { NEXT_PUBLIC_BASE_PATH: basePath ?? "" },
 };
 
 export default nextConfig;
