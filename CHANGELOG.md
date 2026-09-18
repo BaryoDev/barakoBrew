@@ -9,6 +9,8 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-18
+
 ### Changed
 
 - **Speaks API contracts 1 to 4.** barakoCMS 4.2.0 moves the contract to 4: a locked account is answered
