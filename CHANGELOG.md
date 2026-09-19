@@ -9,6 +9,19 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **The block editor picks data bindings, and saves blocks for reuse.** Beside any block field a
+  site says takes one, a Use data control builds `{{scope.Field | format ?? fallback}}` from a scope,
+  a field, a format and a fallback, so nobody types a brace. The scopes and formats come from the
+  site's own `/api/blocks`, and the fields from `GET /api/content-types`, so a deployment that adds
+  either gets it without a console release. Removing a bound field from a content type marks every
+  block that uses it and says what the page will show instead. The palette groups blocks by the
+  layer the site publishes, and a block can be saved as a named block for the tenant, stored in the
+  `Presets` site setting and offered on every page. Needs a barakoPress publishing schema version 2
+  (BaryoDev/barakoPress#33); against one that publishes version 1 the editor is exactly what it was,
+  with no picker, no marks and no extra API reads. (#140)
+
 ## [1.3.0] - 2026-09-18
 
 ### Changed

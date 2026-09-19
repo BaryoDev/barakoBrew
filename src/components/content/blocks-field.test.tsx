@@ -305,7 +305,7 @@ describe('a page without a block schema', () => {
     });
 
     it('falls back when the site publishes a schema version this console does not read', async () => {
-        serve({ ok: true, status: 200, body: { ...SCHEMA, version: 2 } });
+        serve({ ok: true, status: 200, body: { ...SCHEMA, version: 3 } });
         renderBlocks([]);
         expect(await screen.findByText(/could not be read/)).toBeInTheDocument();
         expect(document.getElementById('Blocks')?.tagName).toBe('TEXTAREA');

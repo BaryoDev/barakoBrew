@@ -4,6 +4,7 @@ import {
     countBlocks,
     dropIndex,
     fieldDefinitionFor,
+    isBindable,
     move,
     newBlock,
     parseBlockSchema,
@@ -64,7 +65,7 @@ describe('reading a published block schema', () => {
     });
 
     it('refuses a version it does not know, rather than guessing what the keys mean', () => {
-        expect(parseBlockSchema({ ...PUBLISHED, version: 2 })).toBeNull();
+        expect(parseBlockSchema({ ...PUBLISHED, version: 3 })).toBeNull();
         expect(parseBlockSchema([])).toBeNull();
         expect(parseBlockSchema({ version: 1 })).toBeNull();
     });
@@ -175,21 +176,21 @@ describe('editing a block keeps what the editor does not understand', () => {
 
 describe('validating a block against the schema', () => {
     it('reports a missing required prop', () => {
-        expect(validateBlock(byType('image'), { type: 'image', props: { alt: 'A' } })).toEqual({
+        expect(validateBlock(schema, byType('image'), { type: 'image', props: { alt: 'A' } })).toEqual({
             src: 'Required. The site does not show this block without it.',
         });
     });
 
     it('refuses a link the site would refuse to render', () => {
-        const errors = validateBlock(byType('image'), { type: 'image', props: { src: 'javascript:alert(1)' } });
+        const errors = validateBlock(schema, byType('image'), { type: 'image', props: { src: 'javascript:alert(1)' } });
         expect(Object.keys(errors)).toEqual(['src']);
         expect(errors.src).toMatch(/link/);
-        expect(validateBlock(byType('image'), { type: 'image', props: { src: 'https://x.test/a.png' } })).toEqual({});
-        expect(validateBlock(byType('image'), { type: 'image', props: { src: '/a.png' } })).toEqual({});
+        expect(validateBlock(schema, byType('image'), { type: 'image', props: { src: 'https://x.test/a.png' } })).toEqual({});
+        expect(validateBlock(schema, byType('image'), { type: 'image', props: { src: '/a.png' } })).toEqual({});
     });
 
     it('checks a number against its range, a select against its options and a type against its kind', () => {
-        const errors = validateBlock(byType('collection'), {
+        const errors = validateBlock(schema, byType('collection'), {
             type: 'collection',
             props: { collection: 'category', limit: 30, featured: 'yes', heading: 42 },
         });
@@ -203,8 +204,8 @@ describe('validating a block against the schema', () => {
 
     it('checks how many lists a slots field holds', () => {
         const five = { type: 'columns', props: { columns: [[], [], [], [], []] } };
-        expect(validateBlock(byType('columns'), five)).toEqual({ columns: 'Has to be a number of lists from 1 to 4.' });
-        expect(validateBlock(byType('columns'), { type: 'columns', props: { columns: [[], []] } })).toEqual({});
+        expect(validateBlock(schema, byType('columns'), five)).toEqual({ columns: 'Has to be a number of lists from 1 to 4.' });
+        expect(validateBlock(schema, byType('columns'), { type: 'columns', props: { columns: [[], []] } })).toEqual({});
     });
 
     it('does not check a kind this console does not know', () => {
@@ -212,8 +213,8 @@ describe('validating a block against the schema', () => {
             version: 1,
             blocks: [{ type: 'map', fields: [{ name: 'at', kind: 'geopoint', required: true }] }],
         })!.blocks[0];
-        expect(validateBlock(type, { type: 'map', props: { at: { lat: 1, lng: 2 } } })).toEqual({});
-        expect(validateBlock(type, { type: 'map', props: {} })).toHaveProperty('at');
+        expect(validateBlock(schema, type, { type: 'map', props: { at: { lat: 1, lng: 2 } } })).toEqual({});
+        expect(validateBlock(schema, type, { type: 'map', props: {} })).toHaveProperty('at');
     });
 });
 
@@ -227,3 +228,125 @@ describe('counting blocks the way the site spends its budget', () => {
         expect(countBlocks(schema, list)).toBe(6);
     });
 });
+
+/** What barakoPress publishes from the branch that adds bindings, presets and layers. */
+const PUBLISHED_V2 = {
+    version: 2,
+    bindings: {
+        scopes: ['site', 'page', 'item', 'query', 'props'],
+        formats: ['text', 'date', 'datetime', 'time', 'money', 'number', 'upper', 'lower'],
+    },
+    blocks: [
+        {
+            type: 'text',
+            label: 'Text',
+            layer: 'primitive',
+            perViewer: false,
+            fields: [
+                { name: 'value', kind: 'text', required: true, bindable: true },
+                { name: 'variant', kind: 'select', options: ['meta', 'title'], bindable: true },
+            ],
+        },
+        {
+            type: 'link',
+            label: 'Link',
+            layer: 'primitive',
+            perViewer: false,
+            fields: [{ name: 'href', kind: 'url', required: true, bindable: true }],
+        },
+        {
+            type: 'source',
+            label: 'Load content',
+            layer: 'data',
+            perViewer: false,
+            fields: [
+                { name: 'collection', kind: 'select', required: true, options: ['post'], bindable: true },
+                { name: 'pageSize', kind: 'number', min: 1, max: 50, bindable: false },
+            ],
+        },
+    ],
+};
+
+const v2 = parseBlockSchema(PUBLISHED_V2) as BlockSchema;
+
+describe('reading a version 2 schema, which adds keys to version 1', () => {
+    it('reads the scopes and formats the site published, and does not invent any', () => {
+        expect(v2.version).toBe(2);
+        expect(v2.bindings).toEqual(PUBLISHED_V2.bindings);
+    });
+
+    it('reads the layer each block belongs to', () => {
+        expect(v2.blocks.map((b) => b.layer)).toEqual(['primitive', 'primitive', 'data']);
+    });
+
+    it('reads bindable per field, and is not fooled by a number that says it is', () => {
+        const source = v2.blocks.find((b) => b.type === 'source')!;
+        expect(isBindable(v2, source.fields[0])).toBe(true);
+        expect(isBindable(v2, source.fields[1])).toBe(false);
+    });
+
+    it('publishes no bindings for a version 1 site, so no field takes one', () => {
+        expect(schema.bindings).toBeNull();
+        const image = byType('image');
+        expect(image.fields.every((f) => !isBindable(schema, f))).toBe(true);
+        expect(image.fields.length).toBeGreaterThan(0);
+    });
+
+    it('reads no bindings from a version 1 document claiming a bindable field', () => {
+        const parsed = parseBlockSchema({
+            version: 1,
+            blocks: [{ type: 'text', fields: [{ name: 'value', kind: 'text', bindable: true }] }],
+        })!;
+        expect(parsed.bindings).toBeNull();
+        expect(parsed.blocks[0].fields[0].bindable).toBe(false);
+        expect(isBindable(parsed, { name: 'value', kind: 'text', bindable: true })).toBe(false);
+        expect(isBindable(v2, { name: 'value', kind: 'text', bindable: true })).toBe(true);
+    });
+
+    it('reads no bindings from a version 2 document whose bindings are not a shape it can use', () => {
+        expect(parseBlockSchema({ version: 2, bindings: { scopes: [] }, blocks: [] })!.bindings).toBeNull();
+        expect(parseBlockSchema({ version: 2, blocks: [] })!.bindings).toBeNull();
+    });
+
+    it('gives every block of a version 1 site the same layer, so the palette shows one group', () => {
+        expect(new Set(schema.blocks.map((b) => b.layer))).toEqual(new Set(['block']));
+    });
+});
+
+describe('validating a prop that holds a binding', () => {
+    it('accepts a link that is a binding, since what it resolves to is checked on the server', () => {
+        expect(validateBlock(v2, byTypeIn(v2, 'link'), { type: 'link', props: { href: '{{item.Url}}' } })).toEqual({});
+    });
+
+    it('refuses a link prefixed with a scheme the site refuses, binding or not', () => {
+        const errors = validateBlock(v2, byTypeIn(v2, 'link'), {
+            type: 'link',
+            props: { href: 'javascript:{{item.Url}}' },
+        });
+        expect(errors.href).toMatch(/link/);
+    });
+
+    it('accepts a select holding a binding, because a preset passes a tone through as text', () => {
+        expect(validateBlock(v2, byTypeIn(v2, 'text'), { type: 'text', props: { value: 'x', variant: '{{props.tone}}' } })).toEqual(
+            {},
+        );
+    });
+
+    it('refuses a select holding text that is not a binding and not an option', () => {
+        const errors = validateBlock(v2, byTypeIn(v2, 'text'), { type: 'text', props: { value: 'x', variant: 'huge' } });
+        expect(errors.variant).toMatch(/one of/);
+    });
+
+    it('checks a bound value literally on a site that publishes no bindings, since it renders it literally', () => {
+        const v1 = parseBlockSchema({
+            version: 1,
+            blocks: [{ type: 'link', fields: [{ name: 'href', kind: 'url', required: true }] }],
+        })!;
+        const errors = validateBlock(v1, v1.blocks[0], { type: 'link', props: { href: '{{item.Url}}' } });
+        expect(errors.href).toMatch(/link/);
+    });
+});
+
+function byTypeIn(from: BlockSchema, type: string) {
+    return from.blocks.find((b) => b.type === type)!;
+}

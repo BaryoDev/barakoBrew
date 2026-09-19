@@ -117,6 +117,7 @@ function FieldControl({
                 error={error}
                 onChange={onChange}
                 form={DynamicForm}
+                contentType={contentType}
                 json={
                     <JsonField
                         field={field}
