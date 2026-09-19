@@ -2,14 +2,21 @@
  * The block model a site renders a page from, and the operations the block editor performs on it.
  *
  * A page holds an ordered list of `{ type, props }` in a json field. barakoPress publishes what it
- * can render at `GET /api/blocks` as `{ version: 1, blocks: [{ type, label, perViewer, fields }] }`,
- * and this console builds the editor from that document alone. It knows nothing about any site.
+ * can render at `GET /api/blocks`, and this console builds the editor from that document alone. It
+ * knows nothing about any site.
+ *
+ * Version 1 is `{ version: 1, blocks: [{ type, label, perViewer, fields }] }`. Version 2 adds three
+ * things over it, all additive: `bindings` naming the scopes and formats a placeholder may use,
+ * `layer` on each block, and `bindable` on each field. A version 1 site publishes no `bindings`, and
+ * the editor is then exactly what it was before: no binding picker anywhere, and no field marked
+ * for holding one.
  *
  * Every operation keeps what it does not understand. A block whose type the schema does not list, a
  * prop no field declares, and a key beside `type` and `props` all survive an edit and a save.
  */
 
 import type { FieldDefinition } from '@/types/schema';
+import { hasBinding, withoutBindings } from '@/lib/bindings';
 
 export type BlockFieldKind = 'text' | 'markdown' | 'url' | 'number' | 'boolean' | 'select' | 'slots';
 
@@ -22,18 +29,58 @@ export interface BlockField {
     options?: string[];
     min?: number;
     max?: number;
+    /**
+     * Whether the stored value may hold `{{scope.Path}}` placeholders. Published resolved by the
+     * site from version 2, so the console reads one answer rather than reimplementing the default.
+     * Absent from a version 1 schema, which is read as no field binding anything.
+     */
+    bindable?: boolean;
 }
+
+/** What a block is for. `block` is what a version 1 schema's blocks all are. */
+export type BlockLayer = 'primitive' | 'preset' | 'data' | 'block';
 
 export interface BlockType {
     type: string;
     label: string;
+    layer: BlockLayer | (string & {});
     perViewer: boolean;
     fields: BlockField[];
+    /** A preset's body, for a block the tenant defined rather than the site. */
+    preset?: unknown;
+}
+
+/** The scopes and formats a placeholder may name, exactly as the site published them. */
+export interface BlockBindings {
+    scopes: string[];
+    formats: string[];
 }
 
 export interface BlockSchema {
-    version: 1;
+    version: 1 | 2;
+    /** Null from a site that publishes none, which is every version 1 site. */
+    bindings: BlockBindings | null;
     blocks: BlockType[];
+}
+
+/** The order the palette groups layers in: parts first, then arrangements, then the data blocks. */
+export const LAYER_ORDER: readonly string[] = ['primitive', 'block', 'data', 'preset'];
+
+export const LAYER_LABELS: Record<string, string> = {
+    primitive: 'Parts',
+    block: 'Blocks',
+    data: 'Content and conditions',
+    preset: 'Saved blocks',
+};
+
+/**
+ * Whether this console offers a binding picker for a field.
+ *
+ * Both halves matter. A site that publishes no `bindings` renders no placeholder, so offering one
+ * would write `{{site.Name}}` into a page that shows those characters to a visitor.
+ */
+export function isBindable(schema: BlockSchema, field: BlockField): boolean {
+    return schema.bindings !== null && field.bindable === true;
 }
 
 export type BlockItem = Record<string, unknown>;
@@ -55,15 +102,36 @@ function finite(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function stringList(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v !== '') : [];
+}
+
+/**
+ * The scopes and formats, or null when the site published none this console can use.
+ *
+ * Null rather than empty lists on purpose: a scope list with nothing in it and no scope list at all
+ * both mean the same thing here, which is that nothing is bindable.
+ */
+function parseBindings(raw: unknown): BlockBindings | null {
+    if (!isRecord(raw)) return null;
+    const scopes = stringList(raw.scopes);
+    const formats = stringList(raw.formats);
+    if (scopes.length === 0) return null;
+    return { scopes, formats: formats.length > 0 ? formats : ['text'] };
+}
+
 /**
  * The schema a site published, or null when the document is not one this console can build from.
  *
- * A version other than 1 is refused whole, since a later shape may mean something different by the
- * same keys. Within version 1, an entry with no type or a field with no name is skipped rather than
- * failing everything else.
+ * Version 1 and version 2 are both read, because version 2 only adds keys. A third version is
+ * refused whole, since a later shape may mean something different by the same keys. Within a
+ * version, an entry with no type or a field with no name is skipped rather than failing the rest.
  */
 export function parseBlockSchema(raw: unknown): BlockSchema | null {
-    if (!isRecord(raw) || raw.version !== 1 || !Array.isArray(raw.blocks)) return null;
+    if (!isRecord(raw) || !Array.isArray(raw.blocks)) return null;
+    const version = raw.version === 1 ? 1 : raw.version === 2 ? 2 : null;
+    if (version === null) return null;
+    const bindings = version === 2 ? parseBindings(raw.bindings) : null;
     const blocks: BlockType[] = [];
     const seen = new Set<string>();
     for (const entry of raw.blocks) {
@@ -80,16 +148,20 @@ export function parseBlockSchema(raw: unknown): BlockSchema | null {
                 options: Array.isArray(f.options) ? f.options.filter((o): o is string => typeof o === 'string') : undefined,
                 min: finite(f.min),
                 max: finite(f.max),
+                // Only a site that publishes bindings can render one, so a stray `bindable` on a
+                // version 1 document is not read as permission to write a placeholder.
+                bindable: bindings !== null && f.bindable === true,
             });
         }
         blocks.push({
             type: entry.type,
             label: typeof entry.label === 'string' && entry.label ? entry.label : entry.type,
+            layer: typeof entry.layer === 'string' && entry.layer ? entry.layer : 'block',
             perViewer: entry.perViewer === true,
             fields,
         });
     }
-    return { version: 1, blocks };
+    return { version, bindings, blocks };
 }
 
 /** A stored value as a list of blocks. Nothing stored reads as empty; anything but a list is null. */
@@ -228,12 +300,29 @@ function inRange(field: BlockField, n: number) {
 }
 
 /**
+ * The most harmless value of a field's kind, which is what barakoPress puts in a placeholder's
+ * place before it checks a bindable prop.
+ *
+ * So `{{site.Url}}` passes a link field and `javascript:{{site.Url}}` does not, whatever the
+ * binding turns out to hold. What it does hold is checked again on the server after it resolves.
+ */
+function standInFor(field: BlockField): string {
+    if (field.kind === 'url') return '/x';
+    if (field.kind === 'select') return field.options?.[0] ?? 'x';
+    return 'x';
+}
+
+/**
  * What is wrong with each prop of a block, by field name, checked the way barakoPress checks it.
  *
  * The site skips a block with any wrong prop, required or not, so these are what would make it
  * disappear from the page. A kind this console does not know is not checked.
+ *
+ * A bindable prop holding a placeholder is checked with the placeholder stood in for, because what
+ * is stored is a template and not the value. A field whose site no longer exists, or whose site
+ * never published bindings, is checked as the literal text it is.
  */
-export function validateBlock(type: BlockType, item: unknown): Record<string, string> {
+export function validateBlock(schema: BlockSchema, type: BlockType, item: unknown): Record<string, string> {
     const props = propsOf(item);
     const errors: Record<string, string> = {};
     for (const field of type.fields) {
@@ -242,7 +331,11 @@ export function validateBlock(type: BlockType, item: unknown): Record<string, st
             if (field.required) errors[field.name] = 'Required. The site does not show this block without it.';
             continue;
         }
-        const message = problem(field, value);
+        const checked =
+            isBindable(schema, field) && typeof value === 'string' && hasBinding(value)
+                ? withoutBindings(value, standInFor(field))
+                : value;
+        const message = problem(field, checked);
         if (message) errors[field.name] = message;
     }
     return errors;

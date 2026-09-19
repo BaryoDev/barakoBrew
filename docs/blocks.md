@@ -32,6 +32,52 @@ reads `Blocks` on the page type unless its `pageFields.blocks` says otherwise.
 
 Saving is the ordinary entry save, with the entry's version and `If-Match`.
 
+## Data bindings
+
+A site that publishes a version 2 schema also says which scopes and formats it renders, and which
+of a block's fields accept a placeholder. Beside each of those fields the editor shows **Use data**,
+which builds one from a scope, a field, a format and a fallback:
+
+```
+Welcome to {{site.Name}}
+{{item.Price | money ?? Ask us}}
+{{query.class}}
+```
+
+Nobody types the braces. The scope list and the format list come from the site, so a deployment that
+adds either gets it in the picker without a console release. The field list comes from
+`GET /api/content-types`: `site` offers the fields of the `site` type, `page` the fields of the type
+the entry being edited belongs to, and `item` the fields of whatever the enclosing block loads. Each
+also offers the handful of names barakoPress lays over an entry, such as `Title` and `Slug`, so
+`{{item.Title}}` works whatever the field is called. `query` is whatever the address carries, so it
+takes a typed name.
+
+`item` only holds a row inside a block that loads content or repeats over it. The picker says so
+rather than hiding the option.
+
+A binding is never resolved here. barakoPress resolves it on the server as the request's tenant, so
+no binding makes a visitor's browser call the API.
+
+### When a bound field goes away
+
+Remove a field from a content type and every block binding it says so: the row shows how many data
+problems it has, and the field says which name is gone and what the page will show instead, which is
+the fallback or nothing. It is a warning and not an error, because the page still renders.
+
+## Saved blocks
+
+A saved block, which barakoPress calls a preset, is a named arrangement of blocks stored as data in
+the `Presets` field of the tenant's `site` entry. It is not code, so one published barakoPress image
+serves every site and each one has its own.
+
+Open a block and choose **Save as a reusable block** to store it, with a name and a palette label.
+Every `{{props.X}}` inside it becomes a setting the block asks for where it is used. Saved blocks
+appear in the palette under Saved blocks, and a saved block never replaces one the site ships: the
+site ignores such a name, so the editor does too.
+
+The site type needs a JSON field called `Presets` for this. Without one the palette says so and
+nothing offers to save.
+
 ## What it keeps
 
 - A block whose type the schema does not list is shown read-only with its props, can be moved or
@@ -42,10 +88,20 @@ Saving is the ordinary entry save, with the entry's version and `If-Match`.
 ## When there is no schema
 
 With no `NEXT_PUBLIC_PRESS_URL`, when `/api/blocks` cannot be read, when it publishes a schema version
-other than 1, or when the stored value is not a list, the field is the JSON editor it always was,
-with a note saying why.
+this console does not read, or when the stored value is not a list, the field is the JSON editor it
+always was, with a note saying why.
+
+## Against a site that publishes version 1
+
+A version 1 schema has no `bindings` key, so the editor offers no binding picker, marks no data
+problems, reads no content types and no site settings, and shows one palette with no layer headings.
+That is the editor exactly as it was before bindings existed, which is what an older barakoPress
+renders correctly: it prints `{{site.Name}}` as those characters, so offering to write one would be
+putting a mistake into a page.
 
 ## The schema the editor expects
+
+Version 1:
 
 ```json
 {
@@ -73,6 +129,33 @@ with a note saying why.
 | `boolean`  | switch                                   | true or false                  |
 | `select`   | a select of `options`                    | one of `options`               |
 | `slots`    | a list of block lists, `min` to `max`    | array of arrays of blocks      |
+
+Version 2 adds three things, all optional to a reader and all additive:
+
+```json
+{
+    "version": 2,
+    "bindings": {
+        "scopes": ["site", "page", "item", "query", "props"],
+        "formats": ["text", "date", "datetime", "time", "money", "number", "upper", "lower"]
+    },
+    "blocks": [
+        {
+            "type": "text",
+            "label": "Text",
+            "layer": "primitive",
+            "perViewer": false,
+            "fields": [{ "name": "value", "kind": "text", "required": true, "bindable": true }]
+        }
+    ]
+}
+```
+
+| Key        | Means                                                                          |
+| ---------- | ------------------------------------------------------------------------------ |
+| `bindings` | The scopes and formats a placeholder may name. Absent means no picker anywhere. |
+| `layer`    | `primitive`, `block`, `data` or `preset`, which is how the palette groups.      |
+| `bindable` | Whether that field's value may hold a placeholder. The site resolves it.        |
 
 The editor warns when a page holds more than 100 blocks in total or nests them more than four levels
 deep, which are the limits barakoPress reads to.

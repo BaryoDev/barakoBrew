@@ -4,11 +4,18 @@ import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode 
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FieldError } from '@/components/content/field-error';
 import type { DynamicFormProps } from '@/components/content/dynamic-form';
 import { IconChevronDown, IconChevronRight, IconMore, IconPlus, IconTrash } from '@/components/icons';
 import { useBlockSchema, type BlockSchemaState } from '@/hooks/use-block-schema';
+import { useSchemas } from '@/hooks/use-schemas';
+import { usePresets } from '@/hooks/use-presets';
+import { BindingControl } from '@/components/content/binding-picker';
+import { bindingProblems, scopesFor, type BindingScope } from '@/lib/binding-scopes';
+import { presetFrom, isPresetName, withPresets, MAX_PRESETS, type BlockPreset } from '@/lib/presets';
+import { SITE_TYPE } from '@/lib/site-settings';
 import {
     blockKey,
     blockSummary,
@@ -17,6 +24,9 @@ import {
     definitionFor,
     dropIndex,
     fieldDefinitionFor,
+    isBindable,
+    LAYER_LABELS,
+    LAYER_ORDER,
     MAX_BLOCKS,
     MAX_DEPTH,
     move,
@@ -32,6 +42,7 @@ import {
     type BlockSchema,
     type BlockType,
 } from '@/lib/blocks';
+import type { ContentTypeDefinition } from '@/types/schema';
 import { cn } from '@/lib/utils';
 
 /*
@@ -40,10 +51,48 @@ import { cn } from '@/lib/utils';
  */
 type Form = ComponentType<DynamicFormProps>;
 
+/**
+ * What the pickers read, gathered once for the whole field.
+ *
+ * Empty for a site that publishes no bindings, which is what turns every picker off at once: a
+ * version 1 barakoPress renders `{{site.Name}}` as those eleven characters, so offering to write
+ * one would be putting a mistake into a page.
+ */
+interface EditorSite {
+    scopeNames: string[];
+    formats: string[];
+    siteType?: ContentTypeDefinition;
+    pageType?: ContentTypeDefinition;
+    typeNamed: (name: string) => ContentTypeDefinition | undefined;
+    presets: BlockPreset[];
+    savePreset: ((preset: BlockPreset) => Promise<void>) | null;
+    presetNote?: string;
+}
+
+const NO_SITE: EditorSite = {
+    scopeNames: [],
+    formats: [],
+    typeNamed: () => undefined,
+    presets: [],
+    savePreset: null,
+};
+
+/** Where one block sits, which is what decides the scopes its props can bind to. */
+interface Spot {
+    depth: number;
+    /** True inside a block that loads content or repeats over it, which is where `item` holds a row. */
+    insideData: boolean;
+    /** The content type the nearest enclosing data block loads, so `item` can list its fields. */
+    itemType?: ContentTypeDefinition;
+}
+
+const ROOT: Spot = { depth: 0, insideData: false };
+
 interface Context {
     schema: BlockSchema;
     form: Form;
     announce: (message: string) => void;
+    site: EditorSite;
 }
 
 type Action = 'up' | 'down' | 'toggle';
@@ -55,6 +104,51 @@ function nameOf(schema: BlockSchema, item: unknown, index: number) {
 
 function idPart(value: string) {
     return value.replace(/[^A-Za-z0-9_-]/g, '-');
+}
+
+/** The palette's groups: the layers the site named, in a fixed order, then any it invented. */
+function byLayer(blocks: readonly BlockType[]): [string, BlockType[]][] {
+    const groups = new Map<string, BlockType[]>();
+    for (const block of blocks) {
+        const layer = groups.get(block.layer);
+        if (layer) layer.push(block);
+        else groups.set(block.layer, [block]);
+    }
+    const order = (layer: string) => {
+        const at = LAYER_ORDER.indexOf(layer);
+        return at === -1 ? LAYER_ORDER.length : at;
+    };
+    return [...groups.entries()].sort((a, b) => order(a[0]) - order(b[0]));
+}
+
+/**
+ * The content type a data block loads, so `{{item.X}}` inside it can list that type's fields.
+ *
+ * Read off the block's own props rather than from a list of block names, because which prop names
+ * a collection is the site's business: whichever string prop holds the name of a content type this
+ * tenant has is the one, and a prop called `collection` wins when there is more than one.
+ */
+function loadedType(ctx: Context, item: unknown): ContentTypeDefinition | undefined {
+    const props = propsOf(item);
+    const names = Object.keys(props).sort((a, b) => Number(b === 'collection') - Number(a === 'collection'));
+    for (const key of names) {
+        const value = props[key];
+        if (typeof value !== 'string') continue;
+        const type = ctx.site.typeNamed(value);
+        if (type) return type;
+    }
+    return undefined;
+}
+
+/** The scopes a prop at this spot may bind to, or none at all from a site that publishes none. */
+function scopesAt(ctx: Context, spot: Spot): BindingScope[] {
+    if (ctx.site.scopeNames.length === 0) return [];
+    return scopesFor(ctx.site.scopeNames, {
+        siteType: ctx.site.siteType,
+        pageType: ctx.site.pageType,
+        itemType: spot.itemType,
+        insideData: spot.insideData,
+    });
 }
 
 /**
@@ -72,6 +166,7 @@ export function BlocksField({
     onChange,
     json,
     form,
+    contentType,
 }: {
     displayName: string;
     label: ReactNode;
@@ -80,6 +175,8 @@ export function BlocksField({
     onChange: (value: unknown) => void;
     json: ReactNode;
     form: Form;
+    /** The type of the entry holding these blocks, which is what `{{page.X}}` reads. */
+    contentType?: string;
 }) {
     const state = useBlockSchema();
     const blocks = readBlocks(value);
@@ -87,7 +184,6 @@ export function BlocksField({
     const [announcement, setAnnouncement] = useState('');
 
     const listed = state.status === 'ready' && blocks !== null && !asJson;
-    const total = state.status === 'ready' && blocks !== null ? countBlocks(state.schema, blocks) : 0;
 
     return (
         <div className="space-y-2">
@@ -108,21 +204,26 @@ export function BlocksField({
 
             <SchemaNote state={state} readable={blocks !== null} />
 
-            {listed ? (
-                <>
-                    <BlockList
-                        ctx={{ schema: state.schema, form, announce: setAnnouncement }}
+            {listed && state.status === 'ready' ? (
+                state.schema.bindings ? (
+                    <WithSiteData schema={state.schema} contentType={contentType}>
+                        {(site, schema) => (
+                            <Editor
+                                ctx={{ schema, form, announce: setAnnouncement, site }}
+                                list={blocks}
+                                name={displayName}
+                                onChange={onChange}
+                            />
+                        )}
+                    </WithSiteData>
+                ) : (
+                    <Editor
+                        ctx={{ schema: state.schema, form, announce: setAnnouncement, site: NO_SITE }}
                         list={blocks}
-                        depth={0}
                         name={displayName}
                         onChange={onChange}
                     />
-                    {total > MAX_BLOCKS && (
-                        <p className="text-warning text-xs">
-                            This page holds {total} blocks, and the site shows the first {MAX_BLOCKS}.
-                        </p>
-                    )}
-                </>
+                )
             ) : (
                 // Typing while the schema loads keeps the JSON editor, so a half-typed value is not
                 // swapped out for the block list when the schema arrives.
@@ -136,6 +237,63 @@ export function BlocksField({
                 {announcement}
             </p>
         </div>
+    );
+}
+
+/**
+ * The tenant's own data behind the pickers: its content types, for the fields a scope offers, and
+ * its saved blocks, which are data in a site setting rather than anything the site ships.
+ *
+ * Its own component so a site that publishes no bindings asks the API for none of it.
+ */
+function WithSiteData({
+    schema,
+    contentType,
+    children,
+}: {
+    schema: BlockSchema;
+    contentType?: string;
+    children: (site: EditorSite, schema: BlockSchema) => ReactNode;
+}) {
+    const schemas = useSchemas();
+    const presets = usePresets();
+    const types = schemas.data ?? [];
+    const typeNamed = (name: string) => types.find((t) => t.name.toLowerCase() === name.toLowerCase());
+
+    const site: EditorSite = {
+        scopeNames: schema.bindings?.scopes ?? [],
+        formats: schema.bindings?.formats ?? [],
+        siteType: typeNamed(SITE_TYPE),
+        pageType: contentType ? typeNamed(contentType) : undefined,
+        typeNamed,
+        presets: presets.presets,
+        savePreset: presets.save,
+        presetNote: presets.reason,
+    };
+    return children(site, withPresets(schema, presets.presets));
+}
+
+function Editor({
+    ctx,
+    list,
+    name,
+    onChange,
+}: {
+    ctx: Context;
+    list: unknown[];
+    name: string;
+    onChange: (list: unknown[]) => void;
+}) {
+    const total = countBlocks(ctx.schema, list);
+    return (
+        <>
+            <BlockList ctx={ctx} list={list} spot={ROOT} name={name} onChange={onChange} />
+            {total > MAX_BLOCKS && (
+                <p className="text-warning text-xs">
+                    This page holds {total} blocks, and the site shows the first {MAX_BLOCKS}.
+                </p>
+            )}
+        </>
     );
 }
 
@@ -166,16 +324,17 @@ function SchemaNote({ state, readable }: { state: BlockSchemaState; readable: bo
 function BlockList({
     ctx,
     list,
-    depth,
+    spot,
     name,
     onChange,
 }: {
     ctx: Context;
     list: unknown[];
-    depth: number;
+    spot: Spot;
     name: string;
     onChange: (list: unknown[]) => void;
 }) {
+    const depth = spot.depth;
     const listId = useId();
     const ref = useRef<HTMLDivElement>(null);
     const [focus, setFocus] = useState<{ key: string; action: Action } | 'add' | null>(null);
@@ -245,7 +404,7 @@ function BlockList({
                                 index={i}
                                 count={list.length}
                                 listId={listId}
-                                depth={depth}
+                                spot={spot}
                                 open={open.has(key)}
                                 onToggle={() => toggle(key)}
                                 onChange={(next) => onChange(list.map((it, j) => (j === i ? next : it)))}
@@ -276,18 +435,39 @@ function BlockList({
                 <div
                     role="group"
                     aria-label={`Blocks to add to ${name}`}
-                    className="flex flex-wrap gap-2 rounded-lg border border-dashed p-2"
+                    className="space-y-2 rounded-lg border border-dashed p-2"
                 >
                     {ctx.schema.blocks.length === 0 ? (
                         <p className="text-muted-foreground px-2 py-1 text-sm">This site publishes no blocks.</p>
                     ) : (
-                        ctx.schema.blocks.map((type) => (
-                            <Button key={type.type} type="button" variant="ghost" size="sm" onClick={() => add(type)}>
-                                {type.label}
-                                {type.perViewer && <span className="text-muted-foreground text-xs">per viewer</span>}
-                            </Button>
+                        byLayer(ctx.schema.blocks).map(([layer, types]) => (
+                            <div key={layer} className="space-y-1">
+                                {/* One layer means a version 1 site, where every block is just a block. */}
+                                {byLayer(ctx.schema.blocks).length > 1 && (
+                                    <p className="text-muted-foreground px-1 text-xs font-semibold">
+                                        {LAYER_LABELS[layer] ?? layer}
+                                    </p>
+                                )}
+                                <div className="flex flex-wrap gap-2">
+                                    {types.map((type) => (
+                                        <Button
+                                            key={type.type}
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => add(type)}
+                                        >
+                                            {type.label}
+                                            {type.perViewer && (
+                                                <span className="text-muted-foreground text-xs">per viewer</span>
+                                            )}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
                         ))
                     )}
+                    {ctx.site.presetNote && <p className="text-muted-foreground px-1 text-xs">{ctx.site.presetNote}</p>}
                 </div>
             )}
         </div>
@@ -301,7 +481,7 @@ function BlockRow({
     index,
     count,
     listId,
-    depth,
+    spot,
     open,
     onToggle,
     onChange,
@@ -314,7 +494,7 @@ function BlockRow({
     index: number;
     count: number;
     listId: string;
-    depth: number;
+    spot: Spot;
     open: boolean;
     onToggle: () => void;
     onChange: (item: unknown) => void;
@@ -323,8 +503,21 @@ function BlockRow({
 }) {
     const type = definitionFor(ctx.schema, item);
     const name = nameOf(ctx.schema, item, index);
-    const errors = type ? validateBlock(type, item) : {};
+    const errors = type ? validateBlock(ctx.schema, type, item) : {};
     const problems = Object.keys(errors).length;
+
+    const scopes = scopesAt(ctx, spot);
+    // A block that loads or repeats gives what is inside it an `item`, and carries down the one it
+    // was given when it names no collection of its own, which is how a repeat inside a source works.
+    const inner: Spot =
+        type?.layer === 'data'
+            ? { depth: spot.depth, insideData: true, itemType: loadedType(ctx, item) ?? spot.itemType }
+            : spot;
+    const warnings = type
+        ? type.fields.flatMap((field) =>
+              isBindable(ctx.schema, field) ? bindingProblems(propsOf(item)[field.name], scopes) : [],
+          )
+        : [];
 
     const rowRef = useRef<HTMLLIElement>(null);
     const handleRef = useRef<HTMLSpanElement>(null);
@@ -412,6 +605,11 @@ function BlockRow({
                         {problems === 1 ? '1 problem' : `${problems} problems`}
                     </span>
                 )}
+                {warnings.length > 0 && (
+                    <span className="text-warning shrink-0 text-xs">
+                        {warnings.length === 1 ? '1 data problem' : `${warnings.length} data problems`}
+                    </span>
+                )}
                 <Button
                     type="button"
                     variant="ghost"
@@ -449,15 +647,19 @@ function BlockRow({
             </div>
             <div id={`${itemKey}-body`} hidden={!open} className="space-y-4 border-t p-3">
                 {type ? (
-                    <BlockFields
-                        ctx={ctx}
-                        type={type}
-                        item={item}
-                        idBase={itemKey}
-                        depth={depth}
-                        errors={errors}
-                        onChange={onChange}
-                    />
+                    <>
+                        <BlockFields
+                            ctx={ctx}
+                            type={type}
+                            item={item}
+                            idBase={itemKey}
+                            spot={inner}
+                            scopes={scopes}
+                            errors={errors}
+                            onChange={onChange}
+                        />
+                        <SavePreset ctx={ctx} type={type} item={item} />
+                    </>
                 ) : (
                     <UnknownBlock item={item} />
                 )}
@@ -488,7 +690,8 @@ function BlockFields({
     type,
     item,
     idBase,
-    depth,
+    spot,
+    scopes,
     errors,
     onChange,
 }: {
@@ -496,7 +699,8 @@ function BlockFields({
     type: BlockType;
     item: unknown;
     idBase: string;
-    depth: number;
+    spot: Spot;
+    scopes: BindingScope[];
     errors: Record<string, string>;
     onChange: (item: unknown) => void;
 }) {
@@ -518,22 +722,33 @@ function BlockFields({
                             ctx={ctx}
                             field={field}
                             item={item}
-                            depth={depth}
+                            spot={spot}
                             error={error}
                             onChange={onChange}
                         />
                     );
                 }
+                const binding = isBindable(ctx.schema, field) && scopes.length > 0 && (
+                    <BindingControl
+                        fieldLabel={field.label || field.name}
+                        scopes={scopes}
+                        formats={ctx.site.formats}
+                        value={props[field.name]}
+                        onChange={(v) => onChange(setProp(item, field.name, v))}
+                    />
+                );
                 if (field.kind === 'select') {
                     return (
-                        <SelectProp
-                            key={field.name}
-                            id={id}
-                            field={field}
-                            value={props[field.name]}
-                            error={error}
-                            onChange={(v) => onChange(setProp(item, field.name, v))}
-                        />
+                        <div key={field.name} className="space-y-2">
+                            <SelectProp
+                                id={id}
+                                field={field}
+                                value={props[field.name]}
+                                error={error}
+                                onChange={(v) => onChange(setProp(item, field.name, v))}
+                            />
+                            {binding}
+                        </div>
                     );
                 }
                 // A kind this console does not know yet is edited as JSON, which keeps whatever it holds.
@@ -544,13 +759,15 @@ function BlockFields({
                     isRequired: field.required === true,
                 };
                 return (
-                    <Form
-                        key={field.name}
-                        fields={[definition]}
-                        values={{ [id]: props[field.name] }}
-                        errors={error ? { [id]: error } : undefined}
-                        onChange={(values) => onChange(setProp(item, field.name, values[id]))}
-                    />
+                    <div key={field.name} className="space-y-2">
+                        <Form
+                            fields={[definition]}
+                            values={{ [id]: props[field.name] }}
+                            errors={error ? { [id]: error } : undefined}
+                            onChange={(values) => onChange(setProp(item, field.name, values[id]))}
+                        />
+                        {binding}
+                    </div>
                 );
             })}
             {undeclared.length > 0 && (
@@ -606,14 +823,14 @@ function SlotsProp({
     ctx,
     field,
     item,
-    depth,
+    spot,
     error,
     onChange,
 }: {
     ctx: Context;
     field: BlockField;
     item: unknown;
-    depth: number;
+    spot: Spot;
     error?: string;
     onChange: (item: unknown) => void;
 }) {
@@ -667,7 +884,7 @@ function SlotsProp({
                     <BlockList
                         ctx={ctx}
                         list={list}
-                        depth={depth + 1}
+                        spot={{ ...spot, depth: spot.depth + 1 }}
                         name={`${label} ${i + 1}`}
                         onChange={(next) => onChange(setSlotList(item, field.name, i, next))}
                     />
@@ -685,5 +902,106 @@ function SlotsProp({
             </Button>
             <FieldError message={error} />
         </fieldset>
+    );
+}
+
+/**
+ * Saves one block and everything inside it as a named block this tenant can use again.
+ *
+ * A preset is data in a site setting, not code, so this writes to the tenant and every site on the
+ * same published image is unaffected. It is offered for a block that is code and not for one that
+ * is already a preset, because barakoPress refuses a preset that stands for another preset.
+ */
+function SavePreset({ ctx, type, item }: { ctx: Context; type: BlockType; item: unknown }) {
+    const ids = useId();
+    const [open, setOpen] = useState(false);
+    const [name, setName] = useState('');
+    const [label, setLabel] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [failed, setFailed] = useState('');
+    const [saved, setSaved] = useState('');
+
+    const save = ctx.site.savePreset;
+    if (!save || type.layer === 'preset' || ctx.site.scopeNames.length === 0) return null;
+
+    const taken = ctx.site.presets.some((p) => p.type === name);
+    const full = ctx.site.presets.length >= MAX_PRESETS && !taken;
+    const badName = name !== '' && !isPresetName(name);
+    const clash = !taken && ctx.schema.blocks.some((b) => b.type === name && b.layer !== 'preset');
+
+    const submit = async () => {
+        setSaving(true);
+        setFailed('');
+        try {
+            await save(presetFrom(name, label.trim() || name, [item]));
+            setSaved(`Saved as ${label.trim() || name}.`);
+            setOpen(false);
+            setName('');
+            setLabel('');
+        } catch {
+            setFailed('The site settings could not be saved. Try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-2 border-t pt-3">
+            <Button type="button" variant="ghost" size="xs" aria-expanded={open} onClick={() => setOpen(!open)}>
+                <IconPlus className="size-3" />
+                Save as a reusable block
+            </Button>
+            {saved && !open && <p className="text-muted-foreground text-xs">{saved}</p>}
+            {open && (
+                <div role="group" aria-label="Save as a reusable block" className="space-y-2 rounded-lg border p-3">
+                    <p className="text-muted-foreground text-xs">
+                        Saved for this site only, beside its other settings. Every page here can then add it.
+                    </p>
+                    <div className="space-y-1">
+                        <Label htmlFor={`${ids}-name`}>Name</Label>
+                        <Input
+                            id={`${ids}-name`}
+                            value={name}
+                            placeholder="band"
+                            onChange={(e) => setName(e.target.value)}
+                        />
+                        {badName && (
+                            <p className="text-destructive text-xs">
+                                A letter first, then letters, numbers, dashes or underscores.
+                            </p>
+                        )}
+                        {clash && (
+                            <p className="text-destructive text-xs">
+                                This site already has a block called {name}, and it wins over a saved one.
+                            </p>
+                        )}
+                        {taken && <p className="text-warning text-xs">This replaces the saved block called {name}.</p>}
+                        {full && (
+                            <p className="text-destructive text-xs">
+                                This site already holds {MAX_PRESETS} saved blocks, which is the most.
+                            </p>
+                        )}
+                    </div>
+                    <div className="space-y-1">
+                        <Label htmlFor={`${ids}-label`}>What to call it in the palette</Label>
+                        <Input
+                            id={`${ids}-label`}
+                            value={label}
+                            placeholder="Band"
+                            onChange={(e) => setLabel(e.target.value)}
+                        />
+                    </div>
+                    {failed && <p className="text-destructive text-xs">{failed}</p>}
+                    <Button
+                        type="button"
+                        size="sm"
+                        disabled={saving || name === '' || badName || clash || full}
+                        onClick={submit}
+                    >
+                        {saving ? 'Saving' : 'Save'}
+                    </Button>
+                </div>
+            )}
+        </div>
     );
 }
