@@ -38,22 +38,35 @@ Tags on `ghcr.io/baryodev/barako-brew`:
 | --- | --- |
 | `latest`, `<version>` | a `v*` tag, linux/amd64 and linux/arm64 |
 | `dev`, `dev-<sha>` | every merge to master, both architectures |
-| `playground`, `playground-<version>` | the base-path build that runs playground.baryo.dev, arm64 |
+| `playground`, `playground-<version>` | the release image plus playground.baryo.dev's configuration, both architectures |
 
 Every tag is also pushed as `ghcr.io/baryodev/barako-admin`, the old name, at the same digest.
 That name stops at 2.0.0.
 
 ### Serving under a sub-path
 
-To host the console at something like `example.com/barakocms`, bake the base path in at build
-time (Next.js resolves `basePath` during the build):
+To host the console at something like `example.com/barakocms`, set `BARAKO_BASE_PATH` on the
+published image. No rebuild, and the same image still serves the domain root when the variable is
+unset:
 
 ```bash
-docker build --build-arg NEXT_BASE_PATH=/barakocms -t barako-brew:subpath .
+docker run -e BARAKO_BASE_PATH=/barakocms -e NEXT_PUBLIC_API_URL=https://example.com/api \
+  -p 3000:3000 ghcr.io/baryodev/barako-brew:latest
 ```
 
 Then proxy `/barakocms/` to the container. Next.js 308-redirects `/barakocms/` to `/barakocms`, so
 an nginx rule redirecting the other way will loop. Proxy the bare path instead of redirecting it.
+
+The value is one or more `/segments` of letters, digits, dot, underscore, tilde or hyphen, with no
+trailing slash. It ends up in JavaScript, JSON and HTML, so anything else is refused at start.
+
+Next.js resolves `basePath` and `assetPrefix` during the build, which is why this cannot simply be
+read from the environment at run time. The image is built against a placeholder prefix and
+`entrypoint.sh` writes the real one into the build output before the server starts. The cost is a
+second or so of startup; the gain is one published image for every site.
+
+`--build-arg NEXT_BASE_PATH=/barakocms` still bakes a path in at build time for anyone who wants
+that. An image built that way ignores `BARAKO_BASE_PATH`, and says so in its startup log.
 
 ## What it covers
 

@@ -328,6 +328,59 @@ jobs:
             echo "::error::env-config.js does not carry the NEXT_PUBLIC_API_URL the container was started with"; exit 1; }
           docker rm -f ci-admin >/dev/null
 
+      # The point of #167: this is the same image as the step above, started with a base path
+      # instead of without one. If it ever takes a rebuild again, every site stops being the same
+      # image with different configuration, which is the whole configured-sites plan.
+      - name: The same image serves under a path prefix
+        run: |
+          set -euo pipefail
+          docker run -d --name ci-admin-prefix -p 3301:3000 \
+            -e BARAKO_BASE_PATH=/barakocms \
+            -e NEXT_PUBLIC_API_URL=http://api.example.test:5005 barako-brew:ci
+          for _ in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3301/barakocms/login || true)" = "200" ] && break
+            sleep 2
+          done
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3301/barakocms/login || true)
+          [ "$code" = "200" ] || { docker logs ci-admin-prefix; echo "::error::/barakocms/login answered $code"; exit 1; }
+
+          # A 200 is not enough: a page whose scripts are addressed at the root renders blank behind
+          # the proxy, and that is exactly the failure a baked-in path was hiding.
+          curl -s http://127.0.0.1:3301/barakocms/login > prefixed.html
+          grep -q '/barakocms/_next/' prefixed.html || {
+            echo "::error::the prefixed page addresses its assets outside the base path"; exit 1; }
+          grep -q '/barakocms/env-config.js' prefixed.html || {
+            echo "::error::the prefixed page reads env-config.js outside the base path"; exit 1; }
+          if grep -q '__BARAKO_BASE_PATH__' prefixed.html; then
+            echo "::error::the placeholder base path survived into the served page"; exit 1
+          fi
+
+          asset=$(grep -o '/barakocms/_next/static/[^"]*\.js' prefixed.html | head -1 || true)
+          [ -n "$asset" ] || { echo "::error::no /_next asset to fetch"; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3301$asset" || true)
+          [ "$code" = "200" ] || { echo "::error::$asset answered $code"; exit 1; }
+
+          # And nothing at the root, the way a real basePath build behaves.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3301/login || true)
+          [ "$code" = "404" ] || { echo "::error::/login answered $code on a prefixed console, expected 404"; exit 1; }
+          docker rm -f ci-admin-prefix >/dev/null
+
+      # A build ARG that changes what the image serves is how the base path came to need a second
+      # image. Proven to refuse, against a fixture, because a gate nobody has watched refuse is a
+      # gate nobody should trust.
+      - name: The Dockerfile declares no unagreed build ARG
+        run: bash scripts/check-dockerfile-args.sh
+
+      - name: The build ARG gate refuses a new routing ARG
+        run: |
+          set -uo pipefail
+          code=0
+          out=$(bash scripts/check-dockerfile-args.sh scripts/testdata/dockerfile-new-arg/Dockerfile 2>&1) || code=$?
+          echo "$out"
+          [ "$code" -ne 0 ] || { echo "::error::the gate passed a Dockerfile with an undeclared ARG"; exit 1; }
+          echo "$out" | grep -q 'ARG NEXT_TRAILING_SLASH' || {
+            echo "::error::the gate failed, but not because of the fixture's new ARG"; exit 1; }
+
       # `docker compose config` parses the file, resolves every variable and fails on the first one
       # that has no value. The quickstart is what a newcomer runs first, so a broken one costs the
       # most at the worst moment.

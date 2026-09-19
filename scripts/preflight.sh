@@ -92,6 +92,7 @@ done
 
 gate "assets carry no provenance metadata" python3 scripts/asset-provenance.py .
 gate "licences" bash scripts/check-licences.sh . 400
+gate "the Dockerfile declares no unagreed build ARG" bash scripts/check-dockerfile-args.sh
 
 # The image job compiles the console, so a build break is otherwise found by the slowest job there
 # is. next build is the same command that runs in the Dockerfile.
