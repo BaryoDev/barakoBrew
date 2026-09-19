@@ -1,0 +1,12 @@
+# The playground's console is the published image with one line of configuration on it, not a
+# second build of the app (#167). Every layer below this ENV is the digest publish.yml just pushed,
+# so playground.baryo.dev runs the same bits as every other site and differs only in where it is
+# served from.
+#
+# This file goes away when the playground's own deploy sets BARAKO_BASE_PATH on the container,
+# which is where the setting belongs. It exists because that script lives on the VM, not here.
+ARG BARAKO_IMAGE
+FROM ${BARAKO_IMAGE}
+
+ENV BARAKO_BASE_PATH=/barakocms
+ENV NEXT_PUBLIC_API_URL=https://playground.baryo.dev/barakocms-api

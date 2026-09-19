@@ -42,10 +42,14 @@ export const metadata: Metadata = {
   description: "Headless CMS Admin Dashboard",
 };
 
-// The app is served under this basePath (set at build). The runtime env-config.js is a static asset
-// under it, so the script src must include the basePath — otherwise, when the admin is hosted on a
-// different origin than it was built for, the config 404s and getApiUrl() falls back to the baked URL.
-const basePath = process.env.NEXT_BASE_PATH || "";
+// The app is served under this basePath. env-config.js is a static asset under it, so the script
+// src has to carry the prefix, or the config 404s and getApiUrl() falls back to the baked URL.
+//
+// NEXT_PUBLIC_BASE_PATH, not NEXT_BASE_PATH: next.config.ts inlines this one into the compiled
+// output, where entrypoint.sh can rewrite it at start. NEXT_BASE_PATH stayed a runtime lookup that
+// only the builder stage ever set, so every server-rendered route asked for /env-config.js at the
+// domain root even when the console was served under a prefix.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 export default function RootLayout({
   children,
