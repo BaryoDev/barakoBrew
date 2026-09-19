@@ -1,7 +1,7 @@
 name: Publish
 
 # Every merge to master pushes ghcr.io/baryodev/barako-brew:dev and :dev-<sha>. A v* tag pushes
-# :latest and :<version>, then builds the base-path image playground.baryo.dev runs, pushes it as
+# :latest and :<version>, then pushes that same image with the playground's configuration on it as
 # :playground and :playground-<version>, and deploys it there over SSH. Tagging is the release
 # switch; nothing else publishes.
 #
@@ -296,13 +296,19 @@ jobs:
             --title "barakoBrew $VERSION" \
             --notes-file notes.md
 
-  # The playground image is a different build, not a retag: NEXT_BASE_PATH is baked in at build time
-  # and the VM serves the console under /barakocms. Native arm64 because the VM is Ampere.
+  # The playground console is no longer a second build of the app. It is the image `publish` just
+  # pushed with two lines of configuration on top, because the base path is read at container start
+  # now (#167). Dockerfile.playground adds no code and no dependency: every layer under the ENVs is
+  # the published digest, so the playground runs the same bits as every other site.
+  #
+  # It exists only because the VM's deploy script sets no environment on the container, and that
+  # script lives on the VM. Once it sets BARAKO_BASE_PATH itself, this job and Dockerfile.playground
+  # both go, and the VM pulls :latest like everyone else.
   playground-image:
-    name: Build the playground image
+    name: Configure the playground image
     needs: [version, publish]
     if: needs.version.outputs.is_release == 'true'
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -315,17 +321,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push (arm64)
+      - name: Push the configured tags
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
-          file: Dockerfile
-          platforms: linux/arm64
+          file: Dockerfile.playground
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            NEXT_BASE_PATH=/barakocms
-            NEXT_PUBLIC_API_URL=https://playground.baryo.dev/barakocms-api
-            BARAKO_VERSION=${{ needs.version.outputs.version }}
+            BARAKO_IMAGE=ghcr.io/baryodev/barako-brew:${{ needs.version.outputs.version }}
           # The VM's deploy script pulls barako-admin:playground, so that name has to keep moving
           # until the script is switched to barako-brew.
           tags: |
@@ -336,8 +340,6 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/BaryoDev/barakoBrew
             org.opencontainers.image.licenses=MIT
-          cache-from: type=gha,scope=pg-admin
-          cache-to: type=gha,mode=max,scope=pg-admin
 
   deploy-playground:
     name: Deploy to playground

@@ -9,6 +9,28 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **The base path is set at container start, not at build.** `BARAKO_BASE_PATH=/barakocms` on the
+  published image serves the console under that prefix; leave it unset and it serves the domain root
+  as before. Next resolves `basePath` and `assetPrefix` during the build, so the image is built
+  against a placeholder prefix and `entrypoint.sh` writes the real one into the build output before
+  the server starts. Serving a console under a path no longer needs its own image. The value has to
+  be `/segments` of letters, digits, dot, underscore, tilde or hyphen; anything else is refused at
+  start rather than written into the bundle. Building with `--build-arg NEXT_BASE_PATH=/path` still
+  bakes it in, and an image built that way ignores `BARAKO_BASE_PATH` and says so in its log. (#167)
+- **The playground image is the published image with configuration on it**, not a second build of
+  the console. `Dockerfile.playground` adds two `ENV` lines to the digest the release just pushed,
+  so `:playground` and `:latest` hold the same code. It goes away when the playground's own deploy
+  sets `BARAKO_BASE_PATH` itself. (#167)
+
+### Fixed
+
+- **A route rendered on demand under a base path asked for `/env-config.js` at the domain root.**
+  The root layout read `NEXT_BASE_PATH`, which only the builder stage ever set, so prerendered pages
+  carried the prefix and pages rendered per request did not. It reads `NEXT_PUBLIC_BASE_PATH` now,
+  which is compiled into the output and rewritten at start with everything else. (#167)
+
 ## [1.3.0] - 2026-09-18
 
 ### Changed

@@ -25,9 +25,12 @@ ARG NEXT_PUBLIC_API_URL
 # Set it as environment variable so Next.js can use it during build
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-# Optional sub-path (e.g. /barakocms) when served behind a shared reverse proxy.
-# Must be baked in at build time. Next.js resolves basePath during the build.
-ARG NEXT_BASE_PATH
+# The sub-path the console is served under (e.g. /barakocms behind a shared reverse proxy).
+# Next.js resolves basePath during the build, so the image is built against this placeholder and
+# entrypoint.sh writes the real prefix into the output at container start, from BARAKO_BASE_PATH.
+# Unset there means the domain root. Passing a real path here bakes it in the way every build
+# used to, and an image built that way ignores BARAKO_BASE_PATH.
+ARG NEXT_BASE_PATH=/__BARAKO_BASE_PATH__
 ENV NEXT_BASE_PATH=$NEXT_BASE_PATH
 
 # The version this image is tagged with, so a running container can say what it is. Without it the
@@ -83,6 +86,12 @@ COPY --chown=nextjs:nodejs THIRD-PARTY-NOTICES.md LICENSE ./
 
 # Ensure public directory is owned by nextjs for entrypoint script to write env-config.js
 RUN chown -R nextjs:nodejs ./public
+
+# entrypoint.sh writes the base path into the build output with `sed -i`, which creates its temp
+# file beside the original. So the directories holding those files have to be writable too, not
+# just the files: the copies above chown what they bring, and this one covers /app itself, which
+# WORKDIR created as root and which holds server.js.
+RUN chown nextjs:nodejs /app
 
 USER nextjs
 

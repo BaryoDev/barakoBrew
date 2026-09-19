@@ -1,8 +1,11 @@
 import type { NextConfig } from "next";
 
-// Set NEXT_BASE_PATH at build time to serve the admin under a sub-path
-// (e.g. "/barakocms" behind a shared reverse proxy). Leave it unset to serve
-// from the domain root, which is what the published `latest` image does.
+// The sub-path the console is served under, e.g. "/barakocms" behind a shared reverse proxy.
+// Next resolves basePath and assetPrefix during the build, so this stays a build input and cannot
+// itself become a runtime one. The published image builds against the placeholder the Dockerfile
+// passes and entrypoint.sh writes the real prefix into the output at container start, which is how
+// one image serves the root and any prefix (#167). Unset means the domain root, which is what a
+// local `npm run build` and both test packs get.
 const basePath = process.env.NEXT_BASE_PATH || undefined;
 
 const nextConfig: NextConfig = {
