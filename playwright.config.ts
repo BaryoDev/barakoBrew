@@ -3,6 +3,19 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
+/*
+ * The port the pack's own server runs on. 3100 rather than Next's default 3000, so it cannot
+ * collide with an unrelated dev server.
+ *
+ * BARAKO_E2E_PORT overrides it because the number was written in three places and two checkouts of
+ * this repository cannot run the pack at the same time. One blocks the other for as long as the
+ * first takes. The worse case is quieter: with CI unset, reuseExistingServer is on, so the second
+ * run does not start a server at all. It drives whatever is already answering on 3100, which is the
+ * other checkout's code, and reports green about a branch it never loaded.
+ */
+const E2E_PORT = Number(process.env.BARAKO_E2E_PORT) || 3100;
+const BASE_URL = `http://127.0.0.1:${E2E_PORT}`;
+
 export default defineConfig({
     testDir: './e2e',
     // `.spec.ts` only; see the note in playwright.smoke.config.ts. `helpers.ts` is shared code,
@@ -20,9 +33,8 @@ export default defineConfig({
     reporter: 'html',
     /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
     use: {
-        /* Base URL to use in actions like `await page.goto('/')`. Port 3100 (not Next's default
-           3000) so the E2E server doesn't collide with an unrelated dev server on 3000. */
-        baseURL: 'http://127.0.0.1:3100',
+        /* Base URL to use in actions like `await page.goto('/')`. See E2E_PORT above. */
+        baseURL: BASE_URL,
 
         /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
         trace: 'on-first-retry',
@@ -57,8 +69,8 @@ export default defineConfig({
     /* Start the admin before running tests. Specs mock the API via page.route, so the server only
        needs to boot — no backend required. reuseExistingServer keeps the local loop fast. */
     webServer: {
-        command: 'npm run dev -- -p 3100',
-        url: 'http://127.0.0.1:3100',
+        command: `npm run dev -- -p ${E2E_PORT}`,
+        url: BASE_URL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
     },
