@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { SECRET_MUTATION } from '@/lib/secrets';
 
 export interface MfaStatus {
     enabled: boolean;
@@ -39,6 +40,7 @@ export function useMfaSetup() {
             const { data } = await api.post<MfaSetup>('/api/auth/mfa/setup', {});
             return data;
         },
+        ...SECRET_MUTATION,
     });
 }
 
@@ -49,6 +51,7 @@ export function useMfaEnable() {
             const { data } = await api.post<MfaEnableResult>('/api/auth/mfa/enable', { code });
             return data;
         },
+        ...SECRET_MUTATION,
         onSuccess: () => queryClient.invalidateQueries({ queryKey: STATUS_KEY }),
     });
 }

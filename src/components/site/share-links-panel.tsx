@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Section } from '@/components/site/editors';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
+import { RevealOnce } from '@/components/patterns/reveal-once';
 import { StatusBadge, type Tone } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { IconCopy, IconTrash } from '@/components/icons';
+import { IconTrash } from '@/components/icons';
 import { useCreateShareLink, useRevokeShareLink, useShareLinks } from '@/hooks/use-share-links';
 import { apiErrorMessage } from '@/lib/api';
 import {
@@ -78,16 +79,6 @@ export function ShareLinksPanel({ siteUrl }: { siteUrl: unknown }) {
         );
     };
 
-    const copy = async () => {
-        if (!shown) return;
-        try {
-            await navigator.clipboard.writeText(shown.link);
-            toast.success('Link copied');
-        } catch {
-            toast.error('The link could not be copied. Select it and copy it by hand.');
-        }
-    };
-
     return (
         <Section
             title="Share links"
@@ -124,26 +115,20 @@ export function ShareLinksPanel({ siteUrl }: { siteUrl: unknown }) {
             </form>
 
             {shown && (
-                <div className="space-y-2 rounded-lg border p-4" role="status">
-                    <p className="text-sm font-semibold">Share link for {shown.label}</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Input readOnly aria-label="Share link" value={shown.link} className="min-w-0 flex-1 font-mono text-xs" />
-                        <Button type="button" variant="outline" onClick={copy}>
-                            <IconCopy />
-                            Copy
-                        </Button>
-                    </div>
-                    <p className="text-warning text-xs font-semibold">
-                        This link cannot be shown again. Copy it now. If it is lost, revoke it and create another.
-                    </p>
-                    {!shown.hasAddress && (
+                <div className="rounded-lg border p-4" role="status">
+                    <RevealOnce
+                        title={`Share link for ${shown.label}`}
+                        secret={shown.link}
+                        secretLabel="Share link"
+                        dismissLabel="Done"
+                        onDismiss={() => setShown(null)}
+                    >
                         <p className="text-muted-foreground text-xs">
-                            The site has no saved address, so this is only the part that goes after it.
+                            If it is lost, revoke it and create another.
+                            {!shown.hasAddress &&
+                                ' The site has no saved address, so this is only the part that goes after it.'}
                         </p>
-                    )}
-                    <Button type="button" size="sm" variant="ghost" onClick={() => setShown(null)}>
-                        Done
-                    </Button>
+                    </RevealOnce>
                 </div>
             )}
 

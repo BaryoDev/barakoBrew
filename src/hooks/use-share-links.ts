@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isNotFound } from '@/lib/api';
+import { SECRET_MUTATION } from '@/lib/secrets';
 import type { CreatedShareLink, ShareLink } from '@/lib/site-mode';
 
 /** `disabled` is a 404 from the list: this API has no share links. */
@@ -35,8 +36,7 @@ export function useCreateShareLink() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (input: CreateShareLinkInput) => (await api.post<CreatedShareLink>(URL, input)).data,
-        // The result carries the key. Dropped from the mutation cache as soon as nothing observes it.
-        gcTime: 0,
+        ...SECRET_MUTATION,
         onSuccess: () => queryClient.invalidateQueries({ queryKey: SHARE_LINKS_KEY }),
     });
 }

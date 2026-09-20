@@ -86,3 +86,68 @@ describe('the new key dialog', () => {
         expect(warning()).toBeNull();
     });
 });
+
+describe('the created key', () => {
+  const SECRET = 'bcms_THEFULLSECRETVALUE123456';
+  const CREATED = {
+    id: 'new',
+    name: 'My key',
+    prefix: 'bcms_ab12cd34',
+    scopes: ['content:read'],
+    tenantSlug: 'default',
+    expiresAt: null,
+    lastUsedAt: null,
+    revoked: false,
+    createdAt: new Date().toISOString(),
+    key: SECRET,
+  };
+
+  function anywhereInTheCaches(client: QueryClient) {
+    const holds = (value: unknown) => JSON.stringify(value ?? null).includes(SECRET);
+    return (
+      client.getMutationCache().getAll().some((m) => holds(m.state.data)) ||
+      client.getQueryCache().getAll().some((q) => holds(q.state.data))
+    );
+  }
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+    vi.mocked(api.get).mockResolvedValue({
+      data: { items: [], page: 1, pageSize: 20, totalItems: 0, totalPages: 0, hasNextPage: false },
+    });
+    vi.mocked(api.post).mockResolvedValue({ data: CREATED });
+  });
+
+  async function create() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(React.createElement(QueryClientProvider, { client }, React.createElement(ApiKeysPage)));
+    await waitFor(() => expect(screen.getByText('No API keys yet')).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole('button', { name: /new key/i })[0]);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create key' }));
+    await waitFor(() => expect(screen.getByTestId('api-key-secret')).toHaveValue(SECRET));
+    return client;
+  }
+
+  it('is shown once, and is out of the caches before the dialog is even closed', async () => {
+    const client = await create();
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(anywhereInTheCaches(client)).toBe(false);
+  });
+
+  it('is not in the mutation cache after the dialog closes', async () => {
+    const client = await create();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByTestId('api-key-secret')).toBeNull());
+
+    expect(client.getMutationCache().getAll().some((m) => JSON.stringify(m.state.data ?? null).includes(SECRET))).toBe(
+      false,
+    );
+    expect(anywhereInTheCaches(client)).toBe(false);
+    expect(document.body.textContent).not.toContain(SECRET);
+  });
+});

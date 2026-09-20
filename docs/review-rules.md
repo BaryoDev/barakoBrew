@@ -12,7 +12,7 @@ Read by the adversarial-review skill (arnelirobles/lean-agent-method) before any
 ## Boundaries
 
 - **The console owns no rules** (barakoCMS D20). Validation that decides what is allowed lives in the API; the console may flag early but must show the API's own message when it refuses.
-- **No secret is shown twice.** A key or share link the API returns once is displayed once with a copy button and a note that it cannot be shown again.
+- **No secret is shown twice, and none is left in a cache.** A key, setup secret or share link the API returns once renders through `RevealOnce` (`src/components/patterns/reveal-once.tsx`), and the mutation that returned it spreads `SECRET_MUTATION` from `src/lib/secrets.ts` and is reset once the value is in component state. A new secret screen that builds its own box, or a secret-returning mutation without those options, is a finding.
 - **Anything configurable here is configurable through barista,** because both call the same API. A screen that needs a private endpoint is a finding.
 
 ## Tests

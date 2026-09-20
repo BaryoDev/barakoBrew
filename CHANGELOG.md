@@ -39,6 +39,14 @@ moved. Which API a console works against is stated per release instead.
 
 ### Fixed
 
+- **A secret shown once outlived the dialog that showed it.** The API key, the two-factor setup key
+  and the recovery codes were left in the TanStack mutation cache for five minutes after the screen
+  closed, where anything else in the page could read them back and a navigation did not clear them.
+  Every mutation that returns a secret now spreads `SECRET_MUTATION` (`gcTime: 0`) and the screen
+  resets it as soon as the value is in component state, so the only copy left is the one on screen
+  and closing the panel is what removes it. Share links already did this; the other three did not.
+  All four now render through one `RevealOnce` component, so the copy button, the "cannot be shown
+  again" wording and the dismiss behaviour are the same on each. (#165)
 - **A route rendered on demand under a base path asked for `/env-config.js` at the domain root.**
   The root layout read `NEXT_BASE_PATH`, which only the builder stage ever set, so prerendered pages
   carried the prefix and pages rendered per request did not. It reads `NEXT_PUBLIC_BASE_PATH` now,

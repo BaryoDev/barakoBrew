@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { RevealOnce } from '@/components/patterns/reveal-once';
 
 /**
  * Two-factor authentication settings. Enrollment is deliberately three explicit steps — scan, confirm,
@@ -52,17 +53,25 @@ export default function SecurityPage() {
                 setQrDataUrl(null);
                 setPending(data);
                 setCode('');
+                // The result is the secret and the otpauth URI that contains it. State holds it now.
+                setup.reset();
             },
             onError: (error) => toast.error(apiErrorMessage(error, 'Could not start setup.')),
         });
+
+    const endSetup = () => {
+        setPending(null);
+        setQrDataUrl(null);
+        setCode('');
+    };
 
     const confirmSetup = (e: React.FormEvent) => {
         e.preventDefault();
         enable.mutate(code.trim(), {
             onSuccess: (data) => {
                 setRecoveryCodes(data.recoveryCodes);
-                setPending(null);
-                setCode('');
+                endSetup();
+                enable.reset();
                 toast.success('Two-factor authentication is on.');
             },
             onError: (error) => {
@@ -114,57 +123,38 @@ export default function SecurityPage() {
                 <CardContent className="space-y-6">
                     {/* Shown once, right after enabling. */}
                     {recoveryCodes && (
-                        <div className="rounded-md border p-4">
-                            <p className="text-sm font-medium">Save your recovery codes</p>
-                            <p className="text-muted-foreground mt-1 text-sm">
-                                Each one works once, if you lose your authenticator. This is the only time they are shown.
-                            </p>
-                            <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-sm">
-                                {recoveryCodes.map((rc) => (
-                                    <li key={rc}>{rc}</li>
-                                ))}
-                            </ul>
-                            <div className="mt-4 flex gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        void navigator.clipboard.writeText(recoveryCodes.join('\n'));
-                                        toast.success('Recovery codes copied.');
-                                    }}
-                                >
-                                    Copy codes
-                                </Button>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => setRecoveryCodes(null)}>
-                                    I&apos;ve saved them
-                                </Button>
-                            </div>
-                        </div>
+                        <RevealOnce
+                            className="rounded-md border p-4"
+                            title="Save your recovery codes"
+                            description="Each one works once, if you lose your authenticator."
+                            secret={recoveryCodes}
+                            secretLabel="Recovery codes"
+                            testId="mfa-recovery-codes"
+                            dismissLabel="I've saved them"
+                            onDismiss={() => setRecoveryCodes(null)}
+                        />
                     )}
 
                     {/* Enrollment in progress. */}
                     {pending && (
                         <form onSubmit={confirmSetup} className="space-y-4">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                                {qrDataUrl && (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={qrDataUrl}
-                                        alt="QR code for your authenticator app"
-                                        className="size-[200px] shrink-0 rounded-md border bg-white p-2"
-                                    />
-                                )}
-                                <div className="space-y-2 text-sm">
-                                    <p className="font-medium">Scan this with your authenticator app</p>
-                                    <p className="text-muted-foreground">
-                                        Can&apos;t scan? Enter this key manually:
-                                    </p>
-                                    <code className="bg-muted block break-all rounded px-2 py-1 font-mono text-xs">
-                                        {pending.secret}
-                                    </code>
-                                </div>
-                            </div>
+                            <RevealOnce
+                                title="Scan this with your authenticator app"
+                                description="Can't scan? Enter this key into the app by hand."
+                                secret={pending.secret}
+                                secretLabel="Setup key"
+                                testId="mfa-setup-secret"
+                                aside={
+                                    qrDataUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={qrDataUrl}
+                                            alt="QR code for your authenticator app"
+                                            className="size-[200px] shrink-0 rounded-md border bg-white p-2"
+                                        />
+                                    ) : null
+                                }
+                            />
 
                             <div className="space-y-2">
                                 <Label htmlFor="setup-code">Enter the 6-digit code to confirm</Label>
@@ -184,7 +174,7 @@ export default function SecurityPage() {
                                 <Button type="submit" disabled={enable.isPending}>
                                     {enable.isPending ? 'Confirming…' : 'Turn on'}
                                 </Button>
-                                <Button type="button" variant="ghost" onClick={() => setPending(null)}>
+                                <Button type="button" variant="ghost" onClick={endSetup}>
                                     Cancel
                                 </Button>
                             </div>

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
+import { SECRET_MUTATION } from '@/lib/secrets';
 
 export interface ApiKey {
   id: string;
@@ -55,6 +56,7 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: async (input: CreateApiKeyInput) =>
       (await api.post<CreatedApiKey>('/api/api-keys', input)).data,
+    ...SECRET_MUTATION,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   });
 }
