@@ -3,6 +3,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
+import type { ShareLinkScope } from '@/lib/share-links';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -19,6 +20,7 @@ globalThis.ResizeObserver ??= class {
 
 const { api } = await import('@/lib/api');
 const { ShareLinksPanel } = await import('./share-links-panel');
+const { siteShareScope } = await import('@/lib/site-mode');
 
 function httpError(status: number) {
     return new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
@@ -34,12 +36,27 @@ const DAY = 24 * 60 * 60 * 1000;
 const inDays = (n: number) => new Date(Date.now() + n * DAY).toISOString();
 
 function renderPanel(siteUrl: unknown = 'https://example.com') {
+    return renderScope(siteShareScope(siteUrl));
+}
+
+function renderScope(scope: ShareLinkScope) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     return render(
         <QueryClientProvider client={client}>
-            <ShareLinksPanel siteUrl={siteUrl} />
+            <ShareLinksPanel scope={scope} />
         </QueryClientProvider>,
     );
+}
+
+function expiryOptions() {
+    return Array.from(screen.getByLabelText('Expires after').querySelectorAll('option')).map((o) => o.textContent);
+}
+
+/** The days between now and the `expiresAt` of the one create call made. */
+function postedDays() {
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const [, body] = vi.mocked(api.post).mock.calls[0] as [string, { expiresAt: string }];
+    return (new Date(body.expiresAt).getTime() - Date.now()) / DAY;
 }
 
 beforeEach(() => {
@@ -152,5 +169,101 @@ describe('ShareLinksPanel', () => {
 
         fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }));
         await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/api/site/share-links/act'));
+    });
+});
+
+describe('the expiry maximum', () => {
+    it('is the 90 days barakoCMS enforces when the response reports none', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: [] });
+        vi.mocked(api.post).mockResolvedValue({ data: { id: 'l1', label: 'x', createdAt: inDays(0), expiresAt: inDays(30), key: 'k' } });
+
+        renderPanel();
+        await screen.findByText('No share links yet.');
+
+        expect(expiryOptions()).toEqual(['1 day', '7 days', '30 days', '90 days']);
+        expect(screen.getByLabelText('Expires after')).toHaveValue('30');
+    });
+
+    it('is what the API reports instead, shorter than 90', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [], maxExpiryDays: 14 } });
+        vi.mocked(api.post).mockResolvedValue({ data: { id: 'l1', label: 'x', createdAt: inDays(0), expiresAt: inDays(14), key: 'k' } });
+
+        renderPanel();
+        await screen.findByText('No share links yet.');
+
+        expect(expiryOptions()).toEqual(['1 day', '7 days', '14 days']);
+        expect(screen.getByLabelText('Expires after')).toHaveValue('14');
+
+        fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Client preview' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+
+        await screen.findByRole('textbox', { name: 'Share link' });
+        const days = postedDays();
+        expect(days).toBeGreaterThan(13.9);
+        expect(days).toBeLessThan(14.1);
+    });
+
+    it('is what the API reports instead, longer than 90', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [], maxExpiryDays: 365 } });
+        vi.mocked(api.post).mockResolvedValue({ data: { id: 'l1', label: 'x', createdAt: inDays(0), expiresAt: inDays(365), key: 'k' } });
+
+        renderPanel();
+        await screen.findByText('No share links yet.');
+
+        expect(expiryOptions()).toEqual(['1 day', '7 days', '30 days', '90 days', '180 days', '365 days']);
+
+        fireEvent.change(screen.getByLabelText('Expires after'), { target: { value: '365' } });
+        fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Long preview' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+
+        await screen.findByRole('textbox', { name: 'Share link' });
+        const days = postedDays();
+        expect(days).toBeGreaterThan(364.9);
+        expect(days).toBeLessThan(365.1);
+    });
+});
+
+describe('a scope other than the site', () => {
+    /** What barakoCMS#857 will add. Nothing but this object changes to get the panel there. */
+    const entryScope: ShareLinkScope = {
+        key: ['entry', 'e-7'],
+        path: '/api/entries/e-7/share-links',
+        description: 'Let someone see this draft entry.',
+        revokeWarning: 'Anyone opening this link stops seeing the draft.',
+        link: (key) => ({ value: `https://example.com/_preview#${key}`, complete: true }),
+        incompleteNote: 'no address',
+    };
+
+    it('lists, creates and revokes at its own path, in its own words', async () => {
+        const stored = { id: 'e1', label: 'Draft for review', createdAt: inDays(0), expiresAt: inDays(7), revokedAt: null, lastUsedAt: null };
+        let list: unknown[] = [];
+        vi.mocked(api.get).mockImplementation(async () => ({ data: list }));
+        vi.mocked(api.post).mockImplementation(async () => {
+            list = [stored];
+            return { data: { ...stored, key: 'entry-KEY' } };
+        });
+        vi.mocked(api.delete).mockResolvedValue({ status: 204 });
+
+        renderScope(entryScope);
+        await screen.findByText('No share links yet.');
+        expect(api.get).toHaveBeenCalledWith('/api/entries/e-7/share-links');
+        expect(screen.getByText('Let someone see this draft entry.')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Draft for review' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+
+        expect(await screen.findByRole('textbox', { name: 'Share link' })).toHaveValue(
+            'https://example.com/_preview#entry-KEY',
+        );
+        expect(api.post).toHaveBeenCalledWith('/api/entries/e-7/share-links', expect.objectContaining({ label: 'Draft for review' }));
+
+        const rows = (await screen.findAllByRole('row')).slice(1);
+        expect(rows).toHaveLength(1);
+        fireEvent.click(screen.getByRole('button', { name: 'Revoke Draft for review' }));
+        const dialog = await screen.findByRole('alertdialog');
+        expect(within(dialog).getByText('Anyone opening this link stops seeing the draft.')).toBeInTheDocument();
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }));
+        await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/api/entries/e-7/share-links/e1'));
     });
 });

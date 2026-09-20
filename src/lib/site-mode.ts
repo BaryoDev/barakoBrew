@@ -5,6 +5,7 @@
  * says that next to the control.
  */
 import { isAbsoluteHttpUrl } from '@/lib/site-settings';
+import type { ShareLinkScope } from '@/lib/share-links';
 import type { PageTreeState } from '@/hooks/use-pages';
 import type { FieldDefinition, FieldOption } from '@/types/schema';
 
@@ -72,44 +73,25 @@ export function holdingPageOptions(state: PageTreeState | undefined): HoldingPag
     return out;
 }
 
-export interface ShareLink {
-    id: string;
-    label: string;
-    createdAt: string;
-    createdBy?: string | null;
-    expiresAt: string | null;
-    revokedAt?: string | null;
-    lastUsedAt?: string | null;
-}
-
-/** The create response, the only one that carries `key`. */
-export interface CreatedShareLink {
-    id: string;
-    label: string;
-    expiresAt: string | null;
-    createdAt: string;
-    key: string;
-}
-
-export type ShareLinkStatus = 'active' | 'expired' | 'revoked';
-
-/** Revoked wins over expired, since revoking is the thing someone did on purpose. */
-export function shareLinkStatus(
-    link: Pick<ShareLink, 'expiresAt' | 'revokedAt'>,
-    now: Date = new Date(),
-): ShareLinkStatus {
-    if (link.revokedAt) return 'revoked';
-    if (link.expiresAt && new Date(link.expiresAt).getTime() <= now.getTime()) return 'expired';
-    return 'active';
-}
-
-export const SHARE_LINK_EXPIRY_DAYS = [1, 7, 30, 90] as const;
-export const DEFAULT_SHARE_LINK_DAYS = 30;
-export const MAX_SHARE_LINK_DAYS = 90;
-
-export function shareLinkExpiry(days: number, now: Date = new Date()): string {
-    const clamped = Math.min(Math.max(days, 1), MAX_SHARE_LINK_DAYS);
-    return new Date(now.getTime() + clamped * 24 * 60 * 60 * 1000).toISOString();
+/**
+ * The site's own share links: the whole holding site, at the endpoint barakoCMS 4.2.0 shipped.
+ *
+ * `siteUrl` is the stored address, not the unsaved one, since a link built from an address nobody
+ * saved would point at a site that does not answer to it.
+ */
+export function siteShareScope(siteUrl: unknown): ShareLinkScope {
+    return {
+        key: ['site'],
+        path: '/api/site/share-links',
+        description:
+            'Let someone see the site while it is holding. A link works until it expires or is revoked, and is not saved with the changes above.',
+        revokeWarning: 'Anyone opening this link sees the holding page again. This cannot be undone.',
+        link: (key) => {
+            const url = shareLinkUrl(siteUrl, key);
+            return url ? { value: url, complete: true } : { value: `/_share#${key}`, complete: false };
+        },
+        incompleteNote: 'The site has no saved address, so this is only the part that goes after it.',
+    };
 }
 
 /**
