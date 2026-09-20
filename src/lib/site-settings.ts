@@ -101,32 +101,6 @@ export function isCssLength(value: string): boolean {
 }
 
 /** An object of string values, such as Colors, Fonts, Radii and Layout. */
-const sameValue = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
-
-/**
- * An edit to a JSON map, moved onto a newer stored value key by key.
- *
- * `base` is the stored value the edit was made from and `edit` is the whole map as this screen holds
- * it. Keys the edit changed or added are laid over `stored`, keys it removed are removed, and every
- * other key keeps what is stored now. So someone else's new key survives a save of an unrelated
- * change. A key holding a map on every side, such as one field's entry in OptionColors, is moved
- * forward the same way. A value that is not a plain object on any side is replaced whole, as before.
- */
-export function rebaseMapEdit(base: unknown, edit: unknown, stored: unknown): unknown {
-    if (!isPlainObject(edit) || !isPlainObject(stored) || sameValue(base, stored)) return edit;
-    const before = isPlainObject(base) ? base : {};
-    const next: Record<string, unknown> = { ...stored };
-    for (const [key, value] of Object.entries(edit)) {
-        if (!(key in before) || !sameValue(before[key], value)) {
-            next[key] = key in before && key in stored ? rebaseMapEdit(before[key], value, stored[key]) : value;
-        }
-    }
-    for (const key of Object.keys(before)) {
-        if (!(key in edit)) delete next[key];
-    }
-    return next;
-}
-
 export function readStringMap(value: unknown): Record<string, string> | null {
     if (isBlank(value)) return {};
     if (!isPlainObject(value)) return null;

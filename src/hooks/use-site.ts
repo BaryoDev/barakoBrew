@@ -14,7 +14,14 @@ export type SiteEntryState =
     /** The tenant has no `site` type, which is every tenant on an API older than the blueprint. */
     | { kind: 'no-type' }
     | { kind: 'no-entry'; schema: ContentTypeDefinition }
-    | { kind: 'entry'; schema: ContentTypeDefinition; entry: ContentDetailRead; stored: number };
+    | {
+          kind: 'entry';
+          schema: ContentTypeDefinition;
+          entry: ContentDetailRead;
+          stored: number;
+          /** Reads the entry through to the server, which a refused save does before it retries. */
+          refetch: () => Promise<ContentDetailRead | undefined>;
+      };
 
 /**
  * The tenant's one `site` entry, found the way the single-entry screen finds one: the list filtered
@@ -41,7 +48,13 @@ export function useSiteEntry(): SiteEntryState {
 
     if (detail.isLoading) return { kind: 'loading' };
     if (detail.isError || !detail.data) return { kind: 'error', retry: () => detail.refetch() };
-    return { kind: 'entry', schema, entry: detail.data, stored: list.data.totalItems };
+    return {
+        kind: 'entry',
+        schema,
+        entry: detail.data,
+        stored: list.data.totalItems,
+        refetch: async () => (await detail.refetch()).data,
+    };
 }
 
 /** Creates the `site` type from the API's blueprint. A 409 means it exists already. */
