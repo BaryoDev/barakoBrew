@@ -291,10 +291,12 @@ function ContentListInner() {
                         </div>
                       </TableCell>
                       <TableCell className={`${META} hidden py-3.5 text-right md:table-cell`}>
-                        {/* Nothing, not a zero, when the server did not send one. A cell reading 0
-                            is a claim about the entry; an empty one says the field was absent, which
-                            is what happens against a pre-4.0 API. */}
-                        {item.version === undefined ? '' : item.version}
+                        {/* Nothing, not a zero, when the server did not send a version. A cell
+                            reading 0 is a claim about the entry; an empty one says the server did
+                            not answer. Absent is a pre-4.0 API. Zero is a 4.x one saying the entry
+                            has no event stream behind it, which is every seeded row, so the two mean
+                            the same thing here and read the same way. */}
+                        {item.version ? item.version : ''}
                       </TableCell>
                       <TableCell className={`${META} hidden py-3.5 pr-6 text-right sm:table-cell`}>
                         {formatDistanceToNowStrict(new Date(item.updatedAt), { addSuffix: true })}

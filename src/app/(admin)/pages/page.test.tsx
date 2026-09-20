@@ -232,6 +232,21 @@ describe('Pages screen', () => {
         await waitFor(() => expect(treeReads()).toBe(2));
     });
 
+    it('writes the move again when the first one is refused and the page has not moved', async () => {
+        // The same 412 as above, but only once. Pages saves through the shared concurrent flow, so
+        // a refusal with nothing in disagreement is read again and written again rather than being
+        // handed to the operator as a failure they have to repeat by hand.
+        vi.mocked(api.put).mockRejectedValueOnce(httpError(412)).mockResolvedValue({ data: {} });
+
+        renderPage();
+        fireEvent.click(await screen.findByRole('button', { name: 'Move Contact into the page above' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+        const sent = vi.mocked(api.put).mock.calls[1][1] as { data: Record<string, unknown> };
+        expect(sent.data.ParentPage).toBe('about');
+        expect(within(rowOf('Contact')).queryByRole('alert')).toBeNull();
+    });
+
     it('does not save over a move someone else made after the tree was read', async () => {
         entryParent = 'team';
 

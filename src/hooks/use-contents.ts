@@ -98,7 +98,11 @@ export function useUpdateContent() {
                 { id, ...data },
                 etag ? { headers: { 'If-Match': etag } } : undefined
             );
-            return response.data;
+            // The write answers with the ETag of what it just wrote, and a screen that stays open
+            // has to keep it: the next save from the same screen needs an `If-Match`, and a
+            // deployment with Content:Concurrency:Require on refuses a write that carries none with
+            // a 428. Undefined for an event-sourced type, which the API sends no ETag for.
+            return { ...response.data, etag: response.headers?.etag as string | undefined };
         },
         onSuccess: (_data, { id }) => {
             queryClient.invalidateQueries({ queryKey: ['contents'] });

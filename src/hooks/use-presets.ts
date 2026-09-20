@@ -1,7 +1,9 @@
 'use client';
 
 import { useSiteEntry, useSaveSite } from '@/hooks/use-site';
+import { saveConcurrently, type SaveBase } from '@/lib/concurrent-save';
 import { presetsFrom, upsertPreset, PRESETS_FIELD, type BlockPreset } from '@/lib/presets';
+import { ContentStatus } from '@/types/content';
 
 export type PresetsState = {
     presets: BlockPreset[];
@@ -20,6 +22,11 @@ export type PresetsState = {
  * A tenant whose `site` type has no `Presets` field cannot store one: the API checks an entry
  * against its type. That is a note rather than an error, the way the Site screen treats a setting
  * its type does not declare.
+ *
+ * This is the fourth writer of that one entry, after Site, Theme and the block editor's own reads,
+ * so it saves through the same concurrent flow: somebody saving the Site screen between this read
+ * and this write no longer costs the preset, and two people saving a preset at once is refused
+ * rather than one of them quietly winning.
  */
 export function usePresets(): PresetsState {
     const site = useSiteEntry();
@@ -47,12 +54,33 @@ export function usePresets(): PresetsState {
             reason: `Add a JSON field called ${PRESETS_FIELD} to the site type to save blocks for reuse.`,
         };
     }
+    const refetch = site.kind === 'entry' ? site.refetch : null;
+
     return {
         presets,
         save: async (preset) => {
-            await save.mutateAsync({
-                entry,
-                changes: { [PRESETS_FIELD]: upsertPreset(entry?.data?.[PRESETS_FIELD], preset) },
+            const base: SaveBase & { status: ContentStatus } = {
+                data: entry?.data ?? {},
+                version: entry?.version ?? 0,
+                etag: entry?.etag,
+                status: entry?.status ?? ContentStatus.Draft,
+            };
+
+            await saveConcurrently({
+                base,
+                edit: { ...base.data, [PRESETS_FIELD]: upsertPreset(base.data[PRESETS_FIELD], preset) },
+                read: async () => {
+                    const fresh = await refetch?.();
+                    if (!fresh) throw new Error('The site entry could not be read back.');
+                    return { data: fresh.data, version: fresh.version, etag: fresh.etag, status: fresh.status };
+                },
+                write: (data, against) =>
+                    save.mutateAsync({
+                        entry: entry
+                            ? { ...entry, data, version: against.version, etag: against.etag, status: against.status }
+                            : null,
+                        changes: data,
+                    }),
             });
         },
     };

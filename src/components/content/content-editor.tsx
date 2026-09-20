@@ -14,6 +14,8 @@ import {
   useUpdateContentStatus,
 } from '@/hooks/use-contents';
 import { apiErrorMessage, isConflict } from '@/lib/api';
+import { SaveConflictError } from '@/lib/concurrent-save';
+import { conflictReason, useConcurrentSave } from '@/hooks/use-concurrent-save';
 import { ContentStatus, SENSITIVITY_META } from '@/types/content';
 import { statusMeta } from '@/lib/status-vocabulary';
 import type { ContentDetail } from '@/types/content';
@@ -42,6 +44,13 @@ import { choiceProblems } from '@/lib/choice';
 function sameValues(a: Record<string, unknown>, b: Record<string, unknown>) {
   const keys = Object.keys(a);
   return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+}
+
+/** The entry as this screen last read it: what an edit is written against, and what proves it. */
+interface Seeded {
+  version: number;
+  data: Record<string, unknown>;
+  etag?: string;
 }
 
 /**
@@ -78,18 +87,27 @@ export function ContentEditor({
   // on window focus, so an editor who looked away and came back had everything they had typed
   // replaced by whoever saved in between, with no error and no race. A newer version now re-seeds
   // only when there is nothing to lose; otherwise it raises a conflict and the editor decides.
-  const [seeded, setSeeded] = useState<{ version: number; data: Record<string, unknown> } | null>(null);
-  const [conflict, setConflict] = useState(false);
+  //
+  // The ETag rides along because it is what the save sends as `If-Match`, and it has to be the one
+  // that was read with this data. Taking the freshest one instead would hand the server a
+  // precondition that passes, on top of a document built from an older read, which is a save that
+  // overwrites whoever moved it in between and is refused by nothing.
+  const [seeded, setSeeded] = useState<Seeded | null>(null);
+  const saver = useConcurrentSave();
+  const conflict = saver.conflict;
 
   const dirty = seeded !== null && !sameValues(values, seeded.data);
 
-  if (content && seeded?.version !== content.version) {
+  // Only forward. After a save this holds the version the server just wrote, which is ahead of the
+  // cached entry until the refetch lands, and re-seeding from that would put the screen back to
+  // what was there before the save.
+  if (content && (seeded === null || content.version > seeded.version)) {
     if (!dirty) {
-      setSeeded({ version: content.version, data: content.data });
+      setSeeded({ version: content.version, data: content.data, etag: content.etag });
       setValues(content.data);
-      if (conflict) setConflict(false);
+      if (conflict) saver.clear();
     } else if (!conflict) {
-      setConflict(true);
+      saver.raise();
     }
   }
 
@@ -99,9 +117,9 @@ export function ContentEditor({
   const takeTheirVersion = async () => {
     const fresh = (await refetchContent()).data ?? content;
     if (!fresh) return;
-    setSeeded({ version: fresh.version, data: fresh.data });
+    setSeeded({ version: fresh.version, data: fresh.data, etag: fresh.etag });
     setValues(fresh.data);
-    setConflict(false);
+    saver.clear();
   };
 
   const schema = schemas?.find((s) => s.name === content?.contentType);
@@ -114,36 +132,66 @@ export function ContentEditor({
   const blocked = schema ? Object.keys(choiceProblems(schema.fields, values)).length > 0 : false;
   const sensitivityMeta = SENSITIVITY_META[content.sensitivity];
 
-  const save = (status?: ContentStatus) => {
-    updateContent.mutate(
-      {
-        id,
-        data: {
-          data: values,
-          status: status ?? content.status,
-          version: content.version,
+  // The version and the ETag come from what was seeded, never from the latest read. Sending the
+  // latest is what made a stale save succeed: the entry moved on, the conflict banner went up, and
+  // Save then wrote the editor's older document under a precondition that matched, losing the other
+  // change with no error anywhere. Sending what was read is what lets the server refuse, and a
+  // refusal is what the flow below is for.
+  const save = async (status?: ContentStatus) => {
+    const base = seeded;
+    if (!base) return;
+
+    try {
+      const outcome = await saver.save({
+        base: { ...base, status: content.status },
+        edit: values,
+        read: async () => {
+          const fresh = (await refetchContent()).data;
+          if (!fresh) throw new Error('The entry could not be read back.');
+          return { data: fresh.data, version: fresh.version, etag: fresh.etag, status: fresh.status };
         },
-        etag: content.etag,
-      },
-      {
-        onSuccess: () => toast.success(status === ContentStatus.Published ? 'Published' : 'Changes saved'),
-        onError: (error) => {
-          // A refused save is the one failure where a toast is not enough: it is gone in seconds
-          // and it is the moment somebody has to choose between two versions of the entry.
-          if (isConflict(error)) setConflict(true);
-          toast.error(apiErrorMessage(error, 'The entry could not be saved.'));
-        },
-      }
-    );
+        write: (data, against) =>
+          updateContent.mutateAsync({
+            id,
+            data: { data, status: status ?? against.status, version: against.version },
+            etag: against.etag,
+          }),
+      });
+
+      // Re-seeded from what was written rather than from the cache, which is a version behind until
+      // the invalidation lands. Without this the next render reads its own save as somebody else's
+      // change and raises a conflict over it.
+      setSeeded({ version: outcome.result.version, data: outcome.data, etag: outcome.result.etag });
+      setValues(outcome.data);
+      toast.success(
+        status === ContentStatus.Published
+          ? 'Published'
+          : outcome.rebased
+            ? 'Changes saved, on top of a change somebody else made'
+            : 'Changes saved'
+      );
+    } catch (error) {
+      // A refused save is the one failure where a toast is not enough: it is gone in seconds and it
+      // is the moment somebody has to choose between two versions of the entry. The banner the hook
+      // raised stays on the page.
+      toast.error(
+        error instanceof SaveConflictError
+          ? error.message
+          : apiErrorMessage(error, 'The entry could not be saved.')
+      );
+    }
   };
 
+  // Not through the hook: there is no document to move forward, only a status the server either
+  // accepts or refuses. It raises the same banner, so a refusal reads the same wherever it came
+  // from.
   const setStatus = (status: ContentStatus, label: string) => {
     updateStatus.mutate(
       { id, status },
       {
         onSuccess: () => toast.success(label),
         onError: (error) => {
-          if (isConflict(error)) setConflict(true);
+          if (isConflict(error)) saver.raise();
           toast.error(apiErrorMessage(error, 'The status could not be changed.'));
         },
       }
@@ -193,7 +241,7 @@ export function ContentEditor({
           className="border-warning/40 bg-[var(--warning-soft)] text-warning mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
         >
           <p className="text-sm font-semibold">
-            This entry changed while you were editing.{' '}
+            {conflictReason(conflict.fields, 'This entry changed while you were editing.')}{' '}
             <span className="font-medium">
               Nothing you typed has been lost, and nothing has been saved.
             </span>
