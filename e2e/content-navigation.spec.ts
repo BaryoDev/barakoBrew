@@ -97,6 +97,23 @@ test('the entries of a type are in the URL, so the same link opens the same scre
     expect(new URL(page.url()).searchParams.get('type')).toBe('blogpost');
 });
 
+test('the Entries link in the rail clears a search rather than restoring it', async ({ page, isMobile }) => {
+    test.skip(!!isMobile, 'the rail is a sheet on a phone, and this reaches the screen from the rail');
+
+    // Same route, different query string, so the screen stays mounted and the search box has to
+    // follow the URL. It used to win the argument and write its own value straight back, which
+    // made the rail's Entries link look broken.
+    await page.goto('/content?type=blogpost&q=hello');
+    await expect(page.getByLabel('Search entries')).toHaveValue('hello');
+
+    await page.locator('a[data-sidebar="menu-button"][href="/content"]').click();
+
+    await expect(page.getByLabel('Search entries')).toHaveValue('');
+    await expect
+        .poll(() => new URL(page.url()).searchParams.get('q'), { timeout: 5000 })
+        .toBeNull();
+});
+
 test('cards or list is remembered for next time', async ({ page }) => {
     await page.goto('/schemas');
 

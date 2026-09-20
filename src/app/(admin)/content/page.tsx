@@ -41,6 +41,11 @@ import { IconChevronLeft } from '@/components/icons';
 const ALL_TYPES = 'all';
 const ALL_STATUSES = 'all';
 
+/** Where a new entry of a type is written. Encoded, the way every other generated link here is. */
+function newEntryHref(contentType?: string): string {
+  return contentType ? `/content/new?type=${encodeURIComponent(contentType)}` : '/content/new';
+}
+
 /**
  * The status filter, in the design's order.
  *
@@ -101,22 +106,31 @@ function ContentListInner() {
   // whichever query happened to finish last rather than on what is in the box.
   const query = useDebounced(search, 300);
 
-  /*
-   * The box is seeded from the URL when the screen opens and writes to it from then on, in one
-   * direction only.
+  /**
+   * The search the URL held when this screen last drew, which is what tells the two ways the box
+   * and the URL can disagree apart.
    *
-   * Reading the URL back into the box as well is the obvious next step and it is a loop: the
-   * debounce settles, the box holds the new text while the URL still holds the old, and a screen
-   * that copies the URL into the box on sight reverts the search a moment after it was typed. The
-   * e2e walk caught exactly that.
-   *
-   * One direction is enough because the write is `replace`, which leaves no history entry: nothing
-   * can navigate back to an earlier search on this screen. Arriving with a different one is a fresh
-   * mount, which seeds the box from the URL again.
+   * The URL lagging behind the box is this screen's own write on its way through the router. The
+   * URL changing to something the box did not ask for is a navigation: the Entries link in the
+   * rail, which drops the search, or a pasted address. Comparing the two values cannot separate
+   * them, because on the render where the debounce settles they differ for the first reason and on
+   * the render after a navigation they differ for the second. Comparing the URL against itself can.
    */
+  const [urlQueryAsDrawn, setUrlQueryAsDrawn] = useState(urlQuery);
+
+  if (urlQuery !== urlQueryAsDrawn) {
+    setUrlQueryAsDrawn(urlQuery);
+    // Not what this screen asked for, so somebody navigated and the box follows.
+    if (urlQuery !== query) setSearch(urlQuery);
+  }
+
+  // The box leads and the URL follows, once the typing has settled. Waiting for the debounce is
+  // what stops a navigation that empties the search being written straight back from a box the
+  // debounce has not caught up with yet.
   useEffect(() => {
+    if (search !== query) return;
     if (query !== urlQuery) setParams({ q: query, page: null });
-  }, [query, urlQuery, setParams]);
+  }, [search, query, urlQuery, setParams]);
 
   // Every filter goes back to page one. Staying on page four of a wider result and then narrowing
   // it shows an empty table beside a count saying there are matches, which reads as a broken search.
@@ -203,7 +217,7 @@ function ContentListInner() {
         }
         actions={
           <Button asChild size="sm">
-            <Link href={contentType ? `/content/new?type=${contentType}` : '/content/new'}>
+            <Link href={newEntryHref(contentType)}>
               <IconPlus />
               New entry
             </Link>
@@ -278,7 +292,7 @@ function ContentListInner() {
           }
           action={
             <Button asChild size="sm">
-              <Link href={contentType ? `/content/new?type=${contentType}` : '/content/new'}>
+              <Link href={newEntryHref(contentType)}>
                 <IconPlus />
                 New entry
               </Link>

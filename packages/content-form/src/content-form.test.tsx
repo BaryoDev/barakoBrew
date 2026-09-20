@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ContentForm } from './content-form';
 import { SensitivityLevel, type FieldDefinition } from './definition';
 
@@ -120,6 +120,47 @@ describe('a field the viewer may not read', () => {
         renderSensitive(['Editor'], host);
         expect(host).not.toHaveBeenCalled();
         expect(screen.queryByText('host drew Salary')).toBeNull();
+    });
+});
+
+describe('a JSON field whose value is replaced from outside', () => {
+    const fields: FieldDefinition[] = [
+        { name: 'Prefs', displayName: 'Prefs', type: 'json', isRequired: false },
+    ];
+
+    function draw(values: Record<string, unknown>) {
+        return (
+            <ContentForm fields={fields} values={values} onChange={() => {}} viewerRoles={['SuperAdmin']} />
+        );
+    }
+
+    // The entry is reloaded on a save conflict, rolled back, or the create screen is pointed at
+    // another type. The control stays mounted through all three, and it used to keep drawing the
+    // JSON from before.
+    it('shows the value that arrived, not the one it was holding', () => {
+        const { rerender } = render(draw({ Prefs: { theme: 'dark' } }));
+        const box = document.getElementById('Prefs') as HTMLTextAreaElement;
+        expect(JSON.parse(box.value)).toEqual({ theme: 'dark' });
+
+        rerender(draw({ Prefs: { theme: 'light', density: 'compact' } }));
+        expect(JSON.parse((document.getElementById('Prefs') as HTMLTextAreaElement).value)).toEqual({
+            theme: 'light',
+            density: 'compact',
+        });
+    });
+
+    it('keeps half-typed JSON while the value it came from is unchanged', () => {
+        // The other half of the same rule. A redraw for any other reason must not throw away what
+        // somebody is in the middle of typing, which is why the text is state and not derived.
+        const values = { Prefs: { theme: 'dark' } };
+        const { rerender } = render(draw(values));
+        const box = document.getElementById('Prefs') as HTMLTextAreaElement;
+
+        fireEvent.change(box, { target: { value: '{ "theme": ' } });
+        rerender(draw(values));
+
+        expect((document.getElementById('Prefs') as HTMLTextAreaElement).value).toBe('{ "theme": ');
+        expect(screen.getByText(/Not valid JSON yet/)).toBeInTheDocument();
     });
 });
 

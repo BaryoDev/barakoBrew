@@ -308,6 +308,12 @@ const JSON_HINTS: Partial<Record<FieldType, string>> = {
     geopoint: 'A position, e.g. {"lat": 14.5995, "lng": 120.9842}',
 };
 
+/** A value as the JSON an editor types, with an empty list or object for one that is not there. */
+function asText(value: unknown, type: FieldType): string {
+    if (value === undefined || value === null) return type === 'array' ? '[]' : '{}';
+    return JSON.stringify(value, null, 2);
+}
+
 export function JsonField({
     field,
     type,
@@ -323,14 +329,27 @@ export function JsonField({
     error?: string;
     onChange: (value: unknown) => void;
 }) {
-    const [text, setText] = useState(() =>
-        value === undefined || value === null
-            ? type === 'array'
-                ? '[]'
-                : '{}'
-            : JSON.stringify(value, null, 2)
-    );
+    const [text, setText] = useState(() => asText(value, type));
     const [parseError, setParseError] = useState<string | null>(null);
+
+    /**
+     * The value this editor last handed out, which is how it tells its own edit from somebody
+     * else's.
+     *
+     * The text is held here rather than derived, so half-typed JSON survives a re-render. That is
+     * right while the editor is the one changing the value and wrong the moment anything else does:
+     * the form keys a field by its name, so this control stays mounted when the entry is reloaded
+     * on a save conflict, rolled back to an earlier version, or when the create screen is pointed
+     * at a different content type. It kept showing the old JSON, and the next keystroke wrote that
+     * over the value that had just arrived.
+     */
+    const [handedOut, setHandedOut] = useState(value);
+
+    if (!Object.is(value, handedOut)) {
+        setHandedOut(value);
+        setText(asText(value, type));
+        setParseError(null);
+    }
 
     return (
         <div className="space-y-2">
@@ -345,6 +364,7 @@ export function JsonField({
                     try {
                         const parsed = JSON.parse(e.target.value);
                         setParseError(null);
+                        setHandedOut(parsed);
                         onChange(parsed);
                     } catch {
                         setParseError(

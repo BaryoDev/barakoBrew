@@ -61,6 +61,11 @@ function openHref(schema: ContentTypeDefinition): string {
   return schema.isSingleton === true ? singletonHref(schema.name) : entriesHref(schema.name);
 }
 
+/** The field designer for a type. Encoded, since a name is data even when it usually looks safe. */
+function fieldsHref(schema: ContentTypeDefinition): string {
+  return `/schemas/${encodeURIComponent(schema.name)}`;
+}
+
 function lastEdited(schema: ContentTypeDefinition): string | null {
   const at = schema.updatedAt ?? schema.createdAt;
   if (!at) return null;
@@ -233,7 +238,7 @@ export default function SchemasPage() {
                       </TableCell>
                       <TableCell className="py-3.5 pr-6 text-right">
                         <Link
-                          href={`/schemas/${schema.name}`}
+                          href={fieldsHref(schema)}
                           className="focus-visible:ring-ring text-muted-foreground hover:text-foreground rounded-sm text-xs outline-none focus-visible:ring-[3px]"
                         >
                           Fields
@@ -285,7 +290,7 @@ function TypeCard({ schema }: { schema: ContentTypeDefinition }) {
         <span>{edited ? `Edited ${edited}` : `${schema.fields.length} fields`}</span>
         {/* Above the stretched link, so it is its own destination rather than part of the card. */}
         <Link
-          href={`/schemas/${schema.name}`}
+          href={fieldsHref(schema)}
           className="focus-visible:ring-ring hover:text-foreground relative z-10 rounded-sm outline-none focus-visible:ring-[3px]"
         >
           Fields
