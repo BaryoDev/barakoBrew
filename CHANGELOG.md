@@ -54,8 +54,9 @@ moved. Which API a console works against is stated per release instead.
   by key, and write again. So a change somebody else made to a field you did not touch survives your
   save instead of costing you a round of copy and paste. A field you both changed is named and the
   save is refused, with the same two answers everywhere: take their version, or keep yours over it.
-  `rebaseMapEdit` moves out of the site library to `lib/rebase.ts`, where every screen can reach it.
-  (#164)
+  Saving a reusable block turned out to be a fourth answer to the same refusal, and goes the same
+  way now. `rebaseMapEdit` moves out of the site library to `lib/rebase.ts`, where every screen can
+  reach it. (#164)
 - **The share links panel takes a scope, and reads the maximum expiry from the API.** The panel
   used to know only the whole site and to own the expiry rules itself: the day choices, the 30 day
   default and the 90 day clamp were console constants. It now takes a scope that carries the
