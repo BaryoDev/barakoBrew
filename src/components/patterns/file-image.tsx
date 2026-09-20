@@ -33,7 +33,8 @@ function useLoadedSize(
     }, [image, key, onLoaded]);
 }
 
-function UrlImage({ src, alt, className, onLoaded }: ImageProps & { src: string }) {
+/** An image at a URL the console built. */
+export function UrlImage({ src, alt, className, onLoaded }: ImageProps & { src: string }) {
     const image = useRef<HTMLImageElement>(null);
     useLoadedSize(image, src, onLoaded);
 
@@ -47,7 +48,7 @@ function UrlImage({ src, alt, className, onLoaded }: ImageProps & { src: string 
  * The URL is made and released by the effect rather than held in state, so it goes with the element
  * and there is no way to forget it. An object URL pins its blob in memory until it is revoked.
  */
-function BlobImage({ blob, alt, className, onLoaded }: ImageProps & { blob: Blob }) {
+export function BlobImage({ blob, alt, className, onLoaded }: ImageProps & { blob: Blob }) {
     const image = useRef<HTMLImageElement>(null);
     useLoadedSize(image, blob, onLoaded);
 
@@ -61,13 +62,4 @@ function BlobImage({ blob, alt, className, onLoaded }: ImageProps & { blob: Blob
 
     // eslint-disable-next-line @next/next/no-img-element -- the optimiser is off on purpose (#80).
     return <img ref={image} alt={alt} className={className} />;
-}
-
-/** An image drawn from a URL or from bytes the browser already holds. */
-export function SourceImage({ source, ...rest }: ImageProps & { source: string | Blob }) {
-    return typeof source === 'string' ? (
-        <UrlImage src={source} {...rest} />
-    ) : (
-        <BlobImage blob={source} {...rest} />
-    );
 }

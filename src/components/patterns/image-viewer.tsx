@@ -5,7 +5,7 @@ import { getApiUrl } from '@/lib/api';
 import { formatBytes, publicFileLink } from '@/lib/files';
 import { viewerVariantSource } from '@/lib/image-variants';
 import { useFileBlob } from '@/hooks/use-files';
-import { SourceImage } from '@/components/patterns/source-image';
+import { BlobImage, UrlImage } from '@/components/patterns/file-image';
 import {
     Dialog,
     DialogContent,
@@ -59,7 +59,7 @@ function PrivateImage({
 
     if (isError) return <p className="text-destructive py-8 text-center text-sm">This image could not be loaded.</p>;
     if (!blob) return <div className="bg-muted h-64 animate-pulse rounded-md" aria-hidden="true" />;
-    return <SourceImage source={blob} alt={file.alt ?? ''} className={IMAGE} onLoaded={onLoaded} />;
+    return <BlobImage blob={blob} alt={file.alt ?? ''} className={IMAGE} onLoaded={onLoaded} />;
 }
 
 function ViewerBody({ file }: { file: ViewableFile }) {
@@ -85,7 +85,7 @@ function ViewerBody({ file }: { file: ViewableFile }) {
             {authenticated ? (
                 <PrivateImage file={file} src={src} onLoaded={setLoaded} />
             ) : (
-                <SourceImage source={src} alt={file.alt ?? ''} className={IMAGE} onLoaded={setLoaded} />
+                <UrlImage src={src} alt={file.alt ?? ''} className={IMAGE} onLoaded={setLoaded} />
             )}
 
             {link && (

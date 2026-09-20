@@ -16,7 +16,7 @@ import { apiErrorMessage, getApiUrl } from '@/lib/api';
 import { UPLOAD_RULES, canDeleteFile, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
 import { ImageViewer, isViewableImage } from '@/components/patterns/image-viewer';
-import { SourceImage } from '@/components/patterns/source-image';
+import { BlobImage } from '@/components/patterns/file-image';
 import { useUploads } from '@/components/uploads-provider';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -71,8 +71,8 @@ function ChosenFile({ file }: { file: File }) {
     <li className="space-y-2">
       {/* Nothing the API would refuse is drawn, so an SVG is never rendered from a chosen file. */}
       {problem === null && isViewableImage(file.type) && (
-        <SourceImage
-          source={file}
+        <BlobImage
+          blob={file}
           alt={`Preview of ${file.name}`}
           className="bg-muted max-h-48 w-auto max-w-full rounded-md border object-contain"
         />
