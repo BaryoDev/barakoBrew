@@ -12,6 +12,7 @@ import { IconChevronDown, IconChevronRight, IconMore, IconPlus, IconTrash } from
 import { useBlockSchema, type BlockSchemaState } from '@/hooks/use-block-schema';
 import { useSchemas } from '@/hooks/use-schemas';
 import { usePresets } from '@/hooks/use-presets';
+import { SaveConflictError } from '@/lib/concurrent-save';
 import { BindingControl } from '@/components/content/binding-picker';
 import { bindingProblems, scopesFor, type BindingScope } from '@/lib/binding-scopes';
 import { presetFrom, isPresetName, withPresets, MAX_PRESETS, type BlockPreset } from '@/lib/presets';
@@ -938,8 +939,14 @@ function SavePreset({ ctx, type, item }: { ctx: Context; type: BlockType; item: 
             setOpen(false);
             setName('');
             setLabel('');
-        } catch {
-            setFailed('The site settings could not be saved. Try again.');
+        } catch (error) {
+            // A refused save is the one failure worth naming: it says somebody else changed the same
+            // thing, which is not something trying again fixes.
+            setFailed(
+                error instanceof SaveConflictError
+                    ? error.message
+                    : 'The site settings could not be saved. Try again.'
+            );
         } finally {
             setSaving(false);
         }

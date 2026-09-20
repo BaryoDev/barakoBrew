@@ -65,6 +65,16 @@ moved. Which API a console works against is stated per release instead.
 
 ### Changed
 
+- **One save flow for a refused write, not three.** A 412 was answered in three places in three
+  ways: the entry editor raised a banner and stopped, the Site and Theme screens merged each edited
+  key by hand, and Pages threw and reloaded the tree. Entries, Site, Theme and Pages now write
+  through one flow: write, and if the server refuses, read what is stored, move the edit onto it key
+  by key, and write again. So a change somebody else made to a field you did not touch survives your
+  save instead of costing you a round of copy and paste. A field you both changed is named and the
+  save is refused, with the same two answers everywhere: take their version, or keep yours over it.
+  Saving a reusable block turned out to be a fourth answer to the same refusal, and goes the same
+  way now. `rebaseMapEdit` moves out of the site library to `lib/rebase.ts`, where every screen can
+  reach it. (#164)
 - **The share links panel takes a scope, and reads the maximum expiry from the API.** The panel
   used to know only the whole site and to own the expiry rules itself: the day choices, the 30 day
   default and the 90 day clamp were console constants. It now takes a scope that carries the
@@ -88,6 +98,18 @@ moved. Which API a console works against is stated per release instead.
 
 ### Fixed
 
+- **A save could write over somebody else's, with the banner on screen saying it had not.** The
+  entry editor sent the version and the ETag of its latest read rather than of the read its edit was
+  built from. So after the conflict banner appeared, pressing Save wrote this editor's older
+  document under a precondition the server was happy with, and the other change went with no error
+  anywhere. It sends what it read now, which is what lets the server refuse it. The Site and Theme
+  screens had the same hole through a different door: edits were laid over the freshest read and the
+  save carried that read's version, so a field both people changed was written with nothing to
+  notice it. (#164)
+- **The entries list showed version 0 as if it were a version.** The API sends 0 for an entry with
+  no event stream behind it, which is every seeded row on a fresh deployment, and that means the
+  server has no version rather than the entry being at version zero. The V column now leaves the
+  cell empty for 0, the same as for an API too old to send a version at all. (#10)
 - **A secret shown once outlived the dialog that showed it.** The API key, the two-factor setup key
   and the recovery codes were left in the TanStack mutation cache for five minutes after the screen
   closed, where anything else in the page could read them back and a navigation did not clear them.

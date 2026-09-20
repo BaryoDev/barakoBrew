@@ -3,10 +3,11 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
 import { useApplySiteBlueprint, useSaveSite, useSiteEntry } from '@/hooks/use-site';
-import { apiErrorMessage, isConflict, isNotFound } from '@/lib/api';
-import { rebaseMapEdit } from '@/lib/site-settings';
+import { apiErrorMessage, isNotFound } from '@/lib/api';
+import { SaveConflictError, type SaveBase } from '@/lib/concurrent-save';
+import { conflictReason, useConcurrentSave } from '@/hooks/use-concurrent-save';
+import { rebaseEdit } from '@/lib/rebase';
 import { statusMeta } from '@/lib/status-vocabulary';
 import { ContentStatus, type ContentDetailRead } from '@/types/content';
 import type { ContentTypeDefinition } from '@/types/schema';
@@ -52,13 +53,19 @@ export function SiteForm({
     children: (context: SiteFormContext) => ReactNode;
 }) {
     const state = useSiteEntry();
-    const queryClient = useQueryClient();
     const apply = useApplySiteBlueprint();
     const save = useSaveSite();
     const [edits, setEdits] = useState<Record<string, unknown>>({});
-    /** Each edited field's stored value when this screen last changed it. */
-    const [bases, setBases] = useState<Record<string, unknown>>({});
-    const [conflict, setConflict] = useState(false);
+    /**
+     * The entry as it was when this screen was first edited.
+     *
+     * The save is written against this, not against the freshest read. Sending the freshest version
+     * would let a save that was built from an older document succeed, which is how somebody else's
+     * change disappears with nothing refusing it.
+     */
+    const [base, setBase] = useState<(SaveBase & { status: ContentStatus }) | null>(null);
+    const saver = useConcurrentSave();
+    const conflict = saver.conflict;
 
     if (state.kind === 'loading') {
         return (
@@ -131,44 +138,86 @@ export function SiteForm({
     }
 
     const stored = entry?.data ?? {};
-    const changes = Object.fromEntries(
-        Object.entries(edits).map(([field, value]) => [field, rebaseMapEdit(bases[field], value, stored[field])]),
-    );
-    const values = { ...stored, ...changes };
+    // What the edits were made from, per key. The same document the save is written against, so
+    // what is shown and what is sent cannot disagree about which version this edit answers.
+    const baseData = base?.data ?? stored;
+    // Shown with this screen's edits laid over what is stored now, key by key, so a field somebody
+    // else changed appears without taking the edit with it.
+    const values = rebaseEdit(baseData, { ...baseData, ...edits }, stored).data;
     const set = (field: string, value: unknown) => {
-        // The new value is built from what is shown, which already holds the stored value, so the
-        // stored value now is what this edit differs from.
-        setBases((current) => ({ ...current, [field]: stored[field] }));
+        if (!base && entry) {
+            setBase({ data: entry.data, version: entry.version, etag: entry.etag, status: entry.status });
+        }
         setEdits((current) => ({ ...current, [field]: value }));
     };
     const clearEdits = () => {
         setEdits({});
-        setBases({});
+        setBase(null);
     };
     const dirty = Object.keys(edits).length > 0;
     const refusal = problem?.(values) ?? null;
 
-    const submit = (status?: ContentStatus) => {
-        save.mutate(
-            { entry, changes, status },
-            {
-                onSuccess: () => {
-                    clearEdits();
-                    setConflict(false);
-                    toast.success(
-                        status === ContentStatus.Published
-                            ? 'Published'
-                            : entry?.status === ContentStatus.Published
-                              ? 'Saved. The site reads it on its next request.'
-                              : 'Saved as a draft. Publish it for the site to use it.',
-                    );
+    /**
+     * Takes their version as the one this screen is editing, keeping this screen's value for every
+     * field it changed.
+     *
+     * The edits move with the base, because what is on screen already holds their change everywhere
+     * the two did not disagree. Moving the base without them would send this screen's older map
+     * back and drop the key they added.
+     */
+    const loadTheirs = async () => {
+        if (state.kind !== 'entry') return;
+        const fresh = await state.refetch();
+        if (!fresh) return;
+        const merged = rebaseEdit(baseData, { ...baseData, ...edits }, fresh.data).data;
+        setEdits(Object.fromEntries(Object.keys(edits).map((field) => [field, merged[field]])));
+        setBase({ data: fresh.data, version: fresh.version, etag: fresh.etag, status: fresh.status });
+        saver.clear();
+    };
+
+    const submit = async (status?: ContentStatus) => {
+        const against: SaveBase & { status: ContentStatus } = base ?? {
+            data: stored,
+            version: entry?.version ?? 0,
+            etag: entry?.etag,
+            status: entry?.status ?? ContentStatus.Draft,
+        };
+
+        try {
+            await saver.save({
+                base: against,
+                edit: values,
+                read: async () => {
+                    if (state.kind !== 'entry') throw new Error('The site entry could not be read back.');
+                    const fresh = await state.refetch();
+                    if (!fresh) throw new Error('The site entry could not be read back.');
+                    return { data: fresh.data, version: fresh.version, etag: fresh.etag, status: fresh.status };
                 },
-                onError: (error) => {
-                    if (isConflict(error)) setConflict(true);
-                    toast.error(apiErrorMessage(error, 'The site settings could not be saved.'));
-                },
-            },
-        );
+                write: (data, target) =>
+                    save.mutateAsync({
+                        entry: entry
+                            ? { ...entry, data, version: target.version, etag: target.etag, status: target.status }
+                            : null,
+                        changes: data,
+                        status,
+                    }),
+            });
+
+            clearEdits();
+            toast.success(
+                status === ContentStatus.Published
+                    ? 'Published'
+                    : entry?.status === ContentStatus.Published
+                      ? 'Saved. The site reads it on its next request.'
+                      : 'Saved as a draft. Publish it for the site to use it.',
+            );
+        } catch (error) {
+            toast.error(
+                error instanceof SaveConflictError
+                    ? error.message
+                    : apiErrorMessage(error, 'The site settings could not be saved.'),
+            );
+        }
     };
 
     const meta = entry ? statusMeta(entry.status) : null;
@@ -205,19 +254,17 @@ export function SiteForm({
                     className="border-warning/40 bg-[var(--warning-soft)] text-warning mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
                 >
                     <p className="text-sm font-semibold">
-                        Someone saved the site entry while you were editing. Your changes are still here, and nothing
-                        was saved.
+                        {conflictReason(
+                            conflict.fields,
+                            'Someone saved the site entry while you were editing.',
+                        )}{' '}
+                        Your changes are still here, and nothing was saved.
                     </p>
                     <div className="flex gap-2">
                         <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                                // Reading the entry again puts the edits over the newer version, so the
-                                // next save carries its version and is not refused a second time.
-                                setConflict(false);
-                                void queryClient.invalidateQueries({ queryKey: ['contents'] });
-                            }}
+                            onClick={() => void loadTheirs()}
                         >
                             Load theirs under my changes
                         </Button>
@@ -226,7 +273,7 @@ export function SiteForm({
                             variant="ghost"
                             onClick={() => {
                                 clearEdits();
-                                setConflict(false);
+                                saver.clear();
                             }}
                         >
                             Discard my changes

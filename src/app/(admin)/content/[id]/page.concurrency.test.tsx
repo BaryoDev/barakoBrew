@@ -55,14 +55,19 @@ const SCHEMA = {
     name: 'article',
     displayName: 'Article',
     isPubliclyDeliverable: true,
-    fields: [{ name: 'Title', displayName: 'Title', type: 'string', required: true }],
+    fields: [
+        { name: 'Title', displayName: 'Title', type: 'string', required: true },
+        // A second field, so a test can have two people edit different parts of one entry. With one
+        // field every concurrent edit is a collision and the merge has nothing to show.
+        { name: 'Body', displayName: 'Body', type: 'string', required: false },
+    ],
 };
 
-function entry(version: number, title: string) {
+function entry(version: number, title: string, body = 'the body') {
     return {
         id: ID,
         contentType: 'article',
-        data: { Title: title },
+        data: { Title: title, Body: body },
         status: ContentStatus.Draft,
         sensitivity: 'Public',
         version,
@@ -220,5 +225,116 @@ describe('two editors, one entry', () => {
 
         expect(screen.getByDisplayValue('my unsaved work')).toBeTruthy();
         expect(screen.queryByDisplayValue('their version')).toBeNull();
+    });
+});
+
+/**
+ * The same two editors, against a stand-in for the API rather than a fixed answer.
+ *
+ * A mock that always resolves cannot tell a save that was refused from one that was never stale, so
+ * it cannot show the difference between refusing a second edit and letting it win. This one holds
+ * an entry, refuses a write whose version is not the one it holds, and applies one that is. A save
+ * that overwrites somebody leaves that visible in what it ends up holding.
+ */
+describe('two editors, one entry, against a server that checks the version', () => {
+    let server: Omit<ReturnType<typeof entry>, 'data'> & { data: Record<string, unknown> };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        server = entry(1, 'original', 'the body');
+        routeGet(() => server);
+        vi.mocked(api.put).mockImplementation(async (_url: string, body: unknown) => {
+            const sent = body as { version: number; data: Record<string, unknown> };
+            if (sent.version !== server.version) throw conflict();
+            server = { ...server, version: server.version + 1, data: sent.data };
+            return { data: { id: ID, version: server.version }, headers: { etag: `"v${server.version}"` } };
+        });
+    });
+
+    it('refuses the second of two edits to the same field instead of letting it win', async () => {
+        const { client } = renderEditor();
+        const title = await screen.findByDisplayValue('original');
+        fireEvent.change(title, { target: { value: 'my unsaved work' } });
+
+        // Somebody else saves the same field, and this client learns about it the way it does in
+        // life: a refetch it did for its own reasons.
+        server = entry(2, 'their version', 'the body');
+        await client.refetchQueries({ queryKey: ['contents', 'detail', ID] });
+        expect(await screen.findByText(/while you were editing/i)).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+
+        // Written against the version this editor read, which is what lets the server refuse it.
+        // Sending the version the refetch brought back is what used to make this save succeed.
+        expect((vi.mocked(api.put).mock.calls[0][1] as { version: number }).version).toBe(1);
+
+        // Their save is still what is stored. Nothing of this editor's was silently written over it.
+        expect(server.data.Title).toBe('their version');
+        expect(server.version).toBe(2);
+
+        // And this editor still has their text and the question in front of them.
+        expect(screen.getByDisplayValue('my unsaved work')).toBeTruthy();
+        expect(await screen.findByText(/changed Title while you were editing/i)).toBeTruthy();
+    });
+
+    it('saves over a change somebody else made to a field this editor did not touch', async () => {
+        renderEditor();
+        const body = await screen.findByDisplayValue('the body');
+        fireEvent.change(body, { target: { value: 'my new body' } });
+
+        // Their edit lands after this editor read the entry and before it saves, so the first write
+        // is refused.
+        server = entry(2, 'their title', 'the body');
+
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+        const sent = vi.mocked(api.put).mock.calls[1][1] as { data: Record<string, unknown>; version: number };
+        expect(sent.version).toBe(2);
+        expect(sent.data).toEqual({ Title: 'their title', Body: 'my new body' });
+
+        // Both survive, which is the whole point: their title is still theirs and this body is saved.
+        expect(server.version).toBe(3);
+        expect(server.data).toEqual({ Title: 'their title', Body: 'my new body' });
+        expect(screen.queryByText(/while you were editing/i)).toBeNull();
+    });
+
+    it('does not read its own save as somebody else changing the entry', async () => {
+        const { client } = renderEditor();
+        const title = await screen.findByDisplayValue('original');
+        fireEvent.change(title, { target: { value: 'my work' } });
+
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+
+        // The invalidation the mutation fires brings the entry back at its new version. That is this
+        // editor's own write coming home, not a conflict.
+        await client.refetchQueries({ queryKey: ['contents', 'detail', ID] });
+        await waitFor(() =>
+            expect(client.getQueryData(['contents', 'detail', ID])).toMatchObject({ version: 2 })
+        );
+
+        expect(screen.queryByText(/while you were editing/i)).toBeNull();
+        expect(screen.getByDisplayValue('my work')).toBeTruthy();
+    });
+
+    it('sends the ETag the write answered with, not nothing, on a second save', async () => {
+        // A deployment with Content:Concurrency:Require on refuses a write carrying no If-Match with
+        // a 428. A screen that stays open after a save has to keep the ETag that save answered with,
+        // or the second save from that screen is the one that fails.
+        renderEditor();
+        const title = await screen.findByDisplayValue('original');
+
+        fireEvent.change(title, { target: { value: 'first' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+
+        fireEvent.change(screen.getByDisplayValue('first'), { target: { value: 'second' } });
+        fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+
+        const [, , config] = vi.mocked(api.put).mock.calls[1];
+        expect((config as { headers?: Record<string, string> })?.headers?.['If-Match']).toBe('"v2"');
     });
 });

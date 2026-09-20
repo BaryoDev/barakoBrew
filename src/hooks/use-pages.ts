@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, isNotFound } from '@/lib/api';
+import { api, isConflict, isNotFound } from '@/lib/api';
+import { saveConcurrently, SaveConflictError, type SaveBase } from '@/lib/concurrent-save';
 import { isModuleEnabled, readModules } from '@/hooks/use-modules';
 import { MODULE } from '@/types/modules';
 import { fieldValue, readTree, withField, type TreeView } from '@/lib/page-tree';
@@ -51,6 +52,11 @@ export class PageChangedError extends Error {
     }
 }
 
+/** One page as it was read, and the status a write has to send back with it. */
+interface PageSnapshot extends SaveBase {
+    status: ContentDetail['status'];
+}
+
 /** Where the tree showed a page, and the field names that place is stored under. */
 export interface ExpectedPlace {
     parentField: string;
@@ -77,28 +83,49 @@ export async function writePageFields(
     fields: Record<string, unknown>,
     expected?: ExpectedPlace,
 ): Promise<void> {
-    const read = await api.get<ContentDetail>(`/api/contents/${id}`);
-    const entry = read.data;
+    // Read again on a refused write as well as before the first one, so the expected-place check
+    // runs against whatever is stored now rather than against the copy the write was refused for.
+    const snapshot = async (): Promise<PageSnapshot> => {
+        const read = await api.get<ContentDetail>(`/api/contents/${id}`);
+        const entry = read.data;
 
-    if (expected) {
-        const stored = fieldValue(entry.data, expected.parentField);
-        const storedParent = typeof stored === 'string' && stored !== '' ? stored.toLowerCase() : null;
-        if (storedParent !== (expected.parentId?.toLowerCase() ?? null)) throw new PageChangedError();
-        if (storedOrder(fieldValue(entry.data, expected.orderField)) !== expected.order) throw new PageChangedError();
-    }
+        if (expected) {
+            const stored = fieldValue(entry.data, expected.parentField);
+            const storedParent = typeof stored === 'string' && stored !== '' ? stored.toLowerCase() : null;
+            if (storedParent !== (expected.parentId?.toLowerCase() ?? null)) throw new PageChangedError();
+            if (storedOrder(fieldValue(entry.data, expected.orderField)) !== expected.order) throw new PageChangedError();
+        }
 
-    let data = entry.data;
-    for (const [name, value] of Object.entries(fields)) data = withField(data, name, value);
+        return {
+            data: entry.data,
+            version: entry.version,
+            etag: read.headers?.etag,
+            status: entry.status,
+        };
+    };
 
-    const etag = read.headers?.etag;
+    const base = await snapshot();
+
+    let edit = base.data;
+    for (const [name, value] of Object.entries(fields)) edit = withField(edit, name, value);
+
     try {
-        await api.put(
-            `/api/contents/${id}`,
-            { id, data, status: entry.status, version: entry.version },
-            etag ? { headers: { 'If-Match': etag } } : undefined,
-        );
+        await saveConcurrently<PageSnapshot, unknown>({
+            base,
+            edit,
+            read: snapshot,
+            write: (data, against) =>
+                api.put(
+                    `/api/contents/${id}`,
+                    { id, data, status: against.status, version: against.version },
+                    against.etag ? { headers: { 'If-Match': against.etag } } : undefined,
+                ),
+        });
     } catch (error) {
-        if ((error as { response?: { status?: number } })?.response?.status === 412) throw new PageChangedError();
+        // The tree is the caller here, and it has one answer for all of this: say somebody else
+        // moved the page and reload. A collision the shared flow would have asked about is the same
+        // event to a tree that holds no unsaved text to protect.
+        if (error instanceof SaveConflictError || isConflict(error)) throw new PageChangedError();
         throw error;
     }
 }
