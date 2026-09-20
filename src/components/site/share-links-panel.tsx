@@ -14,13 +14,14 @@ import { IconTrash } from '@/components/icons';
 import { useCreateShareLink, useRevokeShareLink, useShareLinks } from '@/hooks/use-share-links';
 import { apiErrorMessage } from '@/lib/api';
 import {
-    DEFAULT_SHARE_LINK_DAYS,
-    SHARE_LINK_EXPIRY_DAYS,
+    defaultShareLinkDays,
+    maxShareLinkDays,
     shareLinkExpiry,
+    shareLinkExpiryChoices,
     shareLinkStatus,
-    shareLinkUrl,
+    type ShareLinkScope,
     type ShareLinkStatus,
-} from '@/lib/site-mode';
+} from '@/lib/share-links';
 
 const SELECT =
     'border-input bg-transparent dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px] sm:w-48';
@@ -40,37 +41,47 @@ function formatDate(value?: string | null, empty = 'Never') {
 interface Shown {
     label: string;
     link: string;
-    hasAddress: boolean;
+    complete: boolean;
 }
 
 /**
- * Share links let someone see a holding site. Hidden when the API has no share links endpoint.
+ * Share links let someone see what a scope covers. Hidden when the API has no share links for it.
  *
- * `siteUrl` is the stored address, not the unsaved one, since a link built from an address nobody
- * saved would point at a site that does not answer to it.
+ * Everything that differs between scopes is on the scope, so an entry or page scope needs a builder
+ * beside `siteShareScope` and nothing here.
+ *
+ * The longest expiry is the API's to set, since the API is what refuses one. The panel offers what
+ * the list response reports and falls back to the 90 days barakoCMS enforces when it reports
+ * nothing, which is every release through 4.3.0.
  */
-export function ShareLinksPanel({ siteUrl }: { siteUrl: unknown }) {
-    const links = useShareLinks();
-    const create = useCreateShareLink();
-    const revoke = useRevokeShareLink();
+export function ShareLinksPanel({ scope }: { scope: ShareLinkScope }) {
+    const links = useShareLinks(scope);
+    const create = useCreateShareLink(scope);
+    const revoke = useRevokeShareLink(scope);
     const [label, setLabel] = useState('');
-    const [days, setDays] = useState<number>(DEFAULT_SHARE_LINK_DAYS);
+    const [days, setDays] = useState<number | null>(null);
     const [shown, setShown] = useState<Shown | null>(null);
 
     if (links.data?.kind === 'disabled') return null;
+
+    const maxDays = maxShareLinkDays(links.data?.kind === 'links' ? links.data.maxExpiryDays : null);
+    const choices = shareLinkExpiryChoices(maxDays);
+    // Null until someone picks, and a pick the maximum no longer allows falls back the same way, so
+    // the select can never sit on a value the API would refuse.
+    const selected = days !== null && choices.includes(days) ? days : defaultShareLinkDays(maxDays);
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
         const trimmed = label.trim();
         if (!trimmed || create.isPending) return;
         create.mutate(
-            { label: trimmed, expiresAt: shareLinkExpiry(days) },
+            { label: trimmed, expiresAt: shareLinkExpiry(selected, maxDays) },
             {
                 onSuccess: (result) => {
-                    const url = shareLinkUrl(siteUrl, result.key);
-                    setShown({ label: result.label, link: url ?? `/_share#${result.key}`, hasAddress: url !== null });
+                    const target = scope.link(result.key);
+                    setShown({ label: result.label, link: target.value, complete: target.complete });
                     setLabel('');
-                    setDays(DEFAULT_SHARE_LINK_DAYS);
+                    setDays(null);
                     // The mutation keeps its last result, key included, until reset.
                     create.reset();
                 },
@@ -82,7 +93,7 @@ export function ShareLinksPanel({ siteUrl }: { siteUrl: unknown }) {
     return (
         <Section
             title="Share links"
-            description="Let someone see the site while it is holding. A link works until it expires or is revoked, and is not saved with the changes above."
+            description={scope.description}
         >
             <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                 <div className="min-w-48 flex-1 space-y-1.5">
@@ -99,10 +110,10 @@ export function ShareLinksPanel({ siteUrl }: { siteUrl: unknown }) {
                     <select
                         id="share-link-expiry"
                         className={SELECT}
-                        value={days}
+                        value={selected}
                         onChange={(e) => setDays(Number(e.target.value))}
                     >
-                        {SHARE_LINK_EXPIRY_DAYS.map((d) => (
+                        {choices.map((d) => (
                             <option key={d} value={d}>
                                 {d === 1 ? '1 day' : `${d} days`}
                             </option>
@@ -125,8 +136,7 @@ export function ShareLinksPanel({ siteUrl }: { siteUrl: unknown }) {
                     >
                         <p className="text-muted-foreground text-xs">
                             If it is lost, revoke it and create another.
-                            {!shown.hasAddress &&
-                                ' The site has no saved address, so this is only the part that goes after it.'}
+                            {!shown.complete && ` ${scope.incompleteNote}`}
                         </p>
                     </RevealOnce>
                 </div>
@@ -192,7 +202,7 @@ export function ShareLinksPanel({ siteUrl }: { siteUrl: unknown }) {
                                                         </Button>
                                                     }
                                                     title={`Revoke "${link.label}"?`}
-                                                    description="Anyone opening this link sees the holding page again. This cannot be undone."
+                                                    description={scope.revokeWarning}
                                                     confirmLabel="Revoke"
                                                     destructive
                                                     onConfirm={() =>

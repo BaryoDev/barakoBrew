@@ -7,6 +7,7 @@ import { ImageUrlField } from '@/components/site/image-url-field';
 import { LinkList, PairList, Section, Structured, TextField } from '@/components/site/editors';
 import { Button } from '@/components/ui/button';
 import { IconPlus, IconTrash } from '@/components/icons';
+import { siteShareScope } from '@/lib/site-mode';
 import {
     isAbsoluteHttpUrl,
     readFooterColumns,
@@ -159,7 +160,7 @@ export default function SitePage() {
                         </Structured>
                     </Section>
 
-                    <ShareLinksPanel siteUrl={entry?.data?.Url} />
+                    <ShareLinksPanel scope={siteShareScope(entry?.data?.Url)} />
                 </>
             )}
         </SiteForm>

@@ -1,34 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildForest, PAGE_FIELDS } from '@/lib/page-tree';
-import {
-    holdingPageOptions,
-    modeOptions,
-    readMode,
-    shareLinkExpiry,
-    shareLinkStatus,
-    shareLinkUrl,
-} from '@/lib/site-mode';
+import { holdingPageOptions, modeOptions, readMode, shareLinkUrl } from '@/lib/site-mode';
 import type { FieldDefinition } from '@/types/schema';
 
 const { readTree } = await import('@/lib/page-tree');
-
-const NOW = new Date('2026-09-14T12:00:00Z');
-
-describe('shareLinkStatus', () => {
-    it('is active before the expiry', () => {
-        expect(shareLinkStatus({ expiresAt: '2026-09-15T12:00:00Z', revokedAt: null }, NOW)).toBe('active');
-    });
-
-    it('is expired at and after the expiry', () => {
-        expect(shareLinkStatus({ expiresAt: '2026-09-14T12:00:00Z', revokedAt: null }, NOW)).toBe('expired');
-        expect(shareLinkStatus({ expiresAt: '2026-09-01T00:00:00Z' }, NOW)).toBe('expired');
-    });
-
-    it('is revoked when revoked, even once it has also expired', () => {
-        expect(shareLinkStatus({ expiresAt: '2026-10-01T00:00:00Z', revokedAt: '2026-09-10T00:00:00Z' }, NOW)).toBe('revoked');
-        expect(shareLinkStatus({ expiresAt: '2026-09-01T00:00:00Z', revokedAt: '2026-08-20T00:00:00Z' }, NOW)).toBe('revoked');
-    });
-});
 
 describe('shareLinkUrl', () => {
     it('puts the key in the fragment after /_share', () => {
@@ -43,13 +18,6 @@ describe('shareLinkUrl', () => {
         expect(shareLinkUrl('', 'k')).toBeNull();
         expect(shareLinkUrl('/relative', 'k')).toBeNull();
         expect(shareLinkUrl(undefined, 'k')).toBeNull();
-    });
-});
-
-describe('shareLinkExpiry', () => {
-    it('adds the days, and never more than 90', () => {
-        expect(shareLinkExpiry(30, NOW)).toBe('2026-10-14T12:00:00.000Z');
-        expect(shareLinkExpiry(365, NOW)).toBe('2026-12-13T12:00:00.000Z');
     });
 });
 

@@ -31,6 +31,14 @@ moved. Which API a console works against is stated per release instead.
 
 ### Changed
 
+- **The share links panel takes a scope, and reads the maximum expiry from the API.** The panel
+  used to know only the whole site and to own the expiry rules itself: the day choices, the 30 day
+  default and the 90 day clamp were console constants. It now takes a scope that carries the
+  endpoint, the wording and how to build the link, and the Site screen passes the site scope, so the
+  entry and page scopes in BaryoDev/barakoCMS#857 need a builder beside `siteShareScope` and no
+  second panel. The longest expiry is read from `maxExpiryDays` on the list response, and the
+  choices, the starting value and the clamp all follow it. No barakoCMS reports that field yet, so
+  the 90 days its create validator enforces is the fallback and is what runs today. (#163)
 - **The base path is set at container start, not at build.** `BARAKO_BASE_PATH=/barakocms` on the
   published image serves the console under that prefix; leave it unset and it serves the domain root
   as before. Next resolves `basePath` and `assetPrefix` during the build, so the image is built

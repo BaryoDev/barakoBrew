@@ -11,6 +11,16 @@ vi.mock('@/lib/api', async () => {
 
 const { api } = await import('@/lib/api');
 const { useShareLinks, useCreateShareLink, useRevokeShareLink } = await import('./use-share-links');
+const { siteShareScope } = await import('@/lib/site-mode');
+
+const SITE = siteShareScope('https://example.com');
+
+/** Stands in for the entry scope barakoCMS#857 adds: the hooks only ever read these fields. */
+const OTHER = {
+    ...SITE,
+    key: ['entry', 'e-7'],
+    path: '/api/entries/e-7/share-links',
+};
 
 function httpError(status: number) {
     return new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
@@ -49,17 +59,17 @@ describe('useShareLinks', () => {
     it('reads the list from a plain array', async () => {
         vi.mocked(api.get).mockResolvedValue({ data: [LINK] });
 
-        const { result } = renderHook(() => useShareLinks(), { wrapper: wrapper() });
+        const { result } = renderHook(() => useShareLinks(SITE), { wrapper: wrapper() });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(api.get).toHaveBeenCalledWith('/api/site/share-links');
-        expect(result.current.data).toEqual({ kind: 'links', links: [LINK] });
+        expect(result.current.data).toEqual({ kind: 'links', links: [LINK], maxExpiryDays: null });
     });
 
     it('reads the list from a pagination envelope too', async () => {
         vi.mocked(api.get).mockResolvedValue({ data: { items: [LINK, { ...LINK, id: 'b2' }] } });
 
-        const { result } = renderHook(() => useShareLinks(), { wrapper: wrapper() });
+        const { result } = renderHook(() => useShareLinks(SITE), { wrapper: wrapper() });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         const data = result.current.data;
@@ -67,10 +77,45 @@ describe('useShareLinks', () => {
         expect(data?.kind === 'links' ? data.links.map((l) => l.id) : []).toEqual(['a1', 'b2']);
     });
 
+    it('reads a maximum expiry the response reports, and null when it reports none', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [LINK], maxExpiryDays: 14 } });
+
+        const { result } = renderHook(() => useShareLinks(SITE), { wrapper: wrapper() });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        const data = result.current.data;
+        expect(data?.kind === 'links' ? data.links : []).toHaveLength(1);
+        expect(data?.kind === 'links' ? data.maxExpiryDays : 'unread').toBe(14);
+    });
+
+    it('reads another scope from that scope\'s own path', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: [LINK] });
+
+        const { result } = renderHook(() => useShareLinks(OTHER), { wrapper: wrapper() });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(api.get).toHaveBeenCalledWith('/api/entries/e-7/share-links');
+    });
+
+    it('caches one scope apart from another', async () => {
+        vi.mocked(api.get).mockImplementation(async (url) => ({ data: url === SITE.path ? [LINK] : [] }));
+        const Wrapper = wrapper();
+
+        const { result } = renderHook(() => ({ site: useShareLinks(SITE), other: useShareLinks(OTHER) }), {
+            wrapper: Wrapper,
+        });
+
+        await waitFor(() => expect(result.current.site.isSuccess && result.current.other.isSuccess).toBe(true));
+        const site = result.current.site.data;
+        const other = result.current.other.data;
+        expect(site?.kind === 'links' ? site.links : []).toHaveLength(1);
+        expect(other?.kind === 'links' ? other.links : ['unread']).toHaveLength(0);
+    });
+
     it('turns a 404 into disabled rather than an error', async () => {
         vi.mocked(api.get).mockRejectedValue(httpError(404));
 
-        const { result } = renderHook(() => useShareLinks(), { wrapper: wrapper() });
+        const { result } = renderHook(() => useShareLinks(SITE), { wrapper: wrapper() });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data).toEqual({ kind: 'disabled' });
@@ -79,7 +124,7 @@ describe('useShareLinks', () => {
     it('leaves any other failure an error', async () => {
         vi.mocked(api.get).mockRejectedValue(httpError(500));
 
-        const { result } = renderHook(() => useShareLinks(), { wrapper: wrapper() });
+        const { result } = renderHook(() => useShareLinks(SITE), { wrapper: wrapper() });
 
         await waitFor(() => expect(result.current.isError).toBe(true));
     });
@@ -90,7 +135,7 @@ describe('share link mutations', () => {
         vi.mocked(api.get).mockResolvedValue({ data: [] });
         vi.mocked(api.post).mockResolvedValue({ data: { ...LINK, key: 'k-123' } });
 
-        const { result } = renderHook(() => ({ list: useShareLinks(), create: useCreateShareLink() }), {
+        const { result } = renderHook(() => ({ list: useShareLinks(SITE), create: useCreateShareLink(SITE) }), {
             wrapper: wrapper(),
         });
         await waitFor(() => expect(result.current.list.isSuccess).toBe(true));
@@ -115,7 +160,7 @@ describe('share link mutations', () => {
         const holdsKey = () =>
             client.getMutationCache().getAll().some((m) => JSON.stringify(m.state.data ?? null).includes('k-secret'));
 
-        const { result } = renderHook(() => useCreateShareLink(), {
+        const { result } = renderHook(() => useCreateShareLink(SITE), {
             wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
         });
         await act(async () => {
@@ -129,10 +174,27 @@ describe('share link mutations', () => {
         await waitFor(() => expect(holdsKey()).toBe(false));
     });
 
+    it('creates and revokes another scope at that scope\'s own path', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: [] });
+        vi.mocked(api.post).mockResolvedValue({ data: { ...LINK, key: 'k-other' } });
+        vi.mocked(api.delete).mockResolvedValue({ status: 204 });
+
+        const { result } = renderHook(() => ({ create: useCreateShareLink(OTHER), revoke: useRevokeShareLink(OTHER) }), {
+            wrapper: wrapper(),
+        });
+        await act(async () => {
+            await result.current.create.mutateAsync({ label: 'Draft for review' });
+            await result.current.revoke.mutateAsync('a1');
+        });
+
+        expect(api.post).toHaveBeenCalledWith('/api/entries/e-7/share-links', { label: 'Draft for review' });
+        expect(api.delete).toHaveBeenCalledWith('/api/entries/e-7/share-links/a1');
+    });
+
     it('revoke deletes by id', async () => {
         vi.mocked(api.delete).mockResolvedValue({ status: 204 });
 
-        const { result } = renderHook(() => useRevokeShareLink(), { wrapper: wrapper() });
+        const { result } = renderHook(() => useRevokeShareLink(SITE), { wrapper: wrapper() });
         await act(async () => {
             await result.current.mutateAsync('a/1');
         });

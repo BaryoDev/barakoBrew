@@ -12,6 +12,7 @@ const { api } = await import('@/lib/api');
 const { useCreateApiKey } = await import('./use-api-keys');
 const { useMfaSetup, useMfaEnable } = await import('./use-mfa');
 const { useCreateShareLink } = await import('./use-share-links');
+const { siteShareScope } = await import('@/lib/site-mode');
 
 /**
  * The rule in `@/lib/secrets`: a mutation that returns a secret keeps it only while something
@@ -50,7 +51,7 @@ const CASES: {
         name: 'the share link key',
         secret: 'share-KEY-1',
         response: { id: 'l1', label: 'Preview', createdAt: '2026-09-14T00:00:00Z', key: 'share-KEY-1' },
-        use: () => useCreateShareLink() as never,
+        use: () => useCreateShareLink(siteShareScope('https://example.com')) as never,
         variables: { label: 'Preview' },
     },
 ];
