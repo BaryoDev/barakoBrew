@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/use-auth';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useCreateContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
@@ -26,6 +27,7 @@ import {
 function NewContentInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const { data: schemas, isLoading } = useSchemas();
   const createContent = useCreateContent();
 
@@ -115,7 +117,13 @@ function NewContentInner() {
         {schema && !singleton && (
           <>
             <Separator />
-            <DynamicForm fields={schema.fields} values={values} onChange={setValues} contentType={schema.name} />
+            <DynamicForm
+                fields={schema.fields}
+                values={values}
+                onChange={setValues}
+                contentType={schema.name}
+                viewerRoles={user?.roles}
+            />
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => submit(ContentStatus.Published)}

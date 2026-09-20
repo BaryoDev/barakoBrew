@@ -1,5 +1,11 @@
 // Types for Content items (event-sourced on the backend).
 
+// Field sensitivity is the form renderer's business as much as the API's, so the vocabulary lives
+// in barako-content-form and is re-exported here, where every screen already looks for it.
+import { SensitivityLevel } from 'barako-content-form';
+
+export { SensitivityLevel };
+
 export interface ContentListItem {
     id: string;
     contentType: string;
@@ -62,11 +68,6 @@ export enum ContentStatus {
     Scheduled = 'Scheduled',
 }
 
-export enum SensitivityLevel {
-    Public = 'Public',
-    Sensitive = 'Sensitive',
-    Hidden = 'Hidden',
-}
 
 export interface CreateContentRequest {
     contentType: string;

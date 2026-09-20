@@ -11,6 +11,7 @@ export default defineConfig({
         include: ['**/*.test.{ts,tsx}'],
         alias: {
             '@': path.resolve(__dirname, './src'),
+            'barako-content-form': path.resolve(__dirname, './packages/content-form/src/index.ts'),
         },
     },
 });
