@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
@@ -36,6 +36,7 @@ import { useDebounced } from '@/hooks/use-debounced';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
 import { singletonHref } from '@/lib/navigation';
+import { IconChevronLeft } from '@/components/icons';
 
 const ALL_TYPES = 'all';
 const ALL_STATUSES = 'all';
@@ -68,30 +69,68 @@ const HEAD =
 /** Machine-produced cell values: mono, tabular, muted. Types, versions, timestamps. */
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
 
+/**
+ * A status the server knows, or undefined for anything else the query string happens to carry.
+ *
+ * Matched against the enum's values rather than with `in`, which answers true for `toString` and
+ * every other name on Object's prototype and would hand the API a function as a filter.
+ */
+const STATUS_VALUES: string[] = Object.values(ContentStatus);
+
+function statusFromParam(value: string | null): ContentStatus | undefined {
+  return value && STATUS_VALUES.includes(value) ? (value as ContentStatus) : undefined;
+}
+
 function ContentListInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // The filters live in the query string rather than in state, so a link to this screen opens the
+  // same screen. Somebody sending "the drafts that mention invoicing" to a colleague was sending
+  // them an unfiltered table.
   const contentType = searchParams.get('type') ?? undefined;
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<ContentStatus | undefined>(undefined);
+  const urlQuery = searchParams.get('q') ?? '';
+  const status = statusFromParam(searchParams.get('status'));
+  const page = Math.max(1, Number(searchParams.get('page')) || 1);
+
+  const setParams = useCallback(
+    (next: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(next)) {
+        if (value === null || value === '') params.delete(key);
+        else params.set(key, value);
+      }
+      const query = params.toString();
+      router.replace(query ? `/content?${query}` : '/content');
+    },
+    [router, searchParams]
+  );
+
+  const [search, setSearch] = useState(urlQuery);
 
   // Typing is not a request. Without this every keystroke is a round trip that materialises the
   // permitted set server side, and the answers can arrive out of order, so the table settles on
   // whichever query happened to finish last rather than on what is in the box.
   const query = useDebounced(search, 300);
 
-  // Every filter goes back to page one, set where the filter is set rather than in an effect
-  // watching it. Staying on page four of a wider result and then narrowing it shows an empty table
-  // beside a count saying there are matches, which reads as a broken search.
-  const changeSearch = (value: string) => {
-    setPage(1);
-    setSearch(value);
-  };
+  // The box leads and the URL follows it, one history entry per settled search rather than one per
+  // keystroke.
+  //
+  // Both guards earn their place. The effect waits for the debounce to settle, and the line under
+  // it adopts a URL that changed underneath the screen, which is what the Back button does. Without
+  // the first guard the two fight: Back sets the box from the older URL, the debounce is still
+  // holding the newer text, and the effect writes that text straight back over the navigation.
+  useEffect(() => {
+    if (search !== query) return;
+    if (query !== urlQuery) setParams({ q: query, page: null });
+  }, [search, query, urlQuery, setParams]);
 
+  if (urlQuery !== query && search === query) setSearch(urlQuery);
+
+  // Every filter goes back to page one. Staying on page four of a wider result and then narrowing
+  // it shows an empty table beside a count saying there are matches, which reads as a broken search.
   const changeStatus = (value: ContentStatus | undefined) => {
-    setPage(1);
-    setStatus(value);
+    setParams({ status: value ?? null, page: null });
   };
 
   /** Whether the empty table is empty because of a filter, which changes what to tell the reader. */
@@ -137,15 +176,33 @@ function ContentListInner() {
   );
 
   const setType = (value: string) => {
-    setPage(1);
-    router.replace(value === ALL_TYPES ? '/content' : `/content?type=${value}`);
+    setParams({ type: value === ALL_TYPES ? null : value, page: null });
   };
+
+  const schema = schemas?.find((s) => s.name === contentType);
 
   return (
     <>
+      {/* The way back to where the type was chosen. The header crumb says Entries, which is the
+          route; this says which type's entries these are and how to get out of them. */}
+      {contentType && (
+        <Link
+          href="/schemas"
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring mb-3 -mt-1 inline-flex items-center gap-1 rounded-sm text-sm outline-none focus-visible:ring-[3px]"
+        >
+          <IconChevronLeft className="size-3.5" />
+          Content types
+        </Link>
+      )}
+
       <PageHeader
-        title="Entries"
-        description="Everything written in your CMS, filterable by content type."
+        title={schema?.displayName ?? 'Entries'}
+        description={
+          contentType
+            ? (schema?.description ??
+              `Everything written as ${schema?.displayName ?? contentType}.`)
+            : 'Everything written in your CMS, filterable by content type.'
+        }
         badge={
           contents ? (
             <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-[3px] font-mono text-[11px] font-bold tabular-nums">
@@ -172,7 +229,7 @@ function ContentListInner() {
         <Input
           type="search"
           value={search}
-          onChange={(e) => changeSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search entries"
           aria-label="Search entries"
           className="h-[38px] w-full sm:w-[280px]"
@@ -305,7 +362,7 @@ function ContentListInner() {
               </TableBody>
             </Table>
           </div>
-          <PaginationControls page={contents} onPageChange={setPage} />
+          <PaginationControls page={contents} onPageChange={(n) => setParams({ page: String(n) })} />
         </>
       )}
     </>

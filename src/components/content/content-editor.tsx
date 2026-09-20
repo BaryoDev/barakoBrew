@@ -31,6 +31,8 @@ import { IconArchive, IconHistory, IconRollback } from '@/components/icons';
 import { format } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
 import { choiceProblems } from '@/lib/choice';
+import { useSetCrumbTitle } from '@/components/crumb-title';
+import { entriesHref } from '@/lib/navigation';
 
 /**
  * Whether the form still holds exactly what was seeded into it.
@@ -49,12 +51,13 @@ function sameValues(a: Record<string, unknown>, b: Record<string, unknown>) {
  *
  * Shared by the entry page and a single-entry type's own screen. The second passes `heading`, since
  * a type with one entry is named for the type, and `backHref` as null, since there is no list of it
- * to go back to.
+ * to go back to. Left off, the way back is this entry's own type, not every entry in the CMS:
+ * somebody who came in through a content type expects to land back on it.
  */
 export function ContentEditor({
   id,
   heading,
-  backHref = '/content',
+  backHref,
 }: {
   id: string;
   heading?: string;
@@ -106,6 +109,11 @@ export function ContentEditor({
 
   const schema = schemas?.find((s) => s.name === content?.contentType);
   const canRollback = user?.roles.some((r) => r === 'SuperAdmin' || r === 'Admin') ?? false;
+  const title = heading ?? (content ? contentTitle(content.data, id) : '');
+
+  // Before the loading guard, because hooks cannot sit after an early return. An empty title sets
+  // nothing, so the crumb stays the path until the entry has actually loaded.
+  useSetCrumbTitle(title || undefined);
 
   if (isLoading || !content) return <TableSkeleton />;
 
@@ -150,7 +158,8 @@ export function ContentEditor({
     );
   };
 
-  const title = heading ?? contentTitle(content.data, id);
+  const back =
+    backHref === undefined ? entriesHref(content.contentType) : backHref;
 
   return (
     <>
@@ -229,9 +238,9 @@ export function ContentEditor({
                 <Button onClick={() => save()} disabled={updateContent.isPending || blocked}>
                   {updateContent.isPending ? 'Saving…' : 'Save changes'}
                 </Button>
-                {backHref && (
-                  <Button variant="ghost" onClick={() => router.push(backHref)}>
-                    Back to entries
+                {back && (
+                  <Button variant="ghost" onClick={() => router.push(back)}>
+                    Back to {schema?.displayName ?? 'entries'}
                   </Button>
                 )}
               </div>

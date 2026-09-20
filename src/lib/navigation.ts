@@ -187,6 +187,16 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+/**
+ * The entries of one content type.
+ *
+ * One place rather than a template repeated at each call site, because the entries screen reads its
+ * filters from the query string and this is the only spelling of `type` it answers to.
+ */
+export function entriesHref(typeName?: string): string {
+  return typeName ? `/content?type=${encodeURIComponent(typeName)}` : '/content';
+}
+
 /** Where a single-entry type is edited. The type name is a slug, so encoding is only a guard. */
 export function singletonHref(typeName: string): string {
   return `/content/singleton/${encodeURIComponent(typeName)}`;
@@ -253,15 +263,22 @@ const SEGMENT_TITLES: Record<string, string> = {
   new: 'New',
 };
 
-export function breadcrumbsFor(pathname: string): { title: string; href: string }[] {
+export function breadcrumbsFor(
+  pathname: string,
+  /** What the current screen calls itself, for a last segment that is an id rather than a word. */
+  lastTitle?: string
+): { title: string; href: string }[] {
   const segments = pathname.split('/').filter(Boolean);
-  return segments
+  const crumbs = segments
     .map((segment, i) => ({
       title: SEGMENT_TITLES[segment] ?? decodeURIComponent(segment),
       href: '/' + segments.slice(0, i + 1).join('/'),
     }))
     // /content/singleton has no page of its own, so it is not offered as a crumb to click.
     .filter((_, i) => !(segments[i] === 'singleton' && segments[i - 1] === 'content'));
+
+  if (lastTitle && crumbs.length > 0) crumbs[crumbs.length - 1].title = lastTitle;
+  return crumbs;
 }
 
 export function isNavItemActive(href: string, pathname: string): boolean {
