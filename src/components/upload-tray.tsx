@@ -20,7 +20,7 @@ function Row({ job }: { job: UploadJob }) {
     return (
         <li className="space-y-1.5 px-3 py-2.5">
             <div className="flex items-center gap-2">
-                {done && <IconCheckCircle className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />}
+                {done && <IconCheckCircle className="text-success size-3.5 shrink-0" aria-hidden="true" />}
                 {failed && <IconTimesCircle className="text-destructive size-3.5 shrink-0" aria-hidden="true" />}
                 <span className="truncate text-[13px] font-semibold">{job.fileName}</span>
                 <span className={`${META} ml-auto shrink-0`}>

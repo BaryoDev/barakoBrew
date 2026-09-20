@@ -29,7 +29,6 @@ async function stubFiles(page: Page, files: StoredFile[], { uploadDelayMs = 0 } 
     await page.route(/\/api\/files(\?|$)/, async (route) => {
         const request = route.request();
         if (request.method() === 'POST') {
-            if (uploadDelayMs > 0) await new Promise((done) => setTimeout(done, uploadDelayMs));
             const body = request.postDataBuffer()?.toString('latin1') ?? '';
             uploads.push({ body, contentType: request.headers()['content-type'] ?? '' });
             const name = /filename="([^"]+)"/.exec(body)?.[1] ?? 'unnamed';
@@ -46,6 +45,8 @@ async function stubFiles(page: Page, files: StoredFile[], { uploadDelayMs = 0 } 
                 createdAt: new Date().toISOString(),
             };
             files.unshift(record);
+            // After the request is recorded, so a test can see the upload in flight.
+            if (uploadDelayMs > 0) await new Promise((done) => setTimeout(done, uploadDelayMs));
             return route.fulfill({ status: 201, json: record });
         }
         return route.fulfill({ json: pageOf(files, 20) });

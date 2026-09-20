@@ -69,7 +69,8 @@ function ChosenFile({ file }: { file: File }) {
 
   return (
     <li className="space-y-2">
-      {isViewableImage(file.type) && (
+      {/* Nothing the API would refuse is drawn, so an SVG is never rendered from a chosen file. */}
+      {problem === null && isViewableImage(file.type) && (
         <SourceImage
           source={file}
           alt={`Preview of ${file.name}`}
@@ -91,9 +92,11 @@ function ChosenFile({ file }: { file: File }) {
 function UploadDialog({
   open,
   onOpenChange,
+  onQueued,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onQueued: () => void;
 }) {
   const { add } = useUploads();
   const [files, setFiles] = useState<File[]>([]);
@@ -119,6 +122,7 @@ function UploadDialog({
     if (!canUpload) return;
     add(files.map((file) => ({ file, isPublic })));
     toast.success(files.length === 1 ? `Uploading ${files[0].name}` : `Uploading ${files.length} files`);
+    onQueued();
     close();
   }
 
@@ -240,6 +244,8 @@ export default function FilesPage() {
       if (accepted.length === 0) return;
 
       add(accepted.map((file) => ({ file, isPublic: false })));
+      // Back to the first page, which is where a new file lands in a newest-first list.
+      setPage(1);
       toast.success(
         accepted.length === 1 ? `Uploading ${accepted[0].name}` : `Uploading ${accepted.length} files`
       );
@@ -409,7 +415,7 @@ export default function FilesPage() {
         </>
       )}
 
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onQueued={() => setPage(1)} />
 
       <ImageViewer file={viewing} onClose={() => setViewing(null)} />
 

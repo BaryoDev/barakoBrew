@@ -234,12 +234,14 @@ describe('uploading', () => {
         expect(api.post).not.toHaveBeenCalled();
     });
 
-    it('refuses an SVG without sending it', async () => {
+    it('refuses an SVG without sending it, and never draws one', async () => {
         const input = await openUpload();
         choose(input, new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Only PNG, JPEG, GIF, WebP, AVIF and PDF');
         expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled();
+        expect(screen.queryByRole('img', { name: 'Preview of logo.svg' })).not.toBeInTheDocument();
+        expect(objectUrls.created).toHaveLength(0);
     });
 
     it('shows the reason the server gave in the tray, with a way to retry it', async () => {
@@ -366,6 +368,31 @@ describe('viewing an uploaded image', () => {
         );
     });
 
+    it('loads a private image through the signed-in request, not an anonymous URL', async () => {
+        const privateImage = file({ id: 'f3', fileName: 'draft.jpg', contentType: 'image/jpeg', isPublic: false });
+        vi.mocked(api.get).mockImplementation(async (_url, config) => {
+            if (config?.responseType === 'blob') return { data: new Blob(['bytes']) };
+            return { data: pageOf([privateImage]) };
+        });
+        renderPage();
+
+        await screen.findByText('draft.jpg');
+        fireEvent.click(screen.getByRole('button', { name: 'View draft.jpg' }));
+
+        const dialog = await screen.findByRole('dialog');
+        await waitFor(() =>
+            expect(api.get).toHaveBeenCalledWith('http://localhost:5005/api/files/f3?w=1280', {
+                responseType: 'blob',
+            })
+        );
+        const shown = await within(dialog).findByRole('presentation');
+        expect(shown).toHaveAttribute('src', expect.stringContaining('blob:mock/'));
+        // No anonymous route for a private file, and no token anywhere in a URL.
+        const urls = vi.mocked(api.get).mock.calls.map((call) => String(call[0]));
+        expect(urls.length).toBeGreaterThan(0);
+        expect(urls.some((url) => url.includes('/api/public/files/'))).toBe(false);
+    });
+
     it('reports the size of the copy on screen once it has loaded', async () => {
         vi.mocked(api.get).mockResolvedValue({ data: pageOf([MINE_PUBLIC]) });
         renderPage();
@@ -408,6 +435,30 @@ describe('uploading in the background', () => {
         expect(within(tray).getByText('1 finished')).toBeInTheDocument();
         // The list catches up on its own, with no reload.
         await waitFor(() => expect(vi.mocked(api.get).mock.calls.length).toBeGreaterThan(listCallsBefore));
+    });
+
+    it('asks before the tab closes while an upload is in flight, and stops asking once it lands', async () => {
+        let finish: ((value: { data: unknown }) => void) | undefined;
+        vi.mocked(api.post).mockImplementation(
+            () => new Promise((resolve) => { finish = resolve as (value: { data: unknown }) => void; })
+        );
+
+        const input = await openUpload();
+        choose(input, new File(['x'], 'photo.png', { type: 'image/png' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+        await screen.findByRole('region', { name: 'Uploads' });
+
+        const whileUploading = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(whileUploading);
+        expect(whileUploading.defaultPrevented).toBe(true);
+
+        await act(async () => {
+            finish!({ data: { id: 'f9', fileName: 'photo.png', contentType: 'image/png', size: 1, isPublic: false, publicUrl: null } });
+        });
+
+        const afterwards = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(afterwards);
+        expect(afterwards.defaultPrevented).toBe(false);
     });
 
     it('queues every file chosen at once, and says how many', async () => {
