@@ -82,14 +82,6 @@ export async function uploadFile(
     return response.data;
 }
 
-export function useUploadFile() {
-    const queryClient = useQueryClient();
-    return useMutation({
-        mutationFn: ({ file, isPublic }: { file: File; isPublic: boolean }) => uploadFile(file, isPublic),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['files'] }),
-    });
-}
-
 export function useDeleteFile() {
     const queryClient = useQueryClient();
     return useMutation({

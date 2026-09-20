@@ -150,6 +150,12 @@ async function scan(page: import('@playwright/test').Page) {
  */
 test.use({ reducedMotion: 'reduce' });
 
+/** A 1x1 transparent PNG, for the screens that need a real image rather than a name. */
+const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+);
+
 test.describe('accessibility', () => {
     test('the sign-in page', async ({ page }) => {
         await stubShell(page);
@@ -336,6 +342,33 @@ test.describe('accessibility', () => {
         });
         // The refusal is the one piece of text in the destructive tone in the dialog.
         await expect(page.getByRole('alert')).toBeVisible();
+        await scan(page);
+
+        // The preview, from an image the dialog has not sent yet.
+        await page.getByLabel('Choose a file').setInputFiles({
+            name: 'cover.png',
+            mimeType: 'image/png',
+            buffer: PNG,
+        });
+        await expect(page.getByRole('img', { name: 'Preview of cover.png' })).toBeVisible();
+        await scan(page);
+
+        // The tray, with one upload in flight that never answers.
+        await page.route(/\/api\/files$/, async (route) => {
+            if (route.request().method() !== 'POST') return route.fallback();
+            await new Promise(() => {});
+        });
+        await page.getByRole('button', { name: 'Upload', exact: true }).click();
+        const tray = page.getByRole('region', { name: 'Uploads' });
+        await expect(tray).toBeVisible();
+        await scan(page);
+
+        // The viewer, over the list.
+        await page.route(/\/api\/public\/files\/[^/?]+(\?.*)?$/, (route) =>
+            route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+        );
+        await page.getByRole('button', { name: 'View spring-roast-cover.jpg' }).click();
+        await expect(page.getByRole('dialog')).toBeVisible();
         await scan(page);
     });
 

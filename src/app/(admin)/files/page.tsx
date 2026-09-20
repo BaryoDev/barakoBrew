@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -8,7 +8,6 @@ import {
   isForbidden,
   useDeleteFile,
   useFiles,
-  useUploadFile,
   type DeleteRefusal,
   type StoredFile,
 } from '@/hooks/use-files';
@@ -16,6 +15,9 @@ import { useAuth } from '@/hooks/use-auth';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
 import { UPLOAD_RULES, canDeleteFile, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
+import { ImageViewer, isViewableImage } from '@/components/patterns/image-viewer';
+import { SourceImage } from '@/components/patterns/source-image';
+import { useUploads } from '@/components/uploads-provider';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -61,41 +63,63 @@ const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
 /** CSS pixels. Up to a 3x screen that is the API's 160 rung, the smallest it makes. */
 const THUMBNAIL_SIZE = 40;
 
+/** One chosen file, with its preview while it is an image and whatever would refuse it. */
+function ChosenFile({ file }: { file: File }) {
+  const problem = uploadProblem(file);
+
+  return (
+    <li className="space-y-2">
+      {isViewableImage(file.type) && (
+        <SourceImage
+          source={file}
+          alt={`Preview of ${file.name}`}
+          className="bg-muted max-h-48 w-auto max-w-full rounded-md border object-contain"
+        />
+      )}
+      <p className={META}>
+        {file.name}, {formatBytes(file.size)}
+      </p>
+      {problem && (
+        <p role="alert" className="text-destructive text-sm">
+          {problem}
+        </p>
+      )}
+    </li>
+  );
+}
+
 function UploadDialog({
   open,
   onOpenChange,
-  onUploaded,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUploaded: () => void;
 }) {
-  const upload = useUploadFile();
-  const [file, setFile] = useState<File | null>(null);
+  const { add } = useUploads();
+  const [files, setFiles] = useState<File[]>([]);
   const [isPublic, setIsPublic] = useState(false);
 
-  const problem = file ? uploadProblem(file) : null;
-  const refused = upload.isError ? apiErrorMessage(upload.error, 'The upload failed.') : null;
-  const canUpload = file !== null && problem === null && !upload.isPending;
+  const refused = files.some((file) => uploadProblem(file) !== null);
+  const canUpload = files.length > 0 && !refused;
 
   function reset() {
-    setFile(null);
+    setFiles([]);
     setIsPublic(false);
-    upload.reset();
   }
 
-  async function submit(e: React.FormEvent) {
+  function close() {
+    reset();
+    onOpenChange(false);
+  }
+
+  // The dialog hands the files over and closes. Whatever happens next happens in the tray, which
+  // is why nothing here waits on a response.
+  function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || problem) return;
-    try {
-      const uploaded = await upload.mutateAsync({ file, isPublic });
-      toast.success(`Uploaded ${uploaded.fileName}`);
-      reset();
-      onUploaded();
-      onOpenChange(false);
-    } catch {
-      // The reason is rendered in the dialog from upload.error, next to the file it is about.
-    }
+    if (!canUpload) return;
+    add(files.map((file) => ({ file, isPublic })));
+    toast.success(files.length === 1 ? `Uploading ${files[0].name}` : `Uploading ${files.length} files`);
+    close();
   }
 
   return (
@@ -119,16 +143,16 @@ function UploadDialog({
               <Input
                 id="file-input"
                 type="file"
+                multiple
                 accept="image/png,image/jpeg,image/gif,image/webp,image/avif,application/pdf"
-                onChange={(e) => {
-                  setFile(e.target.files?.[0] ?? null);
-                  upload.reset();
-                }}
+                onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
               />
-              {file && (
-                <p className={META}>
-                  {file.name}, {formatBytes(file.size)}
-                </p>
+              {files.length > 0 && (
+                <ul className="space-y-3 pt-1">
+                  {files.map((file) => (
+                    <ChosenFile key={`${file.name}:${file.size}:${file.lastModified}`} file={file} />
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -146,24 +170,14 @@ function UploadDialog({
                 aria-describedby="file-public-help"
               />
             </div>
-
-            {problem ? (
-              <p role="alert" className="text-destructive text-sm">
-                {problem}
-              </p>
-            ) : refused ? (
-              <p role="alert" className="text-destructive text-sm">
-                {refused}
-              </p>
-            ) : null}
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="ghost" onClick={close}>
               Cancel
             </Button>
             <Button type="submit" disabled={!canUpload}>
-              {upload.isPending ? 'Uploading...' : 'Upload'}
+              Upload
             </Button>
           </DialogFooter>
         </form>
@@ -174,11 +188,14 @@ function UploadDialog({
 
 export default function FilesPage() {
   const { user } = useAuth();
+  const { add } = useUploads();
+  const [dropping, setDropping] = useState(false);
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, error, refetch } = useFiles(page);
   const remove = useDeleteFile();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [target, setTarget] = useState<StoredFile | null>(null);
+  const [viewing, setViewing] = useState<StoredFile | null>(null);
   const [refusal, setRefusal] = useState<DeleteRefusal | null>(null);
 
   const files = data?.items ?? [];
@@ -210,6 +227,57 @@ export default function FilesPage() {
     }
   }
 
+  // Dropped files join the queue as private, the same default the dialog starts with, since a drop
+  // has nowhere to answer the public question.
+  const queueDropped = useCallback(
+    (dropped: readonly File[]) => {
+      if (dropped.length === 0) return;
+      for (const file of dropped) {
+        const problem = uploadProblem(file);
+        if (problem) toast.error(`${file.name}: ${problem}`);
+      }
+      const accepted = dropped.filter((file) => uploadProblem(file) === null);
+      if (accepted.length === 0) return;
+
+      add(accepted.map((file) => ({ file, isPublic: false })));
+      toast.success(
+        accepted.length === 1 ? `Uploading ${accepted[0].name}` : `Uploading ${accepted.length} files`
+      );
+    },
+    [add]
+  );
+
+  // On the window rather than on a drop zone in the markup: the browser opens a dropped file in the
+  // tab unless something calls preventDefault, so a miss by a few pixels would throw the screen
+  // away and show the image instead.
+  useEffect(() => {
+    const carriesFiles = (e: DragEvent) => e.dataTransfer?.types?.includes('Files') ?? false;
+
+    const over = (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      e.preventDefault();
+      setDropping(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (e.relatedTarget === null) setDropping(false);
+    };
+    const drop = (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      e.preventDefault();
+      setDropping(false);
+      queueDropped(Array.from(e.dataTransfer?.files ?? []));
+    };
+
+    window.addEventListener('dragover', over);
+    window.addEventListener('dragleave', leave);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('dragleave', leave);
+      window.removeEventListener('drop', drop);
+    };
+  }, [queueDropped]);
+
   async function copyLink(file: StoredFile) {
     const link = publicFileLink(file, getApiUrl());
     if (!link) return;
@@ -234,10 +302,10 @@ export default function FilesPage() {
   const forbidden = isError && isForbidden(error);
 
   return (
-    <>
+    <div className={dropping ? 'outline-primary rounded-xl outline-2 outline-dashed outline-offset-4' : undefined}>
       <PageHeader
         title="Files"
-        description="Images and PDFs uploaded to this tenant, newest first."
+        description="Images and PDFs uploaded to this tenant, newest first. Drop files here to upload them."
         actions={data ? uploadButton : undefined}
       />
 
@@ -279,7 +347,18 @@ export default function FilesPage() {
                   <TableRow key={file.id} className="hover:bg-background">
                     <TableCell className="max-w-[18rem] py-3.5 pl-6 text-[13.5px] font-bold">
                       <div className="flex items-center gap-3">
-                        <FileThumbnail file={file} size={THUMBNAIL_SIZE} />
+                        {isViewableImage(file.contentType) ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewing(file)}
+                            aria-label={`View ${file.fileName}`}
+                            className="focus-visible:ring-ring rounded-md focus-visible:ring-2 focus-visible:outline-none"
+                          >
+                            <FileThumbnail file={file} size={THUMBNAIL_SIZE} />
+                          </button>
+                        ) : (
+                          <FileThumbnail file={file} size={THUMBNAIL_SIZE} />
+                        )}
                         <span className="truncate">{file.fileName}</span>
                       </div>
                     </TableCell>
@@ -330,7 +409,9 @@ export default function FilesPage() {
         </>
       )}
 
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onUploaded={() => setPage(1)} />
+      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+
+      <ImageViewer file={viewing} onClose={() => setViewing(null)} />
 
       <AlertDialog open={target !== null} onOpenChange={(open) => !open && closeDelete()}>
         <AlertDialogContent>
@@ -383,6 +464,6 @@ export default function FilesPage() {
           )}
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

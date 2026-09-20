@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { VARIANT_LADDER, imageVariantSrcSet, isResizableImage, snapToLadder } from './image-variants';
+import {
+    VARIANT_LADDER,
+    imageVariantSrcSet,
+    isResizableImage,
+    snapToLadder,
+    viewerVariantSource,
+} from './image-variants';
 
 const API = 'https://cms.example.test/';
 
@@ -87,5 +93,40 @@ describe('imageVariantSrcSet', () => {
         expect(isResizableImage('image/webp; charset=binary')).toBe(true);
         expect(isResizableImage('image/avif')).toBe(false);
         expect(isResizableImage('application/pdf')).toBe(false);
+    });
+});
+
+describe('viewerVariantSource', () => {
+    it('asks for the rung that covers the screen, not the original', () => {
+        const source = viewerVariantSource(photo(), API, { screenWidth: 1200 });
+
+        expect(source.src).toBe('https://cms.example.test/api/public/files/abc?w=1280');
+        expect(source.srcSet).toBeUndefined();
+        expect(source.authenticated).toBe(false);
+    });
+
+    it('covers a dense screen with the rung above the CSS width', () => {
+        expect(viewerVariantSource(photo(), API, { screenWidth: 420, density: 2 }).src).toBe(
+            'https://cms.example.test/api/public/files/abc?w=960',
+        );
+    });
+
+    it('stays on the top rung on a screen wider than the ladder', () => {
+        expect(viewerVariantSource(photo(), API, { screenWidth: 2560, density: 2 }).src).toBe(
+            'https://cms.example.test/api/public/files/abc?w=1920',
+        );
+    });
+
+    it('sends a private image to the authenticated route, at the same rung', () => {
+        const source = viewerVariantSource(photo({ isPublic: false }), API, { screenWidth: 1200 });
+
+        expect(source.src).toBe('https://cms.example.test/api/files/abc?w=1280');
+        expect(source.authenticated).toBe(true);
+    });
+
+    it('gives an AVIF its original, since the API does not resize one', () => {
+        const source = viewerVariantSource(photo({ contentType: 'image/avif' }), API, { screenWidth: 1200 });
+
+        expect(source.src).toBe('https://cms.example.test/api/public/files/abc');
     });
 });

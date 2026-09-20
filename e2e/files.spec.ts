@@ -22,13 +22,14 @@ interface StoredFile {
  * The files API as a small in-memory store, so upload, list and delete talk to one another the way
  * they do on the server. A fixed list would let a screen that never refetched after an upload pass.
  */
-async function stubFiles(page: Page, files: StoredFile[]) {
+async function stubFiles(page: Page, files: StoredFile[], { uploadDelayMs = 0 } = {}) {
     const uploads: { body: string; contentType: string }[] = [];
     const deleted: string[] = [];
 
     await page.route(/\/api\/files(\?|$)/, async (route) => {
         const request = route.request();
         if (request.method() === 'POST') {
+            if (uploadDelayMs > 0) await new Promise((done) => setTimeout(done, uploadDelayMs));
             const body = request.postDataBuffer()?.toString('latin1') ?? '';
             uploads.push({ body, contentType: request.headers()['content-type'] ?? '' });
             const name = /filename="([^"]+)"/.exec(body)?.[1] ?? 'unnamed';
@@ -85,8 +86,9 @@ test.describe('files', () => {
         await page.getByRole('button', { name: 'Upload', exact: true }).click();
 
         const table = page.getByRole('table');
-        // Exact, because the actions cell is named "Copy link to cover.png Delete cover.png" too.
-        await expect(table.getByRole('cell', { name: 'cover.png', exact: true })).toBeVisible();
+        // The name cell, by the viewer button inside it: the actions cell is named
+        // "Copy link to cover.png Delete cover.png" and matches the file name too.
+        await expect(table.getByRole('button', { name: 'View cover.png' })).toBeVisible();
         await expect(table.getByText('Public', { exact: true })).toBeVisible();
 
         // Sent as multipart with the flag, not as JSON. The API reads the file from the form and
@@ -136,7 +138,7 @@ test.describe('files', () => {
         });
 
         await page.goto('/files');
-        await expect(page.getByRole('cell', { name: 'cover.png', exact: true })).toBeVisible({ timeout: 20000 });
+        await expect(page.getByRole('button', { name: 'View cover.png' })).toBeVisible({ timeout: 20000 });
 
         const paths = () => downloads.map((d) => new URL(d.url)).map((u) => `${u.pathname}${u.search}`);
         await expect.poll(paths).toHaveLength(2);
@@ -155,5 +157,80 @@ test.describe('files', () => {
             /pub-png\?w=160 160w/,
         );
         await expect(page.locator('img[src^="blob:"]')).toHaveCount(1);
+    });
+
+    test('a thumbnail opens the image at the rung that covers this screen, and Escape closes it', async ({
+        page,
+    }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubFiles(page, [
+            {
+                id: 'pub-png',
+                fileName: 'cover.png',
+                contentType: 'image/png',
+                size: 4 * 1024 * 1024,
+                isPublic: true,
+                publicUrl: null,
+                alt: null,
+                caption: null,
+                uploadedBy: ME,
+                createdAt: new Date().toISOString(),
+            },
+        ]);
+        await page.route(/\/api\/public\/files\/[^/?]+(\?.*)?$/, (route) =>
+            route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+        );
+
+        await page.goto('/files');
+        const thumbnail = page.getByRole('button', { name: 'View cover.png' });
+        await expect(thumbnail).toBeVisible({ timeout: 20000 });
+        await thumbnail.click();
+
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText('image/png, 4.0 MB');
+
+        // The rung this screen needs, worked out from the screen rather than pinned, since the
+        // three projects run at three different widths and densities.
+        const wanted = await page.evaluate(() => {
+            const ladder = [160, 320, 640, 960, 1280, 1920];
+            const needed = Math.round(window.innerWidth * (window.devicePixelRatio || 1));
+            return ladder.find((rung) => rung >= needed) ?? ladder[ladder.length - 1];
+        });
+        await expect(dialog.locator('img')).toHaveAttribute(
+            'src',
+            new RegExp(`/api/public/files/pub-png\\?w=${wanted}$`),
+        );
+
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+    });
+
+    test('the dialog closes on Upload, and the upload finishes in the tray', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        const files: StoredFile[] = [];
+        const { uploads } = await stubFiles(page, files, { uploadDelayMs: 1500 });
+
+        await page.goto('/files');
+        await expect(page.getByRole('heading', { name: 'Files', exact: true })).toBeVisible({ timeout: 20000 });
+
+        await page.getByRole('button', { name: 'Upload file' }).first().click();
+        await page
+            .getByLabel('Choose a file')
+            .setInputFiles({ name: 'slow.png', mimeType: 'image/png', buffer: PNG });
+        await page.getByRole('button', { name: 'Upload', exact: true }).click();
+
+        // The dialog is gone while the request is still out, and the tray has the file.
+        await expect(page.getByLabel('Choose a file')).toBeHidden();
+        const tray = page.getByRole('region', { name: 'Uploads' });
+        await expect(tray).toBeVisible();
+        await expect(tray).toContainText('slow.png');
+        expect(uploads).toHaveLength(1);
+
+        // And the list catches up on its own once the API answers.
+        await expect(page.getByRole('button', { name: 'View slow.png' })).toBeVisible({ timeout: 20000 });
+        await expect(tray).toContainText('1 finished');
     });
 });
