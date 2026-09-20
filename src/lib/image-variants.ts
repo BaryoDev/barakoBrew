@@ -78,3 +78,22 @@ export function imageVariantSrcSet(
         authenticated,
     };
 }
+
+/**
+ * The one rung to load when the file is shown as large as the screen allows.
+ *
+ * No srcset: the viewer draws a single element at a size it already knows, so the browser has
+ * nothing left to choose. Density is folded into the width here rather than left to the element,
+ * which is also what makes a private file, whose bytes come through the API client, get the same
+ * rung as a public one.
+ */
+export function viewerVariantSource(
+    file: ImageFile,
+    apiUrl: string,
+    { screenWidth, density = 1 }: { screenWidth: number; density?: number },
+): ImageVariantSource {
+    const route = fileRoute(file, apiUrl);
+    const authenticated = !file.isPublic;
+    if (!isResizableImage(file.contentType)) return { src: route, authenticated };
+    return { src: `${route}?w=${snapToLadder(Math.round(screenWidth * density))}`, authenticated };
+}

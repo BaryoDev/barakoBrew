@@ -56,21 +56,30 @@ export function useFiles(page: number) {
     });
 }
 
-/** Sends the file as multipart form data. The shared client drops its JSON default for a form. */
-export async function uploadFile(file: File, isPublic: boolean): Promise<UploadedFile> {
+/**
+ * Sends the file as multipart form data. The shared client drops its JSON default for a form.
+ *
+ * `onProgress` reports bytes sent over bytes to send, 0 to 1. A request with no `total` (a proxy
+ * that drops the length) reports nothing rather than guessing, so the bar stays where it was.
+ */
+export async function uploadFile(
+    file: File,
+    isPublic: boolean,
+    options: { onProgress?: (progress: number) => void } = {},
+): Promise<UploadedFile> {
     const form = new FormData();
     form.append('file', file);
     form.append('isPublic', isPublic ? 'true' : 'false');
-    const response = await api.post<UploadedFile>('/api/files', form);
-    return response.data;
-}
-
-export function useUploadFile() {
-    const queryClient = useQueryClient();
-    return useMutation({
-        mutationFn: ({ file, isPublic }: { file: File; isPublic: boolean }) => uploadFile(file, isPublic),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['files'] }),
+    const { onProgress } = options;
+    const response = await api.post<UploadedFile>('/api/files', form, {
+        onUploadProgress: onProgress
+            ? (event) => {
+                  const total = event.total ?? 0;
+                  if (total > 0) onProgress(event.loaded / total);
+              }
+            : undefined,
     });
+    return response.data;
 }
 
 export function useDeleteFile() {

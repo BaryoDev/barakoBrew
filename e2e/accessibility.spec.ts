@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { authed, stubShell, stubContentTypes, EMPTY_PAGE, pageOf } from './helpers';
 
 /**
@@ -150,6 +151,12 @@ async function scan(page: import('@playwright/test').Page) {
  */
 test.use({ reducedMotion: 'reduce' });
 
+/** A 1x1 transparent PNG, for the screens that need a real image rather than a name. */
+const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64',
+);
+
 test.describe('accessibility', () => {
     test('the sign-in page', async ({ page }) => {
         await stubShell(page);
@@ -293,7 +300,8 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
-    test('the files screen, with a public and a private file and the upload dialog open', async ({ page }) => {
+    /** The Files list with a public image and a private PDF on it. */
+    async function filesScreen(page: Page) {
         await authed(page);
         await stubShell(page);
         const file = (id: string, fileName: string, isPublic: boolean, contentType: string) => ({
@@ -319,6 +327,10 @@ test.describe('accessibility', () => {
 
         await page.goto('/files');
         await expect(page.getByRole('heading', { name: 'Files', exact: true })).toBeVisible({ timeout: 15000 });
+    }
+
+    test('the files screen, with a public and a private file and the upload dialog open', async ({ page }) => {
+        await filesScreen(page);
 
         // Both visibility pills and the row actions, so the scan sees each tone and every button.
         const rows = page.getByRole('table');
@@ -336,6 +348,42 @@ test.describe('accessibility', () => {
         });
         // The refusal is the one piece of text in the destructive tone in the dialog.
         await expect(page.getByRole('alert')).toBeVisible();
+        await scan(page);
+    });
+
+    test('the upload preview and the progress tray', async ({ page }) => {
+        await filesScreen(page);
+
+        await page.getByRole('button', { name: 'Upload file' }).click();
+        await page.getByLabel('Choose a file').setInputFiles({
+            name: 'cover.png',
+            mimeType: 'image/png',
+            buffer: PNG,
+        });
+        await expect(page.getByRole('img', { name: 'Preview of cover.png' })).toBeVisible();
+        await scan(page);
+
+        // One upload in flight that never answers, so the tray holds a progress row.
+        await page.route(/\/api\/files$/, async (route) => {
+            if (route.request().method() !== 'POST') return route.fallback();
+            await new Promise(() => {});
+        });
+        await page.getByRole('button', { name: 'Upload', exact: true }).click();
+        await expect(page.getByRole('region', { name: 'Uploads' })).toBeVisible();
+        // The toast the upload raises is sonner's, it fades out on its own, and a scan that lands
+        // mid-fade reports the contrast of a half-transparent element. Wait it out.
+        await expect(page.getByText('Uploading cover.png')).toBeHidden({ timeout: 15000 });
+        await scan(page);
+    });
+
+    test('the image viewer, over the list', async ({ page }) => {
+        await filesScreen(page);
+        await page.route(/\/api\/public\/files\/[^/?]+(\?.*)?$/, (route) =>
+            route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+        );
+
+        await page.getByRole('button', { name: 'View spring-roast-cover.jpg' }).click();
+        await expect(page.getByRole('dialog')).toBeVisible();
         await scan(page);
     });
 
