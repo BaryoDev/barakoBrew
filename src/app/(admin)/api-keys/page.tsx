@@ -13,6 +13,7 @@ import {
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
+import { RevealOnce } from '@/components/patterns/reveal-once';
 import { ErrorState } from '@/components/patterns/error-state';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { Button } from '@/components/ui/button';
@@ -75,15 +76,10 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       });
       setCreated(result); // switch the dialog to the copy-once view
+      create.reset(); // the result carries the key, so drop it from the mutation cache now
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Could not create the key.'));
     }
-  }
-
-  async function copyKey() {
-    if (!created) return;
-    await navigator.clipboard.writeText(created.key);
-    toast.success('Key copied to clipboard');
   }
 
   return (
@@ -96,36 +92,22 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     >
       <DialogContent>
         {created ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Copy your API key</DialogTitle>
-              <DialogDescription>
-                This is the only time the full key is shown. Store it somewhere safe — you can&apos;t
-                see it again.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 py-2">
-              <div className="flex items-center gap-2">
-                <Input readOnly value={created.key} className="font-mono text-xs" data-testid="api-key-secret" />
-                <Button type="button" variant="outline" onClick={copyKey}>
-                  Copy
-                </Button>
-              </div>
-              <p className="text-muted-foreground text-xs">
-                Send it as <code className="font-mono">Authorization: Bearer {created.prefix}…</code>
-              </p>
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                onClick={() => {
-                  onOpenChange(false);
-                }}
-              >
-                Done
-              </Button>
-            </DialogFooter>
-          </>
+          <RevealOnce
+            className="py-2"
+            title="Copy your API key"
+            titleAs={DialogTitle}
+            description="Store it somewhere safe before you close this."
+            descriptionAs={DialogDescription}
+            secret={created.key}
+            secretLabel="API key"
+            testId="api-key-secret"
+            dismissLabel="Done"
+            onDismiss={() => onOpenChange(false)}
+          >
+            <p className="text-muted-foreground text-xs">
+              Send it as <code className="font-mono">Authorization: Bearer {created.prefix}…</code>
+            </p>
+          </RevealOnce>
         ) : (
           <form onSubmit={submit}>
             <DialogHeader>

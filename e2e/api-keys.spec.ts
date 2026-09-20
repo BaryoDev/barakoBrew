@@ -57,7 +57,12 @@ test.describe('API keys', () => {
     const secret = page.getByTestId('api-key-secret');
     await expect(secret).toBeVisible({ timeout: 10000 });
     await expect(secret).toHaveValue('bcms_THEFULLSECRETVALUE123456');
-    await expect(page.getByText(/only time the full key is shown/i)).toBeVisible();
+    await expect(page.getByText(/it cannot be shown again/i)).toBeVisible();
+
+    // Done clears it. Nothing in the page holds it afterwards, the mutation cache included.
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(secret).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText('bcms_THEFULLSECRETVALUE123456');
   });
 
   test('revoke calls the API', async ({ page }) => {
