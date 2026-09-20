@@ -4,7 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isNotFound } from '@/lib/api';
 import type { CreatedShareLink, ShareLink } from '@/lib/site-mode';
 
-/** `disabled` is a 404 from the list: this API has no share links. */
+/**
+ * `disabled` is a 404 from the list: this API has no share links.
+ *
+ * The 404 is the only signal available here, unlike the page tree. Share links are served by core
+ * (`Features/Site/ShareLinks`), not by a module, so `GET /api/modules` has nothing to say about
+ * them and a deployment either has the endpoint or is older than it.
+ */
 export type ShareLinksState = { kind: 'disabled' } | { kind: 'links'; links: ShareLink[] };
 
 export const SHARE_LINKS_KEY = ['site', 'share-links'] as const;

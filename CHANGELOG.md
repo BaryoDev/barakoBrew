@@ -11,6 +11,13 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **The rail lists the modules the deployment actually runs.** The Modules group was a fixed list of
+  six items shown to everyone, so a deployment without Accounting still offered an Accounting link
+  that led to an empty screen. The console now reads `GET /api/modules` and leaves out the item for
+  any module the API does not report as running. Until that call answers, and for a caller it
+  refuses (it needs SuperAdmin or Admin) or that it fails for, the rail is exactly what it was, so
+  nothing flickers or disappears on a slow or unreadable response. The Pages screen learns the same
+  way instead of reading a 404 as an answer, and keeps the 404 as its fallback. (#161)
 - **The block editor picks data bindings, and saves blocks for reuse.** Beside any block field a
   site says takes one, a Use data control builds `{{scope.Field | format ?? fallback}}` from a scope,
   a field, a format and a fallback, so nobody types a brace. The scopes and formats come from the

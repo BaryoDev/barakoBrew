@@ -1,17 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isNotFound } from '@/lib/api';
+import { isModuleEnabled, readModules } from '@/hooks/use-modules';
+import { MODULE } from '@/types/modules';
 import { fieldValue, readTree, withField, type TreeView } from '@/lib/page-tree';
 import type { ContentDetail } from '@/types/content';
 
-/** `disabled` is a 404 from the tree endpoint: the Pages module is not enabled on this API. */
+/** `disabled` is this API not serving a page tree: the Pages module is not enabled on it. */
 export type PageTreeState = { kind: 'disabled' } | TreeView;
 
 export const PAGE_TREE_KEY = ['pages', 'tree'] as const;
 
+/**
+ * The page tree, or `disabled` when the deployment does not run Pages.
+ *
+ * Asked of `GET /api/modules` first, so the answer is the API's own inventory rather than an
+ * inference from a failure. The 404 is still handled, because the module list is not always
+ * readable: it needs SuperAdmin or Admin, and an older API does not serve it at all. Reading the
+ * module list through the query cache means the rail has usually already paid for it.
+ */
 export function usePageTree() {
+    const client = useQueryClient();
     return useQuery({
         queryKey: PAGE_TREE_KEY,
         queryFn: async (): Promise<PageTreeState> => {
+            if (isModuleEnabled(await readModules(client), MODULE.pages) === false) {
+                return { kind: 'disabled' };
+            }
             try {
                 const response = await api.get('/api/pages/tree');
                 return readTree(response.data);
