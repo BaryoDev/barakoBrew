@@ -11,6 +11,22 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Uploads run in the background, with a tray that follows you.** Pressing Upload used to hold the
+  dialog open until the API answered, so a 10 MB image on a slow connection took the screen with it.
+  The dialog now hands the files to a queue and closes, and a tray in the corner of every screen
+  lists what is queued, what is uploading with its progress, what finished and what failed. A
+  refusal keeps the API's own reason on its row, with Retry and Dismiss beside it. Two files upload
+  at a time, so a batch does not saturate the connection, and several can be chosen at once or
+  dropped anywhere on the Files screen. Closing or reloading the tab while an upload is in flight
+  asks first, since an upload dies with its page, and each finished file appears in the list without
+  a reload. (#133)
+- **An image can be checked before it is uploaded and looked at afterwards.** The upload dialog
+  draws the image you chose, from the file on your machine, before anything is sent; a PDF still
+  shows its name and size. On the Files screen a thumbnail is now a button that opens the image
+  fitted to the screen, with its name, its size, the size of the copy on screen and the public link
+  when it has one. The viewer asks the API for the resized copy that covers the screen rather than
+  the original, so opening a 4 MB photo does not download 4 MB, and a private file loads through the
+  same signed-in request the thumbnail already used. (#132)
 - **The rail lists the modules the deployment actually runs.** The Modules group was a fixed list of
   six items shown to everyone, so a deployment without Accounting still offered an Accounting link
   that led to an empty screen. The console now reads `GET /api/modules` and leaves out the item for
