@@ -30,6 +30,7 @@ import {
   IconWebhook,
 } from '@/components/icons';
 import { SITE_TYPE } from '@/lib/site-settings';
+import { MODULE } from '@/types/modules';
 
 /**
  * Names a live number the rail may show beside an item. It is an identifier, not a value: the
@@ -60,6 +61,14 @@ export interface NavItem {
    * backend remains the thing that enforces; this only decides what is worth offering.
    */
   roles?: readonly string[];
+  /**
+   * The module that serves this destination, by the name it registers with the API. An item that
+   * declares one is dropped when `GET /api/modules` says the deployment does not run it.
+   *
+   * Only for a destination a module serves entirely. Connectors and share links are core, so a
+   * deployment always has them and naming a module here would be a guess.
+   */
+  module?: string;
 }
 
 export interface NavGroup {
@@ -84,6 +93,27 @@ export function visibleGroups(groups: NavGroup[], userRoles: readonly string[] |
 }
 
 /**
+ * Drops every item whose module the deployment does not run.
+ *
+ * `enabled` undefined means the API has not said: still loading, or it refused the list, or the
+ * request failed. Then nothing is dropped and the rail is what it has always been. A rail that
+ * empties while a request is in flight, or because one call failed, is worse than a rail that lists
+ * a screen the deployment turns out not to serve, and those screens still say so on arrival.
+ *
+ * A module the API lists as not enabled, and a module it does not list at all, are both dropped.
+ * The API distinguishes installed-but-off from not-installed; for the person using the console the
+ * two are the same screen that is not there.
+ */
+export function withModules(groups: NavGroup[], enabled: readonly string[] | undefined): NavGroup[] {
+  if (!enabled) return groups;
+  const running = new Set(enabled);
+
+  return groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.module || running.has(i.module)) }))
+    .filter((g) => g.items.length > 0);
+}
+
+/**
  * The first group carries no label on purpose: it is the primary set, the destinations someone works
  * in all day, and a heading over them would only name the app. Every group after it is
  * labelled, and the rail renders those at a smaller size.
@@ -97,7 +127,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // rendered a link the API answered 403 to, and nothing creates an Editor role anyway.
       { title: 'Content types', href: '/schemas', icon: IconContentTypes, metric: 'contentTypes', roles: ['SuperAdmin', 'Admin'] },
       // Signed in is enough for GET /api/pages/tree, but moving a page is a content update, which is Admin's.
-      { title: 'Pages', href: '/pages', icon: IconList, roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Pages', href: '/pages', icon: IconList, module: MODULE.pages, roles: ['SuperAdmin', 'Admin'] },
       { title: 'Workflows', href: '/workflows', icon: IconWorkflows, metric: 'workflows', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Queries', href: '/queries', icon: IconFilter, roles: ['SuperAdmin', 'Admin'] },
     ],
@@ -124,14 +154,14 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Modules',
     items: [
-      { title: 'Accounting', href: '/accounting', icon: IconCoins , roles: ['SuperAdmin', 'Admin', 'Accountant'] },
-      { title: 'Analytics', href: '/analytics', icon: IconAnalytics , roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Email events', href: '/email-events', icon: IconEnvelope, metric: 'recentBounces', tone: 'warning', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Feature flags', href: '/feature-flags', icon: IconFlag , roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Accounting', href: '/accounting', icon: IconCoins , module: MODULE.accounting, roles: ['SuperAdmin', 'Admin', 'Accountant'] },
+      { title: 'Analytics', href: '/analytics', icon: IconAnalytics , module: MODULE.analytics, roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Email events', href: '/email-events', icon: IconEnvelope, metric: 'recentBounces', tone: 'warning', module: MODULE.emailEvents, roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Feature flags', href: '/feature-flags', icon: IconFlag , module: MODULE.featureFlags, roles: ['SuperAdmin', 'Admin'] },
       // upload_files, which BarakoCMS.Files seeds to Admin and also lets SuperAdmin through. A custom
       // role granted it is not visible here, since the token carries roles and not capabilities.
-      { title: 'Files', href: '/files', icon: IconDisk, roles: ['SuperAdmin', 'Admin'] },
-      { title: 'PWA installs', href: '/pwa', icon: IconMobile , roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Files', href: '/files', icon: IconDisk, module: MODULE.files, roles: ['SuperAdmin', 'Admin'] },
+      { title: 'PWA installs', href: '/pwa', icon: IconMobile , module: MODULE.pwa, roles: ['SuperAdmin', 'Admin'] },
     ],
   },
   {
@@ -147,9 +177,9 @@ export const NAV_GROUPS: NavGroup[] = [
       // devices: an ordinary User has as much right to it as an Admin. Named rather than left
       // ungated, since an item with no roles is offered to a signed-out caller too, and Overview
       // and Health are the only two that should be.
-      { title: 'Devices', href: '/settings/devices', icon: IconMobile , roles: ['SuperAdmin', 'Admin', 'User'] },
-      { title: 'Export and import', href: '/settings/portability', icon: IconArchive , roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Devices', href: '/settings/devices', icon: IconMobile , module: MODULE.deviceTrust, roles: ['SuperAdmin', 'Admin', 'User'] },
+      { title: 'Export and import', href: '/settings/portability', icon: IconArchive , module: MODULE.portability, roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , module: MODULE.import, roles: ['SuperAdmin', 'Admin'] },
       { title: 'Connectors', href: '/settings/connectors', icon: IconWebhook , roles: ['SuperAdmin', 'Admin'] },
       { title: 'Outbound requests', href: '/settings/requests', icon: IconWebhook , roles: ['SuperAdmin', 'Admin'] },
       { title: 'Settings', href: '/settings', icon: IconSettings , roles: ['SuperAdmin', 'Admin'] },

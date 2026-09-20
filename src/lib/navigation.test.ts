@@ -5,8 +5,10 @@ import {
     breadcrumbsFor,
     singletonHref,
     visibleGroups,
+    withModules,
     withSingletons,
 } from './navigation';
+import { MODULE } from '@/types/modules';
 
 const count = (roles: string[] | undefined) =>
     visibleGroups(NAV_GROUPS, roles).reduce((n, g) => n + g.items.length, 0);
@@ -190,5 +192,78 @@ describe('single-entry types in the rail', () => {
         ]);
         // Every other path keeps one crumb per segment.
         expect(breadcrumbsFor('/content/new')).toHaveLength(2);
+    });
+});
+
+
+describe('modules in the rail', () => {
+    const ALL = Object.values(MODULE);
+    const moduleTitles = (enabled: readonly string[] | undefined) =>
+        withModules(visibleGroups(NAV_GROUPS, ['SuperAdmin']), enabled).flatMap((g) =>
+            g.items.map((i) => i.title),
+        );
+
+    // The control. Every assertion below is about something disappearing, and all of them pass on a
+    // rail that shows nothing at all.
+    it('keeps every item when the API runs every module', () => {
+        const seen = moduleTitles(ALL);
+        expect(seen).toEqual(
+            visibleGroups(NAV_GROUPS, ['SuperAdmin']).flatMap((g) => g.items.map((i) => i.title)),
+        );
+        expect(seen).toContain('Accounting');
+    });
+
+    it('drops the item for a module the deployment does not run', () => {
+        const seen = moduleTitles(ALL.filter((m) => m !== MODULE.accounting));
+
+        expect(seen).not.toContain('Accounting');
+        // The rest of the group is still there, so this is one item going rather than the group.
+        expect(seen).toContain('Analytics');
+        expect(seen).toContain('Files');
+    });
+
+    it('keeps an item that no module serves', () => {
+        // Connectors, share links and the audit log are core. A deployment with no modules at all
+        // still has them, so an empty list must not empty the rail.
+        const seen = moduleTitles([]);
+
+        expect(seen).toContain('Overview');
+        expect(seen).toContain('Connectors');
+        expect(seen).toContain('Audit log');
+        expect(seen).not.toContain('Files');
+        expect(seen).not.toContain('Accounting');
+    });
+
+    it('shows every item while the API has not answered', () => {
+        // Undefined is loading, a 403 for a caller who may not read the list, and a failed request.
+        // All three keep the rail exactly as it was before this filter existed.
+        const railed = withModules(visibleGroups(NAV_GROUPS, ['SuperAdmin']), undefined);
+        expect(railed).toEqual(visibleGroups(NAV_GROUPS, ['SuperAdmin']));
+        expect(moduleTitles(undefined)).toContain('Accounting');
+    });
+
+    it('drops a group whose every item belonged to a module that is gone', () => {
+        // The Modules group is nothing but module items, so a deployment running none of them must
+        // not render a "Modules" heading with nothing under it.
+        const groups = withModules(visibleGroups(NAV_GROUPS, ['SuperAdmin']), []);
+        expect(groups.length).toBeGreaterThan(0);
+        expect(groups.map((g) => g.label)).not.toContain('Modules');
+        for (const g of groups) expect(g.items.length).toBeGreaterThan(0);
+    });
+
+    it('names a module for every item in the Modules group', () => {
+        const group = NAV_GROUPS.find((g) => g.label === 'Modules');
+        expect(group).toBeDefined();
+        expect(group!.items.length).toBeGreaterThan(0);
+        expect(group!.items.filter((i) => !i.module).map((i) => i.title)).toEqual([]);
+    });
+
+    it('gates on names the API could actually report', () => {
+        // A module name is a copy of the module's own Name property. A rail item naming something no
+        // module registers would simply never appear, which looks like a deployment problem rather
+        // than a typo, so the set of names in use is pinned to the set the console knows.
+        const named = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.module);
+        expect(named.length).toBeGreaterThan(0);
+        for (const item of named) expect(ALL).toContain(item.module);
     });
 });

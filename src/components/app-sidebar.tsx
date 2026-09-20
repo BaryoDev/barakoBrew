@@ -9,12 +9,14 @@ import {
   NAV_GROUPS,
   activeNavHref,
   visibleGroups,
+  withModules,
   withSingletons,
   type NavGroup,
   type NavItem,
 } from '@/lib/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useNavMetrics, type NavMetrics } from '@/hooks/use-nav-metrics';
+import { useEnabledModules } from '@/hooks/use-modules';
 import { CommandMenu } from '@/components/command-menu';
 import { IconMore, IconSignOut } from '@/components/icons';
 import { AboutDialog } from '@/components/about-dialog';
@@ -140,7 +142,12 @@ export function AppSidebar() {
   // Filtered rather than rendered whole. Every item used to be shown to every role, so a User saw
   // all nineteen destinations and sixteen of them answered 403 on arrival. The backend was never
   // the problem; the sidebar was advertising doors it knew were locked.
-  const allowed = visibleGroups(NAV_GROUPS, user?.roles);
+  const roleFiltered = visibleGroups(NAV_GROUPS, user?.roles);
+
+  // And filtered again by what the deployment actually runs. Until /api/modules answers, and for a
+  // caller it will not answer, this is the role-filtered list unchanged: see withModules.
+  const modules = useEnabledModules();
+  const allowed = withModules(roleFiltered, modules);
   const { data: meta } = useApiMeta();
   const [aboutOpen, setAboutOpen] = useState(false);
 
