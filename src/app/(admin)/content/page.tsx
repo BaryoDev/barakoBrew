@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useContents } from '@/hooks/use-contents';
 import { ContentStatus } from '@/types/content';
-import { STATUS_ORDER, STATUS_VOCABULARY, statusMeta } from '@/lib/status-vocabulary';
+import { STATUS_ORDER, STATUS_VOCABULARY, statusFromParam, statusMeta } from '@/lib/status-vocabulary';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { StatusBadge } from '@/components/patterns/status-badge';
@@ -69,18 +69,6 @@ const HEAD =
 /** Machine-produced cell values: mono, tabular, muted. Types, versions, timestamps. */
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
 
-/**
- * A status the server knows, or undefined for anything else the query string happens to carry.
- *
- * Matched against the enum's values rather than with `in`, which answers true for `toString` and
- * every other name on Object's prototype and would hand the API a function as a filter.
- */
-const STATUS_VALUES: string[] = Object.values(ContentStatus);
-
-function statusFromParam(value: string | null): ContentStatus | undefined {
-  return value && STATUS_VALUES.includes(value) ? (value as ContentStatus) : undefined;
-}
-
 function ContentListInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -113,19 +101,22 @@ function ContentListInner() {
   // whichever query happened to finish last rather than on what is in the box.
   const query = useDebounced(search, 300);
 
-  // The box leads and the URL follows it, one history entry per settled search rather than one per
-  // keystroke.
-  //
-  // Both guards earn their place. The effect waits for the debounce to settle, and the line under
-  // it adopts a URL that changed underneath the screen, which is what the Back button does. Without
-  // the first guard the two fight: Back sets the box from the older URL, the debounce is still
-  // holding the newer text, and the effect writes that text straight back over the navigation.
+  /*
+   * The box is seeded from the URL when the screen opens and writes to it from then on, in one
+   * direction only.
+   *
+   * Reading the URL back into the box as well is the obvious next step and it is a loop: the
+   * debounce settles, the box holds the new text while the URL still holds the old, and a screen
+   * that copies the URL into the box on sight reverts the search a moment after it was typed. The
+   * e2e walk caught exactly that.
+   *
+   * One direction is enough because the write is `replace`, which leaves no history entry: nothing
+   * can navigate back to an earlier search on this screen. Arriving with a different one is a fresh
+   * mount, which seeds the box from the URL again.
+   */
   useEffect(() => {
-    if (search !== query) return;
     if (query !== urlQuery) setParams({ q: query, page: null });
-  }, [search, query, urlQuery, setParams]);
-
-  if (urlQuery !== query && search === query) setSearch(urlQuery);
+  }, [query, urlQuery, setParams]);
 
   // Every filter goes back to page one. Staying on page four of a wider result and then narrowing
   // it shows an empty table beside a count saying there are matches, which reads as a broken search.
