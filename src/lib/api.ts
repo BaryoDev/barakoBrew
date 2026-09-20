@@ -264,6 +264,17 @@ export function isNotFound(error: unknown): boolean {
     return axios.isAxiosError(error) && error.response?.status === 404;
 }
 
+/**
+ * A read the server refused, saying this caller may not have it.
+ *
+ * Distinct from a 404 on purpose. A 403 says the thing exists and is not yours; a 404 says it is
+ * not there. A caller that conflates them reports a missing feature to someone who is only missing
+ * a role.
+ */
+export function isForbidden(error: unknown): boolean {
+    return axios.isAxiosError(error) && error.response?.status === 403;
+}
+
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
     if (axios.isAxiosError(error)) {
         const data = error.response?.data;

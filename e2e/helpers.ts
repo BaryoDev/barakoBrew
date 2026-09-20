@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { SUPPORTED_CONTRACT } from '../src/lib/api-contract';
+import { MODULE } from '../src/types/modules';
 
 // A structurally valid JWT the UI can decode (the client never verifies the signature). Lives here,
 // not in a *.spec.ts, because Playwright forbids one test file importing another.
@@ -156,7 +157,21 @@ export async function stubShell(page: Page) {
     await page.route(/\/api\/workflows(\?|$)/, (r) => r.fulfill({ json: countOf(3) }));
     await page.route(/\/api\/client-errors(\?|$)/, (r) => r.fulfill({ json: countOf(0) }));
     await page.route(/\/api\/email-events(\?|$)/, (r) => r.fulfill({ json: [] }));
+
+    // The rail asks the API which modules it runs and leaves out the items for the ones it does
+    // not. A deployment running everything is what these specs describe, so this answers with every
+    // module the rail gates on. A spec about a module being absent registers its own route.
+    await page.route(/\/api\/modules(\?|$)/, (r) => r.fulfill({ json: pageOf(ALL_MODULES) }));
 }
+
+/** Every module the rail gates an item on, running. */
+export const ALL_MODULES = Object.values(MODULE).map((name) => ({
+    name,
+    contractVersion: 1,
+    enabled: true,
+    schemaState: 'ready',
+    schemaChanges: [],
+}));
 
 /** The pagination envelope as a count query sees it: one row asked for, the real total reported. */
 function countOf(totalItems: number) {

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { smokeApiUrl } from './api-url';
+import { MODULE } from '../src/types/modules';
 
 /**
  * The admin, unmocked, against a real API and a real database.
@@ -247,4 +248,45 @@ test('pwa installs are the collection envelope, not a bare array', async ({ requ
     expect(Array.isArray(body), 'installs must not be a bare array').toBe(false);
     expect(Array.isArray(body.items), 'items must be an array').toBe(true);
     expect(typeof body.totalItems, 'totalItems must be a number').toBe('number');
+});
+
+/**
+ * The module inventory the rail gates on.
+ *
+ * The console now leaves a rail item out when `GET /api/modules` does not report its module as
+ * running, so the names in `src/types/modules.ts` are a contract with the API: a misspelled one is
+ * an item that never appears, against any deployment, and looks like a deployment problem rather
+ * than a typo. Nothing mocked can catch that, because the fixture is written from the same list.
+ *
+ * Asserted as an overlap rather than as every name, because which modules an image installs is a
+ * deployment choice: a smoke API without Accounting is not a broken console. What cannot be true is
+ * that none of the names the console uses is one this API has heard of.
+ */
+test('the module list names the modules the rail gates on', async ({ request }) => {
+    const token = process.env.SMOKE_TOKEN;
+    const api = smokeApiUrl();
+    expect(token, 'SMOKE_TOKEN must be set by scripts/smoke-check.sh').toBeTruthy();
+
+    const response = await request.get(`${api}/api/modules?page=1&pageSize=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.ok(), `GET /api/modules returned ${response.status()}`).toBeTruthy();
+
+    const body = await response.json();
+    expect(Array.isArray(body), 'the module list must not be a bare array').toBe(false);
+    expect(Array.isArray(body.items), 'items must be an array').toBe(true);
+    expect(body.items.length, 'an API with no modules at all would say nothing about any of them')
+        .toBeGreaterThan(0);
+
+    expect(typeof body.items[0].name, 'name must be a string').toBe('string');
+    expect(typeof body.items[0].enabled, 'enabled must be a boolean').toBe('boolean');
+
+    const reported: string[] = body.items.map((m: { name: string }) => m.name);
+    const known = Object.values(MODULE).filter((name) => reported.includes(name));
+    expect(
+        known.length,
+        `this API reports [${reported.join(', ')}] and the console gates rail items on `
+            + `[${Object.values(MODULE).join(', ')}]. None of them match, so every gated item would `
+            + 'be hidden against this deployment.'
+    ).toBeGreaterThan(0);
 });
