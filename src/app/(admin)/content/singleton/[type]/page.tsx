@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/use-auth';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useContents, useCreateContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
@@ -98,6 +99,7 @@ function FirstEntry({
   schema: ContentTypeDefinition;
   onRefused: () => void;
 }) {
+  const { user } = useAuth();
   const createContent = useCreateContent();
   const [values, setValues] = useState<Record<string, unknown>>({});
 
@@ -124,7 +126,13 @@ function FirstEntry({
         description="Nothing saved yet. Saving creates the entry, and this screen edits it from then on."
       />
       <div className="max-w-2xl">
-        <DynamicForm fields={schema.fields} values={values} onChange={setValues} contentType={schema.name} />
+        <DynamicForm
+            fields={schema.fields}
+            values={values}
+            onChange={setValues}
+            contentType={schema.name}
+            viewerRoles={user?.roles}
+        />
         <Separator className="my-6" />
         <div className="flex items-center gap-2">
           <Button onClick={() => submit(ContentStatus.Published)} disabled={createContent.isPending}>

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ContentStatus } from '@/types/content';
-import { STATUS_VOCABULARY, statusMeta, type StatusKey } from './status-vocabulary';
+import { STATUS_VOCABULARY, statusFromParam, statusMeta, type StatusKey } from './status-vocabulary';
 
 /**
  * The five states the design fixes, and the one rule that outranks all of them.
@@ -121,5 +121,22 @@ describe('a status the console does not know', () => {
         // A badge with no label is a coloured smudge. Whatever produced the empty string, the
         // reader is owed a word.
         expect(statusMeta('')).toEqual({ label: 'Unknown', tone: 'muted' });
+    });
+});
+
+describe('a status read out of a query string', () => {
+    it('is kept when the API knows it', () => {
+        expect(statusFromParam('Draft')).toBe(ContentStatus.Draft);
+        expect(statusFromParam('Scheduled')).toBe(ContentStatus.Scheduled);
+    });
+
+    it('is dropped when it is anything else, prototype names included', () => {
+        // `'toString' in ContentStatus` is true, and the lookup returns a function. Sent as a query
+        // parameter that reads as `status=function+toString`, which is a filter nothing matches.
+        expect(statusFromParam('toString')).toBeUndefined();
+        expect(statusFromParam('constructor')).toBeUndefined();
+        expect(statusFromParam('InReview')).toBeUndefined(); // in the vocabulary, not in the API
+        expect(statusFromParam('')).toBeUndefined();
+        expect(statusFromParam(null)).toBeUndefined();
     });
 });

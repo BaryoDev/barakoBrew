@@ -1,0 +1,27 @@
+{
+    "name": "barako-content-form",
+    "version": "0.1.0",
+    "description": "Renders an editing form from a barakoCMS content type definition, with field sensitivity honoured.",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "files": [
+        "src",
+        "LICENSE",
+        "README.md"
+    ],
+    "peerDependencies": {
+        "@radix-ui/react-label": ">=2",
+        "clsx": ">=2",
+        "radix-ui": ">=1",
+        "react": ">=19",
+        "tailwind-merge": ">=3"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/BaryoDev/barakoBrew.git",
+        "directory": "packages/content-form"
+    }
+}

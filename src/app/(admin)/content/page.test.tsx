@@ -17,13 +17,38 @@ vi.mock('@/lib/api', async () => {
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
 });
 
-const replace = vi.fn();
+/**
+ * A router that actually navigates.
+ *
+ * The filters live in the query string now (#138), so a `replace` that records the call and leaves
+ * the parameters alone is a fake that cannot do the one thing the screen depends on: the status
+ * would never reach the request, and the test would be describing a screen nobody has. This keeps
+ * the parameters in a store the mocked `useSearchParams` subscribes to, so a replace re-renders the
+ * screen with what was written, the way the real router does.
+ */
 let searchParams = new URLSearchParams();
+const paramListeners = new Set<() => void>();
 
-vi.mock('next/navigation', () => ({
-    useRouter: () => ({ push: vi.fn(), replace, back: vi.fn(), refresh: vi.fn() }),
-    useSearchParams: () => searchParams,
-}));
+const replace = vi.fn((url: string) => {
+    searchParams = new URLSearchParams(url.split('?')[1] ?? '');
+    paramListeners.forEach((notify) => notify());
+});
+
+vi.mock('next/navigation', async () => {
+    const { useSyncExternalStore } = await import('react');
+    return {
+        useRouter: () => ({ push: vi.fn(), replace, back: vi.fn(), refresh: vi.fn() }),
+        useSearchParams: () =>
+            useSyncExternalStore(
+                (onChange: () => void) => {
+                    paramListeners.add(onChange);
+                    return () => paramListeners.delete(onChange);
+                },
+                () => searchParams,
+                () => searchParams,
+            ),
+    };
+});
 
 globalThis.ResizeObserver ??= class {
     observe() {}
@@ -63,6 +88,12 @@ function lastListParams() {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks drops the implementation as well as the calls, so the router has to navigate
+    // again rather than becoming the fake this file replaced.
+    replace.mockImplementation((url: string) => {
+        searchParams = new URLSearchParams(url.split('?')[1] ?? '');
+        paramListeners.forEach((notify) => notify());
+    });
     searchParams = new URLSearchParams();
     rows = [row('a', 'Alpha', ContentStatus.Published, 7)];
 
@@ -107,7 +138,10 @@ describe('the entries filter bar', () => {
 
         // Three rows, none of which match what was typed. A console filtering its own page would
         // be showing an empty table here.
-        expect(bodyRows()).toHaveLength(3);
+        //
+        // Waited for, not read straight after: the search is part of the query key, so the screen
+        // is drawing its skeleton until the new request answers. The assertion is the same one.
+        await waitFor(() => expect(bodyRows()).toHaveLength(3));
         expect(screen.getByText('Beta')).toBeTruthy();
     });
 

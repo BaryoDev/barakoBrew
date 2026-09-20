@@ -3,6 +3,7 @@ import {
     NAV_GROUPS,
     activeNavHref,
     breadcrumbsFor,
+    entriesHref,
     singletonHref,
     visibleGroups,
     withModules,
@@ -94,6 +95,27 @@ describe('nav visibility', () => {
 
     it('titles the files crumb rather than showing the raw segment', () => {
         expect(breadcrumbsFor('/files')).toEqual([{ title: 'Files', href: '/files' }]);
+    });
+
+    it('lets a screen name its own crumb, for a path that ends in an id', () => {
+        // The entry editor is the screen somebody with no interest in the API spends the day on,
+        // and its crumb read the uuid out of the path.
+        const id = '4f6c2a90-1b2c-4d3e-8f90-a1b2c3d4e5f6';
+        const raw = breadcrumbsFor(`/content/${id}`);
+        expect(raw).toHaveLength(2);
+        expect(raw[1].title).toBe(id);
+
+        const named = breadcrumbsFor(`/content/${id}`, 'Hello world');
+        expect(named).toHaveLength(2);
+        expect(named[1]).toEqual({ title: 'Hello world', href: `/content/${id}` });
+        // The crumbs above the last one are the route, so a title does not touch them.
+        expect(named[0]).toEqual({ title: 'Entries', href: '/content' });
+    });
+
+    it('points the entries of a type at the one query string the screen reads', () => {
+        expect(entriesHref('blogpost')).toBe('/content?type=blogpost');
+        expect(entriesHref()).toBe('/content');
+        expect(entriesHref('a type')).toBe('/content?type=a%20type');
     });
 
     it('drops a group whose every item was filtered out', () => {

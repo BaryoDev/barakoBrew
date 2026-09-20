@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { ContentForm } from 'barako-content-form';
 import { DynamicForm } from './dynamic-form';
-import type { FieldDefinition } from '@/types/schema';
+import { SensitivityLevel, type FieldDefinition } from '@/types/schema';
 
 function renderField(field: Partial<FieldDefinition> & { name: string; type: FieldDefinition['type'] }) {
     render(
@@ -89,5 +90,95 @@ describe('the Items field of a menu', () => {
         const textarea = document.getElementById('Items') as HTMLTextAreaElement;
         expect(textarea.tagName).toBe('TEXTAREA');
         expect(JSON.parse(textarea.value)).toEqual(value);
+    });
+});
+
+/**
+ * The console draws its form with barako-content-form.
+ *
+ * These are the assertions that fail if the extraction is undone. Everything above passes against
+ * the renderer that used to live in this file as well as against the package, which makes them
+ * tests of the form rather than tests of the extraction.
+ */
+describe('the console draws its form with the package', () => {
+    const PLAIN: FieldDefinition[] = [
+        { name: 'Title', displayName: 'Title', type: 'string', isRequired: true },
+        { name: 'Body', displayName: 'Body', type: 'text', isRequired: false },
+        { name: 'Seats', displayName: 'Seats', type: 'int', isRequired: false },
+        { name: 'Live', displayName: 'Live', type: 'bool', isRequired: false },
+    ];
+
+    it('hands a field it has no control of its own for straight to the package', () => {
+        // Same definition through both, compared as markup. A console that went back to picking its
+        // own controls would draw something, and something is not the same as the same thing.
+        const viaConsole = render(
+            <DynamicForm fields={PLAIN} values={{}} onChange={() => {}} viewerRoles={['Editor']} />,
+        );
+        const consoleHtml = viaConsole.container.innerHTML;
+        viaConsole.unmount();
+
+        const viaPackage = render(
+            <ContentForm fields={PLAIN} values={{}} onChange={() => {}} viewerRoles={['Editor']} />,
+        );
+        const packageHtml = viaPackage.container.innerHTML;
+        viaPackage.unmount();
+
+        expect(consoleHtml.length).toBeGreaterThan(0);
+        expect(consoleHtml).toBe(packageHtml);
+    });
+
+    it('gives a string field one line, because that is what the type means', () => {
+        // It was a two row textarea, which is what made every title look like a paragraph.
+        expect(renderField({ name: 'Title', type: 'string' }).tagName).toBe('INPUT');
+    });
+
+    it('honours field sensitivity, which the console never did on its own', () => {
+        const fields: FieldDefinition[] = [
+            {
+                name: 'Salary',
+                displayName: 'Salary',
+                type: 'string',
+                isRequired: false,
+                sensitivity: SensitivityLevel.Sensitive,
+            },
+        ];
+
+        render(
+            <DynamicForm
+                fields={fields}
+                values={{ Salary: '***' }}
+                onChange={() => {}}
+                viewerRoles={['Editor']}
+            />,
+        );
+
+        // The API reverts a write to this field and says nothing, so an editable box here is an
+        // edit that disappears on save.
+        expect(document.getElementById('Salary')).toHaveAttribute('readonly');
+        expect(screen.getByText(/cannot read this field/i)).toBeInTheDocument();
+    });
+
+    it('leaves a sensitive field editable for a role the API lets through', () => {
+        // Paired with the test above, so a form that made everything read only would fail here.
+        const fields: FieldDefinition[] = [
+            {
+                name: 'Salary',
+                displayName: 'Salary',
+                type: 'string',
+                isRequired: false,
+                sensitivity: SensitivityLevel.Sensitive,
+            },
+        ];
+
+        render(
+            <DynamicForm
+                fields={fields}
+                values={{ Salary: '90000' }}
+                onChange={() => {}}
+                viewerRoles={['HR']}
+            />,
+        );
+
+        expect(document.getElementById('Salary')).not.toHaveAttribute('readonly');
     });
 });

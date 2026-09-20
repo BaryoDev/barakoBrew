@@ -16,6 +16,7 @@ const MARKS: Mark[] = [
     { name: 'Heading', prefix: '## ' },
     { name: 'Link', wrap: ['[', '](https://)'] },
     { name: 'List', prefix: '- ' },
+    { name: 'Quote', prefix: '> ' },
     { name: 'Code', wrap: ['`', '`'] },
 ];
 

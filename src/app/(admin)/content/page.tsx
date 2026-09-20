@@ -1,12 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useContents } from '@/hooks/use-contents';
 import { ContentStatus } from '@/types/content';
-import { STATUS_ORDER, STATUS_VOCABULARY, statusMeta } from '@/lib/status-vocabulary';
+import { STATUS_ORDER, STATUS_VOCABULARY, statusFromParam, statusMeta } from '@/lib/status-vocabulary';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { StatusBadge } from '@/components/patterns/status-badge';
@@ -36,9 +36,15 @@ import { useDebounced } from '@/hooks/use-debounced';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
 import { singletonHref } from '@/lib/navigation';
+import { IconChevronLeft } from '@/components/icons';
 
 const ALL_TYPES = 'all';
 const ALL_STATUSES = 'all';
+
+/** Where a new entry of a type is written. Encoded, the way every other generated link here is. */
+function newEntryHref(contentType?: string): string {
+  return contentType ? `/content/new?type=${encodeURIComponent(contentType)}` : '/content/new';
+}
 
 /**
  * The status filter, in the design's order.
@@ -71,27 +77,65 @@ const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
 function ContentListInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // The filters live in the query string rather than in state, so a link to this screen opens the
+  // same screen. Somebody sending "the drafts that mention invoicing" to a colleague was sending
+  // them an unfiltered table.
   const contentType = searchParams.get('type') ?? undefined;
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<ContentStatus | undefined>(undefined);
+  const urlQuery = searchParams.get('q') ?? '';
+  const status = statusFromParam(searchParams.get('status'));
+  const page = Math.max(1, Number(searchParams.get('page')) || 1);
+
+  const setParams = useCallback(
+    (next: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(next)) {
+        if (value === null || value === '') params.delete(key);
+        else params.set(key, value);
+      }
+      const query = params.toString();
+      router.replace(query ? `/content?${query}` : '/content');
+    },
+    [router, searchParams]
+  );
+
+  const [search, setSearch] = useState(urlQuery);
 
   // Typing is not a request. Without this every keystroke is a round trip that materialises the
   // permitted set server side, and the answers can arrive out of order, so the table settles on
   // whichever query happened to finish last rather than on what is in the box.
   const query = useDebounced(search, 300);
 
-  // Every filter goes back to page one, set where the filter is set rather than in an effect
-  // watching it. Staying on page four of a wider result and then narrowing it shows an empty table
-  // beside a count saying there are matches, which reads as a broken search.
-  const changeSearch = (value: string) => {
-    setPage(1);
-    setSearch(value);
-  };
+  /**
+   * The search the URL held when this screen last drew, which is what tells the two ways the box
+   * and the URL can disagree apart.
+   *
+   * The URL lagging behind the box is this screen's own write on its way through the router. The
+   * URL changing to something the box did not ask for is a navigation: the Entries link in the
+   * rail, which drops the search, or a pasted address. Comparing the two values cannot separate
+   * them, because on the render where the debounce settles they differ for the first reason and on
+   * the render after a navigation they differ for the second. Comparing the URL against itself can.
+   */
+  const [urlQueryAsDrawn, setUrlQueryAsDrawn] = useState(urlQuery);
 
+  if (urlQuery !== urlQueryAsDrawn) {
+    setUrlQueryAsDrawn(urlQuery);
+    // Not what this screen asked for, so somebody navigated and the box follows.
+    if (urlQuery !== query) setSearch(urlQuery);
+  }
+
+  // The box leads and the URL follows, once the typing has settled. Waiting for the debounce is
+  // what stops a navigation that empties the search being written straight back from a box the
+  // debounce has not caught up with yet.
+  useEffect(() => {
+    if (search !== query) return;
+    if (query !== urlQuery) setParams({ q: query, page: null });
+  }, [search, query, urlQuery, setParams]);
+
+  // Every filter goes back to page one. Staying on page four of a wider result and then narrowing
+  // it shows an empty table beside a count saying there are matches, which reads as a broken search.
   const changeStatus = (value: ContentStatus | undefined) => {
-    setPage(1);
-    setStatus(value);
+    setParams({ status: value ?? null, page: null });
   };
 
   /** Whether the empty table is empty because of a filter, which changes what to tell the reader. */
@@ -137,15 +181,33 @@ function ContentListInner() {
   );
 
   const setType = (value: string) => {
-    setPage(1);
-    router.replace(value === ALL_TYPES ? '/content' : `/content?type=${value}`);
+    setParams({ type: value === ALL_TYPES ? null : value, page: null });
   };
+
+  const schema = schemas?.find((s) => s.name === contentType);
 
   return (
     <>
+      {/* The way back to where the type was chosen. The header crumb says Entries, which is the
+          route; this says which type's entries these are and how to get out of them. */}
+      {contentType && (
+        <Link
+          href="/schemas"
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring mb-3 -mt-1 inline-flex items-center gap-1 rounded-sm text-sm outline-none focus-visible:ring-[3px]"
+        >
+          <IconChevronLeft className="size-3.5" />
+          Content types
+        </Link>
+      )}
+
       <PageHeader
-        title="Entries"
-        description="Everything written in your CMS, filterable by content type."
+        title={schema?.displayName ?? 'Entries'}
+        description={
+          contentType
+            ? (schema?.description ??
+              `Everything written as ${schema?.displayName ?? contentType}.`)
+            : 'Everything written in your CMS, filterable by content type.'
+        }
         badge={
           contents ? (
             <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-[3px] font-mono text-[11px] font-bold tabular-nums">
@@ -155,7 +217,7 @@ function ContentListInner() {
         }
         actions={
           <Button asChild size="sm">
-            <Link href={contentType ? `/content/new?type=${contentType}` : '/content/new'}>
+            <Link href={newEntryHref(contentType)}>
               <IconPlus />
               New entry
             </Link>
@@ -172,7 +234,7 @@ function ContentListInner() {
         <Input
           type="search"
           value={search}
-          onChange={(e) => changeSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search entries"
           aria-label="Search entries"
           className="h-[38px] w-full sm:w-[280px]"
@@ -230,7 +292,7 @@ function ContentListInner() {
           }
           action={
             <Button asChild size="sm">
-              <Link href={contentType ? `/content/new?type=${contentType}` : '/content/new'}>
+              <Link href={newEntryHref(contentType)}>
                 <IconPlus />
                 New entry
               </Link>
@@ -307,7 +369,7 @@ function ContentListInner() {
               </TableBody>
             </Table>
           </div>
-          <PaginationControls page={contents} onPageChange={setPage} />
+          <PaginationControls page={contents} onPageChange={(n) => setParams({ page: String(n) })} />
         </>
       )}
     </>

@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "barako-content-form": ["./packages/content-form/src/index.ts"]
     }
   },
   "include": [

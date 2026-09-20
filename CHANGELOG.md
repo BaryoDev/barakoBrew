@@ -11,6 +11,24 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Content types are where writing starts, and a type opens its entries.** A content type card
+  used to lead to the field designer, which is the one screen an editor has no use for. Opening a
+  type now opens its entries, with the fields a second link beside it, and a type holding a single
+  entry opens that entry. The screen shows cards or a compact list, remembered per browser, with a
+  search and a sort by name, field count or last edited, and Single entry and Public badges on each
+  type. The entries screen keeps the type, the search, the status and the page in the URL, so the
+  link opens the same screen it was copied from, and names the type with a way back to the list of
+  them. The crumb above an entry now reads the entry's title instead of its uuid. The markdown
+  toolbar gained Quote, which it had always been documented as having. (#138)
+- **The content form is a package.** `packages/content-form` draws the form from a content type
+  definition and imports nothing from the console, so the portal in #4 renders the same form without
+  a copy of it. Field sensitivity moved into the package and is decided before any host control
+  runs: a field a viewer's roles cannot read is drawn read only with a line saying why, rather than
+  as an editable box whose edits the API silently discards. The console keeps the controls that need
+  data the package does not fetch, and hands them in. A `string` field is a single line now, which
+  is what the type means; it was a two row textarea. MIT, with its own LICENSE, because a package is
+  bundled into its consumers' builds. (#5)
+
 - **Uploads run in the background, with a tray that follows you.** Pressing Upload used to hold the
   dialog open until the API answered, so a 10 MB image on a slow connection took the screen with it.
   The dialog now hands the files to a queue and closes, and a tray in the corner of every screen

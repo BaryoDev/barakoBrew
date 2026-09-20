@@ -3,6 +3,7 @@
 import { Fragment } from 'react';
 import { usePathname } from 'next/navigation';
 import { breadcrumbsFor } from '@/lib/navigation';
+import { useCrumbTitle } from '@/components/crumb-title';
 import { TenantSwitcher } from '@/components/tenant-switcher';
 import { WhatsNew } from '@/components/whats-new';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -18,7 +19,10 @@ import {
 
 export function AppHeader() {
   const pathname = usePathname();
-  const crumbs = breadcrumbsFor(pathname);
+  // A screen whose last segment is an id names its own crumb, so the header reads "Entries / My
+  // first post" rather than "Entries / 4f6c2a90-...".
+  const named = useCrumbTitle(pathname);
+  const crumbs = breadcrumbsFor(pathname, named);
 
   return (
     <header className="bg-card/85 sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 rounded-t-[inherit] border-b px-4 backdrop-blur">

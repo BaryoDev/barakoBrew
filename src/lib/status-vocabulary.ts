@@ -1,4 +1,5 @@
 import type { Tone } from '@/components/patterns/status-badge';
+import { ContentStatus } from '@/types/content';
 
 /**
  * One status vocabulary, for tables, editor headers, workflow nodes and the Overview list.
@@ -85,4 +86,20 @@ export function statusMeta(status: string | undefined): StatusMeta {
 
     // Muted, not subtle: an unknown value is the loud case, not the retired one.
     return { label: status || 'Unknown', tone: 'muted' };
+}
+
+/**
+ * A status the API knows, read out of a query string, or undefined for anything else.
+ *
+ * Undefined rather than a default, so a link carrying a status this console cannot send asks for
+ * every entry instead of quietly filtering to one the server would refuse.
+ *
+ * Matched against the enum's values rather than with `in`, for the same reason `statusMeta` uses
+ * `Object.hasOwn`: the argument is a string from the URL, so it can be any string, and `in`
+ * answers true for `toString`, whose value is a function this would then hand the API as a filter.
+ */
+const STATUS_VALUES: string[] = Object.values(ContentStatus);
+
+export function statusFromParam(value: string | null | undefined): ContentStatus | undefined {
+    return value && STATUS_VALUES.includes(value) ? (value as ContentStatus) : undefined;
 }
