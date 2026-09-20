@@ -22,14 +22,26 @@ export interface SaveBase {
     etag?: string;
 }
 
+/**
+ * What to tell somebody whose save was refused.
+ *
+ * One sentence built in one place, because a message built twice is a message that ends up saying
+ * two things. `whenUnnamed` is the screen's own wording for a refusal with nothing to name, which
+ * is a 412 the server sent for a reason this console could not work out from the documents.
+ */
+export function conflictReason(
+    fields: readonly Collision[],
+    whenUnnamed = 'Someone else changed this while you were editing.',
+): string {
+    return fields.length > 0
+        ? `Someone else changed ${fields.join(', ')} while you were editing.`
+        : whenUnnamed;
+}
+
 /** A save the console refused to retry, because moving the edit forward would lose somebody's work. */
 export class SaveConflictError extends Error {
     constructor(readonly fields: Collision[]) {
-        super(
-            fields.length > 0
-                ? `Someone else changed ${fields.join(', ')} while you were editing.`
-                : 'Someone else changed this while you were editing.',
-        );
+        super(conflictReason(fields));
         this.name = 'SaveConflictError';
     }
 }

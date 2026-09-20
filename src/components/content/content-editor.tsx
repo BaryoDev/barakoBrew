@@ -241,7 +241,7 @@ export function ContentEditor({
           className="border-warning/40 bg-[var(--warning-soft)] text-warning mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
         >
           <p className="text-sm font-semibold">
-            {conflictReason(conflict)}{' '}
+            {conflictReason(conflict.fields, 'This entry changed while you were editing.')}{' '}
             <span className="font-medium">
               Nothing you typed has been lost, and nothing has been saved.
             </span>

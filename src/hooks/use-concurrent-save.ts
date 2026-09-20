@@ -10,6 +10,8 @@ import {
     type SaveOutcome,
 } from '@/lib/concurrent-save';
 
+export { conflictReason } from '@/lib/concurrent-save';
+
 /** A save the console would not retry, and what it could not decide. */
 export interface SaveConflict {
     /** Keys both sides changed. Empty when the refusal came from the server with nothing to name. */
@@ -45,11 +47,4 @@ export function useConcurrentSave() {
         raise: () => setConflict({ fields: [] }),
         clear: () => setConflict(null),
     };
-}
-
-/** What the banner says a refused save could not decide. */
-export function conflictReason(conflict: SaveConflict): string {
-    return conflict.fields.length > 0
-        ? `Someone else changed ${conflict.fields.join(', ')} while you were editing.`
-        : 'This changed while you were editing.';
 }

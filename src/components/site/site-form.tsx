@@ -254,7 +254,11 @@ export function SiteForm({
                     className="border-warning/40 bg-[var(--warning-soft)] text-warning mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
                 >
                     <p className="text-sm font-semibold">
-                        {conflictReason(conflict)} Your changes are still here, and nothing was saved.
+                        {conflictReason(
+                            conflict.fields,
+                            'Someone saved the site entry while you were editing.',
+                        )}{' '}
+                        Your changes are still here, and nothing was saved.
                     </p>
                     <div className="flex gap-2">
                         <Button
