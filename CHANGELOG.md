@@ -9,6 +9,8 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-21
+
 ### Added
 
 - **Content types are where writing starts, and a type opens its entries.** A content type card
@@ -458,7 +460,9 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.4.0
+[1.3.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.3.0
 [1.2.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.2.0
 [1.1.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.1.0
 [1.0.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.0.0
