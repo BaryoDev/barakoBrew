@@ -28,6 +28,12 @@ import {
     type ToneRow,
 } from '@/lib/theme-tokens';
 
+/** The ids of the messages that are showing, for aria-describedby, or undefined when none are. */
+export function describedBy(...ids: (string | false | null | undefined)[]): string | undefined {
+    const shown = ids.filter((id): id is string => typeof id === 'string' && id !== '');
+    return shown.length > 0 ? shown.join(' ') : undefined;
+}
+
 const KIND_LABELS: Record<TokenKind, string> = { colour: 'Colour', length: 'Length', font: 'Font stack' };
 const PART_LABELS: Record<(typeof TONE_PARTS)[number], string> = { ink: 'Ink', bg: 'Background', edge: 'Edge' };
 
@@ -95,6 +101,10 @@ export function TokensEditor({
                                     placeholder="cms-ink"
                                     spellCheck={false}
                                     aria-invalid={nameProblem || repeated.has(index) ? true : undefined}
+                                    aria-describedby={describedBy(
+                                        nameProblem && `${id}-${index}-name-error`,
+                                        repeated.has(index) && `${id}-${index}-repeated`,
+                                    )}
                                     className="font-mono text-xs"
                                     onChange={(e) => update(index, { ...row, name: e.target.value })}
                                 />
@@ -119,6 +129,7 @@ export function TokensEditor({
                                         placeholder="#1D3A8A, 24px or 'Zilla Slab', Georgia, serif"
                                         spellCheck={false}
                                         aria-invalid={valueProblem ? true : undefined}
+                                        aria-describedby={describedBy(valueProblem && `${id}-${index}-value-error`)}
                                         className="font-mono text-xs"
                                         onChange={(e) => update(index, { ...row, value: e.target.value })}
                                     />
@@ -138,10 +149,10 @@ export function TokensEditor({
                                 </Button>
                             </div>
                         </div>
-                        <FieldError message={nameProblem ?? undefined} />
-                        <FieldError message={valueProblem ?? undefined} />
+                        <FieldError id={`${id}-${index}-name-error`} message={nameProblem} />
+                        <FieldError id={`${id}-${index}-value-error`} message={valueProblem} />
                         {repeated.has(index) && (
-                            <p className="text-warning text-xs">A token above has this name, so this one is not saved.</p>
+                            <p id={`${id}-${index}-repeated`} className="text-warning text-xs">A token above has this name, so this one is not saved.</p>
                         )}
                         {row.name.trim() === '' && <p className="text-muted-foreground text-xs">Not saved until it has a name.</p>}
                     </div>
@@ -243,6 +254,10 @@ export function TonesEditor({
                                     placeholder="cms"
                                     spellCheck={false}
                                     aria-invalid={nameProblem || repeated.has(index) ? true : undefined}
+                                    aria-describedby={describedBy(
+                                        nameProblem && `${id}-${index}-name-error`,
+                                        repeated.has(index) && `${id}-${index}-repeated`,
+                                    )}
                                     className="font-mono text-xs"
                                     onChange={(e) => update(index, { ...row, name: e.target.value })}
                                 />
@@ -261,6 +276,7 @@ export function TonesEditor({
                                             placeholder={part === 'edge' ? '#B9C8F5' : part === 'ink' ? 'cms-ink' : 'cms-bg'}
                                             spellCheck={false}
                                             aria-invalid={problem ? true : undefined}
+                                            aria-describedby={describedBy(problem && `${id}-${index}-${part}-error`)}
                                             className="font-mono text-xs"
                                             onChange={(e) => update(index, { ...row, [part]: e.target.value })}
                                         />
@@ -278,14 +294,16 @@ export function TonesEditor({
                             </Button>
                         </div>
                         <ToneChip row={row} tokens={tokens} colors={colors} />
-                        <FieldError message={nameProblem ?? undefined} />
+                        <FieldError id={`${id}-${index}-name-error`} message={nameProblem} />
                         {named &&
                             TONE_PARTS.map((part) => {
                                 const problem = toneColourProblem(row[part], tokens);
-                                return problem ? <FieldError key={part} message={`${PART_LABELS[part]}: ${problem}`} /> : null;
+                                return problem ? (
+                                    <FieldError key={part} id={`${id}-${index}-${part}-error`} message={`${PART_LABELS[part]}: ${problem}`} />
+                                ) : null;
                             })}
                         {repeated.has(index) && (
-                            <p className="text-warning text-xs">A tone above has this name, so this one is not saved.</p>
+                            <p id={`${id}-${index}-repeated`} className="text-warning text-xs">A tone above has this name, so this one is not saved.</p>
                         )}
                         {!named && <p className="text-muted-foreground text-xs">Not saved until it has a name.</p>}
                     </div>

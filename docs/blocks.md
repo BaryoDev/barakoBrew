@@ -90,7 +90,7 @@ A tenant's own tones (`Tones`) and style recipes (`StyleRecipes`) are site setti
 Theme and Style recipes screens. The editor reads them from the same `site` entry as saved blocks:
 
 - Every tone field, which is a select offering the six built-in tones, also offers the tenant's
-  tones after them. The site does the same when it knows the tenant, but the console reads
+  tones after them, leaving out one whose colours do not resolve, since the site drops it. The site does the same when it knows the tenant, but the console reads
   `/api/blocks` without saying which tenant it edits, so it adds them itself.
 - A field named `recipe` stays a text box, since the site takes a bound name such as
   `card-{{item.Product}}`, and offers the tenant's recipe names as suggestions. A name the site has
@@ -98,7 +98,8 @@ Theme and Style recipes screens. The editor reads them from the same `site` entr
 
 The site type needs JSON fields called `Tokens`, `Tones` and `StyleRecipes`. The API stores a field
 its type does not declare, but its public delivery sends only declared fields, so the site would
-never read it. Without one, the screen says so in place of the editor.
+never read it. Without one, the screen says so in place of the editor, a value stored under that
+name does not hold back a save, and the block form offers nothing from it.
 
 The Theme and Style recipes screens check names and values with the patterns barakoPress uses, and
 refuse to save one it would drop. barakoPress checks them again when it reads the settings.

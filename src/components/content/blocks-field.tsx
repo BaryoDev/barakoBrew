@@ -14,7 +14,7 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { usePresets } from '@/hooks/use-presets';
 import { useSiteEntry } from '@/hooks/use-site';
 import { RECIPES_FIELD, recipeNames } from '@/lib/recipes';
-import { TONES_FIELD, toneNames, withTones } from '@/lib/theme-tokens';
+import { TOKENS_FIELD, TONES_FIELD, toneNames, validTokens, withTones } from '@/lib/theme-tokens';
 import { SaveConflictError } from '@/lib/concurrent-save';
 import { idPart, PropField, type PropContext } from '@/components/content/block-props';
 import { bindingProblems, scopesFor, type BindingScope } from '@/lib/binding-scopes';
@@ -242,6 +242,10 @@ export function BlocksField({
     );
 }
 
+function declaredOnly(data: Record<string, unknown>, fields: readonly { name: string }[]): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(data).filter(([key]) => fields.some((f) => f.name === key)));
+}
+
 /**
  * The tenant's own data behind the pickers: its content types, for the fields a scope offers, and
  * its saved blocks, which are data in a site setting rather than anything the site ships.
@@ -260,7 +264,8 @@ function WithSiteData({
     const schemas = useSchemas();
     const presets = usePresets();
     const entry = useSiteEntry();
-    const settings = entry.kind === 'entry' ? entry.entry.data : {};
+    // A setting the site type does not declare never reaches the site, so its names are not offered.
+    const settings = entry.kind === 'entry' ? declaredOnly(entry.entry.data, entry.schema.fields) : {};
     const types = schemas.data ?? [];
     const typeNamed = (name: string) => types.find((t) => t.name.toLowerCase() === name.toLowerCase());
 
@@ -275,7 +280,8 @@ function WithSiteData({
         presetNote: presets.reason,
         recipes: recipeNames(settings[RECIPES_FIELD]),
     };
-    return children(site, withTones(withPresets(schema, presets.presets), toneNames(settings[TONES_FIELD])));
+    const tones = toneNames(settings[TONES_FIELD], validTokens(settings[TOKENS_FIELD]));
+    return children(site, withTones(withPresets(schema, presets.presets), tones));
 }
 
 function Editor({

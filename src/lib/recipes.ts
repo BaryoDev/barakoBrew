@@ -10,7 +10,7 @@
  */
 
 import type { CSSProperties } from 'react';
-import { THEME_COLOR_NAMES } from '@/lib/theme-tokens';
+import { THEME_COLOR_NAMES, type SiteTypeFields } from '@/lib/theme-tokens';
 
 export const RECIPES_FIELD = 'StyleRecipes';
 
@@ -167,7 +167,7 @@ const MAX_VALUE = 240;
 
 const QUOTED = /'[A-Za-z0-9 -]{1,60}'|"[A-Za-z0-9 -]{1,60}"/g;
 const ALPHABET = /^[A-Za-z0-9 #%.,()/+*-]+$/;
-const CALL = /([A-Za-z-]+)\(/g;
+const CALL = /(-?[A-Za-z_][A-Za-z0-9_-]*)\(/g;
 const VAR_ARGUMENT = /^var\(\s*--[A-Za-z0-9-]{1,60}\s*[,)]/;
 const REFERENCE = /\{([A-Za-z][A-Za-z0-9-]{0,39})(?:\.([A-Za-z][A-Za-z0-9-]{0,39}))?\}/g;
 
@@ -323,8 +323,12 @@ export function recipeNames(value: unknown): string[] {
     return (readRecipes(value) ?? []).map((r) => r.name).filter((name) => recipeNameProblem(name) === null);
 }
 
-/** Why a save would store a recipe the engine drops, or null. */
-export function recipesProblem(values: Record<string, unknown>): string | null {
+/**
+ * Why a save would store a recipe the engine drops, or null. Only when the site type declares the
+ * field: otherwise the screen does not edit it, and a value it cannot fix must not block a save.
+ */
+export function recipesProblem(values: Record<string, unknown>, schema: SiteTypeFields): string | null {
+    if (!schema.fields.some((f) => f.name === RECIPES_FIELD)) return null;
     const rows = readRecipes(values[RECIPES_FIELD]);
     if (!rows) return null;
     if (rows.length > MAX_RECIPES) return `The site reads the first ${MAX_RECIPES} recipes. Remove some to save.`;
@@ -369,11 +373,16 @@ function camel(property: string): string {
  */
 export function previewStyle(row: RecipeRow, theme: PreviewTheme): CSSProperties {
     const style: Record<string, string> = {};
+    const seen = new Set<string>();
     for (const declaration of row.declarations) {
-        if (declaration.property === '' || declarationProblem(declaration)) continue;
+        const key = camel(declaration.property);
+        // The save keeps the first of a property set twice, so the preview draws that one too.
+        if (declaration.property === '' || Object.hasOwn(style, key) || seen.has(key)) continue;
+        seen.add(key);
+        if (declarationProblem(declaration)) continue;
         const value = declaration.value.trim();
         const resolved = ONLY_VALUES[declaration.property] ? value : resolve(theme, value);
-        if (resolved !== undefined) style[camel(declaration.property)] = resolved;
+        if (resolved !== undefined) style[key] = resolved;
     }
     return style as CSSProperties;
 }

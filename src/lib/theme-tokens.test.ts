@@ -93,23 +93,41 @@ describe('tones', () => {
     });
 
     it('offer only the names a block may store', () => {
-        expect(toneNames({ cms: {}, accent: {}, Press: {}, 'press-dark': {} })).toEqual(['cms', 'press-dark']);
-        expect(toneNames(undefined)).toEqual([]);
+        const spec = { ink: '#000', bg: '#fff', edge: '#fff' };
+        expect(toneNames({ cms: spec, accent: spec, Press: spec, 'press-dark': spec }, {})).toEqual(['cms', 'press-dark']);
+        expect(toneNames(undefined, {})).toEqual([]);
+    });
+
+    it('offer no tone whose colours the site cannot resolve', () => {
+        const stored = {
+            cms: { ink: 'cms-ink', bg: 'cms-bg', edge: '#B9C8F5' },
+            ghost: { ink: 'no-such-token', bg: '#fff', edge: '#fff' },
+        };
+        expect(toneNames(stored, tokens)).toEqual(['cms']);
     });
 });
 
 describe('tokensAndTonesProblem', () => {
+    const BOTH = { fields: [{ name: 'Tokens' }, { name: 'Tones' }] };
+
+    it('says nothing about a field the site type does not declare, which the screen does not edit', () => {
+        const values = { Tokens: { accent: 'url(evil)' }, Tones: { accent: {} } };
+        expect(tokensAndTonesProblem(values, { fields: [{ name: 'Name' }] })).toBeNull();
+        expect(tokensAndTonesProblem(values, { fields: [{ name: 'Tokens' }] })).toMatch(/A token has/);
+        expect(tokensAndTonesProblem(values, { fields: [{ name: 'Tones' }] })).toMatch(/A tone has/);
+    });
+
     it('lets a save through when every token and tone resolves', () => {
         expect(
             tokensAndTonesProblem({
                 Tokens: { 'cms-ink': '#1D3A8A', 'cms-bg': '#E8EEFD' },
                 Tones: { cms: { ink: 'cms-ink', bg: 'cms-bg', edge: 'hairline' } },
-            }),
+            }, BOTH),
         ).toBeNull();
     });
 
     it('refuses a token the engine drops', () => {
-        expect(tokensAndTonesProblem({ Tokens: { accent: 'url(evil)' } })).toMatch(/A token has a problem/);
+        expect(tokensAndTonesProblem({ Tokens: { accent: 'url(evil)' } }, BOTH)).toMatch(/A token has a problem/);
     });
 
     it('refuses a tone naming a token that is not kept', () => {
@@ -117,10 +135,10 @@ describe('tokensAndTonesProblem', () => {
             tokensAndTonesProblem({
                 Tokens: { 'cms-ink': 'not a colour;' },
                 Tones: { cms: { ink: 'cms-ink', bg: '#FFFFFF', edge: '#FFFFFF' } },
-            }),
+            }, BOTH),
         ).toMatch(/token/);
         expect(
-            tokensAndTonesProblem({ Tones: { cms: { ink: 'cms-ink', bg: '#FFFFFF', edge: '#FFFFFF' } } }),
+            tokensAndTonesProblem({ Tones: { cms: { ink: 'cms-ink', bg: '#FFFFFF', edge: '#FFFFFF' } } }, BOTH),
         ).toMatch(/A tone has a problem/);
     });
 

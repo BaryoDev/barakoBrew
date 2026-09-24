@@ -44,17 +44,30 @@ const FIELDS: FieldDefinition[] = [{ name: 'Blocks', displayName: 'Blocks', type
 
 const SETTINGS = {
     Name: 'barakocms.com',
-    Tones: { cms: { ink: 'cms-ink', bg: 'cms-bg', edge: '#B9C8F5' }, Loud: { ink: '#000', bg: '#fff', edge: '#fff' } },
+    Tokens: { 'cms-ink': '#1D3A8A', 'cms-bg': '#E8EEFD' },
+    Tones: {
+        cms: { ink: 'cms-ink', bg: 'cms-bg', edge: '#B9C8F5' },
+        Loud: { ink: '#000', bg: '#fff', edge: '#fff' },
+        ghost: { ink: 'no-such-token', bg: '#fff', edge: '#fff' },
+    },
     StyleRecipes: { card: { style: { padding: '22px 24px' } }, eyebrow: { style: { 'font-size': '11px' } } },
 };
 
-function serve(settings: Record<string, unknown>) {
+function serve(settings: Record<string, unknown>, declared: string[] = ['Tokens', 'Tones', 'StyleRecipes']) {
     vi.stubGlobal(
         'fetch',
         vi.fn(async () => ({ ok: true, status: 200, json: async () => SCHEMA })),
     );
     const types = [
-        { name: 'site', displayName: 'site', isSingleton: true, fields: [{ name: 'Name', displayName: 'Name', type: 'string', isRequired: true }] },
+        {
+            name: 'site',
+            displayName: 'site',
+            isSingleton: true,
+            fields: [
+                { name: 'Name', displayName: 'Name', type: 'string', isRequired: true },
+                ...declared.map((name) => ({ name, displayName: name, type: 'json', isRequired: false })),
+            ],
+        },
         { name: 'page', displayName: 'page', fields: [{ name: 'Blocks', displayName: 'Blocks', type: 'json', isRequired: false }] },
     ];
     vi.mocked(api.get).mockImplementation(async (url: string) => {
@@ -110,7 +123,8 @@ describe('a tone field', () => {
         const tone = screen.getByLabelText('Tone') as HTMLSelectElement;
 
         await waitFor(() => expect([...tone.options].map((o) => o.value)).toContain('cms'));
-        // The upper case name is one the site would not store on a block, so it is not offered.
+        // Loud is a name the site would not store on a block, and ghost names a token nobody set, so
+        // the site drops it. Neither is offered.
         expect([...tone.options].map((o) => o.value)).toEqual(['', ...TONES, 'cms']);
 
         fireEvent.change(tone, { target: { value: 'cms' } });
@@ -150,7 +164,17 @@ describe('a recipe field', () => {
         expect(screen.queryByText(/no recipe called/)).toBeNull();
 
         fireEvent.change(recipe, { target: { value: 'cardd' } });
-        expect(screen.getByText('This site has no recipe called cardd, so the block draws its own look.')).toBeTruthy();
+        expect(screen.getByText('This site has no recipe called "cardd", so the block draws its own look.')).toBeTruthy();
+    });
+
+    it('flags a name with a trailing space, which the site does not trim', async () => {
+        serve(SETTINGS);
+        const saved = renderBlocks([{ type: 'section', props: { content: [[]] } }]);
+        fireEvent.click(await screen.findByRole('button', { name: /^Section/ }));
+        const recipe = (await screen.findByRole('combobox', { name: 'Style recipe' })) as HTMLInputElement;
+        fireEvent.change(recipe, { target: { value: 'card ' } });
+        expect(saved.current).toEqual([{ type: 'section', props: { recipe: 'card ', content: [[]] } }]);
+        expect(screen.getByText('This site has no recipe called "card ", so the block draws its own look.')).toBeTruthy();
     });
 
     it('is a plain text field for a tenant with no recipes', async () => {
@@ -158,6 +182,20 @@ describe('a recipe field', () => {
         renderBlocks([{ type: 'section', props: { content: [[]] } }]);
         fireEvent.click(await screen.findByRole('button', { name: /^Section/ }));
         await screen.findByLabelText(/^Style recipe/);
+        expect(screen.queryByRole('combobox', { name: 'Style recipe' })).toBeNull();
+    });
+});
+
+describe('settings the site type does not declare', () => {
+    it('offer no tones and no recipes, since the site cannot read them', async () => {
+        serve(SETTINGS, []);
+        renderBlocks([{ type: 'section', props: { content: [[]] } }]);
+        fireEvent.click(await screen.findByRole('button', { name: /^Section/ }));
+        // Wait for the site entry, which the tone field has read once Name's type is known.
+        await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalledWith(`/api/contents/${SITE_ID}`));
+        await new Promise((r) => setTimeout(r, 50));
+        const tone = screen.getByLabelText('Tone') as HTMLSelectElement;
+        expect([...tone.options].map((o) => o.value)).toEqual(['', ...TONES]);
         expect(screen.queryByRole('combobox', { name: 'Style recipe' })).toBeNull();
     });
 });

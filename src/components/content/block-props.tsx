@@ -187,7 +187,8 @@ function RecipeProp({
     onChange: (value: string | undefined) => void;
 }) {
     const current = typeof value === 'string' ? value : '';
-    const unknown = current.trim() !== '' && !current.includes('{{') && !recipes.includes(current.trim());
+    // Untrimmed, because the site looks the stored name up as it is: `card ` finds no recipe.
+    const unknown = current !== '' && !current.includes('{{') && !recipes.includes(current);
     return (
         <div className="space-y-2">
             <Label htmlFor={id}>{labelOf(field)}</Label>
@@ -209,7 +210,7 @@ function RecipeProp({
             </datalist>
             {unknown && (
                 <p id={`${id}-hint`} className="text-warning text-xs">
-                    This site has no recipe called {current.trim()}, so the block draws its own look.
+                    This site has no recipe called &quot;{current}&quot;, so the block draws its own look.
                 </p>
             )}
             <FieldError message={error} />

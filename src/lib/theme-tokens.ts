@@ -203,23 +203,35 @@ export function validTokens(value: unknown): Record<string, string> {
     return out;
 }
 
-/** The names of the tones a block may store, in the order they were saved. */
-export function toneNames(value: unknown): string[] {
-    return (readTones(value) ?? []).map((t) => t.name).filter((name) => toneNameProblem(name) === null);
+/**
+ * The names of the tones a block may store, in the order they were saved: a name the engine takes,
+ * with every colour resolving against `tokens`, since the engine drops a tone that does not.
+ */
+export function toneNames(value: unknown, tokens: Readonly<Record<string, string>>): string[] {
+    return (readTones(value) ?? [])
+        .filter((t) => toneNameProblem(t.name) === null && TONE_PARTS.every((part) => toneColourProblem(t[part], tokens) === null))
+        .map((t) => t.name);
+}
+
+/** The part of a content type these checks read: which fields it declares. */
+export interface SiteTypeFields {
+    fields: readonly { name: string }[];
 }
 
 /**
  * Why a save of these settings would store something the engine drops, or null. Only the fields
- * this screen edits, and only when their stored shape is one the form can read.
+ * this screen edits, which are the ones the site type declares, and only when their stored shape is
+ * one the form can read. A value the screen cannot fix must not block a save.
  */
-export function tokensAndTonesProblem(values: Record<string, unknown>): string | null {
-    const tokens = readTokens(values[TOKENS_FIELD]);
+export function tokensAndTonesProblem(values: Record<string, unknown>, schema: SiteTypeFields): string | null {
+    const declared = (field: string) => schema.fields.some((f) => f.name === field);
+    const tokens = declared(TOKENS_FIELD) ? readTokens(values[TOKENS_FIELD]) : null;
     if (tokens) {
         if (tokens.length > MAX_TOKENS) return `The site reads the first ${MAX_TOKENS} tokens. Remove some to save.`;
         const bad = tokens.filter((t) => tokenNameProblem(t.name) || tokenValueProblem(t.value)).length;
         if (bad > 0) return `${bad === 1 ? 'A token has' : `${bad} tokens have`} a problem the site would drop. Fix it to save.`;
     }
-    const tones = readTones(values[TONES_FIELD]);
+    const tones = declared(TONES_FIELD) ? readTones(values[TONES_FIELD]) : null;
     if (tones) {
         if (tones.length > MAX_TONES) return `The site reads the first ${MAX_TONES} tones. Remove some to save.`;
         const named = validTokens(values[TOKENS_FIELD]);

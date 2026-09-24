@@ -217,11 +217,22 @@ test('Theme will not save a token or a tone the site would drop', async ({ page 
 
 test('a site type without the fields says so rather than editing a value the site cannot read', async ({ page }) => {
     await stubContentTypes(page, [ARTICLE, SITE_TYPE]);
-    await serveSite(page, [siteEntry({ Name: 'baryo.dev' })]);
+    // Values the site would drop, stored under names the type does not declare. The screen does not
+    // edit them, so they must not hold back a save of what it does edit.
+    await serveSite(page, [
+        siteEntry({
+            Name: 'baryo.dev',
+            Tokens: { accent: 'url(x)' },
+            StyleRecipes: { card: { style: { background: 'url(x)' } } },
+        }),
+    ]);
 
     await page.goto('/site/theme');
     await expect(page.getByText('The site type has no Tokens field, so the site cannot read tokens yet.', { exact: false })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add token' })).toHaveCount(0);
+    await page.getByRole('textbox', { name: 'accent', exact: true }).fill('#17458F');
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+    await expect(page.getByText('problem the site would drop', { exact: false })).toHaveCount(0);
 
     await page.goto('/site/recipes');
     await expect(page.getByText('The site type has no StyleRecipes field', { exact: false })).toBeVisible();

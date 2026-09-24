@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     RECIPE_PROPERTIES,
+    recipeValueOk,
     classProblem,
     declarationProblem,
     previewStyle,
@@ -13,6 +14,8 @@ import {
     writeRecipes,
     type PreviewTheme,
 } from './recipes';
+
+const DECLARED = { fields: [{ name: 'StyleRecipes' }] };
 
 const ok = (property: string, value: string) => declarationProblem({ property, value }) === null;
 
@@ -42,6 +45,14 @@ describe('declarationProblem', () => {
         expect(ok('font-family', '"Evil<script>"')).toBe(false);
         expect(ok('color', '')).toBe(false);
         expect(ok('color', 'a'.repeat(241))).toBe(false);
+    });
+
+    it('refuses a call to a function whose name holds a digit or an underscore', () => {
+        expect(ok('color', 'x9(y)')).toBe(false);
+        expect(ok('width', 'calc2(1px)')).toBe(false);
+        expect(ok('width', 'r2d2(1px)')).toBe(false);
+        expect(ok('color', 'var(--a, x9(y))')).toBe(false);
+        expect(ok('width', '_f(1px)')).toBe(false);
     });
 
     it('holds position to the two values that keep a block in the flow', () => {
@@ -106,9 +117,9 @@ describe('reading and writing', () => {
     });
 
     it('refuses a save holding a declaration the engine drops', () => {
-        expect(recipesProblem({ StyleRecipes: stored })).toBeNull();
-        expect(recipesProblem({ StyleRecipes: { card: { style: { background: 'url(x)' } } } })).toMatch(/A recipe has/);
-        expect(recipesProblem({ StyleRecipes: { Card: { style: { padding: '0' } } } })).toMatch(/A recipe has/);
+        expect(recipesProblem({ StyleRecipes: stored }, DECLARED)).toBeNull();
+        expect(recipesProblem({ StyleRecipes: { card: { style: { background: 'url(x)' } } } }, DECLARED)).toMatch(/A recipe has/);
+        expect(recipesProblem({ StyleRecipes: { Card: { style: { padding: '0' } } } }, DECLARED)).toMatch(/A recipe has/);
     });
 });
 
@@ -139,5 +150,75 @@ describe('references', () => {
             theme,
         );
         expect(style).toEqual({ background: '#FFFFFF', color: '#E4572E', '--bp-ink': '#101223' });
+    });
+});
+
+/*
+ * The verdicts barakoPress's own recipeValueOk gives these inputs (src/recipes.ts on its master),
+ * so a change to either copy that makes them disagree fails here.
+ */
+const ENGINE_VERDICTS: [string, boolean][] = [
+    ['22px 24px', true],
+    ['0 1px 2px rgba(16,18,35,.04)', true],
+    ["'JetBrains Mono', monospace", true],
+    ['var(--t-cms-ink, #1D3A8A)', true],
+    ['calc(100% - 20px)', true],
+    ['repeat(3, minmax(0, 1fr))', true],
+    ['linear-gradient(90deg, #fff, #000)', true],
+    ['color-mix(in oklab, #fff 40%, #000)', true],
+    ['relative', true],
+    ['.16em', true],
+    ['fit-content(20px)', true],
+    ['red; position: fixed', false],
+    ['url(https://evil.example/x.png)', false],
+    ['image-set(x)', false],
+    ['red !important', false],
+    ['red /* x */', false],
+    ['calc(100% - 2px', false],
+    ['1px)', false],
+    ['var(x)', false],
+    ['x9(y)', false],
+    ['calc2(1px)', false],
+    ['r2d2(1px)', false],
+    ['var(--a, x9(y))', false],
+    ['_f(1px)', false],
+    ['-webkit-calc(1px)', false],
+    ['attr(data-x)', false],
+    ['expression(alert(1))', false],
+    ['"Evil<script>"', false],
+    ['a:b', false],
+    ['{x}', false],
+    ['', false],
+    ['a'.repeat(241), false],
+    ['calc(calc(calc(calc(calc(calc(calc(1px)))))))', false],
+];
+
+describe('recipeValueOk against the engine', () => {
+    it.each(ENGINE_VERDICTS)('gives %j the verdict the engine gives', (value, verdict) => {
+        expect(recipeValueOk(value)).toBe(verdict);
+    });
+});
+
+describe('the preview and the save agree', () => {
+    it('draws the first of two declarations of one property, the one the save keeps', () => {
+        const row = {
+            name: 'card',
+            class: '',
+            declarations: [
+                { property: 'color', value: 'red' },
+                { property: 'color', value: 'blue' },
+            ],
+        };
+        expect(writeRecipes([row]).card.style).toEqual({ color: 'red' });
+        expect(previewStyle(row, { tokens: {}, groups: {} })).toEqual({ color: 'red' });
+    });
+});
+
+describe('recipesProblem and the site type', () => {
+    const bad = { StyleRecipes: { card: { style: { background: 'url(x)' } } } };
+
+    it('says nothing about a field the site type does not declare, which the screen does not edit', () => {
+        expect(recipesProblem(bad, { fields: [{ name: 'Name' }] })).toBeNull();
+        expect(recipesProblem(bad, { fields: [{ name: 'StyleRecipes' }] })).toMatch(/A recipe has/);
     });
 });

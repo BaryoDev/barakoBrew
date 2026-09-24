@@ -27,6 +27,7 @@ import {
     type StoredRecipe,
 } from '@/lib/recipes';
 import { COLOR_ROLE_ALIASES, THEME_COLOR_NAMES, repeatedNames } from '@/lib/theme-tokens';
+import { describedBy } from '@/components/site/tokens-editor';
 
 const SELECT =
     'border-input bg-background focus-visible:ring-ring/50 h-9 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2';
@@ -173,6 +174,11 @@ function DeclarationRow({
                         placeholder={only ? only.join(' or ') : '1px solid {colors.hairline}'}
                         spellCheck={false}
                         aria-invalid={problem ? true : undefined}
+                        aria-describedby={describedBy(
+                            problem && `${id}-error`,
+                            missing.length > 0 && `${id}-missing`,
+                            repeated && `${id}-repeated`,
+                        )}
                         className="font-mono text-xs"
                         onChange={(e) => onChange({ ...declaration, value: e.target.value })}
                     />
@@ -190,14 +196,14 @@ function DeclarationRow({
                     <IconTrash />
                 </Button>
             </div>
-            <FieldError message={problem} />
+            <FieldError id={`${id}-error`} message={problem} />
             {missing.length > 0 && (
-                <p className="text-warning text-xs">
+                <p id={`${id}-missing`} className="text-warning text-xs">
                     {missing.join(', ')} {missing.length === 1 ? 'is' : 'are'} not in these settings. The site leaves
                     this property out unless its own config has {missing.length === 1 ? 'it' : 'them'}.
                 </p>
             )}
-            {repeated && <p className="text-warning text-xs">Set above already, so this one is not saved.</p>}
+            {repeated && <p id={`${id}-repeated`} className="text-warning text-xs">Set above already, so this one is not saved.</p>}
             {!chosen && <p className="text-muted-foreground text-xs">Not saved until a property is chosen.</p>}
         </li>
     );
@@ -266,6 +272,10 @@ export function RecipesEditor({
                                     placeholder="card"
                                     spellCheck={false}
                                     aria-invalid={nameProblem || repeated.has(index) ? true : undefined}
+                                    aria-describedby={describedBy(
+                                        nameProblem && `${id}-${index}-name-error`,
+                                        repeated.has(index) && `${id}-${index}-repeated`,
+                                    )}
                                     className="font-mono text-xs"
                                     onChange={(e) => update(index, { ...row, name: e.target.value })}
                                 />
@@ -280,6 +290,7 @@ export function RecipesEditor({
                                     placeholder="lift"
                                     spellCheck={false}
                                     aria-invalid={clsProblem ? true : undefined}
+                                    aria-describedby={describedBy(clsProblem && `${id}-${index}-class-error`)}
                                     className="font-mono text-xs"
                                     onChange={(e) => update(index, { ...row, class: e.target.value })}
                                 />
@@ -294,10 +305,10 @@ export function RecipesEditor({
                                 <IconTrash />
                             </Button>
                         </div>
-                        <FieldError message={nameProblem} />
-                        <FieldError message={clsProblem} />
+                        <FieldError id={`${id}-${index}-name-error`} message={nameProblem} />
+                        <FieldError id={`${id}-${index}-class-error`} message={clsProblem} />
                         {repeated.has(index) && (
-                            <p className="text-warning text-xs">A recipe above has this name, so this one is not saved.</p>
+                            <p id={`${id}-${index}-repeated`} className="text-warning text-xs">A recipe above has this name, so this one is not saved.</p>
                         )}
                         {!named && <p className="text-muted-foreground text-xs">Not saved until it has a name.</p>}
 
