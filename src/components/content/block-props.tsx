@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FieldError } from '@/components/content/field-error';
 import type { DynamicFormProps } from '@/components/content/dynamic-form';
@@ -36,6 +37,8 @@ export interface PropContext {
     scopes: BindingScope[];
     formats: string[];
     announce: (message: string) => void;
+    /** The tenant's style recipe names, offered by a `recipe` field. Absent or empty offers none. */
+    recipes?: string[];
 }
 
 export function idPart(value: string) {
@@ -84,6 +87,15 @@ export function PropField({
             onChange={onChange}
         />
     );
+
+    if (field.name === 'recipe' && field.kind === 'text' && (ctx.recipes?.length ?? 0) > 0) {
+        return (
+            <div className="space-y-2">
+                <RecipeProp id={id} field={field} recipes={ctx.recipes!} value={value} error={error ?? undefined} onChange={onChange} />
+                {binding}
+            </div>
+        );
+    }
 
     if (field.kind === 'select') {
         return (
@@ -149,6 +161,58 @@ function SelectProp({
                 ))}
                 {current && !options.includes(current) && <option value={current}>{current} (not offered)</option>}
             </select>
+            <FieldError message={error} />
+        </div>
+    );
+}
+
+/**
+ * A block's style recipe: a text box offering the tenant's recipe names. Text and not a select,
+ * because the site takes a bound name too, such as `card-{{item.Product}}`, and a preset passes its
+ * own prop through the same way.
+ */
+function RecipeProp({
+    id,
+    field,
+    recipes,
+    value,
+    error,
+    onChange,
+}: {
+    id: string;
+    field: BlockField;
+    recipes: readonly string[];
+    value: unknown;
+    error?: string;
+    onChange: (value: string | undefined) => void;
+}) {
+    const current = typeof value === 'string' ? value : '';
+    // Untrimmed, because the site looks the stored name up as it is: `card ` finds no recipe.
+    const unknown = current !== '' && !current.includes('{{') && !recipes.includes(current);
+    return (
+        <div className="space-y-2">
+            <Label htmlFor={id}>{labelOf(field)}</Label>
+            <Input
+                id={id}
+                list={`${id}-recipes`}
+                value={current}
+                placeholder="None"
+                spellCheck={false}
+                aria-describedby={unknown ? `${id}-hint` : undefined}
+                onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
+            />
+            <datalist id={`${id}-recipes`}>
+                {recipes.map((name) => (
+                    <option key={name} value={name}>
+                        {name}
+                    </option>
+                ))}
+            </datalist>
+            {unknown && (
+                <p id={`${id}-hint`} className="text-warning text-xs">
+                    This site has no recipe called &quot;{current}&quot;, so the block draws its own look.
+                </p>
+            )}
             <FieldError message={error} />
         </div>
     );

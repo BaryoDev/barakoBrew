@@ -1,4 +1,8 @@
-export function FieldError({ message }: { message?: string | null }) {
+export function FieldError({ message, id }: { message?: string | null; id?: string }) {
     if (!message) return null;
-    return <p className="text-destructive text-xs">{message}</p>;
+    return (
+        <p id={id} className="text-destructive text-xs">
+            {message}
+        </p>
+    );
 }

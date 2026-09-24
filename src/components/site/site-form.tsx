@@ -49,7 +49,7 @@ export function SiteForm({
     /** Theme needs the entry to exist, since creating one needs a Name the Theme screen does not ask for. */
     requireEntry?: boolean;
     /** Why a save would be refused, or null. */
-    problem?: (values: Record<string, unknown>) => string | null;
+    problem?: (values: Record<string, unknown>, schema: ContentTypeDefinition) => string | null;
     children: (context: SiteFormContext) => ReactNode;
 }) {
     const state = useSiteEntry();
@@ -155,7 +155,7 @@ export function SiteForm({
         setBase(null);
     };
     const dirty = Object.keys(edits).length > 0;
-    const refusal = problem?.(values) ?? null;
+    const refusal = problem?.(values, state.schema) ?? null;
 
     /**
      * Takes their version as the one this screen is editing, keeping this screen's value for every

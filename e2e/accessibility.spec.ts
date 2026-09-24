@@ -548,6 +548,51 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
+    test('the theme screen and the style recipes screen, with tokens, a tone and a recipe filled in', async ({ page }) => {
+        const id = '3e8b1d2c-5f4a-4b6c-9d7e-1a2b3c4d5e6f';
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [
+            {
+                id: 'ct-site',
+                name: 'site',
+                displayName: 'Site',
+                isSingleton: true,
+                fields: ['Name', 'Colors', 'Fonts', 'Radii', 'Layout', 'Variants', 'OptionColors', 'Tokens', 'Tones', 'StyleRecipes'].map(
+                    (name) => ({ name, displayName: name, type: name === 'Name' ? 'string' : 'json', isRequired: name === 'Name' })
+                ),
+            },
+        ]);
+        const entry = {
+            id,
+            contentType: 'site',
+            data: {
+                Name: 'barakocms.com',
+                Colors: { pageBg: '#FFFFFF', ink: '#101223', accent: '#1D3A8A', accentInk: '#FFFFFF' },
+                Tokens: { 'cms-ink': '#1D3A8A', 'cms-bg': '#E8EEFD', gutter: '24px', serif: "'Zilla Slab', Georgia, serif" },
+                Tones: { cms: { ink: 'cms-ink', bg: 'cms-bg', edge: '#B9C8F5' } },
+                StyleRecipes: {
+                    card: { class: 'lift', style: { padding: '22px 24px', border: '1px solid {colors.hairline}', 'border-radius': '16px' } },
+                },
+            },
+            status: 'Published',
+            sensitivity: 'Public',
+            version: 2,
+            createdAt: '2026-09-01T00:00:00Z',
+            updatedAt: '2026-09-01T00:00:00Z',
+        };
+        await page.route(/\/api\/contents(\?|$)/, (r) => r.fulfill({ json: pageOf([entry]) }));
+        await page.route(`**/api/contents/${id}`, (r) => r.fulfill({ json: entry }));
+
+        await page.goto('/site/theme');
+        await expect(page.getByTestId('tone-chip')).toBeVisible({ timeout: 15000 });
+        await scan(page);
+
+        await page.goto('/site/recipes');
+        await expect(page.getByTestId('recipe-preview')).toBeVisible({ timeout: 15000 });
+        await scan(page);
+    });
+
     test('the menu editor, with a submenu open', async ({ page }) => {
         const id = '5f1d7c2a-3b4e-4a6f-8c9d-0e1f2a3b4c5d';
         await authed(page);

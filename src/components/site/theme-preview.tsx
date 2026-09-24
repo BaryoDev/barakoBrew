@@ -5,7 +5,7 @@ import { parseHex } from '@/lib/contrast';
 import { isCssLength, type SiteLink } from '@/lib/site-settings';
 
 /** What an unset or unreadable slot is drawn with here. barakoPress has its own defaults. */
-const FALLBACK: Record<string, string> = {
+export const FALLBACK: Record<string, string> = {
     pageBg: '#ffffff',
     surface: '#f6f6f4',
     ink: '#1c1c1c',

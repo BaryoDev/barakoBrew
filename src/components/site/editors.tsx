@@ -295,3 +295,20 @@ export function ColourInput({
         </div>
     );
 }
+
+/**
+ * Said in place of an editor when the site type has no field for it. The API would store the value
+ * anyway, but its public delivery sends only declared fields, so the site would never read it.
+ */
+export function UndeclaredField({ field, noun }: { field: string; noun: string }) {
+    return (
+        <p className="text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
+            The site type has no {field} field, so the site cannot read {noun} yet. Add a JSON field called {field} to
+            the site type to edit them here.
+        </p>
+    );
+}
+
+export function declaresField(schema: { fields: readonly { name: string }[] }, field: string): boolean {
+    return schema.fields.some((f) => f.name === field);
+}

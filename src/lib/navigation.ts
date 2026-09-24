@@ -12,6 +12,7 @@ import {
   IconFilter,
   IconFlag,
   IconSun,
+  IconPen,
   IconCube,
   IconGroups,
   IconHealth,
@@ -139,6 +140,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // the site type through it before they read or write the entry.
       { title: 'Site', href: '/site', icon: IconCube, roles: ['SuperAdmin', 'Admin'] },
       { title: 'Theme', href: '/site/theme', icon: IconSun, roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Style recipes', href: '/site/recipes', icon: IconPen, roles: ['SuperAdmin', 'Admin'] },
     ],
   },
   {
@@ -260,6 +262,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   settings: 'Settings',
   site: 'Site',
   theme: 'Theme',
+  recipes: 'Style recipes',
   new: 'New',
 };
 
