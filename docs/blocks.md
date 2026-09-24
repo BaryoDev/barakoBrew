@@ -26,9 +26,15 @@ reads `Blocks` on the page type unless its `pageFields.blocks` says otherwise.
 - Removes a block.
 - Edits blocks nested in a `slots` field (columns, for example), with a list per slot, between the
   field's `min` and `max`.
+- Edits a `list` field as entries of its item kind: a box per entry for text, links and numbers, and
+  a row that opens to a sub-form for a list of groups. Entries are added, removed, and moved with
+  Move up and Move down, between the list's `min` and `max` (100 when it names no `max`). A `group`
+  field is a sub-form of its fields. Lists and groups nest three deep, as the site reads them.
 - Marks what the site would refuse to render: a missing required prop, a link with an unsafe scheme,
   a number out of range, a value that is not one of a select's options, a wrong number of slot
-  lists. The site skips a block with any of these, so the row says how many problems it has.
+  lists, a list with too few or too many entries, a group missing a required part. The site skips a
+  block with any of these, so the row says how many problems it has, and an entry of a list says its
+  own.
 
 Saving is the ordinary entry save, with the entry's version and `If-Match`.
 
@@ -83,7 +89,8 @@ nothing offers to save.
 - A block whose type the schema does not list is shown read-only with its props, can be moved or
   removed, and is saved exactly as it was.
 - A prop no field declares, and any key beside `type` and `props`, is kept through edits.
-- A field kind the console does not know is edited as JSON.
+- A field kind the console does not know is edited as JSON, and so is a list whose item kind it does
+  not know or a list or group nested deeper than the site reads.
 
 ## When there is no schema
 
@@ -129,6 +136,8 @@ Version 1:
 | `boolean`  | switch                                   | true or false                  |
 | `select`   | a select of `options`                    | one of `options`               |
 | `slots`    | a list of block lists, `min` to `max`    | array of arrays of blocks      |
+| `list`     | entries of `item`, `min` to `max`        | array of the item's values     |
+| `group`    | a sub-form of `fields`                   | object keyed by field name     |
 
 Version 2 adds three things, all optional to a reader and all additive:
 
@@ -156,6 +165,29 @@ Version 2 adds three things, all optional to a reader and all additive:
 | `bindings` | The scopes and formats a placeholder may name. Absent means no picker anywhere. |
 | `layer`    | `primitive`, `block`, `data` or `preset`, which is how the palette groups.      |
 | `bindable` | Whether that field's value may hold a placeholder. The site resolves it.        |
+
+A `list` names what each entry is in `item`: `text`, `url`, `number` (with its own `min` and `max`)
+or `group` (with its own `fields`). A `group` names its parts in `fields`. Both carry `bindable`, and
+a bindable list or group may hold one placeholder in place of its entries, `{{item.Tags}}`, which the
+site resolves to the array or object it names. The editor offers that on an empty list or group and
+shows a bound one as the placeholder, with a way back to entries. A text box inside either gets the
+same Use data control as any other.
+
+```json
+{
+    "name": "stages",
+    "kind": "list",
+    "min": 2,
+    "max": 6,
+    "bindable": true,
+    "item": {
+        "kind": "group",
+        "label": "Stage",
+        "bindable": true,
+        "fields": [{ "name": "label", "kind": "text", "required": true, "bindable": true }]
+    }
+}
+```
 
 The editor warns when a page holds more than 100 blocks in total or nests them more than four levels
 deep, which are the limits barakoPress reads to.

@@ -13,7 +13,7 @@ import { useBlockSchema, type BlockSchemaState } from '@/hooks/use-block-schema'
 import { useSchemas } from '@/hooks/use-schemas';
 import { usePresets } from '@/hooks/use-presets';
 import { SaveConflictError } from '@/lib/concurrent-save';
-import { BindingControl } from '@/components/content/binding-picker';
+import { idPart, PropField, type PropContext } from '@/components/content/block-props';
 import { bindingProblems, scopesFor, type BindingScope } from '@/lib/binding-scopes';
 import { presetFrom, isPresetName, withPresets, MAX_PRESETS, type BlockPreset } from '@/lib/presets';
 import { SITE_TYPE } from '@/lib/site-settings';
@@ -21,11 +21,10 @@ import {
     blockKey,
     blockSummary,
     blockTypeOf,
+    boundStrings,
     countBlocks,
     definitionFor,
     dropIndex,
-    fieldDefinitionFor,
-    isBindable,
     LAYER_LABELS,
     LAYER_ORDER,
     MAX_BLOCKS,
@@ -101,10 +100,6 @@ type Move = (from: number, to: number, action: Action | 'drag') => void;
 
 function nameOf(schema: BlockSchema, item: unknown, index: number) {
     return `${definitionFor(schema, item)?.label ?? 'Unknown block'}, block ${index + 1}`;
-}
-
-function idPart(value: string) {
-    return value.replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
 /** The palette's groups: the layers the site named, in a fixed order, then any it invented. */
@@ -516,7 +511,7 @@ function BlockRow({
             : spot;
     const warnings = type
         ? type.fields.flatMap((field) =>
-              isBindable(ctx.schema, field) ? bindingProblems(propsOf(item)[field.name], scopes) : [],
+              boundStrings(ctx.schema, field, propsOf(item)[field.name]).flatMap((v) => bindingProblems(v, scopes)),
           )
         : [];
 
@@ -705,17 +700,15 @@ function BlockFields({
     errors: Record<string, string>;
     onChange: (item: unknown) => void;
 }) {
-    const Form = ctx.form;
-    const props = propsOf(item);
+    const values = propsOf(item);
     const declared = new Set(type.fields.map((f) => f.name));
-    const undeclared = Object.keys(props).filter((k) => !declared.has(k));
+    const undeclared = Object.keys(values).filter((k) => !declared.has(k));
+    const props: PropContext = { schema: ctx.schema, form: ctx.form, scopes, formats: ctx.site.formats, announce: ctx.announce };
 
     return (
         <>
             {type.fields.length === 0 && <p className="text-muted-foreground text-sm">This block has nothing to set.</p>}
             {type.fields.map((field) => {
-                const id = `${idBase}-${idPart(field.name)}`;
-                const error = errors[field.name];
                 if (field.kind === 'slots') {
                     return (
                         <SlotsProp
@@ -724,51 +717,21 @@ function BlockFields({
                             field={field}
                             item={item}
                             spot={spot}
-                            error={error}
+                            error={errors[field.name]}
                             onChange={onChange}
                         />
                     );
                 }
-                const binding = isBindable(ctx.schema, field) && scopes.length > 0 && (
-                    <BindingControl
-                        fieldLabel={field.label || field.name}
-                        scopes={scopes}
-                        formats={ctx.site.formats}
-                        value={props[field.name]}
+                return (
+                    <PropField
+                        key={field.name}
+                        ctx={props}
+                        field={field}
+                        id={`${idBase}-${idPart(field.name)}`}
+                        value={values[field.name]}
+                        error={errors[field.name]}
                         onChange={(v) => onChange(setProp(item, field.name, v))}
                     />
-                );
-                if (field.kind === 'select') {
-                    return (
-                        <div key={field.name} className="space-y-2">
-                            <SelectProp
-                                id={id}
-                                field={field}
-                                value={props[field.name]}
-                                error={error}
-                                onChange={(v) => onChange(setProp(item, field.name, v))}
-                            />
-                            {binding}
-                        </div>
-                    );
-                }
-                // A kind this console does not know yet is edited as JSON, which keeps whatever it holds.
-                const definition = fieldDefinitionFor(field, id) ?? {
-                    name: id,
-                    displayName: field.label || field.name,
-                    type: 'json' as const,
-                    isRequired: field.required === true,
-                };
-                return (
-                    <div key={field.name} className="space-y-2">
-                        <Form
-                            fields={[definition]}
-                            values={{ [id]: props[field.name] }}
-                            errors={error ? { [id]: error } : undefined}
-                            onChange={(values) => onChange(setProp(item, field.name, values[id]))}
-                        />
-                        {binding}
-                    </div>
                 );
             })}
             {undeclared.length > 0 && (
@@ -777,46 +740,6 @@ function BlockFields({
                 </p>
             )}
         </>
-    );
-}
-
-function SelectProp({
-    id,
-    field,
-    value,
-    error,
-    onChange,
-}: {
-    id: string;
-    field: BlockField;
-    value: unknown;
-    error?: string;
-    onChange: (value: string) => void;
-}) {
-    const options = field.options ?? [];
-    const current = typeof value === 'string' ? value : '';
-    return (
-        <div className="space-y-2">
-            <Label htmlFor={id}>
-                {field.label || field.name}
-                {field.required && <span className="text-destructive ml-0.5">*</span>}
-            </Label>
-            <select
-                id={id}
-                value={current}
-                onChange={(e) => onChange(e.target.value)}
-                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-            >
-                <option value="">{field.required ? 'Choose one' : 'None'}</option>
-                {options.map((option) => (
-                    <option key={option} value={option}>
-                        {option}
-                    </option>
-                ))}
-                {current && !options.includes(current) && <option value={current}>{current} (not offered)</option>}
-            </select>
-            <FieldError message={error} />
-        </div>
     );
 }
 

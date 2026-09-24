@@ -9,6 +9,18 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **The block form edits list and group fields.** barakoPress publishes `list` and `group` fields in
+  its version 2 block schema, and 1.4.0 edited them as JSON. A list is now its entries, each edited
+  as its kind: a box per text, link or number, and a row that opens to a sub-form for a group. Add,
+  Remove, Move up and Move down work from the keyboard, focus stays on the entry that moved, and the
+  list's `min` and `max` hold Add and Remove back. A group is a sub-form. They nest three deep, as the
+  site reads them, the Use data control is on every text box inside them, and a list or group bound
+  whole to data shows its placeholder. What is wrong is said where it is: a list with too few
+  entries on the list, a missing part on the entry, and the row counts it. A schema with no list or
+  group draws the form as before. (#181)
+
 ## [1.4.0] - 2026-09-21
 
 ### Added

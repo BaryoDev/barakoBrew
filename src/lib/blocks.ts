@@ -11,14 +11,31 @@
  * the editor is then exactly what it was before: no binding picker anywhere, and no field marked
  * for holding one.
  *
+ * Version 2 later gained two field kinds without a version bump: `list`, whose `item` says what each
+ * entry is, and `group`, whose `fields` are a sub-form. A console that does not know them edits
+ * them as JSON, which is why the site did not need a new version to add them.
+ *
  * Every operation keeps what it does not understand. A block whose type the schema does not list, a
  * prop no field declares, and a key beside `type` and `props` all survive an edit and a save.
  */
 
 import type { FieldDefinition } from '@/types/schema';
-import { hasBinding, withoutBindings } from '@/lib/bindings';
+import { hasBinding, readBindings, withoutBindings } from '@/lib/bindings';
 
-export type BlockFieldKind = 'text' | 'markdown' | 'url' | 'number' | 'boolean' | 'select' | 'slots';
+export type BlockFieldKind = 'text' | 'markdown' | 'url' | 'number' | 'boolean' | 'select' | 'slots' | 'list' | 'group';
+
+/** What one entry of a `list` may be. */
+export const LIST_ITEM_KINDS: readonly string[] = ['text', 'url', 'number', 'group'];
+
+/** One entry of a `list`: a value with its own range, or a group with its own fields. */
+export interface ListItem {
+    kind: string;
+    label?: string;
+    min?: number;
+    max?: number;
+    fields?: BlockField[];
+    bindable?: boolean;
+}
 
 export interface BlockField {
     name: string;
@@ -35,6 +52,10 @@ export interface BlockField {
      * Absent from a version 1 schema, which is read as no field binding anything.
      */
     bindable?: boolean;
+    /** What each entry of a `list` is. Absent when the site sent one this console cannot edit. */
+    item?: ListItem;
+    /** A `group`'s own fields. Absent when the site sent none this console can edit. */
+    fields?: BlockField[];
 }
 
 /** What a block is for. `block` is what a version 1 schema's blocks all are. */
@@ -89,6 +110,12 @@ export type BlockItem = Record<string, unknown>;
 export const MAX_BLOCKS = 100;
 export const MAX_DEPTH = 4;
 
+/** How deep lists and groups nest inside one field, counting the field itself. A list of groups counts once. */
+export const MAX_FIELD_DEPTH = 3;
+
+/** The most entries a `list` holds when it names no `max` of its own. */
+export const MAX_LIST_ITEMS = 100;
+
 /** The json field that holds a page's blocks, by the name barakoPress reads by default. */
 export function isBlocksField(fieldName: string): boolean {
     return fieldName.toLowerCase() === 'blocks';
@@ -120,6 +147,86 @@ function parseBindings(raw: unknown): BlockBindings | null {
     return { scopes, formats: formats.length > 0 ? formats : ['text'] };
 }
 
+function parseFields(raw: unknown, bindings: BlockBindings | null, depth: number): BlockField[] {
+    const fields: BlockField[] = [];
+    for (const f of Array.isArray(raw) ? raw : []) {
+        if (!isRecord(f) || typeof f.name !== 'string' || !f.name || typeof f.kind !== 'string') continue;
+        const field: BlockField = {
+            name: f.name,
+            kind: f.kind,
+            label: typeof f.label === 'string' ? f.label : undefined,
+            required: f.required === true,
+            options: Array.isArray(f.options) ? f.options.filter((o): o is string => typeof o === 'string') : undefined,
+            min: finite(f.min),
+            max: finite(f.max),
+            // Only a site that publishes bindings can render one, so a stray `bindable` on a
+            // version 1 document is not read as permission to write a placeholder.
+            bindable: bindings !== null && f.bindable === true,
+        };
+        // Past the depth the site reads, a list or a group keeps no structure and is edited as JSON.
+        if (depth < MAX_FIELD_DEPTH) {
+            if (f.kind === 'list') {
+                const item = parseItem(f.item, bindings, depth + 1);
+                if (item) field.item = item;
+            } else if (f.kind === 'group') {
+                const inner = parseFields(f.fields, bindings, depth + 1);
+                if (inner.length > 0) field.fields = inner;
+            }
+        }
+        fields.push(field);
+    }
+    return fields;
+}
+
+function parseItem(raw: unknown, bindings: BlockBindings | null, depth: number): ListItem | null {
+    if (!isRecord(raw) || typeof raw.kind !== 'string' || !LIST_ITEM_KINDS.includes(raw.kind)) return null;
+    const item: ListItem = {
+        kind: raw.kind,
+        label: typeof raw.label === 'string' && raw.label ? raw.label : undefined,
+        min: finite(raw.min),
+        max: finite(raw.max),
+        bindable: bindings !== null && raw.bindable === true,
+    };
+    if (raw.kind === 'group') {
+        const fields = parseFields(raw.fields, bindings, depth);
+        if (fields.length === 0) return null;
+        item.fields = fields;
+    }
+    return item;
+}
+
+/**
+ * Whether a list or group field carries the structure the form needs. One that does not, because
+ * the site sent an item this console does not know or nested past what the site reads, is edited
+ * as JSON like any other kind this console does not know.
+ */
+export function isStructured(field: BlockField): boolean {
+    if (field.kind === 'list') return field.item !== undefined;
+    if (field.kind === 'group') return field.fields !== undefined && field.fields.length > 0;
+    return false;
+}
+
+/** A list's entry as a field of its own, so it is checked and drawn by the same rules a prop is. */
+export function itemField(field: BlockField, name: string = field.name): BlockField {
+    const item = field.item ?? { kind: 'text' };
+    return { ...item, name, label: item.label || field.label || field.name };
+}
+
+/** What a new entry of a list starts as: the emptiest value of its kind. */
+export function newListEntry(item: ListItem): unknown {
+    if (item.kind === 'number') return item.min !== undefined && item.min > 0 ? item.min : 0;
+    if (item.kind === 'group') return {};
+    return '';
+}
+
+/** A record with one key set, dropping it for an empty value the way `setProp` does. */
+export function setKey(record: unknown, name: string, value: unknown): Record<string, unknown> {
+    const next = { ...(isRecord(record) ? record : {}) };
+    if (value === undefined || value === null || value === '') delete next[name];
+    else next[name] = value;
+    return next;
+}
+
 /**
  * The schema a site published, or null when the document is not one this console can build from.
  *
@@ -137,22 +244,7 @@ export function parseBlockSchema(raw: unknown): BlockSchema | null {
     for (const entry of raw.blocks) {
         if (!isRecord(entry) || typeof entry.type !== 'string' || !entry.type || seen.has(entry.type)) continue;
         seen.add(entry.type);
-        const fields: BlockField[] = [];
-        for (const f of Array.isArray(entry.fields) ? entry.fields : []) {
-            if (!isRecord(f) || typeof f.name !== 'string' || !f.name || typeof f.kind !== 'string') continue;
-            fields.push({
-                name: f.name,
-                kind: f.kind,
-                label: typeof f.label === 'string' ? f.label : undefined,
-                required: f.required === true,
-                options: Array.isArray(f.options) ? f.options.filter((o): o is string => typeof o === 'string') : undefined,
-                min: finite(f.min),
-                max: finite(f.max),
-                // Only a site that publishes bindings can render one, so a stray `bindable` on a
-                // version 1 document is not read as permission to write a placeholder.
-                bindable: bindings !== null && f.bindable === true,
-            });
-        }
+        const fields = parseFields(entry.fields, bindings, 0);
         blocks.push({
             type: entry.type,
             label: typeof entry.label === 'string' && entry.label ? entry.label : entry.type,
@@ -287,7 +379,7 @@ export function isSafeHref(href: string): boolean {
     }
 }
 
-function bounds(field: BlockField): string {
+function bounds(field: { min?: number; max?: number }): string {
     const { min, max } = field;
     if (min !== undefined && max !== undefined) return ` from ${min} to ${max}`;
     if (min !== undefined) return ` of at least ${min}`;
@@ -295,7 +387,7 @@ function bounds(field: BlockField): string {
     return '';
 }
 
-function inRange(field: BlockField, n: number) {
+function inRange(field: { min?: number; max?: number }, n: number) {
     return (field.min === undefined || n >= field.min) && (field.max === undefined || n <= field.max);
 }
 
@@ -326,19 +418,101 @@ export function validateBlock(schema: BlockSchema, type: BlockType, item: unknow
     const props = propsOf(item);
     const errors: Record<string, string> = {};
     for (const field of type.fields) {
-        const value = props[field.name];
-        if (value === undefined || value === null || value === '') {
-            if (field.required) errors[field.name] = 'Required. The site does not show this block without it.';
-            continue;
-        }
-        const checked =
-            isBindable(schema, field) && typeof value === 'string' && hasBinding(value)
-                ? withoutBindings(value, standInFor(field))
-                : value;
-        const message = problem(field, checked);
+        const message = fieldProblem(schema, field, props[field.name]);
         if (message) errors[field.name] = message;
     }
     return errors;
+}
+
+const REQUIRED = 'Required. The site does not show this block without it.';
+
+/** Nothing there, the way the site reads it. An empty list is nothing too, so a required one needs an entry. */
+export function isAbsent(field: BlockField, value: unknown): boolean {
+    if (value === undefined || value === null || value === '') return true;
+    return field.kind === 'list' && Array.isArray(value) && value.length === 0;
+}
+
+/** What is wrong with one value held by a field, including a required one left empty, or null. */
+export function fieldProblem(schema: BlockSchema, field: BlockField, value: unknown): string | null {
+    if (isAbsent(field, value)) return field.required ? REQUIRED : null;
+    return valueProblem(schema, field, value);
+}
+
+/** A whole list or group that is one placeholder, which the site resolves to the array or object it names. */
+export function isWholeBinding(schema: BlockSchema, field: BlockField, value: unknown): value is string {
+    if (!isBindable(schema, field) || typeof value !== 'string') return false;
+    const found = readBindings(value);
+    return found.length === 1 && found[0].raw === value.trim();
+}
+
+function valueProblem(schema: BlockSchema, field: BlockField, value: unknown): string | null {
+    if (field.kind === 'list' && isStructured(field)) return listProblem(schema, field, value);
+    if (field.kind === 'group' && isStructured(field)) return groupProblem(schema, field, value);
+    const checked =
+        isBindable(schema, field) && typeof value === 'string' && hasBinding(value)
+            ? withoutBindings(value, standInFor(field))
+            : value;
+    return problem(field, checked);
+}
+
+/**
+ * What is wrong with a list or a group as a whole, leaving its entries and parts out: missing when
+ * required, not the shape its kind is, or a list holding too few or too many entries. A form shows
+ * this on the field and each entry's own problem on the entry, so nothing is said twice.
+ */
+export function shapeProblem(schema: BlockSchema, field: BlockField, value: unknown): string | null {
+    if (isAbsent(field, value)) return field.required ? REQUIRED : null;
+    if (isWholeBinding(schema, field, value)) return null;
+    if (field.kind === 'group') return isRecord(value) ? null : 'Has to be a group of values.';
+    if (!Array.isArray(value)) return 'Has to be a list.';
+    const cap = Math.min(field.max ?? MAX_LIST_ITEMS, MAX_LIST_ITEMS);
+    if (inRange({ min: field.min, max: cap }, value.length)) return null;
+    return field.min !== undefined ? `Has to hold from ${field.min} to ${cap} entries.` : `Has to hold at most ${cap} entries.`;
+}
+
+/** What is wrong with one entry of a list, which unlike a prop is never absent: an empty entry is wrong. */
+export function entryProblem(schema: BlockSchema, field: BlockField, value: unknown): string | null {
+    const entry = itemField(field);
+    if (entry.kind === 'group' && !isRecord(value) && !isWholeBinding(schema, entry, value)) {
+        return 'Has to be a group of values.';
+    }
+    return valueProblem(schema, entry, value);
+}
+
+function listProblem(schema: BlockSchema, field: BlockField, value: unknown): string | null {
+    const shape = shapeProblem(schema, field, value);
+    if (shape || !Array.isArray(value)) return shape;
+    for (let i = 0; i < value.length; i++) {
+        const message = entryProblem(schema, field, value[i]);
+        if (message) return `Entry ${i + 1}: ${message}`;
+    }
+    return null;
+}
+
+function groupProblem(schema: BlockSchema, field: BlockField, value: unknown): string | null {
+    const shape = shapeProblem(schema, field, value);
+    if (shape || !isRecord(value)) return shape;
+    for (const inner of field.fields ?? []) {
+        const message = fieldProblem(schema, inner, value[inner.name]);
+        if (message) return `${inner.label || inner.name}: ${message}`;
+    }
+    return null;
+}
+
+/**
+ * Every string a field holds that may carry a placeholder, entries and parts included, so a
+ * binding deep in a list is checked for a missing field the same as one on the block.
+ */
+export function boundStrings(schema: BlockSchema, field: BlockField, value: unknown): string[] {
+    if (typeof value === 'string') return isBindable(schema, field) ? [value] : [];
+    if (field.kind === 'list' && field.item && Array.isArray(value)) {
+        const entry = itemField(field);
+        return value.flatMap((v) => boundStrings(schema, entry, v));
+    }
+    if (field.kind === 'group' && field.fields && isRecord(value)) {
+        return field.fields.flatMap((f) => boundStrings(schema, f, value[f.name]));
+    }
+    return [];
 }
 
 function problem(field: BlockField, value: unknown): string | null {
@@ -390,12 +564,12 @@ export function countBlocks(schema: BlockSchema, list: readonly unknown[]): numb
  * Null for a kind the entry form has no control for.
  */
 export function fieldDefinitionFor(field: BlockField, id: string): FieldDefinition | null {
-    const type = FIELD_TYPES[field.kind as Exclude<BlockFieldKind, 'select' | 'slots'>];
+    const type = FIELD_TYPES[field.kind as Exclude<BlockFieldKind, 'select' | 'slots' | 'list' | 'group'>];
     if (!type) return null;
     return { name: id, displayName: field.label || field.name, type, isRequired: field.required === true };
 }
 
-const FIELD_TYPES: Record<Exclude<BlockFieldKind, 'select' | 'slots'>, FieldDefinition['type']> = {
+const FIELD_TYPES: Record<Exclude<BlockFieldKind, 'select' | 'slots' | 'list' | 'group'>, FieldDefinition['type']> = {
     text: 'string',
     markdown: 'markdown',
     url: 'url',

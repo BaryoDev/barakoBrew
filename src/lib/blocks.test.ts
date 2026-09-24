@@ -4,9 +4,13 @@ import {
     countBlocks,
     dropIndex,
     fieldDefinitionFor,
+    fieldProblem,
     isBindable,
+    isStructured,
+    MAX_LIST_ITEMS,
     move,
     newBlock,
+    newListEntry,
     parseBlockSchema,
     setProp,
     setSlotList,
@@ -350,3 +354,234 @@ describe('validating a prop that holds a binding', () => {
 function byTypeIn(from: BlockSchema, type: string) {
     return from.blocks.find((b) => b.type === type)!;
 }
+
+/** barakoPress's list and group fields, as its `/api/blocks` publishes the `stages` test block. */
+const PUBLISHED_LISTS = {
+    version: 2,
+    bindings: { scopes: ['site', 'page', 'item'], formats: ['text'] },
+    blocks: [
+        {
+            type: 'stages',
+            label: 'Stages',
+            layer: 'block',
+            perViewer: false,
+            fields: [
+                { name: 'heading', kind: 'text', bindable: true },
+                {
+                    name: 'stages',
+                    kind: 'list',
+                    label: 'Stages',
+                    required: true,
+                    min: 2,
+                    max: 5,
+                    bindable: true,
+                    item: {
+                        kind: 'group',
+                        label: 'Stage',
+                        bindable: true,
+                        fields: [
+                            { name: 'label', kind: 'text', required: true, bindable: true },
+                            { name: 'body', kind: 'markdown', bindable: true },
+                            { name: 'href', kind: 'url', bindable: true },
+                        ],
+                    },
+                },
+                { name: 'tags', kind: 'list', max: 3, bindable: true, item: { kind: 'text', bindable: true } },
+                { name: 'scores', kind: 'list', bindable: true, item: { kind: 'number', min: 0, max: 10, bindable: false } },
+                {
+                    name: 'lead',
+                    kind: 'group',
+                    bindable: true,
+                    fields: [
+                        { name: 'label', kind: 'text', required: true, bindable: true },
+                        { name: 'href', kind: 'url', bindable: true },
+                    ],
+                },
+            ],
+        },
+    ],
+};
+
+const lists = parseBlockSchema(PUBLISHED_LISTS) as BlockSchema;
+const stagesType = lists.blocks[0];
+const fieldOf = (name: string) => stagesType.fields.find((f) => f.name === name)!;
+
+describe('reading list and group fields', () => {
+    it('reads a list item, with its kind, label, range, fields and bindability', () => {
+        const stages = fieldOf('stages');
+        expect(stages).toMatchObject({ kind: 'list', required: true, min: 2, max: 5, bindable: true });
+        expect(stages.item).toMatchObject({ kind: 'group', label: 'Stage', bindable: true });
+        expect(stages.item!.fields!.map((f) => [f.name, f.kind, f.required, f.bindable])).toEqual([
+            ['label', 'text', true, true],
+            ['body', 'markdown', false, true],
+            ['href', 'url', false, true],
+        ]);
+        expect(fieldOf('scores').item).toMatchObject({ kind: 'number', min: 0, max: 10, bindable: false });
+    });
+
+    it('reads a group and its fields', () => {
+        const lead = fieldOf('lead');
+        expect(lead.kind).toBe('group');
+        expect(lead.fields!.map((f) => f.name)).toEqual(['label', 'href']);
+    });
+
+    it('reads no bindability inside a list on a site that publishes no bindings', () => {
+        const v1 = parseBlockSchema({ ...PUBLISHED_LISTS, version: 1 })!;
+        const stages = v1.blocks[0].fields.find((f) => f.name === 'stages')!;
+        expect(stages.item!.fields).toHaveLength(3);
+        expect(stages.bindable).toBe(false);
+        expect(stages.item!.bindable).toBe(false);
+        expect(stages.item!.fields!.every((f) => f.bindable === false)).toBe(true);
+    });
+
+    it('leaves a list with no item, or an item kind it does not know, as a field it edits as JSON', () => {
+        const parsed = parseBlockSchema({
+            version: 2,
+            blocks: [
+                {
+                    type: 'odd',
+                    fields: [
+                        { name: 'a', kind: 'list' },
+                        { name: 'b', kind: 'list', item: { kind: 'slots' } },
+                        { name: 'c', kind: 'group' },
+                        { name: 'd', kind: 'list', item: { kind: 'group' } },
+                        { name: 'e', kind: 'list', item: { kind: 'url' } },
+                    ],
+                },
+            ],
+        })!;
+        const editable = parsed.blocks[0].fields.map((f) => [f.name, isStructured(f)]);
+        expect(editable).toEqual([
+            ['a', false],
+            ['b', false],
+            ['c', false],
+            ['d', false],
+            ['e', true],
+        ]);
+    });
+
+    it('reads lists and groups three deep and no deeper, which is as deep as the site nests them', () => {
+        const deep = (depth: number): Record<string, unknown> =>
+            depth === 0
+                ? { name: 'leaf', kind: 'text' }
+                : { name: `g${depth}`, kind: 'group', fields: [deep(depth - 1)] };
+        const parsed = parseBlockSchema({ version: 2, blocks: [{ type: 'deep', fields: [deep(4)] }] })!;
+        const g4 = parsed.blocks[0].fields[0];
+        const g3 = g4.fields![0];
+        const g2 = g3.fields![0];
+        expect([isStructured(g4), isStructured(g3), isStructured(g2)]).toEqual([true, true, true]);
+        expect(g2.fields![0]).toMatchObject({ name: 'g1', kind: 'group' });
+        expect(isStructured(g2.fields![0])).toBe(false);
+    });
+
+    it('counts a list of groups once toward the depth', () => {
+        const parsed = parseBlockSchema({
+            version: 2,
+            blocks: [
+                {
+                    type: 'path',
+                    fields: [
+                        {
+                            name: 'stages',
+                            kind: 'list',
+                            item: {
+                                kind: 'group',
+                                fields: [
+                                    {
+                                        name: 'links',
+                                        kind: 'list',
+                                        item: { kind: 'group', fields: [{ name: 'tags', kind: 'list', item: { kind: 'text' } }] },
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                },
+            ],
+        })!;
+        const links = parsed.blocks[0].fields[0].item!.fields![0];
+        expect(isStructured(links)).toBe(true);
+        expect(isStructured(links.item!.fields![0])).toBe(true);
+    });
+
+    it('reads a schema with no list or group exactly as before', () => {
+        const before = parseBlockSchema(PUBLISHED)!;
+        for (const field of before.blocks.flatMap((b) => b.fields)) {
+            expect(Object.keys(field).sort()).toEqual(
+                ['bindable', 'kind', 'label', 'max', 'min', 'name', 'options', 'required'].sort(),
+            );
+        }
+        expect(before.blocks.flatMap((b) => b.fields)).toHaveLength(9);
+    });
+});
+
+const FIVE_STAGES = [1, 2, 3, 4, 5].map((n) => ({ label: `Stage ${n}` }));
+
+describe('validating list and group values the way the site does', () => {
+    const check = (props: Record<string, unknown>) => validateBlock(lists, stagesType, { type: 'stages', props });
+
+    it('accepts a list within its range whose every entry passes', () => {
+        expect(check({ stages: FIVE_STAGES, tags: ['a', 'b'], scores: [0, 10], lead: { label: 'Go', href: '/go' } })).toEqual({});
+    });
+
+    it('reads an empty required list as missing', () => {
+        expect(check({ stages: [] }).stages).toBe('Required. The site does not show this block without it.');
+    });
+
+    it('refuses a list shorter than its minimum or longer than its maximum', () => {
+        expect(check({ stages: [{ label: 'Only' }] }).stages).toBe('Has to hold from 2 to 5 entries.');
+        expect(check({ stages: [...FIVE_STAGES, { label: 'Six' }] }).stages).toBe('Has to hold from 2 to 5 entries.');
+        expect(check({ stages: FIVE_STAGES, tags: ['a', 'b', 'c', 'd'] }).tags).toBe('Has to hold at most 3 entries.');
+    });
+
+    it('holds a list with no maximum to the hundred entries the site reads', () => {
+        const many = Array.from({ length: MAX_LIST_ITEMS + 1 }, () => 1);
+        expect(check({ stages: FIVE_STAGES, scores: many }).scores).toBe(`Has to hold at most ${MAX_LIST_ITEMS} entries.`);
+    });
+
+    it('names the entry that fails and why', () => {
+        expect(check({ stages: FIVE_STAGES, scores: [3, 11] }).scores).toBe('Entry 2: Has to be a number from 0 to 10.');
+        expect(check({ stages: [{ label: 'One' }, { body: 'no label' }] }).stages).toBe(
+            'Entry 2: label: Required. The site does not show this block without it.',
+        );
+        expect(check({ stages: [{ label: 'One' }, { label: 'Two', href: 'javascript:alert(1)' }] }).stages).toMatch(
+            /^Entry 2: href: Has to be a link/,
+        );
+    });
+
+    it('refuses a value that is not a list, or a group that is not an object', () => {
+        expect(check({ stages: FIVE_STAGES, tags: 'a,b' }).tags).toBe('Has to be a list.');
+        expect(check({ stages: FIVE_STAGES, lead: ['Go'] }).lead).toBe('Has to be a group of values.');
+        expect(check({ stages: FIVE_STAGES, lead: { href: '/go' } }).lead).toBe(
+            'label: Required. The site does not show this block without it.',
+        );
+    });
+
+    it('accepts a whole list or group bound to data on a site that renders bindings', () => {
+        expect(check({ stages: '{{item.Stages}}', lead: '{{site.Lead}}' })).toEqual({});
+        expect(check({ stages: FIVE_STAGES, tags: ['{{item.Tag}}'] })).toEqual({});
+        expect(check({ stages: FIVE_STAGES, tags: ['a {{item.Tag}}', 'plain'] })).toEqual({});
+    });
+
+    it('refuses a bound list on a site that renders no bindings, since it would print the braces', () => {
+        const v1 = parseBlockSchema({ ...PUBLISHED_LISTS, version: 1 })!;
+        expect(validateBlock(v1, v1.blocks[0], { type: 'stages', props: { stages: '{{item.Stages}}' } }).stages).toBe(
+            'Has to be a list.',
+        );
+    });
+
+    it('gives each nested value its own message, for the field that holds it', () => {
+        const stage = fieldOf('stages').item!.fields!;
+        expect(fieldProblem(lists, stage[0], undefined)).toBe('Required. The site does not show this block without it.');
+        expect(fieldProblem(lists, stage[2], 'javascript:x')).toMatch(/link/);
+        expect(fieldProblem(lists, stage[2], undefined)).toBeNull();
+    });
+});
+
+describe('new list entries', () => {
+    it('starts each entry as the most empty value of its kind', () => {
+        expect(newListEntry(fieldOf('tags').item!)).toBe('');
+        expect(newListEntry(fieldOf('scores').item!)).toBe(0);
+        expect(newListEntry(fieldOf('stages').item!)).toEqual({});
+    });
+});
