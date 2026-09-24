@@ -6,11 +6,14 @@ import {
   useApiKeys,
   useCreateApiKey,
   useRevokeApiKey,
+  supportsKeyContentTypes,
   API_KEY_SCOPES,
   DESTRUCTIVE_API_KEY_SCOPES,
   type CreatedApiKey,
 } from '@/hooks/use-api-keys';
 import { apiErrorMessage } from '@/lib/api';
+import { useApiMeta } from '@/hooks/use-meta';
+import { useSchemas } from '@/hooks/use-schemas';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { RevealOnce } from '@/components/patterns/reveal-once';
@@ -44,11 +47,24 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function CreateApiKeyDialog({
+  open,
+  onOpenChange,
+  limitable,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  /** Whether the API can limit a key to content types. False hides the control entirely. */
+  limitable: boolean;
+}) {
   const create = useCreateApiKey();
+  const revoke = useRevokeApiKey();
+  const types = useSchemas(open && limitable);
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<string[]>(['content:read']);
+  const [contentTypes, setContentTypes] = useState<string[]>([]);
   const [expiresAt, setExpiresAt] = useState('');
+  const [refused, setRefused] = useState('');
   // Once created, hold the secret so it can be shown ONCE. Cleared on close.
   const [created, setCreated] = useState<CreatedApiKey | null>(null);
 
@@ -57,7 +73,9 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   function reset() {
     setName('');
     setScopes(['content:read']);
+    setContentTypes([]);
     setExpiresAt('');
+    setRefused('');
     setCreated(null);
     create.reset();
   }
@@ -66,15 +84,34 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setScopes((prev) => (checked ? [...new Set([...prev, value])] : prev.filter((s) => s !== value)));
   }
 
+  function toggleType(value: string, checked: boolean) {
+    setContentTypes((prev) => (checked ? [...new Set([...prev, value])] : prev.filter((t) => t !== value)));
+  }
+
+  const limited = limitable && contentTypes.length > 0;
+  const canPush = scopes.includes('content:write') || scopes.includes('*');
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
+    setRefused('');
     try {
       const result = await create.mutateAsync({
         name: name.trim(),
         scopes,
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+        ...(limited ? { contentTypes } : {}),
       });
+      // An API that does not know the field ignores it and mints a key with no limit. That key is
+      // not the one asked for, so it is revoked before anybody can copy it.
+      if (limited && !Array.isArray(result.contentTypes)) {
+        create.reset();
+        await revoke.mutateAsync(result.id).catch(() => undefined);
+        setRefused(
+          'This API does not limit keys to content types, so the key it made had no limit and was revoked. Upgrade the API, or create the key without content types.',
+        );
+        return;
+      }
       setCreated(result); // switch the dialog to the copy-once view
       create.reset(); // the result carries the key, so drop it from the mutation cache now
     } catch (err) {
@@ -155,6 +192,40 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 )}
               </div>
 
+              {limitable && (
+                <fieldset className="space-y-2">
+                  <legend className="text-sm leading-none font-medium">Content types</legend>
+                  <p className="text-muted-foreground text-xs">
+                    Optional. A key limited to types can only use{' '}
+                    <code className="font-mono">POST /api/collections/{'{type}'}/push</code> for those types.
+                    Choose none for a key that is not limited.
+                  </p>
+                  <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border p-3">
+                    {types.isLoading ? (
+                      <p className="text-muted-foreground text-xs">Reading the content types.</p>
+                    ) : types.isError ? (
+                      <p className="text-destructive text-xs">The content types could not be read.</p>
+                    ) : !types.data?.length ? (
+                      <p className="text-muted-foreground text-xs">There are no content types yet.</p>
+                    ) : (
+                      types.data.map((t) => (
+                        <label key={t.name} htmlFor={`type-${t.name}`} className="flex items-center gap-2.5">
+                          <Checkbox
+                            id={`type-${t.name}`}
+                            checked={contentTypes.includes(t.name)}
+                            onCheckedChange={(c) => toggleType(t.name, c === true)}
+                          />
+                          <span className="text-sm leading-tight">{t.displayName || t.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {contentTypes.length > 0 && !canPush && (
+                    <p className="text-warning text-xs">Pushing needs Write content or Full content access.</p>
+                  )}
+                </fieldset>
+              )}
+
               <div className="space-y-1.5">
                 <Label htmlFor="key-expiry">Expires (optional)</Label>
                 <Input
@@ -165,6 +236,11 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   className="w-fit"
                 />
               </div>
+              {refused && (
+                <p role="alert" className="text-destructive text-xs">
+                  {refused}
+                </p>
+              )}
             </div>
 
             <DialogFooter>
@@ -185,7 +261,9 @@ function CreateApiKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 export default function ApiKeysPage() {
   const { data: keys, isLoading, isError, refetch } = useApiKeys();
   const revoke = useRevokeApiKey();
+  const { data: meta } = useApiMeta();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const limitable = !isLoading && !isError && supportsKeyContentTypes(keys, meta?.version);
 
   async function onRevoke(id: string, name: string) {
     if (!window.confirm(`Revoke "${name}"? Callers using it will stop working immediately.`)) return;
@@ -231,6 +309,7 @@ export default function ApiKeysPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Key</TableHead>
                 <TableHead>Scopes</TableHead>
+                {limitable && <TableHead>Content types</TableHead>}
                 <TableHead>Last used</TableHead>
                 <TableHead>Expires</TableHead>
                 <TableHead>Status</TableHead>
@@ -251,6 +330,21 @@ export default function ApiKeysPage() {
                       ))}
                     </div>
                   </TableCell>
+                  {limitable && (
+                    <TableCell>
+                      {k.contentTypes?.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {k.contentTypes.map((t) => (
+                            <Badge key={t} variant="outline" className="text-xs">
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Any</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.lastUsedAt)}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.expiresAt)}</TableCell>
                   <TableCell>
@@ -279,7 +373,7 @@ export default function ApiKeysPage() {
         </div>
       )}
 
-      <CreateApiKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <CreateApiKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} limitable={limitable} />
     </>
   );
 }

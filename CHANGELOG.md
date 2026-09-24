@@ -21,6 +21,15 @@ moved. Which API a console works against is stated per release instead.
   entries on the list, a missing part on the entry, and the row counts it. A schema with no list or
   group draws the form as before. (#181)
 
+- **An API key can be limited to content types.** The new key dialog lists the content types beside
+  the scopes, with the note that a key limited to types can only use
+  `POST /api/collections/{type}/push`, and the list shows each key's types, or Any. That is the key a
+  repository's CI holds to push a changelog or a contributor list. A key with no type chosen is sent
+  with the body it always was. The control shows only against an API that knows the field: a listed
+  key carrying `contentTypes` says so, and with no key to read, barakoCMS 4.4.0 or later. An older API
+  ignores a field it does not know and would mint a key with no limit, so if one ever answers without
+  the types, the console revokes that key before it can be copied and says why. (#184)
+
 ## [1.4.0] - 2026-09-21
 
 ### Added

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -150,4 +150,152 @@ describe('the created key', () => {
     expect(anywhereInTheCaches(client)).toBe(false);
     expect(document.body.textContent).not.toContain(SECRET);
   });
+});
+
+describe('limiting a key to content types', () => {
+    const LISTED = {
+        id: 'k1',
+        name: 'Changelog push',
+        prefix: 'bcms_ab12cd34',
+        scopes: ['content:write'],
+        tenantSlug: 'default',
+        expiresAt: null,
+        lastUsedAt: null,
+        revoked: false,
+        createdAt: new Date().toISOString(),
+    };
+    const TYPES = [
+        { name: 'changelog', displayName: 'Changelog', fields: [] },
+        { name: 'contributor', displayName: 'Contributor', fields: [] },
+    ];
+    const envelope = (items: unknown[]) => ({
+        data: { items, page: 1, pageSize: 20, totalItems: items.length, totalPages: 1, hasNextPage: false },
+    });
+
+    function serve(keys: unknown[], version = '4.3.0') {
+        vi.mocked(api.get).mockReset();
+        vi.mocked(api.post).mockReset();
+        vi.mocked(api.delete).mockReset();
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/api-keys') return envelope(keys);
+            if (url === '/api/content-types') return envelope(TYPES);
+            if (url === '/api/meta') return { data: { version, swaggerEnabled: false } };
+            throw new Error(`unexpected GET ${url}`);
+        });
+    }
+
+    async function renderPage() {
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(React.createElement(QueryClientProvider, { client }, React.createElement(ApiKeysPage)));
+    }
+
+    async function openDialog() {
+        fireEvent.click(screen.getAllByRole('button', { name: /new key/i })[0]);
+        await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    }
+
+    it('shows each listed key its content types, and Any for a key with none', async () => {
+        serve([
+            { ...LISTED, contentTypes: ['changelog', 'contributor'] },
+            { ...LISTED, id: 'k2', name: 'Reader', contentTypes: [] },
+        ]);
+        await renderPage();
+        expect(await screen.findByRole('columnheader', { name: 'Content types' })).toBeInTheDocument();
+        const rows = screen.getAllByRole('row');
+        expect(rows).toHaveLength(3);
+        expect(rows[1]).toHaveTextContent('changelog');
+        expect(rows[1]).toHaveTextContent('contributor');
+        expect(rows[2]).toHaveTextContent('Any');
+    });
+
+    it('offers the content types beside the scopes, with the push note', async () => {
+        serve([{ ...LISTED, contentTypes: [] }]);
+        await renderPage();
+        await screen.findByText('Changelog push');
+        await openDialog();
+
+        const group = await screen.findByRole('group', { name: 'Content types' });
+        expect(await within(group).findByLabelText('Changelog')).toBeInTheDocument();
+        expect(within(group).getByLabelText('Contributor')).toBeInTheDocument();
+        expect(group).toHaveTextContent('A key limited to types can only use POST /api/collections/{type}/push');
+    });
+
+    it('sends the chosen types when minting', async () => {
+        serve([{ ...LISTED, contentTypes: [] }]);
+        vi.mocked(api.post).mockResolvedValue({
+            data: { ...LISTED, id: 'new', name: 'Push', contentTypes: ['changelog'], key: 'bcms_SECRET' },
+        });
+        await renderPage();
+        await screen.findByText('Changelog push');
+        await openDialog();
+
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Push' } });
+        fireEvent.click(document.getElementById('scope-content:write') as HTMLElement);
+        fireEvent.click(await screen.findByLabelText('Changelog'));
+        fireEvent.click(screen.getByRole('button', { name: 'Create key' }));
+
+        await waitFor(() => expect(screen.getByTestId('api-key-secret')).toHaveValue('bcms_SECRET'));
+        expect(api.post).toHaveBeenCalledWith('/api/api-keys', {
+            name: 'Push',
+            scopes: ['content:read', 'content:write'],
+            expiresAt: undefined,
+            contentTypes: ['changelog'],
+        });
+    });
+
+    it('mints a key with no type chosen exactly as before, with no contentTypes in the body', async () => {
+        serve([{ ...LISTED, contentTypes: [] }]);
+        vi.mocked(api.post).mockResolvedValue({
+            data: { ...LISTED, id: 'new', name: 'Plain', contentTypes: [], key: 'bcms_SECRET' },
+        });
+        await renderPage();
+        await screen.findByText('Changelog push');
+        await openDialog();
+
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Plain' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create key' }));
+
+        await waitFor(() => expect(screen.getByTestId('api-key-secret')).toHaveValue('bcms_SECRET'));
+        const body = vi.mocked(api.post).mock.calls[0][1] as Record<string, unknown>;
+        expect(Object.keys(body).sort()).toEqual(['expiresAt', 'name', 'scopes']);
+    });
+
+    it('offers the types on an empty list when the API version has them', async () => {
+        serve([], '4.4.0');
+        await renderPage();
+        await screen.findByText('No API keys yet');
+        await openDialog();
+        expect(await screen.findByRole('group', { name: 'Content types' })).toBeInTheDocument();
+    });
+
+    it('hides the control and the column against an API that does not return contentTypes', async () => {
+        serve([LISTED], '4.3.0');
+        await renderPage();
+        await screen.findByText('Changelog push');
+        await openDialog();
+
+        expect(screen.getByLabelText('Name')).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Content types' })).toBeNull();
+        expect(screen.queryByRole('columnheader', { name: 'Content types' })).toBeNull();
+        expect(api.get).not.toHaveBeenCalledWith('/api/content-types');
+    });
+
+    it('revokes a key the API minted without the chosen types, rather than handing it out', async () => {
+        serve([], '4.4.0');
+        vi.mocked(api.post).mockResolvedValue({
+            data: { ...LISTED, id: 'minted', name: 'Push', key: 'bcms_UNLIMITED' },
+        });
+        vi.mocked(api.delete).mockResolvedValue({});
+        await renderPage();
+        await screen.findByText('No API keys yet');
+        await openDialog();
+
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Push' } });
+        fireEvent.click(await screen.findByLabelText('Changelog'));
+        fireEvent.click(screen.getByRole('button', { name: 'Create key' }));
+
+        await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/api/api-keys/minted'));
+        expect(screen.queryByTestId('api-key-secret')).toBeNull();
+        expect(document.body.textContent).not.toContain('bcms_UNLIMITED');
+    });
 });
