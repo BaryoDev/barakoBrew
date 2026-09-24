@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { authed, stubShell, pageOf } from './helpers';
+import { authed, stubShell, pageOf, stubContentTypes } from './helpers';
 
 /**
  * API keys admin page (Phase 2). Route-mocked, driving the real page: the list renders, creating a
@@ -86,5 +86,52 @@ test.describe('API keys', () => {
     await page.goto('/api-keys');
     await page.getByRole('button', { name: /Revoke CI deploy/i }).click();
     await expect.poll(() => deleted, { timeout: 10000 }).toBe(true);
+  });
+
+  test('a key can be limited to content types, and the list shows them', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubContentTypes(page, [
+      { name: 'changelog', displayName: 'Changelog', fields: [] },
+      { name: 'contributor', displayName: 'Contributor', fields: [] },
+    ]);
+    let body: Record<string, unknown> | null = null;
+    await page.route('**/api/api-keys**', (route) => {
+      if (route.request().method() === 'POST') {
+        body = route.request().postDataJSON();
+        return route.fulfill({
+          json: { ...KEY, id: 'new', name: 'Push', contentTypes: ['changelog'], key: 'bcms_THEFULLSECRETVALUE123456' },
+        });
+      }
+      return route.fulfill({ json: pageOf([{ ...KEY, contentTypes: ['contributor'] }]) });
+    });
+
+    await page.goto('/api-keys');
+    await expect(page.getByRole('columnheader', { name: 'Content types' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('row', { name: /CI deploy/ })).toContainText('contributor');
+
+    await page.getByRole('button', { name: 'New key' }).first().click();
+    const types = page.getByRole('group', { name: 'Content types' });
+    await expect(types).toContainText('POST /api/collections/{type}/push');
+    await page.getByLabel('Name').fill('Push');
+    await page.locator('[id="scope-content:write"]').check();
+    await types.getByRole('checkbox', { name: 'Changelog' }).check();
+    await page.getByRole('button', { name: 'Create key' }).click();
+
+    await expect(page.getByTestId('api-key-secret')).toBeVisible({ timeout: 10000 });
+    expect(body).toMatchObject({ name: 'Push', contentTypes: ['changelog'] });
+  });
+
+  test('an API that does not return contentTypes gets the screen it always had', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await page.route('**/api/api-keys**', (r) => r.fulfill({ json: pageOf([KEY]) }));
+
+    await page.goto('/api-keys');
+    await expect(page.getByText('CI deploy')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('columnheader', { name: 'Content types' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'New key' }).first().click();
+    await expect(page.getByLabel('Name')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Content types' })).toHaveCount(0);
   });
 });
