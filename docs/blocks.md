@@ -84,6 +84,25 @@ site ignores such a name, so the editor does too.
 The site type needs a JSON field called `Presets` for this. Without one the palette says so and
 nothing offers to save.
 
+## Tones and style recipes
+
+A tenant's own tones (`Tones`) and style recipes (`StyleRecipes`) are site settings, edited on the
+Theme and Style recipes screens. The editor reads them from the same `site` entry as saved blocks:
+
+- Every tone field, which is a select offering the six built-in tones, also offers the tenant's
+  tones after them. The site does the same when it knows the tenant, but the console reads
+  `/api/blocks` without saying which tenant it edits, so it adds them itself.
+- A field named `recipe` stays a text box, since the site takes a bound name such as
+  `card-{{item.Product}}`, and offers the tenant's recipe names as suggestions. A name the site has
+  no recipe for is flagged, and the block then draws its own look.
+
+The site type needs JSON fields called `Tokens`, `Tones` and `StyleRecipes`. The API stores a field
+its type does not declare, but its public delivery sends only declared fields, so the site would
+never read it. Without one, the screen says so in place of the editor.
+
+The Theme and Style recipes screens check names and values with the patterns barakoPress uses, and
+refuse to save one it would drop. barakoPress checks them again when it reads the settings.
+
 ## What it keeps
 
 - A block whose type the schema does not list is shown read-only with its props, can be moved or

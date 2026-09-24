@@ -2,7 +2,8 @@
 
 import { useId, useState } from 'react';
 import { SiteForm } from '@/components/site/site-form';
-import { ColourInput, Section, Structured, TextField } from '@/components/site/editors';
+import { ColourInput, Section, Structured, TextField, UndeclaredField, declaresField } from '@/components/site/editors';
+import { TokensEditor, TonesEditor } from '@/components/site/tokens-editor';
 import { ThemePreview } from '@/components/site/theme-preview';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,15 @@ import {
     type OptionColorRow,
     type ThemeVariant,
 } from '@/lib/site-settings';
+import {
+    TOKENS_FIELD,
+    TONES_FIELD,
+    readTokens,
+    readTones,
+    tokensAndTonesProblem,
+    validTokens,
+} from '@/lib/theme-tokens';
+import type { ContentTypeDefinition } from '@/types/schema';
 
 const SELECT =
     'border-input bg-background focus-visible:ring-ring/50 h-9 rounded-md border px-2 text-sm outline-none focus-visible:ring-2';
@@ -45,10 +55,13 @@ export default function ThemePage() {
     return (
         <SiteForm
             title="Theme"
-            description="Colours, fonts, corner radii and widths for this tenant's site. Contrast problems are flagged here and never block a save."
+            description="Colours, fonts, corner radii, widths, tokens and tones for this tenant's site. Contrast problems are flagged here and never block a save."
             requireEntry
+            problem={tokensAndTonesProblem}
         >
-            {({ values, set, entry }) => <ThemeEditor key={entry?.id} version={entry?.version} values={values} set={set} />}
+            {({ values, set, entry, schema }) => (
+                <ThemeEditor key={entry?.id} version={entry?.version} values={values} set={set} schema={schema} />
+            )}
         </SiteForm>
     );
 }
@@ -57,10 +70,12 @@ function ThemeEditor({
     version,
     values,
     set,
+    schema,
 }: {
     version?: number;
     values: Record<string, unknown>;
     set: (field: string, value: unknown) => void;
+    schema: ContentTypeDefinition;
 }) {
     const colors = readStringMap(values.Colors) ?? {};
     const fonts = readStringMap(values.Fonts) ?? {};
@@ -155,6 +170,40 @@ function ThemeEditor({
                         <LengthFields keys={LAYOUT_KEYS} labels={LAYOUT_LABELS} map={map} prefix="layout" onChange={(next) => set('Layout', next)} />
                     )}
                 </Structured>
+            </Section>
+
+            <Section
+                title="Tokens"
+                description="Named colours, lengths and font stacks. The site writes each one as --t-<name>, and tones and style recipes can name them."
+            >
+                {declaresField(schema, TOKENS_FIELD) ? (
+                    <Structured field={TOKENS_FIELD} label="Tokens" value={values.Tokens} read={readTokens} onChange={(v) => set(TOKENS_FIELD, v)}>
+                        {(rows) => <TokensEditor key={version} initial={rows} onChange={(next) => set(TOKENS_FIELD, next)} />}
+                    </Structured>
+                ) : (
+                    <UndeclaredField field={TOKENS_FIELD} noun="tokens" />
+                )}
+            </Section>
+
+            <Section
+                title="Tones"
+                description="Tones of the site's own, offered after the built-in six wherever a block picks a tone. Each part is a token, a colour slot or a colour."
+            >
+                {declaresField(schema, TONES_FIELD) ? (
+                    <Structured field={TONES_FIELD} label="Tones" value={values.Tones} read={readTones} onChange={(v) => set(TONES_FIELD, v)}>
+                        {(rows) => (
+                            <TonesEditor
+                                key={version}
+                                initial={rows}
+                                tokens={validTokens(values.Tokens)}
+                                colors={colors}
+                                onChange={(next) => set(TONES_FIELD, next)}
+                            />
+                        )}
+                    </Structured>
+                ) : (
+                    <UndeclaredField field={TONES_FIELD} noun="tones" />
+                )}
             </Section>
 
             <Section title="Visitor theme variants" description="Themes a visitor can switch between. Each one overrides colours only.">

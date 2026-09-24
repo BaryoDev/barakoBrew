@@ -11,6 +11,17 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Tokens, tones and style recipes.** The Theme screen edits `Tokens` (named colours, lengths and
+  font stacks, with a swatch, a length bar or a font sample) and `Tones` (an ink, a background and an
+  edge, each a token, a colour slot or a colour, with a preview chip). A new Style recipes screen
+  edits `StyleRecipes`: a name, optional classes, and properties picked from barakoPress's allowed
+  list, each a value that can name `{token}` or `{colors.surface}` and the like, with a live preview
+  of a sample block. Names and values are checked with barakoPress's own patterns, and a save that
+  would store something the site drops is refused. In the block form, every tone field offers the
+  tenant's tones, and a `recipe` field suggests its recipe names while still taking a bound value.
+  The site type needs the three JSON fields; without one the screen says so. Recipes need
+  barakoPress with style recipes (barakoPress#131). (#182)
+
 - **The block form edits list and group fields.** barakoPress publishes `list` and `group` fields in
   its version 2 block schema, and 1.4.0 edited them as JSON. A list is now its entries, each edited
   as its kind: a box per text, link or number, and a row that opens to a sub-form for a group. Add,

@@ -150,3 +150,139 @@ test('a domain another tenant holds is refused inline with the API sentence', as
     expect(puts).toHaveLength(1);
     expect(puts[0]).toMatchObject({ Handle: 'baryo', Name: 'Baryo', IsActive: true, Domains: ['baryo.dev', 'rckoronadal.org'] });
 });
+
+const THEMED_SITE_TYPE = {
+    ...SITE_TYPE,
+    fields: [
+        ...SITE_TYPE.fields,
+        { name: 'Tokens', displayName: 'Tokens', type: 'json', isRequired: false },
+        { name: 'Tones', displayName: 'Tones', type: 'json', isRequired: false },
+        { name: 'StyleRecipes', displayName: 'Style recipes', type: 'json', isRequired: false },
+    ],
+};
+
+test('Theme adds a token and a tone that names it, previews the tone, and saves both', async ({ page }) => {
+    await stubContentTypes(page, [ARTICLE, THEMED_SITE_TYPE]);
+    const puts = await serveSite(page, [
+        siteEntry({ Name: 'barakocms.com', Tokens: { 'cms-bg': '#E8EEFD' }, Colors: { pageBg: '#FFFFFF' } }),
+    ]);
+
+    await page.goto('/site/theme');
+    await expect(page.getByRole('textbox', { name: 'Token 1 name' })).toHaveValue('cms-bg');
+
+    await page.getByRole('button', { name: 'Add token' }).click();
+    await page.getByRole('textbox', { name: 'Token 2 name' }).fill('cms-ink');
+    await page.getByRole('textbox', { name: 'Token 2 value' }).fill('#1D3A8A');
+
+    await page.getByRole('button', { name: 'Add tone' }).click();
+    await page.getByRole('textbox', { name: 'Tone 1 name' }).fill('cms');
+    await page.getByRole('combobox', { name: 'Tone 1 ink' }).fill('cms-ink');
+    await page.getByRole('combobox', { name: 'Tone 1 background' }).fill('cms-bg');
+    await page.getByRole('combobox', { name: 'Tone 1 edge' }).fill('hairline');
+
+    const chip = page.getByTestId('tone-chip');
+    await expect(chip).toHaveCSS('color', 'rgb(29, 58, 138)');
+    await expect(chip).toHaveCSS('background-color', 'rgb(232, 238, 253)');
+
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect.poll(() => puts.length).toBe(1);
+    expect(puts[0]).toMatchObject({
+        data: {
+            Name: 'barakocms.com',
+            Colors: { pageBg: '#FFFFFF' },
+            Tokens: { 'cms-bg': '#E8EEFD', 'cms-ink': '#1D3A8A' },
+            Tones: { cms: { ink: 'cms-ink', bg: 'cms-bg', edge: 'hairline' } },
+        },
+    });
+});
+
+test('Theme will not save a token or a tone the site would drop', async ({ page }) => {
+    await stubContentTypes(page, [ARTICLE, THEMED_SITE_TYPE]);
+    await serveSite(page, [siteEntry({ Name: 'barakocms.com', Tokens: { gutter: '24px' } })]);
+
+    await page.goto('/site/theme');
+    await page.getByRole('textbox', { name: 'Token 1 value' }).fill('24px; color: red');
+    await expect(page.getByText('Not a colour, a length (or a clamp of three) or a font stack. The site drops it.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    await expect(page.getByText('A token has a problem the site would drop. Fix it to save.')).toBeVisible();
+
+    await page.getByRole('textbox', { name: 'Token 1 value' }).fill('24px');
+    await page.getByRole('button', { name: 'Add tone' }).click();
+    await page.getByRole('textbox', { name: 'Tone 1 name' }).fill('accent');
+    await expect(page.getByText('accent is a built-in tone, which follows the colours. Pick another name.')).toBeVisible();
+    await page.getByRole('combobox', { name: 'Tone 1 ink' }).fill('gutter');
+    await expect(page.getByText('Ink: The token gutter does not hold a colour.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+});
+
+test('a site type without the fields says so rather than editing a value the site cannot read', async ({ page }) => {
+    await stubContentTypes(page, [ARTICLE, SITE_TYPE]);
+    await serveSite(page, [siteEntry({ Name: 'baryo.dev' })]);
+
+    await page.goto('/site/theme');
+    await expect(page.getByText('The site type has no Tokens field, so the site cannot read tokens yet.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add token' })).toHaveCount(0);
+
+    await page.goto('/site/recipes');
+    await expect(page.getByText('The site type has no StyleRecipes field', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add recipe' })).toHaveCount(0);
+});
+
+test('Style recipes builds a card from allowed properties, previews it, and saves it', async ({ page }) => {
+    await stubContentTypes(page, [ARTICLE, THEMED_SITE_TYPE]);
+    const puts = await serveSite(page, [
+        siteEntry({ Name: 'barakocms.com', Colors: { surface: '#FFFFFF', hairline: '#E7E8F1' }, Tokens: { gap: '12px' } }),
+    ]);
+
+    await page.goto('/site/recipes');
+    await page.getByRole('button', { name: 'Add recipe' }).click();
+    await page.getByRole('textbox', { name: 'Recipe 1 name' }).fill('card');
+    await page.getByRole('textbox', { name: 'Recipe 1 classes (optional)' }).fill('lift');
+
+    const add = page.getByRole('button', { name: 'Add a property to recipe 1' });
+    await add.click();
+    await page.getByRole('combobox', { name: 'Recipe 1 property 1', exact: true }).selectOption('padding');
+    await page.getByRole('combobox', { name: 'Recipe 1 property 1 value' }).fill('22px 24px');
+    await add.click();
+    await page.getByRole('combobox', { name: 'Recipe 1 property 2', exact: true }).selectOption('border');
+    await page.getByRole('combobox', { name: 'Recipe 1 property 2 value' }).fill('1px solid {colors.hairline}');
+    await add.click();
+    await page.getByRole('combobox', { name: 'Recipe 1 property 3', exact: true }).selectOption('gap');
+    await page.getByRole('combobox', { name: 'Recipe 1 property 3 value' }).fill('{gap}');
+
+    const preview = page.getByTestId('recipe-preview');
+    await expect(preview).toHaveCSS('padding', '22px 24px');
+    await expect(preview).toHaveCSS('border-top-color', 'rgb(231, 232, 241)');
+    await expect(preview).toHaveCSS('row-gap', '12px');
+
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect.poll(() => puts.length).toBe(1);
+    expect(puts[0]).toMatchObject({
+        data: {
+            Name: 'barakocms.com',
+            Tokens: { gap: '12px' },
+            StyleRecipes: {
+                card: { class: 'lift', style: { padding: '22px 24px', border: '1px solid {colors.hairline}', gap: '{gap}' } },
+            },
+        },
+    });
+});
+
+test('Style recipes refuses a value that could load something, and warns about a name it cannot resolve', async ({ page }) => {
+    await stubContentTypes(page, [ARTICLE, THEMED_SITE_TYPE]);
+    await serveSite(page, [
+        siteEntry({ Name: 'barakocms.com', StyleRecipes: { card: { style: { background: '{colors.surface}' } } } }),
+    ]);
+
+    await page.goto('/site/recipes');
+    const value = page.getByRole('combobox', { name: 'Recipe 1 property 1 value' });
+    await expect(value).toHaveValue('{colors.surface}');
+
+    await value.fill('url(https://evil.example/x.png)');
+    await expect(page.getByText('The site refuses this value.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+    await value.fill('{brand}');
+    await expect(page.getByText('{brand} is not in these settings.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+});

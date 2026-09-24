@@ -161,6 +161,13 @@ describe('the site type in the rail', () => {
         expect(activeNavHref(hrefs, '/site/theme')).toBe('/site/theme');
         expect(breadcrumbsFor('/site/theme').map((c) => c.title)).toEqual(['Site', 'Theme']);
     });
+
+    it('lists Style recipes beside Theme, for the same roles', () => {
+        const hrefs = (roles: string[]) => visibleGroups(NAV_GROUPS, roles).flatMap((g) => g.items.map((i) => i.href));
+        expect(hrefs(['Admin'])).toContain('/site/recipes');
+        expect(hrefs(['User'])).not.toContain('/site/recipes');
+        expect(breadcrumbsFor('/site/recipes').map((c) => c.title)).toEqual(['Site', 'Style recipes']);
+    });
 });
 
 describe('single-entry types in the rail', () => {

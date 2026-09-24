@@ -12,6 +12,9 @@ import { IconChevronDown, IconChevronRight, IconMore, IconPlus, IconTrash } from
 import { useBlockSchema, type BlockSchemaState } from '@/hooks/use-block-schema';
 import { useSchemas } from '@/hooks/use-schemas';
 import { usePresets } from '@/hooks/use-presets';
+import { useSiteEntry } from '@/hooks/use-site';
+import { RECIPES_FIELD, recipeNames } from '@/lib/recipes';
+import { TONES_FIELD, toneNames, withTones } from '@/lib/theme-tokens';
 import { SaveConflictError } from '@/lib/concurrent-save';
 import { idPart, PropField, type PropContext } from '@/components/content/block-props';
 import { bindingProblems, scopesFor, type BindingScope } from '@/lib/binding-scopes';
@@ -67,6 +70,8 @@ interface EditorSite {
     presets: BlockPreset[];
     savePreset: ((preset: BlockPreset) => Promise<void>) | null;
     presetNote?: string;
+    /** The style recipes the tenant's settings name, offered by every `recipe` field. */
+    recipes: string[];
 }
 
 const NO_SITE: EditorSite = {
@@ -75,6 +80,7 @@ const NO_SITE: EditorSite = {
     typeNamed: () => undefined,
     presets: [],
     savePreset: null,
+    recipes: [],
 };
 
 /** Where one block sits, which is what decides the scopes its props can bind to. */
@@ -253,6 +259,8 @@ function WithSiteData({
 }) {
     const schemas = useSchemas();
     const presets = usePresets();
+    const entry = useSiteEntry();
+    const settings = entry.kind === 'entry' ? entry.entry.data : {};
     const types = schemas.data ?? [];
     const typeNamed = (name: string) => types.find((t) => t.name.toLowerCase() === name.toLowerCase());
 
@@ -265,8 +273,9 @@ function WithSiteData({
         presets: presets.presets,
         savePreset: presets.save,
         presetNote: presets.reason,
+        recipes: recipeNames(settings[RECIPES_FIELD]),
     };
-    return children(site, withPresets(schema, presets.presets));
+    return children(site, withTones(withPresets(schema, presets.presets), toneNames(settings[TONES_FIELD])));
 }
 
 function Editor({
@@ -703,7 +712,14 @@ function BlockFields({
     const values = propsOf(item);
     const declared = new Set(type.fields.map((f) => f.name));
     const undeclared = Object.keys(values).filter((k) => !declared.has(k));
-    const props: PropContext = { schema: ctx.schema, form: ctx.form, scopes, formats: ctx.site.formats, announce: ctx.announce };
+    const props: PropContext = {
+        schema: ctx.schema,
+        form: ctx.form,
+        scopes,
+        formats: ctx.site.formats,
+        announce: ctx.announce,
+        recipes: ctx.site.recipes,
+    };
 
     return (
         <>
