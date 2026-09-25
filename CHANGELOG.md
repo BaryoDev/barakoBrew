@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-25
+
+**Speaks API contracts 1 to 4, which covers barakoCMS 4.4.0.** That release keeps the contract
+at 4. Limiting an API key to content types needs 4.4.0; against an older API the control stays hidden.
+
 ### Added
 
 - **Tokens, tones and style recipes.** The Theme screen edits `Tokens` (named colours, lengths and
@@ -492,7 +497,8 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.5.0
 [1.4.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.4.0
 [1.3.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.3.0
 [1.2.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.2.0
