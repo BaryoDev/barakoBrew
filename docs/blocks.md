@@ -8,7 +8,7 @@ from it, so it offers exactly the blocks that site can show and knows nothing el
 ## Turning it on
 
 Set `NEXT_PUBLIC_PRESS_URL` on the console to the site's address, for example
-`https://rckoronadal.org`. Like `NEXT_PUBLIC_API_URL` it is read at container start, so no rebuild.
+`https://www.example.com`. Like `NEXT_PUBLIC_API_URL` it is read at container start, so no rebuild.
 
 The console fetches `{NEXT_PUBLIC_PRESS_URL}/api/blocks` from the browser, without the session. The
 site has to answer that request from the console's origin: either the console is served from the

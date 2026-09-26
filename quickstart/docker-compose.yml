@@ -65,6 +65,10 @@ services:
     environment:
       # Where the browser reaches the API. Read at container start, so repointing is a restart.
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:${API_PORT:-5005}}
+      # The barakoPress site that renders the pages. Unset leaves a page's Blocks field as JSON.
+      NEXT_PUBLIC_PRESS_URL: ${PUBLIC_PRESS_URL:-}
+      # A sub-path such as /cms to serve the console under. Unset serves the domain root.
+      BARAKO_BASE_PATH: ${CONSOLE_BASE_PATH:-}
 
 volumes:
   pgdata:

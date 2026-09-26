@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **The README and quickstart say what is true at 1.5.0.** The README has a table of which barakoCMS
+  releases each console accepts and which contract each release sends, a configuration reference,
+  and the rail's screens. The quickstart pins barakoCMS 4.4.1 with console 1.5.0, sets a sub-path with
+  `CONSOLE_BASE_PATH` on the published image, passes `PUBLIC_PRESS_URL` through, and runs `db-assert`
+  before an upgrade. (#183)
+
 ## [1.5.0] - 2026-09-25
 
 **Speaks API contracts 1 to 4, which covers barakoCMS 4.4.0.** That release keeps the contract
@@ -47,6 +55,8 @@ at 4. Limiting an API key to content types needs 4.4.0; against an older API the
   the types, the console revokes that key before it can be copied and says why. (#184)
 
 ## [1.4.0] - 2026-09-21
+
+**Speaks API contracts 1 to 4, which covers barakoCMS 4.3.0.** That release keeps the contract at 4.
 
 ### Added
 
