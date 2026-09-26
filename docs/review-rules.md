@@ -1,6 +1,6 @@
 # Review rules
 
-Read by the adversarial-review skill (arnelirobles/lean-agent-method) before any code. Each rule is answered yes or no with a line. AGENTS.md is the coding standard; these are the questions reviews keep needing.
+Read by the adversarial-review skill (arnelirobles/lean-agent) before any code. Each rule is answered yes or no with a line. AGENTS.md is the coding standard; these are the questions reviews keep needing.
 
 ## Contract with barakoCMS
 

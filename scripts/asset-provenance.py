@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail the build when an image carries provenance or identity metadata.
 
-Vendored from https://github.com/arnelirobles/lean-agent-method (MIT), section 9. Kept as a
+Vendored from https://github.com/arnelirobles/lean-agent (MIT), section 9. Kept as a
 copy rather than a dependency because a check that can fail to install is a check that can
 be skipped.
 
