@@ -175,3 +175,17 @@ Concrete claims backed by tests or code.
 - Every request goes through `src/lib/api.ts`. Do not build a second client with its own token
   handling.
 - Dependencies: `npm audit` runs in CI and fails on Critical or High.
+
+## 10. How work is done here
+
+This repository follows the [lean agent method](https://github.com/arnelirobles/lean-agent-method).
+
+- Search open issues before filing. If one covers the area, add to its Covers list instead.
+- One ticket is one agent pass, filed with the Agent-ready template: Goal, Where, Covers, Done
+  when, Risks, Constraints, Out of scope.
+- Scripts, not instructions: run `scripts/preflight.sh` (with `--e2e` or `--smoke` when the change
+  reaches them), not the one gate you have in mind. Anything reasoned through twice becomes a script.
+- A bug fix ships with a test that failed before the fix (section 4).
+- Every change gets an adversarial review by a separate agent, and findings go back to the agent
+  that wrote the change.
+- After a batch merges, run the retro and propose method changes with evidence.
