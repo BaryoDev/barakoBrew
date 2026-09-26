@@ -6,7 +6,7 @@ import { smokeApiUrl } from './api-url';
  * What the Site, Theme and tenant domain screens read, off the real server.
  *
  * The site blueprint arrived after barakoCMS 4.1.0, so against that release the blueprint check
- * skips rather than fails. The nightly runs master, where it has to pass.
+ * skips rather than fails. The release pull requests pin and the nightly's master both have it.
  */
 
 const API = smokeApiUrl();

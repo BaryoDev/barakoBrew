@@ -15,8 +15,8 @@ import { smokeApiUrl } from './api-url';
  * filed about, so this creates a link at whatever maximum the console would offer and fails if the
  * API refuses it.
  *
- * Share links arrived after barakoCMS 4.1.0, so against the release pull requests pin this skips.
- * The nightly runs master, where it has to pass.
+ * Share links arrived after barakoCMS 4.1.0, so against 4.1.0 or older this skips. The
+ * release pull requests pin and the nightly's master both have them, so both have to pass.
  */
 
 const API = smokeApiUrl();
