@@ -178,7 +178,7 @@ Concrete claims backed by tests or code.
 
 ## 10. How work is done here
 
-This repository follows the [lean agent method](https://github.com/arnelirobles/lean-agent-method).
+This repository follows the [lean agent](https://github.com/arnelirobles/lean-agent).
 
 - Search open issues before filing. If one covers the area, add to its Covers list instead.
 - One ticket is one agent pass, filed with the Agent-ready template: Goal, Where, Covers, Done
