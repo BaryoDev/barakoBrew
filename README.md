@@ -68,20 +68,59 @@ second or so of startup; the gain is one published image for every site.
 `--build-arg NEXT_BASE_PATH=/barakocms` still bakes a path in at build time for anyone who wants
 that. An image built that way ignores `BARAKO_BASE_PATH`, and says so in its startup log.
 
+## Which barakoCMS it works with
+
+The console reads `X-Api-Contract-Version` from every API response and refuses to run against a
+contract it does not speak, with a screen naming both sides. The contract is a number separate from
+the barakoCMS version, and it moves only when the API's HTTP surface changes in a way that breaks a
+consumer.
+
+| barakoBrew | Contracts it speaks | barakoCMS releases it accepts |
+| --- | --- | --- |
+| 1.3.0, 1.4.0, 1.5.0 | 1 to 4 | 4.0.1 to 4.4.1 |
+| 1.1.0, 1.2.0 | 1 to 3 | 4.0.1, 4.1.0 |
+| 1.0.0 | 1 | 4.0.1 |
+
+| barakoCMS | Contract it sends |
+| --- | --- |
+| 4.0.0, 4.0.1 | 1 |
+| 4.1.0 | 3 |
+| 4.2.0, 4.2.1, 4.3.0, 4.4.0, 4.4.1 | 4 |
+
+No release sent contract 2: 4.1.0 moved from 1 to 3. barakoCMS 4.0.0 sends the header without
+letting a browser read it, so a console served from another origin cannot see it and stops; use
+4.0.1 or later. Accepting a contract does not mean every screen works on the oldest release that
+sends it: limiting an API key to content types needs barakoCMS 4.4.0, and against an older API that
+control stays hidden. `CHANGELOG.md` states the API range for each console release.
+
+A console speaks both the old and the new contract across a move, so upgrade the console before the
+API.
+
+## Configuration
+
+| Setting | Read | What it does |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | container start | Where the browser reaches the API. Default `http://localhost:5005`. |
+| `NEXT_PUBLIC_PRESS_URL` | container start | The barakoPress site that renders the pages. With it set, a `Blocks` field is edited as blocks; without it, that field is a JSON editor. See [`docs/blocks.md`](docs/blocks.md). |
+| `BARAKO_BASE_PATH` | container start | The sub-path the console is served under, such as `/barakocms`. Unset serves the domain root. See [Serving under a sub-path](#serving-under-a-sub-path). |
+| `NEXT_BASE_PATH` | build (`--build-arg`) | Bakes a sub-path into the build. An image built with it ignores `BARAKO_BASE_PATH`. |
+| `BARAKO_VERSION` | build (`--build-arg`) | The version the About dialog shows. Published images get their tag; a local build says `0.0.0-dev`. |
+
+`entrypoint.sh` writes every `NEXT_PUBLIC_*` variable into `public/env-config.js`, which the browser
+loads, so none of them may hold a secret.
+
 ## What it covers
 
-| Area | Capabilities |
+The rail groups the screens as below. Each screen is shown only to the roles that can use it, and a
+module's screen only when `GET /api/modules` reports that module running.
+
+| Group | Screens |
 | --- | --- |
-| Overview | Live stats, latest entries, health summary, quick actions, command palette |
-| Content types | Browse and define schemas with the API's typed fields |
-| Entries | Create, edit, publish, archive, filter by type, paginate, version history with rollback |
-| Workflows | Trigger builder, conditions, actions from whatever the API registers (barakoCMS ships Email, SMS, Webhook, Request, CreateTask, UpdateField and Conditional), template variables, validation, dry run, execution logs and runs |
-| Connectors | Outbound requests and the connectors screen |
-| Users | Assign and remove roles and groups inline |
-| Roles | Full CRUD with a per-content-type Create/Read/Update/Delete permission matrix |
-| Groups | Full CRUD plus member management |
-| Settings | Runtime toggles grouped by category, devices, portability |
-| Health | Live health checks, API metrics, Kubernetes status |
+| Main | Overview (stats, latest entries, health summary, command palette). Entries (create, edit, publish, archive, filter, version history with rollback). Content types (opening one opens its entries, fields are a second link; cards or list, search, sort). Pages (the page tree: drag or move pages, the navigation flag, slugs, redirects after a move). Workflows (trigger builder, conditions, actions the API registers, dry run). Queries (saved fetches a workflow can use) |
+| Site | Site (tenant name, logo, header and footer links, site mode, holding page, share links). Theme (colour slots, fonts, radii, widths, tokens and tones, with a contrast check). Style recipes |
+| Access | Tenants and their domains. Users. Roles with a per-content-type permission matrix. Groups and members. API keys, with scopes, optionally limited to content types |
+| Modules | Accounting, Analytics, Email events, Feature flags, Files (uploads in the background, image preview and viewer), PWA installs |
+| System | Audit log, Errors, Workflow runs, Health, Email, Security (two-factor), Devices, Export and import, Import a spreadsheet, Connectors, Outbound requests, Settings |
 
 Sessions ride the API's rotating refresh tokens: the 15-minute access token renews automatically,
 and a single in-flight refresh is shared across concurrent requests so the backend's replay
@@ -154,6 +193,7 @@ src/
   hooks/                # TanStack Query hooks per feature area
   lib/api.ts            # axios client, token store, refresh rotation, pagination types
   types/                # API models mirroring the backend
+packages/content-form/  # the content form as its own package, MIT
 e2e/                    # Playwright, mocked API
 smoke/                  # Playwright, real API
 quickstart/             # docker compose for Postgres + API + console

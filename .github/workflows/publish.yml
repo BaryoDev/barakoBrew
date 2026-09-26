@@ -119,6 +119,11 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/BaryoDev/barakoBrew
             org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.title=barakoBrew
+            org.opencontainers.image.description=The console for barakoCMS
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.documentation=https://github.com/BaryoDev/barakoBrew#readme
           # Pushed under both names so each repository holds the blobs its manifest list refers to.
           outputs: type=image,"name=ghcr.io/baryodev/barako-brew,ghcr.io/baryodev/barako-admin",push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.arch }}
@@ -203,7 +208,11 @@ jobs:
           fi
           ARGS=""
           for t in $TAGS; do ARGS="$ARGS --tag $IMG:$t"; done
-          docker buildx imagetools create $ARGS $REFS
+          # GHCR shows a multi-architecture package's description from the index, not from the
+          # labels on each image inside it.
+          docker buildx imagetools create $ARGS \
+            --annotation "index:org.opencontainers.image.description=The console for barakoCMS" \
+            $REFS
           # Copied from the new name rather than built again, so both names resolve to one digest.
           for t in $TAGS; do
             docker buildx imagetools create --tag "$OLD:$t" "$IMG:$t"
@@ -340,6 +349,11 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/BaryoDev/barakoBrew
             org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.title=barakoBrew
+            org.opencontainers.image.description=The console for barakoCMS
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.documentation=https://github.com/BaryoDev/barakoBrew#readme
 
   deploy-playground:
     name: Deploy to playground

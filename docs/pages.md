@@ -53,8 +53,10 @@ The slug field is the page type's field of type `slug`.
 
 ## When the tree is not available
 
-- **A 404** from the tree endpoint means the module is not enabled. The screen says so and links to
-  the entries list.
+- **The module is not running.** The screen asks `GET /api/modules` first, and when the Pages module
+  is not listed as enabled it says so and links to the entries list. That list needs SuperAdmin or
+  Admin and an older API does not serve it, so when it cannot be read, a 404 from the tree endpoint
+  means the same thing.
 - **A contract it does not read.** Each body carries `contract`. This console reads contract 1. Any
   other value, or none, lists the pages without nesting and turns moving off.
 - **`truncated`** means the site has more pages than the API reads for one tree (`MaxPages`, 1000 by
