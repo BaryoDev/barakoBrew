@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/hooks/use-files';
 import { useAuth } from '@/hooks/use-auth';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
-import { UPLOAD_RULES, canDeleteFile, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
+import { UPLOAD_RULES, canDeleteFile, contentProblem, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
 import { ImageViewer, isViewableImage } from '@/components/patterns/image-viewer';
 import { BlobImage } from '@/components/patterns/file-image';
@@ -63,14 +63,29 @@ const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
 /** CSS pixels. Up to a 3x screen that is the API's 160 rung, the smallest it makes. */
 const THUMBNAIL_SIZE = 40;
 
-/** One chosen file, with its preview while it is an image and whatever would refuse it. */
-function ChosenFile({ file }: { file: File }) {
-  const problem = uploadProblem(file);
+const UNREADABLE = 'This file could not be read.';
+
+/**
+ * Why the API would refuse each file, reading the first bytes of each: its type and size, and
+ * whether it starts the way that type does. A file that cannot be read refuses only itself.
+ */
+function refusals(files: readonly File[]): Promise<(string | null)[]> {
+  return Promise.all(
+    files.map(async (file) => uploadProblem(file) ?? (await contentProblem(file).catch(() => UNREADABLE))),
+  );
+}
+
+/**
+ * One chosen file, with its preview while it is an image and whatever would refuse it. `refusal` is
+ * undefined while its first bytes are still being read.
+ */
+function ChosenFile({ file, refusal }: { file: File; refusal: string | null | undefined }) {
+  const problem = uploadProblem(file) ?? refusal ?? null;
 
   return (
     <li className="space-y-2">
-      {/* Nothing the API would refuse is drawn, so an SVG is never rendered from a chosen file. */}
-      {problem === null && isViewableImage(file.type) && (
+      {/* Nothing the API would refuse is drawn, so an SVG, or a file whose bytes are not its type, is never rendered. */}
+      {refusal === null && isViewableImage(file.type) && (
         <BlobImage
           blob={file}
           alt={`Preview of ${file.name}`}
@@ -100,13 +115,26 @@ function UploadDialog({
 }) {
   const { add } = useUploads();
   const [files, setFiles] = useState<File[]>([]);
+  const [checked, setChecked] = useState<(string | null)[] | null>(null);
+  const choice = useRef(0);
   const [isPublic, setIsPublic] = useState(false);
 
-  const refused = files.some((file) => uploadProblem(file) !== null);
-  const canUpload = files.length > 0 && !refused;
+  const refused = files.some((file) => uploadProblem(file) !== null) || (checked?.some((p) => p !== null) ?? false);
+  const canUpload = files.length > 0 && checked !== null && !refused;
+
+  function choose(chosen: File[]) {
+    const current = ++choice.current;
+    setFiles(chosen);
+    setChecked(null);
+    void refusals(chosen).then((result) => {
+      if (choice.current === current) setChecked(result);
+    });
+  }
 
   function reset() {
+    choice.current++;
     setFiles([]);
+    setChecked(null);
     setIsPublic(false);
   }
 
@@ -149,12 +177,16 @@ function UploadDialog({
                 type="file"
                 multiple
                 accept="image/png,image/jpeg,image/gif,image/webp,image/avif,application/pdf"
-                onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                onChange={(e) => choose(Array.from(e.target.files ?? []))}
               />
               {files.length > 0 && (
                 <ul className="space-y-3 pt-1">
-                  {files.map((file) => (
-                    <ChosenFile key={`${file.name}:${file.size}:${file.lastModified}`} file={file} />
+                  {files.map((file, i) => (
+                    <ChosenFile
+                      key={`${file.name}:${file.size}:${file.lastModified}`}
+                      file={file}
+                      refusal={checked?.[i]}
+                    />
                   ))}
                 </ul>
               )}
@@ -234,13 +266,13 @@ export default function FilesPage() {
   // Dropped files join the queue as private, the same default the dialog starts with, since a drop
   // has nowhere to answer the public question.
   const queueDropped = useCallback(
-    (dropped: readonly File[]) => {
+    async (dropped: readonly File[]) => {
       if (dropped.length === 0) return;
-      for (const file of dropped) {
-        const problem = uploadProblem(file);
-        if (problem) toast.error(`${file.name}: ${problem}`);
-      }
-      const accepted = dropped.filter((file) => uploadProblem(file) === null);
+      const problems = await refusals(dropped);
+      dropped.forEach((file, i) => {
+        if (problems[i]) toast.error(`${file.name}: ${problems[i]}`);
+      });
+      const accepted = dropped.filter((_, i) => problems[i] === null);
       if (accepted.length === 0) return;
 
       add(accepted.map((file) => ({ file, isPublic: false })));
@@ -271,7 +303,7 @@ export default function FilesPage() {
       if (!carriesFiles(e)) return;
       e.preventDefault();
       setDropping(false);
-      queueDropped(Array.from(e.dataTransfer?.files ?? []));
+      void queueDropped(Array.from(e.dataTransfer?.files ?? []));
     };
 
     window.addEventListener('dragover', over);

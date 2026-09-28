@@ -42,6 +42,11 @@ moved. Which API a console works against is stated per release instead.
 - **Admins get the Tenants screen for its members list.** The rail offers Tenants to Admin as well as
   SuperAdmin. For anyone but a SuperAdmin the screen shows only the members of the current tenant:
   the tenant list and New tenant, which the API answers for SuperAdmin only, are not shown or fetched.
+- **The Files screen checks an upload the way the API now does.** The type has to be exactly PNG,
+  JPEG, GIF, WebP, AVIF or PDF (parameters and case aside), where a type that only started with one
+  used to pass, and the file's first bytes have to match that format. A file that fails says so
+  before it is sent, for example "This file's contents are not a PNG image.", in the upload dialog
+  and for a dropped file. Pairs with BaryoDev/barakoCMS#1032.
 - **The README and quickstart say what is true at 1.5.0.** The README has a table of which barakoCMS
   releases each console accepts and which contract each release sends, a configuration reference,
   and the rail's screens. The quickstart pins barakoCMS 4.4.1 with console 1.5.0, sets a sub-path with
