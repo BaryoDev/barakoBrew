@@ -12,6 +12,7 @@ import {
 } from '@/hooks/use-rbac';
 import { useUserGroups } from '@/hooks/use-user-groups';
 import { apiErrorMessage } from '@/lib/api';
+import { roleChangeErrorMessage } from '@/lib/global-roles';
 import type { User } from '@/types/rbac';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -137,7 +138,7 @@ function MembershipCell({
   const available = options.filter((o) => !assigned.includes(o.id));
 
   const onError = (error: unknown) =>
-    toast.error(apiErrorMessage(error, `The ${kind} could not be changed.`));
+    toast.error(kind === 'role' ? roleChangeErrorMessage(error) : apiErrorMessage(error, 'The group could not be changed.'));
 
   const add = (id: string) => {
     if (kind === 'role') assignRole.mutate({ userId: user.id, roleId: id }, { onError });

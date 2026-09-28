@@ -146,7 +146,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Access',
     items: [
-      { title: 'Tenants', href: '/tenants', icon: IconServer , roles: ['SuperAdmin'] },
+      // Admin for the members list, where a tenant Admin gives roles in their tenant. The tenant list
+      // and New tenant stay SuperAdmin only on the screen itself.
+      { title: 'Tenants', href: '/tenants', icon: IconServer , roles: ['SuperAdmin', 'Admin'] },
       { title: 'Users', href: '/users', icon: IconUsers , roles: ['SuperAdmin'] },
       { title: 'Roles', href: '/roles', icon: IconRoles , roles: ['SuperAdmin'] },
       { title: 'Groups', href: '/user-groups', icon: IconGroups , roles: ['SuperAdmin', 'Admin'] },
