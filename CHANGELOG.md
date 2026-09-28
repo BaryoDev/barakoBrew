@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The markdown preview escapes text after an opening raw tag.** Text written after an opening
+  script, pre, style or textarea tag is now escaped like any other text. A link to `//host` or
+  `/\host`, or one whose destination holds a character reference, is dropped with its words kept. Every
+  preview link that opens a new tab carries `rel="noopener noreferrer"`, relative and anchor links
+  included.
+
 ### Changed
 
 - **The README and quickstart say what is true at 1.5.0.** The README has a table of which barakoCMS
