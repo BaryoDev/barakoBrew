@@ -72,6 +72,17 @@ describe('contentProblem', () => {
         expect(await contentProblem(sample('x.avif', 'image/avif', mp4))).toMatch(/not an AVIF image/);
     });
 
+    it('accepts AVIF with major brand mif1 and avif among the compatible brands', async () => {
+        const mif1 = new Uint8Array([0, 0, 0, 0x1c, ...new TextEncoder().encode('ftypmif1'), 0, 0, 0, 0, ...new TextEncoder().encode('mif1miafavif')]);
+        expect(await contentProblem(sample('x.avif', 'image/avif', mif1))).toBeNull();
+    });
+
+    // Bytes 12 to 16 of the ftyp box are the minor version, not a brand, so avif there proves nothing.
+    it('refuses AVIF whose only avif is in the minor version', async () => {
+        const minor = new Uint8Array([0, 0, 0, 0x18, ...new TextEncoder().encode('ftypmif1avifmif1miaf')]);
+        expect(await contentProblem(sample('x.avif', 'image/avif', minor))).toMatch(/not an AVIF image/);
+    });
+
     it('leaves a type it does not know to uploadProblem', async () => {
         expect(await contentProblem(sample('x.svg', 'image/svg+xml', new TextEncoder().encode('<svg/>')))).toBeNull();
     });

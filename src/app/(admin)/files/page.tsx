@@ -63,12 +63,16 @@ const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
 /** CSS pixels. Up to a 3x screen that is the API's 160 rung, the smallest it makes. */
 const THUMBNAIL_SIZE = 40;
 
+const UNREADABLE = 'This file could not be read.';
+
 /**
  * Why the API would refuse each file, reading the first bytes of each: its type and size, and
- * whether it starts the way that type does.
+ * whether it starts the way that type does. A file that cannot be read refuses only itself.
  */
-async function refusals(files: readonly File[]): Promise<(string | null)[]> {
-  return Promise.all(files.map(async (file) => uploadProblem(file) ?? (await contentProblem(file))));
+function refusals(files: readonly File[]): Promise<(string | null)[]> {
+  return Promise.all(
+    files.map(async (file) => uploadProblem(file) ?? (await contentProblem(file).catch(() => UNREADABLE))),
+  );
 }
 
 /**
@@ -122,14 +126,9 @@ function UploadDialog({
     const current = ++choice.current;
     setFiles(chosen);
     setChecked(null);
-    refusals(chosen).then(
-      (result) => {
-        if (choice.current === current) setChecked(result);
-      },
-      () => {
-        if (choice.current === current) setChecked(chosen.map(() => 'This file could not be read.'));
-      },
-    );
+    void refusals(chosen).then((result) => {
+      if (choice.current === current) setChecked(result);
+    });
   }
 
   function reset() {
@@ -269,7 +268,7 @@ export default function FilesPage() {
   const queueDropped = useCallback(
     async (dropped: readonly File[]) => {
       if (dropped.length === 0) return;
-      const problems = await refusals(dropped).catch(() => dropped.map(() => 'This file could not be read.'));
+      const problems = await refusals(dropped);
       dropped.forEach((file, i) => {
         if (problems[i]) toast.error(`${file.name}: ${problems[i]}`);
       });

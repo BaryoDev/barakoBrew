@@ -227,6 +227,26 @@ async function clickUpload() {
 
 const HTML = new TextEncoder().encode('<html><script>1</script></html>');
 
+/** A PNG whose first bytes arrive when `read` is called, or never when it is not. */
+function slowPng(name: string) {
+    const file = validFile(name, 'image/png');
+    let read: ((bytes: Uint8Array) => void) | undefined;
+    const pending = new Promise<ArrayBuffer>((resolve) => {
+        read = (bytes) => resolve(bytes.buffer as ArrayBuffer);
+    });
+    Object.defineProperty(file, 'slice', { value: () => ({ arrayBuffer: () => pending }) });
+    return { file, read: (bytes: Uint8Array) => read!(bytes) };
+}
+
+/** A PNG the browser cannot read. */
+function unreadablePng(name: string) {
+    const file = validFile(name, 'image/png');
+    Object.defineProperty(file, 'slice', {
+        value: () => ({ arrayBuffer: () => Promise.reject(new DOMException('gone', 'NotReadableError')) }),
+    });
+    return file;
+}
+
 describe('uploading', () => {
     it('states the size and type rules before a file is chosen', async () => {
         await openUpload();
@@ -262,6 +282,31 @@ describe('uploading', () => {
         expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled();
         expect(screen.queryByRole('img', { name: 'Preview of photo.png' })).not.toBeInTheDocument();
         expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('drops the check of an earlier choice that finishes after a newer one', async () => {
+        const input = await openUpload();
+        const first = slowPng('first.png');
+        choose(input, first.file);
+        choose(input, validFile('second.png', 'image/png'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Upload' })).toBeEnabled());
+
+        await act(async () => first.read(HTML));
+
+        expect(screen.getByText(/second\.png/)).toBeInTheDocument();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Upload' })).toBeEnabled();
+    });
+
+    it('refuses only the file that could not be read', async () => {
+        const input = await openUpload();
+        fireEvent.change(input, { target: { files: [unreadablePng('broken.png'), validFile('fine.png', 'image/png')] } });
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('This file could not be read.');
+        expect(screen.getAllByRole('alert')).toHaveLength(1);
+        expect(alert.closest('li')).toHaveTextContent('broken.png');
+        expect(await screen.findByRole('img', { name: 'Preview of fine.png' })).toBeInTheDocument();
     });
 
     it('shows the 400 the server gives for a file it refuses', async () => {
@@ -544,6 +589,24 @@ describe('uploading in the background', () => {
         expect(toast.error).toHaveBeenCalledWith(
             expect.stringContaining('logo.svg: Only PNG, JPEG, GIF, WebP, AVIF and PDF')
         );
+    });
+
+    it('refuses a dropped file that could not be read, and queues the rest', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: pageOf([MINE_PUBLIC]) });
+        vi.mocked(api.post).mockImplementation(() => new Promise(() => {}));
+        renderPage();
+        await screen.findByText('cover.png');
+
+        fireEvent.drop(screen.getByRole('heading', { name: 'Files' }), {
+            dataTransfer: { types: ['Files'], files: [unreadablePng('broken.png'), validFile('good.png', 'image/png')] },
+        });
+
+        const tray = await screen.findByRole('region', { name: 'Uploads' });
+        const rows = within(tray).getAllByRole('listitem');
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toHaveTextContent('good.png');
+        expect(toast.error).toHaveBeenCalledTimes(1);
+        expect(toast.error).toHaveBeenCalledWith('broken.png: This file could not be read.');
     });
 
     it('refuses a dropped file whose contents are not the type it claims, and queues the rest', async () => {
