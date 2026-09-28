@@ -107,7 +107,8 @@ API.
 | `BARAKO_VERSION` | build (`--build-arg`) | The version the About dialog shows. Published images get their tag; a local build says `0.0.0-dev`. |
 
 `entrypoint.sh` writes every `NEXT_PUBLIC_*` variable into `public/env-config.js`, which the browser
-loads, so none of them may hold a secret.
+loads, so none of them may hold a secret. Only a name that starts with `NEXT_PUBLIC_` and holds
+letters, digits and underscores is written, and each value is written as a JSON string.
 
 ## What it covers
 
