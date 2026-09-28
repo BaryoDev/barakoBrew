@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`env-config.js` carries only variables whose name starts with `NEXT_PUBLIC_`, and each value is
+  a JSON string.** A variable whose name or value only contained `NEXT_PUBLIC_` used to be written
+  too, and a quote, backslash or newline in a value broke the file. Newlines are kept as `\n`. A name
+  starting `NEXT_PUBLIC_` with characters other than letters, digits and underscores is left out,
+  with a line on stderr. `scripts/check-env-config.sh` proves both, in preflight and CI.
+
 ### Changed
 
 - **The README and quickstart say what is true at 1.5.0.** The README has a table of which barakoCMS

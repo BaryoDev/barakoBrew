@@ -52,18 +52,29 @@ elif [ -n "$base_path" ]; then
   echo "entrypoint: BARAKO_BASE_PATH is set to $base_path but this image has no runtime base path to write it into. It was built with NEXT_BASE_PATH baked in." >&2
 fi
 
-# Generate env-config.js from environment variables
-# We use a relative path to 'public/env-config.js' so it works in different environments
-echo "window._env_ = {" > ./public/env-config.js
-
-# Only include variables starting with NEXT_PUBLIC_
-printenv | grep NEXT_PUBLIC_ | while read -r line; do
-  key=$(echo $line | cut -d '=' -f 1)
-  value=$(echo $line | cut -d '=' -f 2-)
-  echo "  $key: \"$value\"," >> ./public/env-config.js
-done
-
-echo "};" >> ./public/env-config.js
+# public/env-config.js hands the NEXT_PUBLIC_ variables to the browser as window._env_. Only a name
+# that starts with NEXT_PUBLIC_ is read, never a value, so a secret whose name or value merely
+# contains the prefix stays on the server. Each value is written as a JSON string with "<" escaped,
+# so a quote, backslash, newline or closing script tag stays inside the string it belongs to.
+# Newlines survive as \n. A name with characters that cannot be a property name is left out, and
+# said so, rather than breaking the file.
+node -e '
+const fs = require("fs");
+const literal = (v) => JSON.stringify(v)
+  .replace(/</g, "\\u003c")
+  .replace(/\u2028/g, "\\u2028")
+  .replace(/\u2029/g, "\\u2029");
+let out = "window._env_ = {\n";
+for (const name of Object.keys(process.env)) {
+  if (!name.startsWith("NEXT_PUBLIC_")) continue;
+  if (!/^NEXT_PUBLIC_[A-Za-z0-9_]*$/.test(name)) {
+    console.error("entrypoint: left " + JSON.stringify(name) + " out of env-config.js, a name may hold only letters, digits and underscores");
+    continue;
+  }
+  out += "  " + name + ": " + literal(process.env[name]) + ",\n";
+}
+fs.writeFileSync("./public/env-config.js", out + "};\n");
+'
 
 # Start the application
 exec "$@"
