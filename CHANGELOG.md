@@ -16,6 +16,18 @@ moved. Which API a console works against is stated per release instead.
   `/\host`, or one whose destination holds a character reference, is dropped with its words kept. Every
   preview link that opens a new tab carries `rel="noopener noreferrer"`, relative and anchor links
   included.
+- **`env-config.js` carries only variables whose name starts with `NEXT_PUBLIC_`, and each value is
+  a JSON string.** A variable whose name or value only contained `NEXT_PUBLIC_` used to be written
+  too, and a quote, backslash or newline in a value broke the file. Newlines are kept as `\n`. A name
+  starting `NEXT_PUBLIC_` with characters other than letters, digits and underscores is left out,
+  with a line on stderr. `scripts/check-env-config.sh` proves both, in preflight and CI.
+
+- **Signing out revokes the session on the server even when the access token has expired.** With no
+  access token, or an expired one, sign-out refreshes from the cookie once and then calls logout with
+  the new token. A 401 on a token that looked live gets the same single retry. If the server still
+  does not confirm, this tab is signed out anyway and a notice says the server sign-out could not be
+  confirmed. From sign-out until the next sign-in, nothing refreshes on its own, so a query refetching
+  after sign-out can no longer sign the tab back in.
 
 ### Changed
 
@@ -35,15 +47,6 @@ moved. Which API a console works against is stated per release instead.
   and the rail's screens. The quickstart pins barakoCMS 4.4.1 with console 1.5.0, sets a sub-path with
   `CONSOLE_BASE_PATH` on the published image, passes `PUBLIC_PRESS_URL` through, and runs `db-assert`
   before an upgrade. (#183)
-
-### Fixed
-
-- **Signing out revokes the session on the server even when the access token has expired.** With no
-  access token, or an expired one, sign-out refreshes from the cookie once and then calls logout with
-  the new token. A 401 on a token that looked live gets the same single retry. If the server still
-  does not confirm, this tab is signed out anyway and a notice says the server sign-out could not be
-  confirmed. From sign-out until the next sign-in, nothing refreshes on its own, so a query refetching
-  after sign-out can no longer sign the tab back in.
 
 ## [1.5.0] - 2026-09-25
 

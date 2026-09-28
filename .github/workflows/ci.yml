@@ -74,6 +74,13 @@ jobs:
         if: '!cancelled()'
         run: python3 scripts/asset-provenance.py .
 
+      # entrypoint.sh builds env-config.js, a script every page loads, from the container's
+      # environment. This runs it with names and values meant to leak or break out, and reads the
+      # file back as JavaScript.
+      - name: env-config.js carries only NEXT_PUBLIC_ variables, encoded
+        if: '!cancelled()'
+        run: bash scripts/check-env-config.sh
+
   audit:
     name: Audit dependencies
     if: github.event_name != 'schedule'
