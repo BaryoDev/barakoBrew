@@ -11,6 +11,7 @@ import {
   type Tenant,
 } from '@/hooks/use-tenants';
 import { apiErrorMessage } from '@/lib/api';
+import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -260,7 +261,10 @@ function DomainsForm({ tenant, onDone }: { tenant: Tenant; onDone: () => void })
 }
 
 export default function TenantsPage() {
-  const { data: tenants, isLoading, isError, refetch } = useTenants();
+  // Listing and creating tenants are SuperAdmin acts. A tenant Admin comes here for the members list.
+  const { user } = useAuth();
+  const platformAdmin = user?.roles.includes('SuperAdmin') ?? false;
+  const { data: tenants, isLoading, isError, refetch } = useTenants({ enabled: platformAdmin });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDomains, setEditingDomains] = useState<Tenant | null>(null);
 
@@ -276,10 +280,10 @@ export default function TenantsPage() {
       <PageHeader
         title="Tenants"
         description="Isolated spaces on this deployment — each with its own content, users and data."
-        actions={newButton}
+        actions={platformAdmin ? newButton : undefined}
       />
 
-      {isLoading ? (
+      {!platformAdmin ? null : isLoading ? (
         <TableSkeleton />
       ) : isError ? (
         <ErrorState entity="tenants" onRetry={() => refetch()} />

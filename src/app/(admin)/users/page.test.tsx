@@ -69,10 +69,10 @@ beforeEach(() => {
 });
 
 /**
- * `/api/users/{id}/roles` changes the roles a user holds in every tenant, and from API contract 5 the
- * server refuses it to anyone whose capability comes only from a tenant membership. The token carries
- * effective roles, so an Admin in it may be a tenant Admin. SuperAdmin is never a membership role, so
- * it is the one role that proves the caller is a platform admin.
+ * `/api/users/{id}/roles` changes the roles a user holds in every tenant. From API contract 5 the
+ * server refuses it when the caller's capability comes only from a tenant membership. The token
+ * carries effective roles, so a global Admin and a tenant Admin look the same here: the controls
+ * stay, the API decides, and the toast says where a tenant Admin should go instead.
  */
 describe('global role controls on the Users screen', () => {
     it('are offered to a SuperAdmin', async () => {
@@ -81,19 +81,14 @@ describe('global role controls on the Users screen', () => {
 
         expect(screen.getByRole('button', { name: 'Remove role Editor from ana' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Add role to ana' })).toBeInTheDocument();
-        expect(screen.queryByText(/give roles inside a tenant/i)).not.toBeInTheDocument();
     });
 
-    it('are not offered to a caller who is not a platform admin', async () => {
+    it('are offered to an Admin, since a global Admin may still use them', async () => {
         session.user.roles = ['Admin'];
         await renderPage();
 
-        expect(screen.getByText('Editor')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Remove role Editor from ana' })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: 'Add role to ana' })).not.toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Add group to ana' })).toBeInTheDocument();
-        expect(screen.getByText(/give roles inside a tenant/i)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /tenants/i })).toHaveAttribute('href', '/tenants');
+        expect(screen.getByRole('button', { name: 'Remove role Editor from ana' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Add role to ana' })).toBeInTheDocument();
     });
 });
 
@@ -137,6 +132,8 @@ describe('when the API refuses a role change', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Remove role Editor from ana' }));
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-        expect(vi.mocked(toast.error).mock.calls[0][0]).toMatch(/only a platform administrator/i);
+        const message = vi.mocked(toast.error).mock.calls[0][0] as string;
+        expect(message).toMatch(/only a platform administrator/i);
+        expect(message).toMatch(/members on the Tenants screen/i);
     });
 });
