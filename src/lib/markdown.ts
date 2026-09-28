@@ -25,6 +25,9 @@ export function isSafeHref(href: string): boolean {
     const trimmed = href.trim();
     // A browser drops tabs and newlines inside a URL before reading it, so check what it will read.
     const read = trimmed.replace(/[\t\n\r]/g, '');
+    // A character reference is decoded again wherever the href is read as HTML, so /&#47;host can
+    // become //host after this check. A real destination does not need one.
+    if (/&(#|[A-Za-z][A-Za-z0-9]*;)/.test(read)) return false;
     if (read.startsWith('#')) return true;
     // A path on this site. Two slashes, or a slash and a backslash, name another host instead.
     if (read.startsWith('/')) return !/^\/[/\\]/.test(read);

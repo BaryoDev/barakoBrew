@@ -12,8 +12,8 @@ moved. Which API a console works against is stated per release instead.
 ### Fixed
 
 - **The markdown preview escapes text after an opening raw tag.** Text written after an opening
-  script, pre, style or textarea tag is now escaped like any other text, and a link to `//host` or
-  `/\host` is dropped with its words kept, since it leaves the site while looking relative. Every
+  script, pre, style or textarea tag is now escaped like any other text. A link to `//host` or
+  `/\host`, or one whose destination holds a character reference, is dropped with its words kept. Every
   preview link that opens a new tab carries `rel="noopener noreferrer"`, relative and anchor links
   included.
 

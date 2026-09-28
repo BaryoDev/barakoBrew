@@ -75,6 +75,9 @@ describe('renderMarkdown treats the source as untrusted', () => {
             'java&#115;cript:alert(1)',
             'JaVaScRiPt:alert(1)',
             'javascript&colon;alert(1)',
+            '/&#47;evil.example/x',
+            '/&sol;evil.example/x',
+            'https://example.com/&#x2f;x',
         ]) {
             expect(isSafeHref(href), href).toBe(false);
         }
@@ -91,6 +94,8 @@ describe('renderMarkdown treats the source as untrusted', () => {
 
     it('escapes HTML that follows an opening script, pre, style or textarea tag', () => {
         const payloads = [
+            'x <script><img src=x onerror=alert(1)',
+            'x <pre><img src=x onerror=alert(1)',
             'a <script> <img src=x onerror=alert(1)//',
             'a <pre> b\n\n<img src=x onerror=alert(1)//',
             '- x <script>\n- <img src=x onerror=alert(1) z',
