@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
 import type { StoredFile } from '@/hooks/use-files';
 import { MAX_UPLOAD_BYTES } from '@/lib/files';
+import { sample, validFile } from '@/test/file-samples';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -217,6 +218,15 @@ function choose(input: HTMLElement, chosen: File) {
     fireEvent.change(input, { target: { files: [chosen] } });
 }
 
+/** Upload stays disabled while the chosen files' first bytes are read, which is not instant. */
+async function clickUpload() {
+    const button = screen.getByRole('button', { name: 'Upload' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+}
+
+const HTML = new TextEncoder().encode('<html><script>1</script></html>');
+
 describe('uploading', () => {
     it('states the size and type rules before a file is chosen', async () => {
         await openUpload();
@@ -244,6 +254,32 @@ describe('uploading', () => {
         expect(objectUrls.created).toHaveLength(0);
     });
 
+    it('refuses a file whose contents are not the type it claims, without sending it', async () => {
+        const input = await openUpload();
+        choose(input, sample('photo.png', 'image/png', HTML));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent("This file's contents are not a PNG image.");
+        expect(screen.getByRole('button', { name: 'Upload' })).toBeDisabled();
+        expect(screen.queryByRole('img', { name: 'Preview of photo.png' })).not.toBeInTheDocument();
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('shows the 400 the server gives for a file it refuses', async () => {
+        vi.mocked(api.post).mockRejectedValue(
+            httpError(400, {
+                status: 400,
+                title: 'One or more validation errors occurred.',
+                errors: [{ name: 'generalErrors', reason: "The file's content is not image/png." }],
+            })
+        );
+        const input = await openUpload();
+        choose(input, validFile('photo.png', 'image/png'));
+        await clickUpload();
+
+        const tray = await screen.findByRole('region', { name: 'Uploads' });
+        expect(await within(tray).findByRole('alert')).toHaveTextContent("The file's content is not image/png.");
+    });
+
     it('shows the reason the server gave in the tray, with a way to retry it', async () => {
         vi.mocked(api.post).mockRejectedValue(
             httpError(422, {
@@ -252,8 +288,8 @@ describe('uploading', () => {
             })
         );
         const input = await openUpload();
-        choose(input, new File(['x'], 'photo.png', { type: 'image/png' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+        choose(input, validFile('photo.png', 'image/png'));
+        await clickUpload();
 
         const tray = await screen.findByRole('region', { name: 'Uploads' });
         expect(await within(tray).findByRole('alert')).toHaveTextContent(
@@ -305,7 +341,7 @@ describe('deleting', () => {
 describe('previewing before upload', () => {
     it('shows the chosen image, and releases its object URL when the dialog closes', async () => {
         const input = await openUpload();
-        choose(input, new File(['x'], 'photo.png', { type: 'image/png' }));
+        choose(input, validFile('photo.png', 'image/png'));
 
         const preview = await screen.findByRole('img', { name: 'Preview of photo.png' });
         expect(preview).toHaveAttribute('src', 'blob:mock/1');
@@ -319,10 +355,10 @@ describe('previewing before upload', () => {
 
     it('releases the first preview when a second file is chosen', async () => {
         const input = await openUpload();
-        choose(input, new File(['x'], 'photo.png', { type: 'image/png' }));
+        choose(input, validFile('photo.png', 'image/png'));
         await screen.findByRole('img', { name: 'Preview of photo.png' });
 
-        choose(input, new File(['y'], 'other.jpg', { type: 'image/jpeg' }));
+        choose(input, validFile('other.jpg', 'image/jpeg'));
 
         await waitFor(() => expect(objectUrls.revoked).toEqual(['blob:mock/1']));
         expect(await screen.findByRole('img', { name: 'Preview of other.jpg' })).toHaveAttribute(
@@ -333,7 +369,7 @@ describe('previewing before upload', () => {
 
     it('shows a PDF as its name and size, with no preview', async () => {
         const input = await openUpload();
-        const pdf = new File(['x'], 'bylaws.pdf', { type: 'application/pdf' });
+        const pdf = validFile('bylaws.pdf', 'application/pdf');
         Object.defineProperty(pdf, 'size', { value: 2048 });
         choose(input, pdf);
 
@@ -418,8 +454,8 @@ describe('uploading in the background', () => {
         );
 
         const input = await openUpload();
-        choose(input, new File(['x'], 'photo.png', { type: 'image/png' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+        choose(input, validFile('photo.png', 'image/png'));
+        await clickUpload();
 
         // The dialog is gone while the request is still out.
         await waitFor(() => expect(screen.queryByLabelText('Choose a file')).not.toBeInTheDocument());
@@ -444,8 +480,8 @@ describe('uploading in the background', () => {
         );
 
         const input = await openUpload();
-        choose(input, new File(['x'], 'photo.png', { type: 'image/png' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+        choose(input, validFile('photo.png', 'image/png'));
+        await clickUpload();
         await screen.findByRole('region', { name: 'Uploads' });
 
         const whileUploading = new Event('beforeunload', { cancelable: true });
@@ -467,13 +503,13 @@ describe('uploading in the background', () => {
         fireEvent.change(input, {
             target: {
                 files: [
-                    new File(['a'], 'one.png', { type: 'image/png' }),
-                    new File(['b'], 'two.png', { type: 'image/png' }),
-                    new File(['c'], 'three.png', { type: 'image/png' }),
+                    validFile('one.png', 'image/png'),
+                    validFile('two.png', 'image/png'),
+                    validFile('three.png', 'image/png'),
                 ],
             },
         });
-        fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+        await clickUpload();
 
         const tray = await screen.findByRole('region', { name: 'Uploads' });
         const rows = within(tray).getAllByRole('listitem');
@@ -495,7 +531,7 @@ describe('uploading in the background', () => {
         renderPage();
         await screen.findByText('cover.png');
 
-        const good = new File(['a'], 'good.png', { type: 'image/png' });
+        const good = validFile('good.png', 'image/png');
         const bad = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' });
         fireEvent.drop(screen.getByRole('heading', { name: 'Files' }), {
             dataTransfer: { types: ['Files'], files: [good, bad] },
@@ -508,5 +544,24 @@ describe('uploading in the background', () => {
         expect(toast.error).toHaveBeenCalledWith(
             expect.stringContaining('logo.svg: Only PNG, JPEG, GIF, WebP, AVIF and PDF')
         );
+    });
+
+    it('refuses a dropped file whose contents are not the type it claims, and queues the rest', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: pageOf([MINE_PUBLIC]) });
+        vi.mocked(api.post).mockImplementation(() => new Promise(() => {}));
+        renderPage();
+        await screen.findByText('cover.png');
+
+        const good = validFile('good.png', 'image/png');
+        const fake = sample('fake.pdf', 'application/pdf', HTML);
+        fireEvent.drop(screen.getByRole('heading', { name: 'Files' }), {
+            dataTransfer: { types: ['Files'], files: [good, fake] },
+        });
+
+        const tray = await screen.findByRole('region', { name: 'Uploads' });
+        const rows = within(tray).getAllByRole('listitem');
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toHaveTextContent('good.png');
+        expect(toast.error).toHaveBeenCalledWith("fake.pdf: This file's contents are not a PDF.");
     });
 });
