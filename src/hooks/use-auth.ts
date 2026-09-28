@@ -5,7 +5,16 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { toast } from 'sonner';
-import { accessTokenExpired, api, ensureSession, refreshSession, subscribeToAuth, tokenStore } from '@/lib/api';
+import {
+    accessTokenExpired,
+    api,
+    beginSignOut,
+    ensureSession,
+    refreshSession,
+    startSession,
+    subscribeToAuth,
+    tokenStore,
+} from '@/lib/api';
 
 interface LoginResponse {
     token: string;
@@ -111,20 +120,21 @@ export function useAuth() {
     const isLoading = !hydrated || !bootstrapped;
 
     const logout = useCallback(async () => {
+        beginSignOut();
         const revoked = await revokeOnServer();
+        // Everything cached was fetched as the account that just left. Dropping the token stops new
+        // requests, and does nothing about answers already held: the next account signing in to this
+        // tab reads the previous one's lists, counts and names from cache until each goes stale.
+        // Queries are cancelled before the token goes, so none is mid-flight with it.
+        await queryClient.cancelQueries();
+        queryClient.clear();
         tokenStore.clear();
         if (!revoked) {
             toast.error('Sign-out could not be confirmed with the server', {
                 description:
-                    'This tab is signed out, but the session may still be active in this browser. Sign in and sign out again, or clear this site\'s cookies.',
+                    'This tab is signed out, but the session may still be active in this browser, and a reload can sign it back in. Clear this site\'s cookies to be sure.',
             });
         }
-        // Everything cached was fetched as the account that just left. Dropping the token stops new
-        // requests, and does nothing about answers already held: the next account signing in to this
-        // tab reads the previous one's lists, counts and names from cache until each goes stale.
-        // Switching tenant already invalidates every query for the same reason; signing out is the
-        // larger version of that and was doing nothing.
-        queryClient.clear();
         router.push('/login');
     }, [router, queryClient]);
 
@@ -151,7 +161,7 @@ export function useLogin() {
             // empty string here would look like a session and lock the user out of the UI, so only
             // persist when a real token came back; the caller drives the second step.
             if (data.token) {
-                tokenStore.set(data.token);
+                startSession(data.token);
             }
             return data;
         },
@@ -174,7 +184,7 @@ export function useVerifyDeviceCode() {
         mutationFn: async (input: { email: string; code: string }) => {
             const { data } = await api.post<LoginResponse>('/api/auth/otp/verify', input);
             // No tokens when a second factor is still owed; the caller moves to the MFA step.
-            if (data.token) tokenStore.set(data.token);
+            if (data.token) startSession(data.token);
             return data;
         },
     });
@@ -205,7 +215,7 @@ export function useVerifyMfa() {
     return useMutation({
         mutationFn: async (input: { challengeToken: string; code: string }) => {
             const { data } = await api.post<LoginResponse>('/api/auth/mfa/verify', input);
-            tokenStore.set(data.token);
+            startSession(data.token);
             return data;
         },
     });

@@ -23,7 +23,8 @@ moved. Which API a console works against is stated per release instead.
   access token, or an expired one, sign-out refreshes from the cookie once and then calls logout with
   the new token. A 401 on a token that looked live gets the same single retry. If the server still
   does not confirm, this tab is signed out anyway and a notice says the server sign-out could not be
-  confirmed.
+  confirmed. From sign-out until the next sign-in, nothing refreshes on its own, so a query refetching
+  after sign-out can no longer sign the tab back in.
 
 ## [1.5.0] - 2026-09-25
 

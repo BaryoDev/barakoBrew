@@ -54,6 +54,26 @@ export const tokenStore = {
     },
 };
 
+/**
+ * Set from the moment sign-out starts until the next sign-in.
+ *
+ * The refresh cookie outlives the access token, and when the server did not revoke it, every
+ * automatic refresh would quietly sign the tab back in: a query refetching after the cache is
+ * dropped gets a 401, and the 401 handler trades the cookie for a new session. While this is set,
+ * nothing refreshes on its own. Sign-out's own explicit refresh still goes through.
+ */
+let signedOut = false;
+
+export function beginSignOut() {
+    signedOut = true;
+}
+
+/** Stores the token from a sign-in and lets automatic refreshes run again. */
+export function startSession(token: string) {
+    signedOut = false;
+    tokenStore.set(token);
+}
+
 const AUTH_EVENT = 'barako-auth-change';
 
 function notifyAuthChange() {
@@ -193,7 +213,7 @@ export function ensureSession(): Promise<void> {
     if (typeof window === 'undefined') return Promise.resolve();
 
     bootstrapPromise ??= (async () => {
-        if (accessToken) return;
+        if (accessToken || signedOut) return;
         await refreshSession();
     })();
 
@@ -203,6 +223,7 @@ export function ensureSession(): Promise<void> {
 /** Test hook: forget the one-shot bootstrap so a spec can drive it again. */
 export function __resetSessionBootstrapForTests() {
     bootstrapPromise = null;
+    signedOut = false;
 }
 
 // Every response, success or failure, carries the API's contract version, so this is where the
@@ -223,6 +244,7 @@ api.interceptors.response.use(
         if (
             error.response?.status === 401 &&
             typeof window !== 'undefined' &&
+            !signedOut &&
             !original._retried &&
             !original.url?.includes('/api/auth/')
         ) {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { act, renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
 /**
@@ -17,7 +17,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
 const { api, ensureSession, tokenStore, __resetSessionBootstrapForTests } = await import('@/lib/api');
-const { useAuth } = await import('./use-auth');
+const { useAuth, useLogin } = await import('./use-auth');
 const { toast } = await import('sonner');
 
 const originalAdapter = api.defaults.adapter;
@@ -180,5 +180,82 @@ describe('signing out', () => {
         expect(logoutCalls).toEqual([`Bearer ${LIVE}`]);
         expect(toast.error).toHaveBeenCalledTimes(1);
         expect(tokenStore.token).toBeNull();
+    });
+});
+
+describe('after signing out', () => {
+    let seen: string[] = [];
+
+    function serveQueries(logoutStatus: number) {
+        seen = [];
+        api.defaults.adapter = async (config) => {
+            const bearer = config.headers?.Authorization ? 'bearer' : 'none';
+            seen.push(`${config.url} ${bearer}`);
+            if (config.url === '/api/auth/logout') return respond(config, logoutStatus);
+            if (config.url === '/api/auth/login') {
+                return { status: 200, statusText: '200', headers: {}, config, data: { token: FRESH } };
+            }
+            return respond(config, bearer === 'bearer' ? 200 : 401);
+        };
+    }
+
+    function renderWithQuery() {
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const Provider = ({ children }: { children: React.ReactNode }) =>
+            React.createElement(QueryClientProvider, { client }, children);
+        return renderHook(
+            () => {
+                const query = useQuery({ queryKey: ['x'], queryFn: async () => (await api.get('/x')).data });
+                return { auth: useAuth(), login: useLogin(), query };
+            },
+            { wrapper: Provider },
+        );
+    }
+
+    it('does not refresh itself back in when the server sign-out failed', async () => {
+        vi.stubGlobal('location', { pathname: '/content', href: 'https://example.com/content' });
+        serveQueries(500);
+        tokenStore.set(LIVE);
+        refreshSucceeds(FRESH);
+
+        const { result } = renderWithQuery();
+        await waitFor(() => expect(result.current.query.isSuccess).toBe(true));
+
+        await act(async () => {
+            await result.current.auth.logout();
+        });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(seen).toContain('/api/auth/logout bearer');
+        expect(axios.post).not.toHaveBeenCalled();
+        expect(tokenStore.token).toBeNull();
+        expect(toast.error).toHaveBeenCalledTimes(1);
+        vi.unstubAllGlobals();
+    });
+
+    it('signs in normally again, and a later 401 refreshes as usual', async () => {
+        serveQueries(500);
+        tokenStore.set(LIVE);
+        refreshSucceeds(FRESH);
+
+        const { result } = renderWithQuery();
+        await waitFor(() => expect(result.current.query.isSuccess).toBe(true));
+        await act(async () => {
+            await result.current.auth.logout();
+        });
+
+        await act(async () => {
+            await result.current.login.mutateAsync({ username: 'u', password: 'p' });
+        });
+        expect(tokenStore.token).toBe(FRESH);
+
+        tokenStore.clear();
+        tokenStore.set(EXPIRED);
+        api.defaults.adapter = async (config) =>
+            respond(config, config.headers?.Authorization === `Bearer ${FRESH}` ? 200 : 401);
+        await api.get('/y');
+
+        expect(axios.post).toHaveBeenCalledTimes(1);
+        expect(tokenStore.token).toBe(FRESH);
     });
 });
