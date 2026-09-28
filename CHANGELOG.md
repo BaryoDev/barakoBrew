@@ -11,6 +11,14 @@ moved. Which API a console works against is stated per release instead.
 
 ### Changed
 
+- **Speaks API contracts 1 to 5.** The next barakoCMS release moves the contract to 5: only a platform
+  administrator changes a user's global roles, removing SuperAdmin takes a SuperAdmin, and the last
+  SuperAdmin keeps the role (BaryoDev/barakoCMS#1028). A console that stops at 4 refuses that API
+  outright, so upgrade the console before the API.
+- **The Users screen offers global role changes only to a SuperAdmin.** Anyone else sees the roles
+  without the add and remove controls, and a line pointing to the tenant's members list on the
+  Tenants screen. When the API refuses a role change, the toast shows its message, and a bare 403
+  says that only a platform administrator can change global roles.
 - **The README and quickstart say what is true at 1.5.0.** The README has a table of which barakoCMS
   releases each console accepts and which contract each release sends, a configuration reference,
   and the rail's screens. The quickstart pins barakoCMS 4.4.1 with console 1.5.0, sets a sub-path with

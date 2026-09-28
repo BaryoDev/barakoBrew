@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   useAssignGroup,
@@ -12,6 +13,8 @@ import {
 } from '@/hooks/use-rbac';
 import { useUserGroups } from '@/hooks/use-user-groups';
 import { apiErrorMessage } from '@/lib/api';
+import { useAuth } from '@/hooks/use-auth';
+import { canChangeGlobalRoles, roleChangeErrorMessage } from '@/lib/global-roles';
 import type { User } from '@/types/rbac';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -43,6 +46,8 @@ export default function UsersPage() {
   const { data: users, isLoading, isError, refetch } = useUsers({ page });
   const { data: roles } = useRoles({ pageSize: 100 });
   const { data: groups } = useUserGroups();
+  const { user: caller } = useAuth();
+  const platformAdmin = canChangeGlobalRoles(caller?.roles);
 
   const roleName = (id: string) => roles?.items.find((r) => r.id === id)?.name ?? '…';
   const groupName = (id: string) => groups?.find((g) => g.id === id)?.name ?? '…';
@@ -53,6 +58,13 @@ export default function UsersPage() {
         title="Users"
         description="Everyone with an account. Users sign up through the API; here you control what they can do."
       />
+
+      {!platformAdmin && (
+        <p className="text-muted-foreground mb-4 text-sm">
+          Roles here apply in every tenant, and only a platform administrator can change them. Give roles
+          inside a tenant from its members list on the <Link href="/tenants" className="underline">Tenants</Link> screen.
+        </p>
+      )}
 
       {isLoading ? (
         <TableSkeleton />
@@ -90,6 +102,7 @@ export default function UsersPage() {
                         nameOf={roleName}
                         options={roles?.items.map((r) => ({ id: r.id, name: r.name })) ?? []}
                         kind="role"
+                        editable={platformAdmin}
                       />
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
@@ -122,12 +135,14 @@ function MembershipCell({
   nameOf,
   options,
   kind,
+  editable = true,
 }: {
   user: User;
   assigned: string[];
   nameOf: (id: string) => string;
   options: { id: string; name: string }[];
   kind: 'role' | 'group';
+  editable?: boolean;
 }) {
   const assignRole = useAssignRole();
   const removeRole = useRemoveRole();
@@ -137,7 +152,7 @@ function MembershipCell({
   const available = options.filter((o) => !assigned.includes(o.id));
 
   const onError = (error: unknown) =>
-    toast.error(apiErrorMessage(error, `The ${kind} could not be changed.`));
+    toast.error(kind === 'role' ? roleChangeErrorMessage(error) : apiErrorMessage(error, 'The group could not be changed.'));
 
   const add = (id: string) => {
     if (kind === 'role') assignRole.mutate({ userId: user.id, roleId: id }, { onError });
@@ -154,16 +169,18 @@ function MembershipCell({
       {assigned.map((id) => (
         <Badge key={id} variant="secondary" className="gap-1 font-normal">
           {nameOf(id)}
-          <button
-            type="button"
-            aria-label={`Remove ${kind} ${nameOf(id)} from ${user.username}`}
-            onClick={() => remove(id)}
-          >
-            <IconTimes className="size-3" />
-          </button>
+          {editable && (
+            <button
+              type="button"
+              aria-label={`Remove ${kind} ${nameOf(id)} from ${user.username}`}
+              onClick={() => remove(id)}
+            >
+              <IconTimes className="size-3" />
+            </button>
+          )}
         </Badge>
       ))}
-      {available.length > 0 && (
+      {editable && available.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
