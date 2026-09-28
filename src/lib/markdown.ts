@@ -1,4 +1,4 @@
-import { Marked, type Tokens } from 'marked';
+import { Marked, type Token, type Tokens } from 'marked';
 
 /*
  * Markdown to HTML, treating the markdown as untrusted.
@@ -12,8 +12,9 @@ import { Marked, type Tokens } from 'marked';
  * Three rules:
  *   1. Raw HTML in the source is escaped, never passed through. That removes script tags, event
  *      handler attributes and iframes in one move, instead of trying to enumerate them.
- *   2. A link or image destination must be http, https or mailto. That kills javascript: and
- *      data: URLs, which are the two that execute.
+ *   2. A link or image destination must be http, https or mailto, or a path on this site. That
+ *      kills javascript: and data: URLs, which are the two that execute, and a //host link that
+ *      leaves the site while looking relative.
  *   3. Text is escaped on the way into every attribute, so an alt or a title cannot close its own
  *      quote and add another attribute.
  */
@@ -22,8 +23,15 @@ const SAFE_SCHEMES = ['http:', 'https:', 'mailto:'];
 
 export function isSafeHref(href: string): boolean {
     const trimmed = href.trim();
-    // A relative or anchor link has no scheme and cannot execute.
-    if (trimmed.startsWith('/') || trimmed.startsWith('#')) return true;
+    // A browser drops tabs and newlines inside a URL before reading it, so check what it will read.
+    const read = trimmed.replace(/[\t\n\r]/g, '');
+    // Refused to match barakoPress. Here escapeHtml writes & as &amp;, so /&#47;host is already a
+    // harmless path, but a renderer that stopped escaping it would let /&#47;host decode to //host
+    // after this check. The cost is that a URL copied from HTML with &amp; in it shows as text.
+    if (/&(#|[A-Za-z][A-Za-z0-9]*;)/.test(read)) return false;
+    if (read.startsWith('#')) return true;
+    // A path on this site. Two slashes, or a slash and a backslash, name another host instead.
+    if (read.startsWith('/')) return !/^\/[/\\]/.test(read);
     try {
         return SAFE_SCHEMES.includes(new URL(trimmed).protocol);
     } catch {
@@ -48,10 +56,26 @@ export function anchor(text: string): string {
         .replace(/\s+/g, '-');
 }
 
+/*
+ * The lexer marks text after an opening script, pre, style or textarea tag as already escaped, and
+ * the default text renderer then writes it out as it came. With raw HTML escaped that tag never
+ * reaches the page, so nothing protects the text after it. Every such token is sent back through
+ * normal escaping, and every raw HTML token becomes plain escaped text before rendering, so no
+ * renderer can pass either through.
+ */
+function escapeRawTokens(token: Token) {
+    if (token.type === 'html') {
+        Object.assign(token, { type: 'text', text: escapeHtml(token.text), escaped: true });
+        return;
+    }
+    if ('escaped' in token && token.escaped) token.escaped = false;
+}
+
 function buildRenderer() {
     const marked = new Marked({ gfm: true, breaks: false });
 
     marked.use({
+        walkTokens: escapeRawTokens,
         renderer: {
             html({ text }: Tokens.HTML | Tokens.Tag) {
                 return escapeHtml(text);

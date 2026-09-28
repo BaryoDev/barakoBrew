@@ -40,12 +40,14 @@ export function countWords(value: string) {
  * Two changes to the site's output, both for the console and neither to what is sanitised.
  * Heading ids are dropped because the preview sits in a form whose controls are found by id, and a
  * heading called "Body" must not shadow the field called Body. Links open a new tab, because
- * following one in place would leave the form and lose whatever has not been saved.
+ * following one in place would leave the form and lose whatever has not been saved, and every one
+ * gets noopener so the new tab cannot reach back into the console.
  */
 export function previewHtml(source: string) {
     return renderMarkdown(source)
         .replace(/<h([1-6]) id="[^"]*">/g, '<h$1>')
-        .replace(/<a href=/g, '<a target="_blank" href=');
+        .replace(/ rel="noopener noreferrer"/g, '')
+        .replace(/<a href=/g, '<a target="_blank" rel="noopener noreferrer" href=');
 }
 
 const PREVIEW_STYLES = [
