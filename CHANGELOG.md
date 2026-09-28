@@ -17,6 +17,14 @@ moved. Which API a console works against is stated per release instead.
   `CONSOLE_BASE_PATH` on the published image, passes `PUBLIC_PRESS_URL` through, and runs `db-assert`
   before an upgrade. (#183)
 
+### Fixed
+
+- **Signing out revokes the session on the server even when the access token has expired.** With no
+  access token, or an expired one, sign-out refreshes from the cookie once and then calls logout with
+  the new token. A 401 on a token that looked live gets the same single retry. If the server still
+  does not confirm, this tab is signed out anyway and a notice says the server sign-out could not be
+  confirmed.
+
 ## [1.5.0] - 2026-09-25
 
 **Speaks API contracts 1 to 4, which covers barakoCMS 4.4.0.** That release keeps the contract

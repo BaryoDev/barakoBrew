@@ -150,6 +150,33 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 /**
+ * Trades the refresh cookie for a new access token, or null when the session is gone.
+ *
+ * Single flight: every caller that asks while a refresh is running gets the same answer. The server
+ * rotates refresh tokens and treats a second use of one as theft, so two refreshes racing would sign
+ * the user out everywhere.
+ */
+export function refreshSession(): Promise<string | null> {
+    refreshPromise ??= refreshAccessToken().finally(() => {
+        refreshPromise = null;
+    });
+    return refreshPromise;
+}
+
+/**
+ * True when the token's `exp` has passed, or passes within the next few seconds. A token with no
+ * readable `exp` counts as live, and the server has the final word on it.
+ */
+export function accessTokenExpired(token: string, skewSeconds = 10): boolean {
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return typeof payload.exp === 'number' && payload.exp <= Date.now() / 1000 + skewSeconds;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * One silent refresh on first load, so a reload is not a sign-out.
  *
  * The access token lives in memory, so every page load starts with none. The refresh cookie is what
@@ -167,7 +194,7 @@ export function ensureSession(): Promise<void> {
 
     bootstrapPromise ??= (async () => {
         if (accessToken) return;
-        await refreshAccessToken();
+        await refreshSession();
     })();
 
     return bootstrapPromise;
@@ -200,10 +227,7 @@ api.interceptors.response.use(
             !original.url?.includes('/api/auth/')
         ) {
             original._retried = true;
-            refreshPromise ??= refreshAccessToken().finally(() => {
-                refreshPromise = null;
-            });
-            const token = await refreshPromise;
+            const token = await refreshSession();
             if (token) {
                 original.headers.Authorization = `Bearer ${token}`;
                 return api(original);
