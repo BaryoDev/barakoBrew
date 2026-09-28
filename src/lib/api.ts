@@ -54,6 +54,26 @@ export const tokenStore = {
     },
 };
 
+/**
+ * Set from the moment sign-out starts until the next sign-in.
+ *
+ * The refresh cookie outlives the access token, and when the server did not revoke it, every
+ * automatic refresh would quietly sign the tab back in: a query refetching after the cache is
+ * dropped gets a 401, and the 401 handler trades the cookie for a new session. While this is set,
+ * nothing refreshes on its own. Sign-out's own explicit refresh still goes through.
+ */
+let signedOut = false;
+
+export function beginSignOut() {
+    signedOut = true;
+}
+
+/** Stores the token from a sign-in and lets automatic refreshes run again. */
+export function startSession(token: string) {
+    signedOut = false;
+    tokenStore.set(token);
+}
+
 const AUTH_EVENT = 'barako-auth-change';
 
 function notifyAuthChange() {
@@ -150,6 +170,33 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 /**
+ * Trades the refresh cookie for a new access token, or null when the session is gone.
+ *
+ * Single flight: every caller that asks while a refresh is running gets the same answer. The server
+ * rotates refresh tokens and treats a second use of one as theft, so two refreshes racing would sign
+ * the user out everywhere.
+ */
+export function refreshSession(): Promise<string | null> {
+    refreshPromise ??= refreshAccessToken().finally(() => {
+        refreshPromise = null;
+    });
+    return refreshPromise;
+}
+
+/**
+ * True when the token's `exp` has passed, or passes within the next few seconds. A token with no
+ * readable `exp` counts as live, and the server has the final word on it.
+ */
+export function accessTokenExpired(token: string, skewSeconds = 10): boolean {
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return typeof payload.exp === 'number' && payload.exp <= Date.now() / 1000 + skewSeconds;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * One silent refresh on first load, so a reload is not a sign-out.
  *
  * The access token lives in memory, so every page load starts with none. The refresh cookie is what
@@ -166,8 +213,8 @@ export function ensureSession(): Promise<void> {
     if (typeof window === 'undefined') return Promise.resolve();
 
     bootstrapPromise ??= (async () => {
-        if (accessToken) return;
-        await refreshAccessToken();
+        if (accessToken || signedOut) return;
+        await refreshSession();
     })();
 
     return bootstrapPromise;
@@ -176,6 +223,7 @@ export function ensureSession(): Promise<void> {
 /** Test hook: forget the one-shot bootstrap so a spec can drive it again. */
 export function __resetSessionBootstrapForTests() {
     bootstrapPromise = null;
+    signedOut = false;
 }
 
 // Every response, success or failure, carries the API's contract version, so this is where the
@@ -196,14 +244,12 @@ api.interceptors.response.use(
         if (
             error.response?.status === 401 &&
             typeof window !== 'undefined' &&
+            !signedOut &&
             !original._retried &&
             !original.url?.includes('/api/auth/')
         ) {
             original._retried = true;
-            refreshPromise ??= refreshAccessToken().finally(() => {
-                refreshPromise = null;
-            });
-            const token = await refreshPromise;
+            const token = await refreshSession();
             if (token) {
                 original.headers.Authorization = `Bearer ${token}`;
                 return api(original);
