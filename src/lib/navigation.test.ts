@@ -35,6 +35,13 @@ describe('nav visibility', () => {
         expect(seen).not.toContain('Audit log');
     });
 
+    // A tenant Admin gives roles in their tenant from the members list on the Tenants screen, and
+    // the Users screen's refusal points there, so the link has to be in their rail.
+    it('offers Tenants to Admin', () => {
+        expect(titles(['Admin'])).toContain('Tenants');
+        expect(titles(['Admin'])).not.toContain('Users');
+    });
+
     it('shows fewer to Admin than to SuperAdmin, and fewer again to User', () => {
         expect(count(['Admin'])).toBeLessThan(count(['SuperAdmin']));
         expect(count(['User'])).toBeLessThan(count(['Admin']));

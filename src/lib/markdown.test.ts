@@ -66,4 +66,51 @@ describe('renderMarkdown treats the source as untrusted', () => {
         expect(isSafeHref('data:text/html,x')).toBe(false);
         expect(isSafeHref('vbscript:x')).toBe(false);
     });
+
+    it('refuses protocol-relative and encoded destinations', () => {
+        for (const href of [
+            '//evil.example/x',
+            '/\\evil.example/x',
+            '/\t/evil.example/x',
+            'java&#115;cript:alert(1)',
+            'JaVaScRiPt:alert(1)',
+            'javascript&colon;alert(1)',
+            '/&#47;evil.example/x',
+            '/&sol;evil.example/x',
+            'https://example.com/&#x2f;x',
+        ]) {
+            expect(isSafeHref(href), href).toBe(false);
+        }
+        expect(isSafeHref('/posts/one')).toBe(true);
+    });
+
+    it('drops a protocol-relative or encoded link and keeps its words', () => {
+        for (const href of ['//evil.example/x', '/\\evil.example/x', 'java&#115;cript:alert(1)', '<java&#x73;cript:alert(1)>']) {
+            const html = fragment(`[click me](${href})`);
+            expect(html.textContent, href).toContain('click me');
+            expect(html.querySelectorAll('a'), href).toHaveLength(0);
+        }
+    });
+
+    it('escapes HTML that follows an opening script, pre, style or textarea tag', () => {
+        const payloads = [
+            'x <script><img src=x onerror=alert(1)',
+            'x <pre><img src=x onerror=alert(1)',
+            'a <script> <img src=x onerror=alert(1)//',
+            'a <pre> b\n\n<img src=x onerror=alert(1)//',
+            '- x <script>\n- <img src=x onerror=alert(1) z',
+            '> q <style>\n> <img src=x onerror=alert(1)//',
+            '| h |\n|---|\n| <textarea> <img src=x onerror=alert(1)// |',
+        ];
+        for (const source of payloads) {
+            const html = fragment(source);
+            expect(html.textContent, source).toContain('onerror=alert(1)');
+            expect(html.querySelectorAll('img, script, style, textarea, pre'), source).toHaveLength(0);
+            expect(html.querySelectorAll('[onerror]'), source).toHaveLength(0);
+        }
+    });
+
+    it('still shows an entity the author typed after a raw tag the same way it would elsewhere', () => {
+        expect(fragment('x <script> y &lt;b&gt;').textContent?.trim()).toBe('x <script> y <b>');
+    });
 });

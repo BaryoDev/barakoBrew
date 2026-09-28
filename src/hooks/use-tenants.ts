@@ -44,10 +44,11 @@ export interface CreateTenantInput {
 }
 
 /** Every tenant on the deployment (platform admin). Distinct from useMyTenants (only the caller's). */
-export function useTenants() {
+export function useTenants({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['tenants'],
     queryFn: async () => (await api.get<Paginated<Tenant>>('/api/tenants')).data.items,
+    enabled,
   });
 }
 

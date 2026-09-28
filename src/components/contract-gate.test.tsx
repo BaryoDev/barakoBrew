@@ -15,8 +15,8 @@ describe('the screen shown when the API does not fit', () => {
 
     // Literal versions, not the ends of SUPPORTED_CONTRACT. Derived from the constant this passes
     // whatever the range holds, including the range that sent the console blank against contract 2.
-    it('renders the console against contract 1, 2 and 3', () => {
-        for (const version of [1, 2, 3]) {
+    it('renders the console against contract 1 to 5', () => {
+        for (const version of [1, 2, 3, 4, 5]) {
             __resetContractForTests();
             recordContractVersion(String(version));
 
@@ -29,6 +29,19 @@ describe('the screen shown when the API does not fit', () => {
             expect(screen.getByText('the console'), `contract ${version} was refused`).toBeInTheDocument();
             unmount();
         }
+    });
+
+    it('still stops the console against contract 6', () => {
+        recordContractVersion('6');
+
+        render(
+            <ContractGate>
+                <p>the console</p>
+            </ContractGate>
+        );
+
+        expect(screen.queryByText('the console')).not.toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('This API is newer than this console');
     });
 
     it('names the whole range it speaks, not a single version', () => {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DynamicForm } from './dynamic-form';
-import { applyMark, countWords } from './markdown-field';
+import { applyMark, countWords, previewHtml } from './markdown-field';
 import type { FieldDefinition } from '@/types/schema';
 
 const BODY: FieldDefinition = { name: 'Body', displayName: 'Body', type: 'markdown', isRequired: false } as FieldDefinition;
@@ -107,6 +107,20 @@ describe('a markdown field', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
         expect(spy).toHaveBeenLastCalledWith({ Body: 'make this **bold**' });
         expect(screen.getByRole('toolbar', { name: 'Body formatting' })).toBeInTheDocument();
+    });
+});
+
+describe('previewHtml', () => {
+    it('gives every link that opens a new tab rel="noopener noreferrer", relative and anchor ones too', () => {
+        const host = document.createElement('div');
+        host.innerHTML = previewHtml('[out](https://example.com) [in](/posts/one) [top](#top) [mail](mailto:a@example.com)');
+        const links = [...host.querySelectorAll('a')];
+        expect(links).toHaveLength(4);
+        for (const link of links) {
+            expect(link.getAttribute('target'), link.textContent ?? '').toBe('_blank');
+            expect(link.getAttribute('rel'), link.textContent ?? '').toBe('noopener noreferrer');
+        }
+        expect(host.innerHTML.match(/rel=/g)).toHaveLength(4);
     });
 });
 
