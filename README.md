@@ -77,6 +77,7 @@ consumer.
 
 | barakoBrew | Contracts it speaks | barakoCMS releases it accepts |
 | --- | --- | --- |
+| 1.6.0 | 1 to 5 | 4.0.1 to 4.5.0 |
 | 1.3.0, 1.4.0, 1.5.0 | 1 to 4 | 4.0.1 to 4.4.1 |
 | 1.1.0, 1.2.0 | 1 to 3 | 4.0.1, 4.1.0 |
 | 1.0.0 | 1 | 4.0.1 |
@@ -86,6 +87,7 @@ consumer.
 | 4.0.0, 4.0.1 | 1 |
 | 4.1.0 | 3 |
 | 4.2.0, 4.2.1, 4.3.0, 4.4.0, 4.4.1 | 4 |
+| 4.5.0 | 5 |
 
 No release sent contract 2: 4.1.0 moved from 1 to 3. barakoCMS 4.0.0 sends the header without
 letting a browser read it, so a console served from another origin cannot see it and stops; use
