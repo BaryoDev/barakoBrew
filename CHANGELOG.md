@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **A push to a branch with an open pull request runs CI once, not twice.** `ci.yml` no longer
+  listens to `push`. `ci-branch.yml` takes branch pushes and calls it only when no `pull_request`
+  run covers the commit, so a branch with no pull request yet still gets every job, reported as
+  `Branch push / <job name>`. A merge queue group runs once too. A branch cut before this change
+  keeps running twice until it takes master. (#96)
+
 ### Security
 
 - **Next.js is 16.3.8, and `brace-expansion` is 1.1.21 and 5.0.12.** Next.js 16.3.6 fixed

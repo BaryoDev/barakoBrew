@@ -1,9 +1,10 @@
 name: CI
 
 on:
-  push:
-    branches-ignore:
-      - master
+  # No push trigger here. A branch with an open pull request matches both push and pull_request, so
+  # every push ran this workflow twice on one commit (#96). Branch pushes arrive through
+  # ci-branch.yml, which calls this workflow only when no pull_request run covers the commit.
+  workflow_call:
   pull_request:
     branches: ["master"]
   # The merge queue tests a batch of PRs against master together, then merges them in order. Without
