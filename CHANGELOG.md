@@ -9,6 +9,13 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Security
+
+- **Next.js is 16.3.8, and `brace-expansion` is 1.1.21 and 5.0.12.** Next.js 16.3.6 fixed
+  GHSA-vcvr-r3jv-pc5j, which covers 16.2.0 to 16.3.5, and 16.3.8 is the current patch. The
+  `brace-expansion` versions fix GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 and GHSA-6j4f-fj2g-mc7p.
+  `@humanfs/node` moves to 0.16.8 for GHSA-p498-v437-472g. `npm audit` reports nothing. (#204)
+
 ### Changed
 
 - **The build no longer downloads its fonts.** Sora, Manrope and JetBrains Mono are files in
