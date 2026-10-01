@@ -69,6 +69,11 @@ export interface WorkflowExecutionLog {
     contentId: string;
     executedAt: string;
     isDryRun: boolean;
+    /**
+     * True when the log was stored without exception messages and parameter values. An API older
+     * than 4.2.0 leaves the field out.
+     */
+    redacted?: boolean;
     success: boolean;
     duration: string;
     actions: ActionExecutionLog[];

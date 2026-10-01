@@ -2,11 +2,7 @@
 
 import { use, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  useDryRunWorkflow,
-  useWorkflow,
-  useWorkflowDebugLogs,
-} from '@/hooks/use-workflows';
+import { useDryRunWorkflow, useWorkflow } from '@/hooks/use-workflows';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { StatusBadge } from '@/components/patterns/status-badge';
@@ -18,8 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { IconBolt, IconBug, IconPlay, IconWorkflows } from '@/components/icons';
-import { format } from 'date-fns';
 import Link from 'next/link';
+import { RunsPanel } from './runs-panel';
 
 export default function WorkflowDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -138,41 +134,6 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
         </Card>
       </div>
     </>
-  );
-}
-
-function RunsPanel({ workflowId }: { workflowId: string }) {
-  const { data: logs, isLoading } = useWorkflowDebugLogs(workflowId);
-
-  if (isLoading) return <TableSkeleton rows={3} />;
-  if (!logs?.length) {
-    return (
-      <p className="text-muted-foreground py-8 text-center text-sm">
-        This workflow has not run yet. It executes when matching content events occur.
-      </p>
-    );
-  }
-
-  return (
-    <ul className="space-y-2">
-      {logs.map((log) => (
-        <li key={log.id} className="rounded-md border px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm">{format(new Date(log.executedAt), 'PPp')}</span>
-            <StatusBadge tone={log.success ? 'success' : 'destructive'}>
-              {log.success ? 'Succeeded' : 'Failed'}
-            </StatusBadge>
-          </div>
-          <ul className="text-muted-foreground mt-1.5 space-y-0.5 text-xs">
-            {log.actions.map((action, i) => (
-              <li key={i}>
-                {action.actionType}: {action.success ? 'ok' : action.errorMessage ?? 'failed'}
-              </li>
-            ))}
-          </ul>
-        </li>
-      ))}
-    </ul>
   );
 }
 

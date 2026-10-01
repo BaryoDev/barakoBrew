@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -28,7 +28,9 @@ import { IconRefresh, IconWorkflows } from '@/components/icons';
 import { apiErrorMessage } from '@/lib/api';
 import {
   ANY_STATUS,
+  FAILURE_KINDS,
   RUN_STATUSES,
+  runFailureKind,
   toneForRunStatus,
   useRetryAttempt,
   useWorkflowRun,
@@ -68,6 +70,17 @@ function RunFacts({ run }: { run: WorkflowRun }) {
   );
 }
 
+function RunFailureKind({ run }: { run: WorkflowRun }) {
+  const kind = runFailureKind(run);
+  if (!kind) return null;
+
+  return (
+    <StatusBadge tone={FAILURE_KINDS[kind].tone} dot={false}>
+      {FAILURE_KINDS[kind].label}
+    </StatusBadge>
+  );
+}
+
 export default function WorkflowRunsPage() {
   const [status, setStatus] = useState<string>(ANY_STATUS);
   const [page, setPage] = useState(1);
@@ -79,8 +92,14 @@ export default function WorkflowRunsPage() {
 
   const rows = runs.data?.items ?? [];
 
+  // A ref, not `retry.isPending`. The second click of a double click arrives before React has
+  // rendered the pending state, and a button in a closing dialog never reads it at all, so only a
+  // flag set in the same tick as the first click stops the second request.
+  const retryInFlight = useRef(false);
+
   async function onRetry(ordinal: number) {
-    if (!selectedId) return;
+    if (!selectedId || retryInFlight.current) return;
+    retryInFlight.current = true;
 
     try {
       await retry.mutateAsync({ runId: selectedId, ordinal });
@@ -89,6 +108,8 @@ export default function WorkflowRunsPage() {
       // A 409 lands here, which is the guard working rather than the button breaking: the runner
       // claimed the attempt while the operator was reading. The endpoint's wording says so.
       toast.error(apiErrorMessage(error));
+    } finally {
+      retryInFlight.current = false;
     }
   }
 
@@ -187,7 +208,10 @@ export default function WorkflowRunsPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        <StatusBadge tone={toneForRunStatus(row.status)}>{row.status}</StatusBadge>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <StatusBadge tone={toneForRunStatus(row.status)}>{row.status}</StatusBadge>
+                          <RunFailureKind run={row} />
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-40 truncate text-[13px] font-bold">
                         {row.workflowName}

@@ -1,9 +1,13 @@
 'use client';
 
+import { useRef } from 'react';
+import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
 import { IconRefresh } from '@/components/icons';
 import {
+  FAILURE_KINDS,
+  failureKind,
   formatDuration,
   isRetryable,
   toneForAttemptStatus,
@@ -20,8 +24,36 @@ function formatMoment(value: string | null | undefined): string {
 interface AttemptCardProps {
   attempt: WorkflowActionAttempt;
   onRetry: (ordinal: number) => void;
-  /** True while a retry is in flight anywhere in the run, so the button cannot be pressed twice. */
+  /**
+   * True while a retry is in flight anywhere in the run. It disables the button once React has
+   * rendered it, which is too late for the second click of a double click, so the page's `onRetry`
+   * also refuses a retry while one is in flight.
+   */
   retrying: boolean;
+}
+
+/**
+ * The rest of the props go onto the button, because the dialog hands its trigger a click handler
+ * and a ref of its own.
+ */
+function RetryButton({
+  attempt,
+  retrying,
+  ...props
+}: Pick<AttemptCardProps, 'attempt' | 'retrying'> & React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      {...props}
+      className="ml-auto"
+      size="sm"
+      variant="outline"
+      disabled={retrying}
+      aria-label={`Retry action ${attempt.ordinal}, ${attempt.actionType}`}
+    >
+      <IconRefresh />
+      {retrying ? 'Queueing...' : 'Retry'}
+    </Button>
+  );
 }
 
 /**
@@ -29,6 +61,9 @@ interface AttemptCardProps {
  *
  * The button's presence is `isRetryable` and nothing else, which is why that lives in the hook with
  * its own tests. Offering it on a succeeded action is the hazard the idempotency key was added for.
+ *
+ * A failure the API calls permanent keeps the button and asks first. The request it then sends is
+ * the same one: the server works out for its audit entry whether the failure was permanent.
  */
 export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
   const facts: { label: string; value: string }[] = [
@@ -46,6 +81,23 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
   const next = formatMoment(attempt.nextAttemptAt);
   if (next) facts.push({ label: 'Next attempt', value: next });
 
+  const kind = failureKind(attempt);
+
+  // One retry for each time the question is asked. "Retry anyway" stays on screen and pressable
+  // while the dialog animates out, so a second press, or a held Enter, would otherwise retry again
+  // once a quick answer had cleared the page's in-flight flag.
+  const asked = useRef(false);
+
+  function onConfirmed() {
+    if (!asked.current) return;
+    asked.current = false;
+    onRetry(attempt.ordinal);
+  }
+
+  function onAsk() {
+    asked.current = true;
+  }
+
   return (
     <li className="rounded-lg border p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -55,19 +107,24 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
         <span className="text-[13px] font-bold">{attempt.actionType}</span>
         <StatusBadge tone={toneForAttemptStatus(attempt.status)}>{attempt.status}</StatusBadge>
 
-        {isRetryable(attempt) && (
-          <Button
-            className="ml-auto"
-            size="sm"
-            variant="outline"
-            disabled={retrying}
-            aria-label={`Retry action ${attempt.ordinal}, ${attempt.actionType}`}
-            onClick={() => onRetry(attempt.ordinal)}
-          >
-            <IconRefresh />
-            {retrying ? 'Queueing...' : 'Retry'}
-          </Button>
+        {kind && (
+          <StatusBadge tone={FAILURE_KINDS[kind].tone} dot={false}>
+            {FAILURE_KINDS[kind].label}
+          </StatusBadge>
         )}
+
+        {isRetryable(attempt) &&
+          (kind === 'permanent' ? (
+            <ConfirmDialog
+              trigger={<RetryButton attempt={attempt} retrying={retrying} onClick={onAsk} />}
+              title={`Retry action ${attempt.ordinal}, ${attempt.actionType}?`}
+              description="This failure will not fix itself by retrying. Retry anyway?"
+              confirmLabel="Retry anyway"
+              onConfirm={onConfirmed}
+            />
+          ) : (
+            <RetryButton attempt={attempt} retrying={retrying} onClick={() => onRetry(attempt.ordinal)} />
+          ))}
       </div>
 
       <dl className="mt-3 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">

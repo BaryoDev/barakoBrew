@@ -18,6 +18,7 @@ interface Attempt {
   nextAttemptAt?: string | null;
   responseStatus?: number | null;
   error?: string | null;
+  retryable?: boolean | null;
   completedAt?: string | null;
   durationMs?: number | null;
 }
@@ -271,6 +272,140 @@ test.describe('workflow runs', () => {
     // The measurement is the diagnosis; the click is the thing an operator could not do.
     await retry.click();
     await expect(page.getByText('Queued that action to run again.')).toBeVisible();
+  });
+});
+
+/**
+ * Temporary and permanent failures. The fixtures above carry no `retryable`, which is what an API
+ * older than 4.2.0 sends, so every spec above is also the proof that such an API retries as before.
+ */
+test.describe('workflow runs, temporary and permanent failures', () => {
+  const QUESTION = 'This failure will not fix itself by retrying. Retry anyway?';
+
+  const MIXED = run('run-mixed', 'Sync the catalogue', 'Failed', [
+    attempt(1, 'Webhook', 'Failed', { retryable: true, responseStatus: 503, error: 'Service Unavailable' }),
+    attempt(2, 'Webhook', 'Failed', { retryable: false, error: 'The URL is not valid.' }),
+    attempt(3, 'Email', 'Failed', { error: 'Recorded by an older API.' }),
+  ]);
+
+  /** `retryDelayMs` holds the retry answer back, the way a real API under load does. */
+  async function openMixed(page: Page, retryDelayMs = 0) {
+    await authed(page);
+    await stubShell(page);
+
+    const retries: string[] = [];
+    await page.route(/\/api\/workflow-runs(\?|$)/, (route) => route.fulfill({ json: pageOf([MIXED]) }));
+    await page.route(/\/api\/workflow-runs\/[^/]+$/, (route) => route.fulfill({ json: MIXED }));
+    await page.route('**/api/workflow-runs/*/actions/*/retry', async (route) => {
+      retries.push(new URL(route.request().url()).pathname);
+      if (retryDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      await route.fulfill({ json: MIXED });
+    });
+
+    await page.goto('/workflow-runs');
+    await page.getByRole('radio', { name: /Sync the catalogue/ }).check({ timeout: 15000 });
+    await expect(actions(page)).toHaveCount(3);
+    return retries;
+  }
+
+  test('each failed action says whether it is temporary or permanent, and an unmarked one says neither', async ({ page }) => {
+    await openMixed(page);
+
+    const detail = actions(page);
+    await expect(detail.nth(0).getByText('Temporary', { exact: true })).toBeVisible();
+    await expect(detail.nth(1).getByText('Permanent', { exact: true })).toBeVisible();
+    await expect(detail.nth(2).getByText('Failed', { exact: true })).toBeVisible();
+    await expect(detail.nth(2).getByText(/Temporary|Permanent/)).toHaveCount(0);
+
+    // The list marks the run by its worst failure.
+    await expect(page.getByRole('table').getByText('Permanent', { exact: true })).toBeVisible();
+  });
+
+  test('a permanent failure asks first, from the keyboard, and cancelling sends nothing', async ({ page }) => {
+    const retries = await openMixed(page);
+
+    const retry = page.getByRole('button', { name: /Retry action 2/ });
+    await retry.focus();
+    await page.keyboard.press('Enter');
+
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText(QUESTION);
+    // Cancel takes the focus, so Enter on a dialog nobody read does not retry.
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+
+    await page.keyboard.press('Escape');
+
+    await expect(dialog).toBeHidden();
+    await expect(retry).toBeFocused();
+    expect(retries).toHaveLength(0);
+  });
+
+  test('confirming a permanent failure sends the one retry request', async ({ page }) => {
+    const retries = await openMixed(page);
+
+    await page.getByRole('button', { name: /Retry action 2/ }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Retry anyway' }).click();
+
+    await expect(page.getByText('Queued that action to run again.')).toBeVisible();
+    expect(retries).toEqual(['/api/workflow-runs/run-mixed/actions/2/retry']);
+  });
+
+  // The dialog takes 200 ms to animate out, and "Retry anyway" stays pressable for all of it. The
+  // unit tests cannot see that: jsdom has no animation, so the button is gone at once.
+  for (const retryDelayMs of [800, 0]) {
+    test(`a double click on "Retry anyway" sends one retry, with the answer ${retryDelayMs} ms away`, async ({ page }) => {
+      const retries = await openMixed(page, retryDelayMs);
+
+      await page.getByRole('button', { name: /Retry action 2/ }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Retry anyway' }).dblclick();
+
+      await expect(page.getByText('Queued that action to run again.')).toBeVisible();
+      await expect(page.getByRole('alertdialog')).toBeHidden();
+      expect(retries).toEqual(['/api/workflow-runs/run-mixed/actions/2/retry']);
+    });
+  }
+
+  test('holding Enter on "Retry anyway" sends one retry', async ({ page }) => {
+    const retries = await openMixed(page, 800);
+
+    await page.getByRole('button', { name: /Retry action 2/ }).click();
+    const confirm = page.getByRole('alertdialog').getByRole('button', { name: 'Retry anyway' });
+    await confirm.focus();
+
+    // A held key repeats, and each repeat presses the button again.
+    for (let i = 0; i < 12; i += 1) {
+      await page.keyboard.down('Enter');
+      await page.waitForTimeout(33);
+    }
+    await page.keyboard.up('Enter');
+
+    await expect(page.getByText('Queued that action to run again.')).toBeVisible();
+    expect(retries).toEqual(['/api/workflow-runs/run-mixed/actions/2/retry']);
+  });
+
+  test('a double click on a retry that asks nothing sends one retry', async ({ page }) => {
+    const retries = await openMixed(page, 800);
+
+    await page.getByRole('button', { name: /Retry action 1/ }).dblclick();
+
+    await expect(page.getByText('Queued that action to run again.')).toBeVisible();
+    expect(retries).toEqual(['/api/workflow-runs/run-mixed/actions/1/retry']);
+  });
+
+  test('a temporary failure and an unmarked one retry without a question', async ({ page }) => {
+    const retries = await openMixed(page);
+
+    await page.getByRole('button', { name: /Retry action 1/ }).click();
+    await expect.poll(() => retries).toEqual(['/api/workflow-runs/run-mixed/actions/1/retry']);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+
+    const third = page.getByRole('button', { name: /Retry action 3/ });
+    await expect(third).toBeEnabled();
+    await third.click();
+    await expect
+      .poll(() => retries)
+      .toEqual(['/api/workflow-runs/run-mixed/actions/1/retry', '/api/workflow-runs/run-mixed/actions/3/retry']);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
   });
 });
 
