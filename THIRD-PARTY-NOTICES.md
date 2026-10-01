@@ -8,6 +8,22 @@ software. All of it is under a permissive licence. This file ships at
 `/app/THIRD-PARTY-NOTICES.md` inside the image, because a statement about what an image
 redistributes is worth little if it only exists in a repository nobody pulls.
 
+## Fonts
+
+The console's three typefaces are files in this repository, in `src/app/fonts/`, and `next build`
+copies them into the image under `.next/static/media/`. All three are under the SIL Open Font
+License 1.1. It permits bundling and redistributing a font with software, and asks that a modified
+font stays under the same licence. These files are not modified.
+
+- Sora, Copyright 2019 The Sora Project Authors (https://github.com/sora-xor/sora-font)
+- Manrope, Copyright 2018 The Manrope Project Authors (https://github.com/googlefonts/manrope)
+- JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono)
+
+The licence text for each ships in the image at `/app/font-licences/OFL-<family>.txt`, and is beside
+the files in the repository. `src/app/fonts/README.md` records where each file came from and its
+checksum.
+
 ## The image carries no copyleft
 
 It used to. `sharp` is an optional dependency of Next.js itself, so `npm ci` installs it whatever

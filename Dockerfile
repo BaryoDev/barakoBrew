@@ -84,6 +84,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # into the standalone output above, and those are LGPL-3.0-or-later.
 COPY --chown=nextjs:nodejs THIRD-PARTY-NOTICES.md LICENSE ./
 
+# The fonts in .next/static are under the SIL Open Font License, which asks that the licence travels
+# with every copy of them. Named one by one, because a wildcard that matches nothing copies nothing
+# and the build still passes.
+COPY --chown=nextjs:nodejs \
+    src/app/fonts/OFL-sora.txt \
+    src/app/fonts/OFL-manrope.txt \
+    src/app/fonts/OFL-jetbrains-mono.txt \
+    ./font-licences/
+
 # Ensure public directory is owned by nextjs for entrypoint script to write env-config.js
 RUN chown -R nextjs:nodejs ./public
 

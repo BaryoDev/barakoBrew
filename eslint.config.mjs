@@ -47,6 +47,26 @@ const eslintConfig = defineConfig([
       "jsx-a11y/tabindex-no-positive": "error",
     },
   },
+  // The fonts are files in src/app/fonts, loaded with next/font/local. next/font/google downloads
+  // them from Google during `next build`, so a slow answer from that host fails the build, which it
+  // did twice in one day on pull requests that changed only documentation (#196).
+  // src/test/font-imports.test.ts proves this rule refuses the import.
+  {
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next/font/google",
+              message:
+                "It fetches from Google Fonts at build time. Add the woff2 and its licence to src/app/fonts and load it with next/font/local.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
