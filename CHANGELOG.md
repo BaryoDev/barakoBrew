@@ -9,6 +9,16 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **The build no longer downloads its fonts.** Sora, Manrope and JetBrains Mono are files in
+  `src/app/fonts/` with their SIL Open Font License texts, loaded with `next/font/local`, so
+  `next build` passes with no network. They are the same files Google Fonts served, so Latin text
+  renders as before. Text outside the Latin subset (Latin Extended, Cyrillic, Greek, Vietnamese)
+  now falls back to the system font: `next/font/google` shipped those subsets too, and only `latin`
+  is vendored. ESLint refuses `next/font/google`, and CI builds the image with the two Google Fonts
+  hosts unreachable. (#196)
+
 ## [1.6.0] - 2026-09-29
 
 **Speaks API contracts 1 to 5, which covers barakoCMS 4.0.1 to 4.5.0.** barakoCMS 4.5.0 moves the

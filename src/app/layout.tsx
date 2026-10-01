@@ -1,26 +1,40 @@
 import type { Metadata } from "next";
-import { Sora, Manrope, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 // Signal theme (#407). Sora for display, Manrope for body, JetBrains Mono for anything a machine
-// produced. Self-hosted by next/font, so no request leaves the box at runtime, which is the same
-// reason the Yeti fonts were loaded this way.
-const sora = Sora({
+// produced. The files are in ./fonts rather than fetched by next/font/google, so neither the build
+// nor the browser asks another host for a font (#196). ./fonts/README.md says where each came from.
+//
+// One face per weight, the same ones the Google import declared, although Manrope and JetBrains
+// Mono are each a single variable file. A weight range would let the mono's 600 render as 600; with
+// faces at 400, 500 and 700 it resolves to 700, as it always has. Written out because next/font
+// only accepts literals.
+const sora = localFont({
   variable: "--font-sora",
-  subsets: ["latin"],
-  weight: ["600"],
+  src: [
+    { path: "./fonts/sora-latin-600.woff2", weight: "600", style: "normal" },
+  ],
 });
 
-const manrope = Manrope({
+const manrope = localFont({
   variable: "--font-manrope",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  src: [
+    { path: "./fonts/manrope-latin-wght.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/manrope-latin-wght.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/manrope-latin-wght.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/manrope-latin-wght.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/manrope-latin-wght.woff2", weight: "800", style: "normal" },
+  ],
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const jetbrainsMono = localFont({
   variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  src: [
+    { path: "./fonts/jetbrains-mono-latin-wght.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/jetbrains-mono-latin-wght.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/jetbrains-mono-latin-wght.woff2", weight: "700", style: "normal" },
+  ],
 });
 
 declare global {
