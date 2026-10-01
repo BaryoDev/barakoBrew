@@ -9,6 +9,14 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **A push to a branch with an open pull request runs CI once, not twice.** `ci.yml` no longer
+  listens to `push`. `ci-branch.yml` takes branch pushes and calls it only when no `pull_request`
+  run covers the commit, so a branch with no pull request yet still gets every job, reported as
+  `Branch push / <job name>`. A merge queue group runs once too. A branch cut before this change
+  keeps running twice until it takes master. (#96)
+
 ## [1.6.0] - 2026-09-29
 
 **Speaks API contracts 1 to 5, which covers barakoCMS 4.0.1 to 4.5.0.** barakoCMS 4.5.0 moves the

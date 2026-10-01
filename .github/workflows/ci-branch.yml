@@ -23,16 +23,18 @@ permissions: {}
 
 jobs:
   # Skips only on a definite answer: an open pull request into master, from this branch in this
-  # repository, whose head is this commit and which GitHub reports as mergeable. Anything else runs
-  # everything. A denied or failed call, a head that has moved on, and an answer that is still
-  # being computed all count as "run". A pull request with a merge conflict counts as "run" too,
-  # because GitHub starts no pull_request run for one and the push run is then the only run.
+  # repository, whose head is this commit, which GitHub reports as mergeable, and for which a
+  # pull_request run of ci.yml exists. Anything else runs everything. A denied or failed call, a
+  # head that has moved on, and an answer that is still being computed all count as "run". A pull
+  # request with a merge conflict counts as "run" too, because GitHub starts no pull_request run
+  # for one and the push run is then the only run.
   gate:
     name: Does a pull request run cover this push
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       pull-requests: read
+      actions: read
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
@@ -41,8 +43,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # No -e: a failed call must fall through to "run", not end the step.
-          set -uo pipefail
+          # Actions starts this shell with -e. Turned off, so a failed call falls through to "run"
+          # and does not end the step.
+          set +e -uo pipefail
           run=true
           why="no open pull request into master was found for $GITHUB_REF_NAME"
           # base=master because that is the only base ci.yml's pull_request trigger runs for.
@@ -52,15 +55,24 @@ jobs:
           if [ -n "$number" ]; then
             why="#$number is open, but its head or mergeability did not settle on this commit"
             # GitHub works out mergeability after the push, so the first answers can be null or
-            # still name the previous head. Thirty seconds, then run.
+            # still name the previous head. The pull_request run also takes a few seconds to
+            # appear. Thirty seconds, then run.
             for attempt in 1 2 3 4 5 6; do
               pr=$(timeout 30 gh api "repos/$GITHUB_REPOSITORY/pulls/$number" \
                 --jq '"\(.state) \(.head.sha) \(.mergeable)"') || pr=
               case "$pr" in
                 "open $GITHUB_SHA true")
-                  run=false
-                  why="#$number is open on this commit, so its pull_request run covers it"
-                  break ;;
+                  # An open pull request is not yet a pull_request run. One retargeted to master,
+                  # or opened with the workflow token, starts none, so look for the run itself.
+                  runs=$(timeout 30 gh api -X GET \
+                    "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+                    -f head_sha="$GITHUB_SHA" -f event=pull_request --jq '.total_count') || runs=
+                  if [ "$runs" -gt 0 ] 2>/dev/null; then
+                    run=false
+                    why="#$number is open on this commit and its pull_request run has started"
+                    break
+                  fi
+                  why="#$number is open on this commit, but no pull_request run was found for it" ;;
                 "open $GITHUB_SHA false")
                   why="#$number has a merge conflict, so no pull_request run will start"
                   break ;;
