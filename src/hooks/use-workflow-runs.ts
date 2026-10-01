@@ -24,6 +24,12 @@ export interface WorkflowActionAttempt {
   responseStatus?: number | null;
   /** Why it failed, truncated by the server. Never a response body. */
   error?: string | null;
+  /**
+   * For a Failed action, whether a retry could fix the failure. The server sends null for any
+   * other status and for a failure recorded before it kept this, and an API older than 4.2.0
+   * leaves the field out. Read it through `failureKind`, which keeps those apart from false.
+   */
+  retryable?: boolean | null;
   completedAt?: string | null;
   durationMs?: number | null;
 }
@@ -89,6 +95,43 @@ export function runListParams(query: WorkflowRunsQuery): Record<string, string |
 export function isRetryable(attempt: Pick<WorkflowActionAttempt, 'status'>): boolean {
   return attempt.status === 'Failed' || attempt.status === 'Unknown';
 }
+
+export type FailureKind = 'temporary' | 'permanent';
+
+/**
+ * Whether a failed action is worth retrying as it stands, or nothing at all when the API did not say.
+ *
+ * Three answers, not two. Only a boolean counts: a missing or null `retryable` is "not said", and
+ * folding it into false would label every failure from an older API permanent and put a question
+ * in front of every retry there. Only a Failed action is labelled. Unknown is a timeout with its
+ * own badge, and the server clears the field on every other status.
+ */
+export function failureKind(
+  attempt: Pick<WorkflowActionAttempt, 'status' | 'retryable'>
+): FailureKind | null {
+  if (attempt.status !== 'Failed') return null;
+  if (attempt.retryable === true) return 'temporary';
+  if (attempt.retryable === false) return 'permanent';
+  return null;
+}
+
+/**
+ * The kind to show against a whole run in the list: permanent if any failed action is, because that
+ * is the one a retry will not clear, otherwise temporary if any failed action says so.
+ */
+export function runFailureKind(run: {
+  actions?: Pick<WorkflowActionAttempt, 'status' | 'retryable'>[];
+}): FailureKind | null {
+  const kinds = (run.actions ?? []).map(failureKind);
+  if (kinds.includes('permanent')) return 'permanent';
+  return kinds.includes('temporary') ? 'temporary' : null;
+}
+
+/** The words and the tint for a failure kind. The word carries the meaning, the tint only repeats it. */
+export const FAILURE_KINDS: Record<FailureKind, { label: string; tone: Tone }> = {
+  temporary: { label: 'Temporary', tone: 'warning' },
+  permanent: { label: 'Permanent', tone: 'destructive' },
+};
 
 /**
  * A duration in words, at a precision an operator can act on.

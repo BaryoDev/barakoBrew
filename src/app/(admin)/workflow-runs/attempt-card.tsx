@@ -1,9 +1,12 @@
 'use client';
 
+import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
 import { IconRefresh } from '@/components/icons';
 import {
+  FAILURE_KINDS,
+  failureKind,
   formatDuration,
   isRetryable,
   toneForAttemptStatus,
@@ -29,6 +32,9 @@ interface AttemptCardProps {
  *
  * The button's presence is `isRetryable` and nothing else, which is why that lives in the hook with
  * its own tests. Offering it on a succeeded action is the hazard the idempotency key was added for.
+ *
+ * A failure the API calls permanent keeps the button and asks first. The request it then sends is
+ * the same one: the server works out for its audit entry whether the failure was permanent.
  */
 export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
   const facts: { label: string; value: string }[] = [
@@ -46,6 +52,22 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
   const next = formatMoment(attempt.nextAttemptAt);
   if (next) facts.push({ label: 'Next attempt', value: next });
 
+  const kind = failureKind(attempt);
+
+  const retryButton = (onClick?: () => void) => (
+    <Button
+      className="ml-auto"
+      size="sm"
+      variant="outline"
+      disabled={retrying}
+      aria-label={`Retry action ${attempt.ordinal}, ${attempt.actionType}`}
+      onClick={onClick}
+    >
+      <IconRefresh />
+      {retrying ? 'Queueing...' : 'Retry'}
+    </Button>
+  );
+
   return (
     <li className="rounded-lg border p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -55,19 +77,24 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
         <span className="text-[13px] font-bold">{attempt.actionType}</span>
         <StatusBadge tone={toneForAttemptStatus(attempt.status)}>{attempt.status}</StatusBadge>
 
-        {isRetryable(attempt) && (
-          <Button
-            className="ml-auto"
-            size="sm"
-            variant="outline"
-            disabled={retrying}
-            aria-label={`Retry action ${attempt.ordinal}, ${attempt.actionType}`}
-            onClick={() => onRetry(attempt.ordinal)}
-          >
-            <IconRefresh />
-            {retrying ? 'Queueing...' : 'Retry'}
-          </Button>
+        {kind && (
+          <StatusBadge tone={FAILURE_KINDS[kind].tone} dot={false}>
+            {FAILURE_KINDS[kind].label}
+          </StatusBadge>
         )}
+
+        {isRetryable(attempt) &&
+          (kind === 'permanent' ? (
+            <ConfirmDialog
+              trigger={retryButton()}
+              title={`Retry action ${attempt.ordinal}, ${attempt.actionType}?`}
+              description="This failure will not fix itself by retrying. Retry anyway?"
+              confirmLabel="Retry anyway"
+              onConfirm={() => onRetry(attempt.ordinal)}
+            />
+          ) : (
+            retryButton(() => onRetry(attempt.ordinal))
+          ))}
       </div>
 
       <dl className="mt-3 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">

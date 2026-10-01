@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   ANY_STATUS,
+  failureKind,
   formatDuration,
   isRetryable,
+  runFailureKind,
   runListParams,
   toneForAttemptStatus,
   toneForRunStatus,
@@ -134,5 +136,61 @@ describe('toneForAttemptStatus', () => {
     expect(toneForAttemptStatus('Running')).toBe('accent');
     expect(toneForAttemptStatus('Pending')).toBe('muted');
     expect(toneForAttemptStatus('Skipped')).toBe('muted');
+  });
+});
+
+describe('failureKind', () => {
+  it('reads retryable true on a failed action as temporary', () => {
+    expect(failureKind({ status: 'Failed', retryable: true })).toBe('temporary');
+  });
+
+  it('reads retryable false on a failed action as permanent', () => {
+    expect(failureKind({ status: 'Failed', retryable: false })).toBe('permanent');
+  });
+
+  it('says nothing when the API sent no retryable, or sent null', () => {
+    // An API older than 4.2.0 leaves the field out, and a newer one sends null for a failure
+    // recorded before it was kept. Reading either as permanent would put a confirmation in front of
+    // every retry on an older API.
+    expect(failureKind({ status: 'Failed' })).toBeNull();
+    expect(failureKind({ status: 'Failed', retryable: null })).toBeNull();
+    expect(failureKind({ status: 'Failed', retryable: undefined })).toBeNull();
+  });
+
+  it('says nothing about an action that did not fail, whatever retryable holds', () => {
+    const others = ['Pending', 'Running', 'Succeeded', 'Unknown', 'Skipped'];
+    expect(others).toHaveLength(5);
+
+    for (const status of others) {
+      expect(failureKind({ status, retryable: false })).toBeNull();
+      expect(failureKind({ status, retryable: true })).toBeNull();
+    }
+  });
+
+  it('does not read a value that is not a boolean as either kind', () => {
+    const odd = { status: 'Failed', retryable: 'false' as unknown as boolean };
+    expect(failureKind(odd)).toBeNull();
+  });
+});
+
+describe('runFailureKind', () => {
+  const failed = (retryable?: boolean | null) => ({ status: 'Failed', retryable });
+
+  it('is permanent when any failed action is permanent, whatever order they come in', () => {
+    expect(runFailureKind({ actions: [failed(true), failed(false)] })).toBe('permanent');
+    expect(runFailureKind({ actions: [failed(false), failed(true)] })).toBe('permanent');
+  });
+
+  it('is temporary when every failed action that says is temporary', () => {
+    expect(runFailureKind({ actions: [failed(true), failed(null), { status: 'Succeeded' }] })).toBe('temporary');
+  });
+
+  it('says nothing for a run whose failures carry no retryable', () => {
+    expect(runFailureKind({ actions: [failed(), failed(null)] })).toBeNull();
+  });
+
+  it('says nothing for a run with no failed action, or no actions at all', () => {
+    expect(runFailureKind({ actions: [{ status: 'Succeeded', retryable: false }] })).toBeNull();
+    expect(runFailureKind({ actions: [] })).toBeNull();
   });
 });

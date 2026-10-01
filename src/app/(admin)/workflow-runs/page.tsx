@@ -28,7 +28,9 @@ import { IconRefresh, IconWorkflows } from '@/components/icons';
 import { apiErrorMessage } from '@/lib/api';
 import {
   ANY_STATUS,
+  FAILURE_KINDS,
   RUN_STATUSES,
+  runFailureKind,
   toneForRunStatus,
   useRetryAttempt,
   useWorkflowRun,
@@ -65,6 +67,17 @@ function RunFacts({ run }: { run: WorkflowRun }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+function RunFailureKind({ run }: { run: WorkflowRun }) {
+  const kind = runFailureKind(run);
+  if (!kind) return null;
+
+  return (
+    <StatusBadge tone={FAILURE_KINDS[kind].tone} dot={false}>
+      {FAILURE_KINDS[kind].label}
+    </StatusBadge>
   );
 }
 
@@ -187,7 +200,10 @@ export default function WorkflowRunsPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        <StatusBadge tone={toneForRunStatus(row.status)}>{row.status}</StatusBadge>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <StatusBadge tone={toneForRunStatus(row.status)}>{row.status}</StatusBadge>
+                          <RunFailureKind run={row} />
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-40 truncate text-[13px] font-bold">
                         {row.workflowName}

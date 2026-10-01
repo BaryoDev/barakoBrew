@@ -79,7 +79,7 @@ function workflowRun() {
         completedAt: new Date().toISOString(),
         actions: [
             { ordinal: 1, actionType: 'Email', status: 'Succeeded', attempts: 1, responseStatus: 202, durationMs: 420, error: null, completedAt: new Date().toISOString(), nextAttemptAt: null },
-            { ordinal: 2, actionType: 'Webhook', status: 'Failed', attempts: 3, responseStatus: 503, durationMs: 15_400, error: 'Service Unavailable from hooks.example.com', completedAt: null, nextAttemptAt: null },
+            { ordinal: 2, actionType: 'Webhook', status: 'Failed', attempts: 3, responseStatus: 503, durationMs: 15_400, error: 'Service Unavailable from hooks.example.com', retryable: false, completedAt: null, nextAttemptAt: null },
             { ordinal: 3, actionType: 'Webhook', status: 'Unknown', attempts: 1, responseStatus: null, durationMs: null, error: 'The request timed out.', completedAt: null, nextAttemptAt: null },
             { ordinal: 4, actionType: 'Email', status: 'Running', attempts: 1, responseStatus: null, durationMs: null, error: null, completedAt: null, nextAttemptAt: null },
             { ordinal: 5, actionType: 'Email', status: 'Skipped', attempts: 0, responseStatus: null, durationMs: null, error: null, completedAt: null, nextAttemptAt: null },
@@ -422,6 +422,12 @@ test.describe('accessibility', () => {
         // an empty panel. Every badge tone this screen can draw is on the page at once.
         await page.getByRole('radio', { name: /Announce a post/ }).check();
         await expect(page.getByRole('button', { name: /Retry action 2/ })).toBeVisible();
+        await expect(page.getByRole('list', { name: 'Actions' }).getByText('Permanent', { exact: true })).toBeVisible();
+        await scan(page);
+
+        // The question a permanent failure asks before it retries.
+        await page.getByRole('button', { name: /Retry action 2/ }).click();
+        await expect(page.getByRole('alertdialog')).toBeVisible();
         await scan(page);
     });
 
