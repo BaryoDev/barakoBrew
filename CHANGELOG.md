@@ -16,7 +16,8 @@ moved. Which API a console works against is stated per release instead.
   Retry on a permanent failure asks first: "This failure will not fix itself by retrying. Retry
   anyway?" A workflow's recent runs mark a log the API calls `redacted`, with a note that
   credentials and exception messages are not stored. Both fields arrived in barakoCMS 4.2.0; an
-  older API shows neither label and retries without asking, as before. (#150)
+  older API shows neither label and retries without asking, as before. A double click on Retry,
+  or on "Retry anyway", now sends one request. (#150)
 
 ### Security
 

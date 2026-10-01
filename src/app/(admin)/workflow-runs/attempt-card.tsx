@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
@@ -23,8 +24,36 @@ function formatMoment(value: string | null | undefined): string {
 interface AttemptCardProps {
   attempt: WorkflowActionAttempt;
   onRetry: (ordinal: number) => void;
-  /** True while a retry is in flight anywhere in the run, so the button cannot be pressed twice. */
+  /**
+   * True while a retry is in flight anywhere in the run. It disables the button once React has
+   * rendered it, which is too late for the second click of a double click, so the page's `onRetry`
+   * also refuses a retry while one is in flight.
+   */
   retrying: boolean;
+}
+
+/**
+ * The rest of the props go onto the button, because the dialog hands its trigger a click handler
+ * and a ref of its own.
+ */
+function RetryButton({
+  attempt,
+  retrying,
+  ...props
+}: Pick<AttemptCardProps, 'attempt' | 'retrying'> & React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      {...props}
+      className="ml-auto"
+      size="sm"
+      variant="outline"
+      disabled={retrying}
+      aria-label={`Retry action ${attempt.ordinal}, ${attempt.actionType}`}
+    >
+      <IconRefresh />
+      {retrying ? 'Queueing...' : 'Retry'}
+    </Button>
+  );
 }
 
 /**
@@ -54,19 +83,20 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
 
   const kind = failureKind(attempt);
 
-  const retryButton = (onClick?: () => void) => (
-    <Button
-      className="ml-auto"
-      size="sm"
-      variant="outline"
-      disabled={retrying}
-      aria-label={`Retry action ${attempt.ordinal}, ${attempt.actionType}`}
-      onClick={onClick}
-    >
-      <IconRefresh />
-      {retrying ? 'Queueing...' : 'Retry'}
-    </Button>
-  );
+  // One retry for each time the question is asked. "Retry anyway" stays on screen and pressable
+  // while the dialog animates out, so a second press, or a held Enter, would otherwise retry again
+  // once a quick answer had cleared the page's in-flight flag.
+  const asked = useRef(false);
+
+  function onConfirmed() {
+    if (!asked.current) return;
+    asked.current = false;
+    onRetry(attempt.ordinal);
+  }
+
+  function onAsk() {
+    asked.current = true;
+  }
 
   return (
     <li className="rounded-lg border p-4">
@@ -86,14 +116,14 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
         {isRetryable(attempt) &&
           (kind === 'permanent' ? (
             <ConfirmDialog
-              trigger={retryButton()}
+              trigger={<RetryButton attempt={attempt} retrying={retrying} onClick={onAsk} />}
               title={`Retry action ${attempt.ordinal}, ${attempt.actionType}?`}
               description="This failure will not fix itself by retrying. Retry anyway?"
               confirmLabel="Retry anyway"
-              onConfirm={() => onRetry(attempt.ordinal)}
+              onConfirm={onConfirmed}
             />
           ) : (
-            retryButton(() => onRetry(attempt.ordinal))
+            <RetryButton attempt={attempt} retrying={retrying} onClick={() => onRetry(attempt.ordinal)} />
           ))}
       </div>
 
