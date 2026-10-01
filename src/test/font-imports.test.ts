@@ -15,17 +15,25 @@ import { ESLint } from 'eslint';
 
 const LAYOUT = 'src/app/layout.tsx';
 
-async function restrictedImports(source: string) {
-    const eslint = new ESLint({ cwd: process.cwd() });
-    const [result] = await eslint.lintText(source, { filePath: 'src/app/font-probe.tsx' });
+// Linted at more than one path, so a rule narrowed to one directory with `files` still fails here.
+// None of these files exist; ESLint only uses the path to decide which config applies.
+const PROBE_PATHS = ['src/app/font-probe.tsx', 'src/components/font-probe.tsx', 'packages/content-form/src/font-probe.ts'];
+
+const GOOGLE_IMPORT =
+    'import { Sora } from "next/font/google";\nexport const sora = Sora({ subsets: ["latin"], weight: ["600"] });\n';
+const LOCAL_IMPORT =
+    'import localFont from "next/font/local";\nexport const sora = localFont({ src: "./fonts/sora-latin-600.woff2" });\n';
+
+const eslint = new ESLint({ cwd: process.cwd() });
+
+async function restrictedImports(source: string, filePath: string) {
+    const [result] = await eslint.lintText(source, { filePath });
     return result.messages.filter((m) => m.ruleId === 'no-restricted-imports');
 }
 
 describe('fonts are vendored, not fetched during the build', () => {
-    it('lint refuses an import of next/font/google', async () => {
-        const messages = await restrictedImports(
-            'import { Sora } from "next/font/google";\nexport const sora = Sora({ subsets: ["latin"], weight: ["600"] });\n'
-        );
+    it.each(PROBE_PATHS)('lint refuses an import of next/font/google in %s', async (filePath) => {
+        const messages = await restrictedImports(GOOGLE_IMPORT, filePath);
 
         expect(messages).toHaveLength(1);
         expect(messages[0].severity).toBe(2);
@@ -33,12 +41,12 @@ describe('fonts are vendored, not fetched during the build', () => {
     }, 60_000);
 
     it('lint accepts next/font/local, so the rule is about the source and not about fonts', async () => {
-        const messages = await restrictedImports(
-            'import localFont from "next/font/local";\nexport const sora = localFont({ src: "./fonts/sora-latin-600.woff2" });\n'
-        );
-
-        expect(messages).toEqual([]);
+        expect(await restrictedImports(LOCAL_IMPORT, PROBE_PATHS[0])).toEqual([]);
     }, 60_000);
+
+    it('the root layout is linted, so the rule reaches the one file that loads the fonts', async () => {
+        expect(await eslint.isPathIgnored(LAYOUT)).toBe(false);
+    });
 
     it('every font file the root layout names is in the repository, with a licence beside it', () => {
         const source = readFileSync(LAYOUT, 'utf8');

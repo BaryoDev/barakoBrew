@@ -27,8 +27,17 @@ to that range, which is why Sora is static and JetBrains Mono starts at 400.
 | `manrope-latin-wght.woff2` | `https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap` | `https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSvfedN4.woff2` | `e310b55a7fd9677f5e3555e6c6c4d064fa1f1d24393f0ddbe217cea12a8c432f` |
 | `jetbrains-mono-latin-wght.woff2` | `https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap` | `https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2` | `2c32b9b3ee358c119e210f6f5195f9bd34894d78a785ff2e95d60e718e400af4` |
 
-The stylesheet lists one `@font-face` per subset. The font URL is the one in the block marked
-`/* latin */`, and the request needs a browser's `User-Agent` or Google answers with TTF.
+The stylesheet lists one `@font-face` per subset, and the font URL is the one in the block marked
+`/* latin */`. Google picks the files by `User-Agent`, so the stylesheet only lists these URLs for
+the one `next/font/google` sends:
+
+```
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36
+```
+
+A current Chrome is given a different Sora file (15,000 bytes, with a `prep` table), and a client
+with no browser `User-Agent` is given TTF. The font URLs above answer with the recorded checksums
+whatever the client.
 
 ## Licences
 
