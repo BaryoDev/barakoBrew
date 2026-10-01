@@ -19,12 +19,37 @@ moved. Which API a console works against is stated per release instead.
   older API shows neither label and retries without asking, as before. A double click on Retry,
   or on "Retry anyway", now sends one request. (#150)
 
+### Changed
+
+- **A push to a branch with an open pull request runs CI once, not twice.** `ci.yml` no longer
+  listens to `push`. `ci-branch.yml` takes branch pushes and calls it only when no `pull_request`
+  run covers the commit, so a branch with no pull request yet still gets every job, reported as
+  `Branch push / <job name>`. A merge queue group runs once too. A branch cut before this change
+  keeps running twice until it takes master. (#96)
+
 ### Security
 
 - **Next.js is 16.3.8, and `brace-expansion` is 1.1.21 and 5.0.12.** Next.js 16.3.6 fixed
   GHSA-vcvr-r3jv-pc5j, which covers 16.2.0 to 16.3.5, and 16.3.8 is the current patch. The
   `brace-expansion` versions fix GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 and GHSA-6j4f-fj2g-mc7p.
   `@humanfs/node` moves to 0.16.8 for GHSA-p498-v437-472g. `npm audit` reports nothing. (#204)
+
+### Changed
+
+- **The build no longer downloads its fonts.** Sora, Manrope and JetBrains Mono are files in
+  `src/app/fonts/` with their SIL Open Font License texts, loaded with `next/font/local`, so
+  `next build` passes with no network. They are the same files Google Fonts served, so ASCII and
+  Latin-1 text, ñ included, renders as before. ESLint refuses `next/font/google`, and CI builds the
+  image with the two Google Fonts hosts unreachable. (#196)
+- **Monospace text loses its non-Latin-1 glyphs.** `next/font/google` also shipped the Latin
+  Extended, Cyrillic, Greek and Vietnamese files of each family, and only `latin` is vendored. It
+  shows where the console prints user data in the mono face: entry and block JSON, request bodies,
+  error messages, page paths. Polish, Turkish, Cyrillic, Greek and Vietnamese characters there now
+  come from the system font, mid-word, so columns no longer line up (a 22 character Polish sample
+  measured 176px before and 169px now). Body text was already the system font. (#196)
+- **The font preview on Site, Theme no longer finds `JetBrains Mono` in the console itself.** The
+  bundled mono face is now named `jetbrainsMono`, so typing `JetBrains Mono` previews in that font
+  only on a machine that has it installed. `Manrope` and `Sora` still match. (#196)
 
 ## [1.6.0] - 2026-09-29
 

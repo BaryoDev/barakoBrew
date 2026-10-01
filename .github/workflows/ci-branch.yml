@@ -1,0 +1,103 @@
+name: CI (branch push)
+
+# Runs ci.yml for a branch that has no pull request yet, so a pushed branch still gets an answer.
+#
+# ci.yml used to listen to push itself. A branch with an open pull request matches both push and
+# pull_request, so every push ran everything twice on one commit (#96). The push payload does not
+# say whether a pull request is open, and a workflow cannot decide that in its `on:` block, so the
+# push trigger lives here behind a job that asks the API.
+#
+# Calling ci.yml also keeps a push run away from the required checks. A called job reports as
+# "Branch push / <job name>", and the ruleset asks for the bare job names, which only ci.yml's own
+# runs (pull_request and merge_group) report. A push run, skipped or not, cannot satisfy one.
+
+on:
+  push:
+    branches-ignore:
+      - master
+      # The merge queue pushes its own branch for every group, and merge_group already runs ci.yml
+      # on that commit.
+      - "gh-readonly-queue/**"
+
+permissions: {}
+
+jobs:
+  # Skips only on a definite answer: an open pull request into master, from this branch in this
+  # repository, whose head is this commit, which GitHub reports as mergeable, and for which a
+  # pull_request run of ci.yml exists. Anything else runs everything. A denied or failed call, a
+  # head that has moved on, and an answer that is still being computed all count as "run". A pull
+  # request with a merge conflict counts as "run" too, because GitHub starts no pull_request run
+  # for one and the push run is then the only run.
+  gate:
+    name: Does a pull request run cover this push
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+      actions: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      # Worst case for the script: 10 + 6 x (10 + 10) + 5 x 5 = 155 seconds, under this step's 180.
+      # A step past its timeout fails, a failed gate runs everything, and the job's own limit above
+      # is never reached.
+      - name: Look for an open pull request on this branch
+        id: decide
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Actions starts this shell with -e. Turned off, so a failed call falls through to "run"
+          # and does not end the step.
+          set +e -uo pipefail
+          run=true
+          why="no open pull request into master was found for $GITHUB_REF_NAME"
+          # base=master because that is the only base ci.yml's pull_request trigger runs for.
+          number=$(timeout 10 gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" \
+            -f state=open -f base=master -f head="$GITHUB_REPOSITORY_OWNER:$GITHUB_REF_NAME" \
+            --jq '.[0].number // empty') || { number=; why="the pull request lookup failed"; }
+          if [ -n "$number" ]; then
+            why="#$number is open, but its head or mergeability did not settle on this commit"
+            # GitHub works out mergeability after the push, so the first answers can be null or
+            # still name the previous head. The pull_request run also takes a few seconds to
+            # appear. Thirty seconds, then run.
+            for attempt in 1 2 3 4 5 6; do
+              pr=$(timeout 10 gh api "repos/$GITHUB_REPOSITORY/pulls/$number" \
+                --jq '"\(.state) \(.head.sha) \(.mergeable)"') || pr=
+              case "$pr" in
+                "open $GITHUB_SHA true")
+                  # An open pull request is not yet a pull_request run. One retargeted to master,
+                  # or opened with the workflow token, starts none, so look for the run itself.
+                  runs=$(timeout 10 gh api -X GET \
+                    "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+                    -f head_sha="$GITHUB_SHA" -f event=pull_request --jq '.total_count') || runs=
+                  if [ "$runs" -gt 0 ] 2>/dev/null; then
+                    run=false
+                    why="#$number is open on this commit and its pull_request run has started"
+                    break
+                  fi
+                  why="#$number is open on this commit, but no pull_request run was found for it" ;;
+                "open $GITHUB_SHA false")
+                  why="#$number has a merge conflict, so no pull_request run will start"
+                  break ;;
+              esac
+              [ "$attempt" -eq 6 ] || sleep 5
+            done
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "run=$run: $why" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # Only an explicit false skips. If the gate fails or writes nothing, the output is empty and
+  # `!cancelled()` lets the call start anyway.
+  #
+  # The permissions are the union of what ci.yml's jobs declare. A called workflow cannot ask for
+  # more than its caller has, and that is checked when the run starts, for every job, including
+  # the nightly report that never runs on a push. ci.yml reads no secrets, so none are passed.
+  ci:
+    name: Branch push
+    needs: gate
+    if: needs.gate.outputs.run != 'false' && !cancelled()
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/ci.yml

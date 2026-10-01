@@ -1,9 +1,10 @@
 name: CI
 
 on:
-  push:
-    branches-ignore:
-      - master
+  # No push trigger here. A branch with an open pull request matches both push and pull_request, so
+  # every push ran this workflow twice on one commit (#96). Branch pushes arrive through
+  # ci-branch.yml, which calls this workflow only when no pull_request run covers the commit.
+  workflow_call:
   pull_request:
     branches: ["master"]
   # The merge queue tests a batch of PRs against master together, then merges them in order. Without
@@ -277,6 +278,12 @@ jobs:
           tags: barako-brew:ci
           build-args: |
             BARAKO_VERSION=0.0.0-ci
+          # The fonts are files in src/app/fonts, so the build has no reason to reach Google Fonts.
+          # Pointing both hosts at nothing makes that a gate: next/font/google fails the build
+          # outright when it cannot fetch, where a slow answer only failed it some of the time (#196).
+          add-hosts: |
+            fonts.googleapis.com:0.0.0.0
+            fonts.gstatic.com:0.0.0.0
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
