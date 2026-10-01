@@ -36,7 +36,9 @@ jobs:
   # The suffix is why a skipped job cannot stand in for a required check. A skipped job reports as
   # passing, and its check lands on the same commit as the pull_request run's. Under its own name
   # it could satisfy a required check that the pull_request run failed or has not reported yet. So
-  # a skipped job reports under a different name, one no ruleset asks for.
+  # a skipped job reports under a different name, one no ruleset asks for. GitHub does not evaluate
+  # the name of a job it skips, so today that name is the expression as written. If that changes,
+  # the suffix output takes over. Either way it is not the required name.
   gate:
     name: Skip a push the pull request run covers
     runs-on: ubuntu-latest
