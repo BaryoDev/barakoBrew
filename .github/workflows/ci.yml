@@ -4,6 +4,9 @@ on:
   push:
     branches-ignore:
       - master
+      # The merge queue pushes its own branch for every group, and merge_group already runs on that
+      # commit. Left in, each group ran twice.
+      - "gh-readonly-queue/**"
   pull_request:
     branches: ["master"]
   # The merge queue tests a batch of PRs against master together, then merges them in order. Without
@@ -18,9 +21,77 @@ on:
   workflow_dispatch:
 
 jobs:
+  # A branch with an open pull request matches both push and pull_request, so every push used to
+  # run this workflow twice on one commit (#96). The push trigger stays, because a branch with no
+  # pull request yet should still get an answer. This job is what tells the two cases apart: the
+  # push payload does not say whether a pull request is open, so it asks the API. Every other job
+  # needs it and reads its output.
+  #
+  # It skips only on a definite answer: an open pull request into master, from this branch in this
+  # repository, whose head is this commit and which GitHub reports as mergeable. Anything else runs
+  # everything. A denied or failed call, a head that has moved on, and an answer that is still
+  # being computed all count as "run". A pull request with a merge conflict counts as "run" too,
+  # because GitHub starts no pull_request run for one and the push run is then the only run.
+  #
+  # The suffix is why a skipped job cannot stand in for a required check. A skipped job reports as
+  # passing, and its check lands on the same commit as the pull_request run's. Under its own name
+  # it could satisfy a required check that the pull_request run failed or has not reported yet. So
+  # a skipped job reports under a different name, one no ruleset asks for.
+  gate:
+    name: Skip a push the pull request run covers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      suffix: ${{ steps.decide.outputs.suffix }}
+    steps:
+      - name: Look for an open pull request on this branch
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # No -e: a failed call must fall through to "run", not end the step.
+          set -uo pipefail
+          run=true
+          why="the event is $GITHUB_EVENT_NAME"
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            why="no open pull request into master was found for $GITHUB_REF_NAME"
+            # base=master because that is the only base the pull_request trigger above runs for.
+            number=$(timeout 30 gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" \
+              -f state=open -f base=master -f head="$GITHUB_REPOSITORY_OWNER:$GITHUB_REF_NAME" \
+              --jq '.[0].number // empty') || { number=; why="the pull request lookup failed"; }
+            if [ -n "$number" ]; then
+              why="#$number is open, but its head or mergeability did not settle on this commit"
+              # GitHub works out mergeability after the push, so the first answers can be null or
+              # still name the previous head. Thirty seconds, then run.
+              for attempt in 1 2 3 4 5 6; do
+                pr=$(timeout 30 gh api "repos/$GITHUB_REPOSITORY/pulls/$number" \
+                  --jq '"\(.state) \(.head.sha) \(.mergeable)"') || pr=
+                case "$pr" in
+                  "open $GITHUB_SHA true")
+                    run=false
+                    why="#$number is open on this commit, so its pull_request run covers it"
+                    break ;;
+                  "open $GITHUB_SHA false")
+                    why="#$number has a merge conflict, so no pull_request run will start"
+                    break ;;
+                esac
+                [ "$attempt" -eq 6 ] || sleep 5
+              done
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [ "$run" = false ]; then
+            echo "suffix= (skipped, the pull request run covers this commit)" >> "$GITHUB_OUTPUT"
+          fi
+          echo "run=$run: $why" | tee -a "$GITHUB_STEP_SUMMARY"
+
   console:
-    name: Console (lint, types, unit)
-    if: github.event_name != 'schedule'
+    name: Console (lint, types, unit)${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: github.event_name != 'schedule' && needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -82,8 +153,9 @@ jobs:
         run: bash scripts/check-env-config.sh
 
   audit:
-    name: Audit dependencies
-    if: github.event_name != 'schedule'
+    name: Audit dependencies${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: github.event_name != 'schedule' && needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -146,8 +218,9 @@ jobs:
   # Both directions in one job, the same shape as image-platform-gate below. A gate that has only
   # ever been green is not evidence that it works.
   licences:
-    name: Licence gate
-    if: github.event_name != 'schedule'
+    name: Licence gate${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: github.event_name != 'schedule' && needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -197,8 +270,9 @@ jobs:
             echo "::error::the gate failed, but not because of the GPL package (exit $code)"; exit 1; }
 
   e2e:
-    name: End to end (Playwright and axe)
-    if: github.event_name != 'schedule'
+    name: End to end (Playwright and axe)${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: github.event_name != 'schedule' && needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -255,8 +329,9 @@ jobs:
           retention-days: 7
 
   image:
-    name: Image builds
-    if: github.event_name != 'schedule'
+    name: Image builds${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: github.event_name != 'schedule' && needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -407,8 +482,9 @@ jobs:
           echo "quickstart/docker-compose.yml resolves"
 
   sbom:
-    name: SBOM generates
-    if: github.event_name != 'schedule'
+    name: SBOM generates${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: github.event_name != 'schedule' && needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -455,7 +531,9 @@ jobs:
   # An arm runner. Both tags are published for arm64 and amd64; arm is what this job was proven on,
   # and it is free for public repositories.
   smoke:
-    name: Console against the real API
+    name: Console against the real API${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -548,7 +626,9 @@ jobs:
   # Both directions on purpose. A gate that refuses everything would satisfy the negative case
   # alone and block every release.
   image-platform-gate:
-    name: Image platform gate refuses an amd64-only tag
+    name: Image platform gate refuses an amd64-only tag${{ needs.gate.outputs.suffix }}
+    needs: gate
+    if: needs.gate.outputs.run != 'false' && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: read
