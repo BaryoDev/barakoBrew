@@ -38,8 +38,12 @@ jobs:
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
+      # Worst case for the script: 10 + 6 x (10 + 10) + 5 x 5 = 155 seconds, under this step's 180.
+      # A step past its timeout fails, a failed gate runs everything, and the job's own limit above
+      # is never reached.
       - name: Look for an open pull request on this branch
         id: decide
+        timeout-minutes: 3
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -49,7 +53,7 @@ jobs:
           run=true
           why="no open pull request into master was found for $GITHUB_REF_NAME"
           # base=master because that is the only base ci.yml's pull_request trigger runs for.
-          number=$(timeout 30 gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" \
+          number=$(timeout 10 gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" \
             -f state=open -f base=master -f head="$GITHUB_REPOSITORY_OWNER:$GITHUB_REF_NAME" \
             --jq '.[0].number // empty') || { number=; why="the pull request lookup failed"; }
           if [ -n "$number" ]; then
@@ -58,13 +62,13 @@ jobs:
             # still name the previous head. The pull_request run also takes a few seconds to
             # appear. Thirty seconds, then run.
             for attempt in 1 2 3 4 5 6; do
-              pr=$(timeout 30 gh api "repos/$GITHUB_REPOSITORY/pulls/$number" \
+              pr=$(timeout 10 gh api "repos/$GITHUB_REPOSITORY/pulls/$number" \
                 --jq '"\(.state) \(.head.sha) \(.mergeable)"') || pr=
               case "$pr" in
                 "open $GITHUB_SHA true")
                   # An open pull request is not yet a pull_request run. One retargeted to master,
                   # or opened with the workflow token, starts none, so look for the run itself.
-                  runs=$(timeout 30 gh api -X GET \
+                  runs=$(timeout 10 gh api -X GET \
                     "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
                     -f head_sha="$GITHUB_SHA" -f event=pull_request --jq '.total_count') || runs=
                   if [ "$runs" -gt 0 ] 2>/dev/null; then
