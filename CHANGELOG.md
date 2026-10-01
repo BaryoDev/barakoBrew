@@ -17,6 +17,13 @@ moved. Which API a console works against is stated per release instead.
   `Branch push / <job name>`. A merge queue group runs once too. A branch cut before this change
   keeps running twice until it takes master. (#96)
 
+### Security
+
+- **Next.js is 16.3.8, and `brace-expansion` is 1.1.21 and 5.0.12.** Next.js 16.3.6 fixed
+  GHSA-vcvr-r3jv-pc5j, which covers 16.2.0 to 16.3.5, and 16.3.8 is the current patch. The
+  `brace-expansion` versions fix GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 and GHSA-6j4f-fj2g-mc7p.
+  `@humanfs/node` moves to 0.16.8 for GHSA-p498-v437-472g. `npm audit` reports nothing. (#204)
+
 ## [1.6.0] - 2026-09-29
 
 **Speaks API contracts 1 to 5, which covers barakoCMS 4.0.1 to 4.5.0.** barakoCMS 4.5.0 moves the
