@@ -21,6 +21,12 @@ moved. Which API a console works against is stated per release instead.
 
 ### Changed
 
+- **Speaks API contracts 1 to 6.** The next barakoCMS release moves the contract to 6: an entry
+  write that breaks a field's `validationRules` answers 400 naming the field and the rule, and
+  saving a content type with a rule the API cannot apply is refused (BaryoDev/barakoCMS#927). The
+  console sets no validation rules and already shows the API's message when a save is refused, so
+  nothing else changes here. A console that stops at 5 refuses that API outright, so upgrade the
+  console before the API.
 - **A push to a branch with an open pull request runs CI once, not twice.** `ci.yml` no longer
   listens to `push`. `ci-branch.yml` takes branch pushes and calls it only when no `pull_request`
   run covers the commit, so a branch with no pull request yet still gets every job, reported as
