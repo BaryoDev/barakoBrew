@@ -14,7 +14,7 @@ import {
  * on its own passes when one type is swapped for another.
  *
  * Every canonical name in Core/Validation/FieldTypeRegistry.cs, as of 4.0, plus choice from
- * BaryoDev/barakoCMS#820.
+ * BaryoDev/barakoCMS#820, and token, file and inlineimage from 4.6.
  */
 const REGISTRY_CANONICAL = [
     'array',
@@ -24,7 +24,9 @@ const REGISTRY_CANONICAL = [
     'datetime',
     'decimal',
     'email',
+    'file',
     'geopoint',
+    'inlineimage',
     'int',
     'json',
     'markdown',
@@ -36,6 +38,7 @@ const REGISTRY_CANONICAL = [
     'string',
     'text',
     'time',
+    'token',
     'url',
     'uuid',
 ];
@@ -60,13 +63,16 @@ describe('the field type list', () => {
 });
 
 describe('the grouped picker', () => {
-    // The groups and their membership come from the Add-a-field panel in the design.
+    // The groups and their membership come from the Add-a-field panel in the design. The design
+    // predates token, file and inlineimage (API 4.6): token sits with the text types, and the two
+    // that hold a file or an image have a group of their own ahead of the checked ones.
     const EXPECTED: Record<string, string[]> = {
-        Text: ['string', 'text', 'richtext', 'markdown', 'slug', 'uuid'],
+        Text: ['string', 'text', 'richtext', 'markdown', 'slug', 'uuid', 'token'],
         Numbers: ['int', 'decimal', 'money'],
         Time: ['date', 'datetime', 'time'],
         'True or false': ['bool'],
         Structured: ['array', 'object', 'json', 'geopoint'],
+        'Files and images': ['file', 'inlineimage'],
         'Checked on write': ['email', 'url', 'reference', 'choice'],
     };
 

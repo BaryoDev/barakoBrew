@@ -3,7 +3,9 @@ import {
   ANY_STATUS,
   failureKind,
   formatDuration,
+  isCancellable,
   isRetryable,
+  isStopped,
   runFailureKind,
   runListParams,
   toneForAttemptStatus,
@@ -192,5 +194,38 @@ describe('runFailureKind', () => {
   it('says nothing for a run with no failed action, or no actions at all', () => {
     expect(runFailureKind({ actions: [{ status: 'Succeeded', retryable: false }] })).toBeNull();
     expect(runFailureKind({ actions: [] })).toBeNull();
+  });
+});
+
+describe('isCancellable', () => {
+  it('is true for a waiting or running run on an API that can cancel', () => {
+    expect(isCancellable({ status: 'Pending', cancelledAt: null })).toBe(true);
+    expect(isCancellable({ status: 'Running', cancelledAt: null })).toBe(true);
+  });
+
+  it('is false for a finished run', () => {
+    for (const status of ['Succeeded', 'Failed', 'PartiallyFailed', 'Cancelled']) {
+      expect(isCancellable({ status, cancelledAt: null })).toBe(false);
+    }
+  });
+
+  it('is false once someone has stopped the run, even while an action is still out', () => {
+    expect(isCancellable({ status: 'Running', cancelledAt: '2026-10-03T10:00:00Z' })).toBe(false);
+  });
+
+  it('is false on an API before 4.6, which sends no cancelledAt and has no cancel route', () => {
+    expect(isCancellable({ status: 'Pending' })).toBe(false);
+  });
+});
+
+describe('isStopped', () => {
+  it('is true for a cancelled run and for one cancelled with an action still out', () => {
+    expect(isStopped({ status: 'Cancelled' })).toBe(true);
+    expect(isStopped({ status: 'Running', cancelledAt: '2026-10-03T10:00:00Z' })).toBe(true);
+  });
+
+  it('is false for a run nobody stopped', () => {
+    expect(isStopped({ status: 'Failed', cancelledAt: null })).toBe(false);
+    expect(isStopped({ status: 'Failed' })).toBe(false);
   });
 });

@@ -1,10 +1,9 @@
 /**
  * Share links, whatever a link is scoped to.
  *
- * A scope says what a link covers and where the API serves it. barakoCMS serves one scope today,
- * the whole site. BaryoDev/barakoCMS#857 adds entry and page scopes; each is a builder like
- * `siteShareScope` in `@/lib/site-mode`, and the panel, the hooks and the query cache work from a
- * scope alone, so none of them changes when one arrives.
+ * A scope says what a link covers and where the API serves it: the whole site, or one entry (a
+ * page link is an entry link that also carries the path the page is served at). Each is a builder
+ * in `@/lib/site-mode`, and the panel, the hooks and the query cache work from a scope alone.
  *
  * Nothing here imports through `@/`, so `smoke/` can read the same values the console ships instead
  * of restating them.
@@ -18,6 +17,10 @@ export interface ShareLink {
     expiresAt: string | null;
     revokedAt?: string | null;
     lastUsedAt?: string | null;
+    /** `site`, `entry` or `page`. Absent before barakoCMS 4.6, where every link was a site link. */
+    scope?: string;
+    /** Set on a page link: the path it was made for. */
+    path?: string | null;
 }
 
 /** The create response, the only one that carries `key`. */
@@ -27,6 +30,8 @@ export interface CreatedShareLink {
     expiresAt: string | null;
     createdAt: string;
     key: string;
+    scope?: string;
+    path?: string | null;
 }
 
 export type ShareLinkStatus = 'active' | 'expired' | 'revoked';
@@ -61,6 +66,48 @@ export interface ShareLinkScope {
     link: (key: string) => ShareLinkTarget;
     /** Shown when the link came back incomplete. */
     incompleteNote: string;
+    /** The panel offers a page path, which makes the link a page link. Entry scopes only. */
+    acceptsPath?: boolean;
+    /**
+     * A 403 on the list hides the panel instead of showing an error. An entry's links need update on
+     * that entry, and someone who can only read it has nothing to do here.
+     */
+    hideWhenForbidden?: boolean;
+}
+
+/** The longest page path the API accepts. */
+const MAX_PATH_LENGTH = 2048;
+
+/**
+ * Backslash, `?`, `#`, `%`, whitespace, control characters and the Basic Multilingual Plane's format
+ * characters (soft hyphen, zero width spaces, the bidi marks and overrides, the byte order mark).
+ * Spelled out rather than `\p{Cf}`, which needs an ES2018 target. A format character outside the
+ * BMP still reaches the API, which refuses it.
+ */
+const REFUSED_IN_PATH =
+    /[\\?#%\s\u0000-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB]/;
+
+/**
+ * The API's rule for a page link's path: a leading slash, no empty, `.` or `..` segment, and no
+ * whitespace, backslash, `?`, `#`, `%`, control or format character. The API is still the one that
+ * refuses; this lets the form say so before a round trip.
+ */
+export function isSitePath(path: string): boolean {
+    if (path.length === 0 || path.length > MAX_PATH_LENGTH || path[0] !== '/') return false;
+    if (path.includes('//')) return false;
+    if (path.split('/').some((segment) => segment === '.' || segment === '..')) return false;
+    return !REFUSED_IN_PATH.test(path);
+}
+
+/**
+ * The link a preview token is handed over as: the site address, the path the entry is read at, and
+ * the token in the query parameter the API names. Null when the site has no usable address.
+ */
+export function previewLinkUrl(siteUrl: string | null, path: string, token: string, queryParam = 'preview'): string | null {
+    if (!siteUrl) return null;
+    const base = siteUrl.trim().replace(/\/+$/, '');
+    const at = path.startsWith('/') ? path : `/${path}`;
+    return `${base}${at}?${encodeURIComponent(queryParam)}=${encodeURIComponent(token)}`;
 }
 
 /**
@@ -117,4 +164,31 @@ export function shareLinkExpiry(days: number, maxDays: number, now: Date = new D
     const wanted = Number.isFinite(days) ? Math.floor(days) : PREFERRED_DAYS;
     const clamped = Math.min(Math.max(wanted, 1), maxShareLinkDays(maxDays));
     return new Date(now.getTime() + clamped * DAY).toISOString();
+}
+
+/** Enough of a field definition to find the slug the way the API does. */
+interface SlugCandidate {
+    name: string;
+    type: string;
+    sensitivity?: string;
+}
+
+/**
+ * The entry's slug, found the way `POST /api/preview` finds it: a field of type `slug`, or else a
+ * Public string or text field named Slug. Null when the type has neither, which is when the API
+ * answers 404 for a preview.
+ */
+export function entrySlug(fields: SlugCandidate[], data: Record<string, unknown>): string | null {
+    const lower = (value: string) => value.toLowerCase();
+    const field =
+        fields.find((f) => lower(f.type) === 'slug') ??
+        fields.find(
+            (f) =>
+                lower(f.name) === 'slug' &&
+                (f.sensitivity ?? 'Public') === 'Public' &&
+                (lower(f.type) === 'string' || lower(f.type) === 'text'),
+        );
+    if (!field) return null;
+    const value = data[field.name];
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }

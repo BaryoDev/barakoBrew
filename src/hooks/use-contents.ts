@@ -162,3 +162,33 @@ export function useRollbackContent() {
         },
     });
 }
+
+/**
+ * Moves an entry of a type with its own lifecycle through a named transition. `data` carries the
+ * values of the fields the transition requires or allows, and is left out when there are none, as
+ * an API older than transition fields expects.
+ */
+export function useTransitionContent() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            id,
+            transition,
+            data,
+        }: {
+            id: string;
+            transition: string;
+            data?: Record<string, unknown>;
+        }) => {
+            const body: Record<string, unknown> = { id, transition };
+            if (data && Object.keys(data).length > 0) body.data = data;
+            const response = await api.put<{ message: string }>(`/api/contents/${id}/status`, body);
+            return response.data;
+        },
+        onSuccess: (_data, { id }) => {
+            queryClient.invalidateQueries({ queryKey: ['contents'] });
+            queryClient.invalidateQueries({ queryKey: ['contents', 'detail', id] });
+        },
+    });
+}

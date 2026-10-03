@@ -391,3 +391,67 @@ describe('the test button', () => {
         expect(screen.getByRole('button', { name: 'Test Beta' })).toBeDisabled();
     });
 });
+
+describe('OAuth2 client credentials', () => {
+    const oauth = () =>
+        connector({
+            auth: 'OAuth2ClientCredentials',
+            settings: { TokenUrl: 'https://id.example.com/token', ClientId: 'client-1', Scope: 'read' },
+            secretKeys: ['ClientSecret'],
+        });
+
+    it('saves the token URL, client id and scope as settings and the secret as a secret', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: oauth() });
+        await openCreate();
+
+        typeInto(nameField(), 'Accounting');
+        typeInto(baseUrlField(), 'https://api.example.com');
+        fireEvent.change(screen.getByLabelText('Authentication'), { target: { value: 'OAuth2ClientCredentials' } });
+        typeInto(screen.getByLabelText('Token URL') as HTMLInputElement, 'https://id.example.com/token');
+        typeInto(screen.getByLabelText('Client id') as HTMLInputElement, 'client-1');
+        typeInto(screen.getByLabelText('Scope (optional)') as HTMLInputElement, 'read');
+        typeInto(screen.getByLabelText('ClientSecret') as HTMLInputElement, 's3cret');
+        fireEvent.click(screen.getByRole('button', { name: 'Add connector' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalled());
+        expect(vi.mocked(api.post).mock.calls[0][1]).toMatchObject({
+            auth: 'OAuth2ClientCredentials',
+            settings: { TokenUrl: 'https://id.example.com/token', ClientId: 'client-1', Scope: 'read' },
+            secrets: { ClientSecret: 's3cret' },
+        });
+    });
+
+    it('never shows the stored client secret, and leaves it out of a save that does not change it', async () => {
+        vi.mocked(api.put).mockResolvedValue({ data: oauth() });
+        await openEdit(oauth());
+
+        expect((screen.getByLabelText('Replace the stored ClientSecret') as HTMLInputElement).value).toBe('');
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalled());
+        expect(vi.mocked(api.put).mock.calls[0][1]).toMatchObject({ secrets: undefined });
+    });
+
+    it('will not save a moved token URL until the client secret is entered again', async () => {
+        vi.mocked(api.put).mockResolvedValue({ data: oauth() });
+        await openEdit(oauth());
+
+        retype(screen.getByLabelText('Token URL') as HTMLInputElement, 'https://other.example.com/token');
+
+        expect(screen.getByText(/enter the client secret again/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+        typeInto(screen.getByLabelText('Replace the stored ClientSecret') as HTMLInputElement, 'new-secret');
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+    });
+});
+
+describe('the way to a connector deliveries', () => {
+    it('links each connector to its own request deliveries', async () => {
+        renderPage([connector({ slug: 'crm', name: 'CRM' })]);
+
+        const link = await screen.findByRole('link', { name: 'Deliveries for CRM' });
+        expect(link).toHaveAttribute('href', '/settings/deliveries?kind=requests&connector=crm');
+        expect(screen.getByRole('link', { name: 'Deliveries' })).toHaveAttribute('href', '/settings/deliveries?kind=requests');
+    });
+});

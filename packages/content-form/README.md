@@ -19,11 +19,16 @@ import { ContentForm } from 'barako-content-form';
 
 ## Sensitivity
 
-`viewerRoles` is required, not optional. A field marked `Sensitive` or `Hidden` that those roles
+`viewerRoles` is required, not optional. A field marked `Sensitive` or `Hidden` that the viewer
 cannot read is drawn read only, with a line saying so, and the value the caller passed is never
-made editable. The rule is the one the API enforces in `SensitivityService`: SuperAdmin sees
-everything, then `visibleToRoles` if the field names any, then `HR` for `Sensitive` and nobody but
-SuperAdmin for `Hidden`.
+made editable.
+
+Pass `viewerCapabilities` (and `viewerRoleIds`) when you know them, and the rule is the one
+barakoCMS 4.6 enforces in `SensitivityService`: the seeded SuperAdmin role (by id) sees everything,
+then `visibleToRoles` if the field names any, then `view_sensitive` for `Sensitive` and
+`view_hidden` for `Hidden`, with `*` satisfying both. Leave them out and the older rule by name
+applies: SuperAdmin sees everything, then `visibleToRoles`, then `HR` for `Sensitive` and nobody
+but SuperAdmin for `Hidden`.
 
 The API would refuse the write anyway, silently, by putting the stored value back. Drawing an
 editable box over a value the server will not take is the thing this stops.

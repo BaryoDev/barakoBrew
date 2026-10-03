@@ -93,6 +93,34 @@ describe('the Items field of a menu', () => {
     });
 });
 
+describe('the editor hint', () => {
+    it('opens the menu editor on a field of any name and type that names it', () => {
+        const fields = [
+            { name: 'FooterItems', displayName: 'Footer items', type: 'array', isRequired: false, editor: 'menu' },
+        ] as FieldDefinition[];
+        render(
+            <DynamicForm
+                contentType="footer"
+                fields={fields}
+                values={{ FooterItems: [{ Label: 'Blog', Url: '/blog' }, { Label: 'Docs', Url: '/docs' }] }}
+                onChange={() => {}}
+            />,
+        );
+
+        expect(screen.getByRole('button', { name: 'Move Docs up' })).toBeEnabled();
+        expect(document.querySelector('textarea')).toBeNull();
+    });
+
+    it('wins over the name, so a menu Items field with another hint is plain JSON', () => {
+        const fields = [
+            { name: 'Items', displayName: 'Items', type: 'json', isRequired: false, editor: 'links' },
+        ] as FieldDefinition[];
+        render(<DynamicForm contentType="menu" fields={fields} values={{ Items: [] }} onChange={() => {}} />);
+
+        expect(document.getElementById('Items')?.tagName).toBe('TEXTAREA');
+    });
+});
+
 /**
  * The console draws its form with barako-content-form.
  *

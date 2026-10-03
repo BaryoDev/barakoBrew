@@ -26,6 +26,7 @@ export const MODULE = {
     emailEvents: 'Email.Resend',
     featureFlags: 'FeatureFlags',
     files: 'Files',
+    forms: 'Forms',
     import: 'Import',
     pages: 'Pages',
     portability: 'Portability',

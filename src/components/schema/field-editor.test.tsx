@@ -150,3 +150,99 @@ describe('a choice field', () => {
         expect('multiple' in saved[0][0]).toBe(false);
     });
 });
+
+describe('the members a field type adds', () => {
+    function start(onChange: (f: FieldDefinition[]) => void, displayName: string, typeLabel: string) {
+        render(<FieldEditor fields={[]} onChange={onChange} contentTypes={[{ name: 'speaker', displayName: 'Speaker' }]} />);
+        fireEvent.click(screen.getAllByRole('button', { name: 'Add field' })[0]);
+        fireEvent.change(screen.getByLabelText('Display name'), { target: { value: displayName } });
+        fireEvent.keyDown(screen.getByRole('combobox', { name: 'Type' }), { key: 'ArrowDown' });
+        const option = within(screen.getByRole('listbox'))
+            .getAllByRole('option')
+            .find((o) => o.textContent?.startsWith(typeLabel))!;
+        fireEvent.keyDown(option, { key: 'Enter' });
+    }
+
+    function addButton() {
+        const buttons = screen.getAllByRole('button', { name: 'Add field' });
+        return buttons[buttons.length - 1];
+    }
+
+    it('saves a money field with its currency and scale', () => {
+        const saved: FieldDefinition[][] = [];
+        start((f) => saved.push(f), 'Unit price', 'Money');
+
+        fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'usd' } });
+        fireEvent.change(screen.getByLabelText('Decimal places'), { target: { value: '4' } });
+        fireEvent.click(addButton());
+
+        expect(saved).toHaveLength(1);
+        expect(saved[0][0]).toMatchObject({ type: 'money', currency: 'USD', scale: 4 });
+    });
+
+    it('will not save a scale without a currency', () => {
+        start(() => {}, 'Total', 'Money');
+
+        fireEvent.change(screen.getByLabelText('Decimal places'), { target: { value: '2' } });
+
+        expect(screen.getByText(/Set a currency before/)).toBeInTheDocument();
+        expect(addButton()).toBeDisabled();
+    });
+
+    it('saves a token field with its length, not required and not Public', () => {
+        const saved: FieldDefinition[][] = [];
+        start((f) => saved.push(f), 'Claim token', 'Token');
+
+        expect(screen.queryByRole('switch', { name: 'Required' })).toBeNull();
+        fireEvent.change(screen.getByLabelText('Token length'), { target: { value: '24' } });
+        fireEvent.click(addButton());
+
+        expect(saved).toHaveLength(1);
+        expect(saved[0][0]).toMatchObject({ type: 'token', tokenLength: 24, isRequired: false, sensitivity: 'Hidden' });
+    });
+
+    it('needs a target for a reference, and saves it with several entries allowed', () => {
+        const saved: FieldDefinition[][] = [];
+        start((f) => saved.push(f), 'Speakers', 'Reference');
+
+        expect(addButton()).toBeDisabled();
+        fireEvent.change(screen.getByLabelText('Points at (content type)'), { target: { value: 'speaker' } });
+        fireEvent.click(screen.getByRole('switch', { name: 'Holds several entries' }));
+        fireEvent.click(addButton());
+
+        expect(saved).toHaveLength(1);
+        expect(saved[0][0]).toMatchObject({ type: 'reference', referenceType: 'speaker', multiple: true });
+    });
+
+    it('saves a section, and leaves out an editor and role nobody picked', () => {
+        const saved: FieldDefinition[][] = [];
+        start((f) => saved.push(f), 'Headline', 'Text');
+
+        fireEvent.change(screen.getByLabelText('Section'), { target: { value: 'Details' } });
+        fireEvent.click(addButton());
+
+        expect(saved).toHaveLength(1);
+        expect(saved[0][0].section).toBe('Details');
+        expect('editor' in saved[0][0]).toBe(false);
+        expect('role' in saved[0][0]).toBe(false);
+    });
+
+    it('refuses a role another field already holds', () => {
+        render(
+            <FieldEditor
+                fields={[{ name: 'Title', displayName: 'Title', type: 'string', isRequired: false, role: 'title' }]}
+                onChange={() => {}}
+            />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+        fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Name' } });
+        fireEvent.keyDown(screen.getByRole('combobox', { name: 'Role' }), { key: 'ArrowDown' });
+        const title = within(screen.getByRole('listbox'))
+            .getAllByRole('option')
+            .find((o) => o.textContent === 'Title')!;
+        fireEvent.keyDown(title, { key: 'Enter' });
+
+        expect(screen.getByText(/already holds this role/)).toBeInTheDocument();
+        expect(addButton()).toBeDisabled();
+    });
+});

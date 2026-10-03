@@ -46,6 +46,10 @@ export interface ContentTypeDefinition {
      * API refuses a second create. Absent from an API older than the flag, which reads as false.
      */
     isSingleton?: boolean;
+    /** Where an entry lives on the site, such as `/blog/{slug}`. Absent or null when none is declared. */
+    routeTemplate?: string | null;
+    /** Values only one entry of this type may hold at a time. Absent or null when there are none. */
+    uniqueness?: UniquenessRule[] | null;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -55,7 +59,23 @@ export interface StateTransition {
     name: string;
     from: string;
     to: string;
+    /** Fields whose values have to be sent with this move. Absent from an API older than 4.6. */
+    requiredFields?: string[];
+    /** Fields whose values may be sent with this move. */
+    optionalFields?: string[];
 }
+
+/** Mirrors Models/ContentTypeDefinition.cs UniquenessRule. */
+export interface UniquenessRule {
+    name: string;
+    /** One to five field names, or `$createdBy` for the user who created the entry. */
+    fields: string[];
+    /** The lifecycle state an entry has to be in to count, or null to count every entry. */
+    whenState?: string | null;
+}
+
+/** The name that stands for the entry's creator in a uniqueness rule. */
+export const CREATED_BY_FIELD = '$createdBy';
 
 export interface LifecycleDefinition {
     states: string[];
@@ -70,4 +90,6 @@ export interface CreateSchemaRequest {
     fields: FieldDefinition[];
     isPubliclyDeliverable?: boolean;
     isSingleton?: boolean;
+    /** Left out when empty, so an API older than the member is sent nothing it does not know. */
+    routeTemplate?: string;
 }

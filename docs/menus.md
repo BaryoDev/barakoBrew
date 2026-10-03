@@ -37,8 +37,9 @@ itself stores whatever list it is given.
 
 ## Editing it in the console
 
-The console shows the menu editor for the field named `Items` on the type named `menu`, and only
-there. Another name gets the plain JSON editor. The editor:
+The console shows the menu editor for a json or array field whose definition sets the editor hint
+`"editor": "menu"`, on any type (API 4.6 and later). A field with no hint gets it only when it is the
+field named `Items` on the type named `menu`; any other field gets the plain JSON editor. The editor:
 
 - moves an item up or down among its siblings, nests a top-level item under the one above it, and
   moves a child back out, all with buttons that work from the keyboard;

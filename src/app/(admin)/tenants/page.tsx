@@ -50,7 +50,6 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [name, setName] = useState('');
   const [handle, setHandle] = useState('');
   const [handleEdited, setHandleEdited] = useState(false);
-  const [about, setAbout] = useState('');
   const [isActive, setIsActive] = useState(true);
 
   // Derive the handle from the name until the user edits it directly (same nicety as the schema form).
@@ -69,7 +68,6 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setName('');
     setHandle('');
     setHandleEdited(false);
-    setAbout('');
     setIsActive(true);
     create.reset();
   }
@@ -81,7 +79,6 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       await create.mutateAsync({
         Handle: derivedHandle,
         Name: name.trim(),
-        About: about.trim() || undefined,
         IsActive: isActive,
       });
       toast.success(`Tenant "${name.trim()}" created`, {
@@ -142,16 +139,6 @@ function CreateTenantDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   ? '3–40 characters, lowercase letters, numbers and hyphens; no leading or trailing hyphen.'
                   : 'Used in URLs and the X-Tenant header. Cannot be changed later.'}
               </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="tenant-about">About (optional)</Label>
-              <Input
-                id="tenant-about"
-                value={about}
-                onChange={(e) => setAbout(e.target.value)}
-                placeholder="Short description"
-              />
             </div>
 
             <div className="flex items-center justify-between">

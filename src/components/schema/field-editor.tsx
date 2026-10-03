@@ -44,11 +44,27 @@ import {
 import { SENSITIVITY_META } from '@/types/content';
 import { OptionsEditor } from '@/components/schema/options-editor';
 import { hasOptionIssues, optionIssues } from '@/lib/choice';
+import {
+    TOKEN_LENGTH,
+    currencyProblem,
+    editorsFor,
+    rolesFor,
+    sectionProblem,
+    tokenLengthProblem,
+} from '@/lib/field-presentation';
 
 interface FieldEditorProps {
     fields: FieldDefinition[];
     onChange: (fields: FieldDefinition[]) => void;
+    /**
+     * The content types a reference field can point at, offered as suggestions. Left off, the
+     * target is typed by its API name.
+     */
+    contentTypes?: { name: string; displayName: string }[];
 }
+
+/** A Select item cannot carry an empty value, so "none" is spelled with this. */
+const NONE = '__none';
 
 // The backend requires PascalCase field names (FieldTypeValidator).
 function toPascalCase(input: string): string {
@@ -62,21 +78,56 @@ function toPascalCase(input: string): string {
 
 const PASCAL_CASE = /^[A-Z][A-Za-z0-9]*$/;
 
-// The API refuses options and multiple on any type but choice, so they go when the type changes.
+// The API refuses each of these members on a type it does not belong to, so they go when the type
+// changes: options on anything but choice, multiple on anything but choice and reference, a target
+// on anything but reference, a currency on anything but money, a length on anything but token, and
+// an editor or role the new type cannot hold.
 function withType(field: FieldDefinition, type: FieldType): FieldDefinition {
+    const next: FieldDefinition = { ...field, type };
     if (type === 'choice') {
-        return {
-            ...field,
-            type,
-            options: field.options?.length ? field.options : [{ value: '', label: '' }],
-            multiple: field.multiple ?? false,
-        };
+        next.options = field.options?.length ? field.options : [{ value: '', label: '' }];
+        next.multiple = field.multiple ?? false;
+    } else {
+        delete next.options;
     }
-    const next = { ...field, type };
-    delete next.options;
-    delete next.multiple;
+    if (type !== 'choice' && type !== 'reference') delete next.multiple;
+    if (type !== 'reference') delete next.referenceType;
+    if (type !== 'money') {
+        delete next.currency;
+        delete next.scale;
+    }
+    if (type === 'token') {
+        // The server fills a token, so nothing can require one, and it is never Public.
+        next.isRequired = false;
+        if (!next.sensitivity || next.sensitivity === SensitivityLevel.Public) {
+            next.sensitivity = SensitivityLevel.Hidden;
+        }
+    } else {
+        delete next.tokenLength;
+    }
+    if (next.editor && !editorsFor(type).some((e) => e.name === next.editor)) delete next.editor;
+    if (next.role && !rolesFor(type).some((r) => r.name === next.role)) delete next.role;
     return next;
 }
+
+/** The field as it is sent: optional members left blank are left out, not sent empty. */
+function cleaned(field: FieldDefinition): FieldDefinition {
+    const next = { ...field };
+    if (!next.section) delete next.section;
+    if (!next.editor) delete next.editor;
+    if (!next.role) delete next.role;
+    if (!next.currency) {
+        delete next.currency;
+        delete next.scale;
+    }
+    if (next.scale === null || next.scale === undefined) delete next.scale;
+    if (next.tokenLength === null || next.tokenLength === undefined) delete next.tokenLength;
+    if (next.referenceType !== undefined) next.referenceType = next.referenceType.trim();
+    return next;
+}
+
+const numberText = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
+const textNumber = (text: string) => (text.trim() === '' ? null : Number(text));
 
 const EMPTY_FIELD: FieldDefinition = {
     name: '',
@@ -88,7 +139,7 @@ const EMPTY_FIELD: FieldDefinition = {
     mask: FieldMask.Default,
 };
 
-export function FieldEditor({ fields, onChange }: FieldEditorProps) {
+export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [form, setForm] = useState<FieldDefinition>(EMPTY_FIELD);
@@ -97,9 +148,33 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
     const nameIsDuplicate = fields.some(
         (f, i) => f.name === form.name && i !== editingIndex
     );
-    const isChoice = resolveFieldType(form.type) === 'choice';
+    const resolvedType = resolveFieldType(form.type);
+    const isChoice = resolvedType === 'choice';
+    const isReference = resolvedType === 'reference';
+    const isMoney = resolvedType === 'money';
+    const isToken = resolvedType === 'token';
     const optionsInvalid = isChoice && hasOptionIssues(optionIssues(form.options ?? []));
-    const canSave = form.name && form.displayName && nameIsValid && !nameIsDuplicate && !optionsInvalid;
+    const editors = editorsFor(form.type);
+    const roles = rolesFor(form.type);
+    const sectionIssue = sectionProblem(form.section ?? '');
+    const currencyIssue = isMoney ? currencyProblem(form.currency ?? '', numberText(form.scale)) : null;
+    const tokenIssue = isToken ? tokenLengthProblem(numberText(form.tokenLength)) : null;
+    const roleHolder = form.role
+        ? fields.find((f, i) => f.role === form.role && i !== editingIndex)
+        : undefined;
+    // The API refuses a reference that names no target, so the dialog does too.
+    const targetMissing = isReference && !form.referenceType?.trim();
+    const canSave =
+        form.name &&
+        form.displayName &&
+        nameIsValid &&
+        !nameIsDuplicate &&
+        !optionsInvalid &&
+        !sectionIssue &&
+        !currencyIssue &&
+        !tokenIssue &&
+        !roleHolder &&
+        !targetMissing;
 
     const openNew = () => {
         setForm(EMPTY_FIELD);
@@ -116,8 +191,8 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
     const save = () => {
         if (!canSave) return;
         const next = [...fields];
-        if (editingIndex !== null) next[editingIndex] = form;
-        else next.push(form);
+        if (editingIndex !== null) next[editingIndex] = cleaned(form);
+        else next.push(cleaned(form));
         onChange(next);
         setIsDialogOpen(false);
     };
@@ -196,6 +271,9 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                                 </div>
                                 <p className="text-muted-foreground text-xs">
                                     <code className="font-mono">{field.name}</code> · {fieldTypeLabel(field.type)}
+                                    {field.multiple ? ', several' : ''}
+                                    {field.currency ? ` in ${field.currency}` : ''}
+                                    {field.section ? ` · ${field.section}` : ''}
                                 </p>
                             </div>
                             <Button
@@ -320,13 +398,185 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                                 </fieldset>
                             </>
                         )}
-                        <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                            <Label htmlFor="field-required">Required</Label>
-                            <Switch
-                                id="field-required"
-                                checked={form.isRequired}
-                                onCheckedChange={(checked) => setForm((f) => ({ ...f, isRequired: checked }))}
-                            />
+                        {isReference && (
+                            <>
+                                <div className="space-y-2">
+                                    <Label htmlFor="field-reference-type">Points at (content type)</Label>
+                                    <Input
+                                        id="field-reference-type"
+                                        value={form.referenceType ?? ''}
+                                        placeholder="author"
+                                        className="font-mono"
+                                        list={contentTypes?.length ? 'field-reference-types' : undefined}
+                                        onChange={(e) => setForm((f) => ({ ...f, referenceType: e.target.value }))}
+                                    />
+                                    {contentTypes?.length ? (
+                                        <datalist id="field-reference-types">
+                                            {contentTypes.map((t) => (
+                                                <option key={t.name} value={t.name}>
+                                                    {t.displayName}
+                                                </option>
+                                            ))}
+                                        </datalist>
+                                    ) : null}
+                                    {targetMissing && (
+                                        <p className="text-muted-foreground text-xs">
+                                            The API name of the type the entries are picked from.
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="field-reference-multiple">Holds several entries</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            A list of up to 100 entries, in the order they are picked.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="field-reference-multiple"
+                                        checked={form.multiple ?? false}
+                                        onCheckedChange={(checked) => setForm((f) => ({ ...f, multiple: checked }))}
+                                    />
+                                </div>
+                            </>
+                        )}
+                        {isMoney && (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="field-currency">Currency</Label>
+                                    <Input
+                                        id="field-currency"
+                                        value={form.currency ?? ''}
+                                        placeholder="USD"
+                                        maxLength={3}
+                                        className="font-mono"
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))
+                                        }
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        Leave empty for a plain number. Nothing is rounded: an amount with too
+                                        many decimal places is refused.
+                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="field-scale">Decimal places</Label>
+                                    <Input
+                                        id="field-scale"
+                                        type="number"
+                                        min={0}
+                                        max={8}
+                                        step={1}
+                                        value={numberText(form.scale)}
+                                        placeholder="The currency's own"
+                                        onChange={(e) => setForm((f) => ({ ...f, scale: textNumber(e.target.value) }))}
+                                    />
+                                </div>
+                                {currencyIssue && (
+                                    <p className="text-destructive text-xs sm:col-span-2">{currencyIssue}</p>
+                                )}
+                            </div>
+                        )}
+                        {isToken && (
+                            <div className="space-y-2">
+                                <Label htmlFor="field-token-length">Token length</Label>
+                                <Input
+                                    id="field-token-length"
+                                    type="number"
+                                    min={TOKEN_LENGTH.min}
+                                    max={TOKEN_LENGTH.max}
+                                    step={1}
+                                    value={numberText(form.tokenLength)}
+                                    placeholder={String(TOKEN_LENGTH.default)}
+                                    onChange={(e) =>
+                                        setForm((f) => ({ ...f, tokenLength: textNumber(e.target.value) }))
+                                    }
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                    The server generates the token when an entry is created, and nobody can set
+                                    or change it. A token is never public.
+                                </p>
+                                {tokenIssue && <p className="text-destructive text-xs">{tokenIssue}</p>}
+                            </div>
+                        )}
+                        {!isToken && (
+                            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                                <Label htmlFor="field-required">Required</Label>
+                                <Switch
+                                    id="field-required"
+                                    checked={form.isRequired}
+                                    onCheckedChange={(checked) => setForm((f) => ({ ...f, isRequired: checked }))}
+                                />
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="space-y-2 sm:col-span-2">
+                                <Label htmlFor="field-section">Section</Label>
+                                <Input
+                                    id="field-section"
+                                    value={form.section ?? ''}
+                                    placeholder="Details"
+                                    onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))}
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                    Fields with the same section are grouped on the edit screen. Leave empty for
+                                    none.
+                                </p>
+                                {sectionIssue && <p className="text-destructive text-xs">{sectionIssue}</p>}
+                            </div>
+                            {editors.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="field-editor-hint">Editor</Label>
+                                    <Select
+                                        value={form.editor ?? NONE}
+                                        onValueChange={(value) =>
+                                            setForm((f) => ({ ...f, editor: value === NONE ? null : value }))
+                                        }
+                                    >
+                                        <SelectTrigger id="field-editor-hint" className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={NONE}>Pick by type and name</SelectItem>
+                                            {editors.map((e) => (
+                                                <SelectItem key={e.name} value={e.name}>
+                                                    {e.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                            {roles.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="field-role">Role</Label>
+                                    <Select
+                                        value={form.role ?? NONE}
+                                        onValueChange={(value) =>
+                                            setForm((f) => ({ ...f, role: value === NONE ? null : value }))
+                                        }
+                                    >
+                                        <SelectTrigger id="field-role" className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={NONE}>None</SelectItem>
+                                            {roles.map((r) => (
+                                                <SelectItem key={r.name} value={r.name}>
+                                                    {r.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {roleHolder && (
+                                        <p className="text-destructive text-xs">
+                                            {roleHolder.displayName} already holds this role. One field of a type
+                                            holds a role.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -341,7 +591,10 @@ export function FieldEditor({ fields, onChange }: FieldEditorProps) {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {[SensitivityLevel.Public, SensitivityLevel.Sensitive, SensitivityLevel.Hidden].map(
+                                    {(isToken
+                                        ? [SensitivityLevel.Sensitive, SensitivityLevel.Hidden]
+                                        : [SensitivityLevel.Public, SensitivityLevel.Sensitive, SensitivityLevel.Hidden]
+                                    ).map(
                                         (level) => (
                                             <SelectItem key={level} value={String(level)}>
                                                 <span className="font-medium">{SENSITIVITY_META[level].label}</span>

@@ -1,6 +1,6 @@
 import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, expect, it } from 'vitest';
-import { apiErrorMessage } from './api';
+import { apiErrorMessage, retryAfterText } from './api';
 
 /**
  * The server sends RFC7807 ProblemDetails, whose entries carry `name` and `reason`.
@@ -75,5 +75,49 @@ describe('apiErrorMessage', () => {
         };
 
         expect(apiErrorMessage(error)).toBe('Your session has expired. Sign in again.');
+    });
+});
+
+function tooMany(body: unknown, headers: Record<string, string> = {}) {
+    const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST');
+    error.response = { data: body, status: 429, statusText: '', headers, config: { headers: new AxiosHeaders() } };
+    return error;
+}
+
+describe('apiErrorMessage on a 429', () => {
+    it('repeats the API text as it stands when no wait is given, which is every release so far', () => {
+        expect(apiErrorMessage(tooMany('Too many requests. Please try again later.'))).toBe(
+            'Too many requests. Please try again later.',
+        );
+    });
+
+    it('says to wait a moment when the 429 has no text either', () => {
+        expect(apiErrorMessage(tooMany(''))).toBe('Too many requests. Wait a moment and try again.');
+    });
+
+    it('adds the wait when Retry-After gives seconds', () => {
+        expect(apiErrorMessage(tooMany('Too many requests. Please try again later.', { 'retry-after': '45' }))).toBe(
+            'Too many requests. Please try again later. Try again in 45 seconds.',
+        );
+    });
+});
+
+describe('retryAfterText', () => {
+    const NOW = new Date('2026-10-03T12:00:00Z');
+
+    it('reads seconds and rounds minutes up', () => {
+        expect(retryAfterText('1', NOW)).toBe('1 second');
+        expect(retryAfterText('90', NOW)).toBe('2 minutes');
+    });
+
+    it('reads an HTTP date', () => {
+        expect(retryAfterText('Sat, 03 Oct 2026 12:05:00 GMT', NOW)).toBe('5 minutes');
+    });
+
+    it('is null for nothing, a past date or text it cannot read', () => {
+        expect(retryAfterText(undefined, NOW)).toBeNull();
+        expect(retryAfterText('0', NOW)).toBeNull();
+        expect(retryAfterText('Sat, 03 Oct 2026 11:00:00 GMT', NOW)).toBeNull();
+        expect(retryAfterText('soon', NOW)).toBeNull();
     });
 });

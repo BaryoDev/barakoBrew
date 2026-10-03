@@ -197,3 +197,28 @@ describe('AttemptCard', () => {
     expect(document.querySelector('li b')).toBeNull();
   });
 });
+
+describe('AttemptCard on a halting run', () => {
+  it('offers no retry on a failed action of a stopped run', () => {
+    render(
+      <ol>
+        <AttemptCard attempt={attempt()} onRetry={vi.fn()} retrying={false} canRetry={false} />
+      </ol>,
+    );
+
+    expect(screen.queryByRole('button', { name: /retry action 2/i })).toBeNull();
+  });
+
+  it('says which action halted the run on an action skipped behind it', () => {
+    renderCard(attempt({ ordinal: 3, status: 'Skipped', haltedBy: 1, error: null, responseStatus: null }));
+
+    expect(screen.getByText('action 1 failed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /retry action 3/i })).toBeNull();
+  });
+
+  it('says a halting action stops the run if it fails', () => {
+    renderCard(attempt({ onFailure: 'Halt' }));
+
+    expect(screen.getByText('Stops the run')).toBeInTheDocument();
+  });
+});

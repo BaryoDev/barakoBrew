@@ -209,3 +209,65 @@ describe('the new workflow form', () => {
         expect(body.actions[0].parameters).toEqual({ Url: 'https://site.example/hook' });
     });
 });
+
+describe('stopping the run when an action fails', () => {
+    it('sends onFailure Halt for an action set to stop the run, and nothing for one that is not', async () => {
+        renderPage();
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Post then file' } });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/content-types'));
+        await choose('When an entry of type…', 'Post');
+        fireEvent.change(await addWebhook(), { target: { value: 'https://a.example/hook' } });
+        await choose('Add an action', 'Webhook');
+        const urls = screen.getAllByLabelText(/^Url/);
+        expect(urls).toHaveLength(2);
+        fireEvent.change(urls[1], { target: { value: 'https://b.example/hook' } });
+
+        const halts = screen.getAllByLabelText('Stop the actions after this one if it fails');
+        expect(halts).toHaveLength(2);
+        fireEvent.click(halts[0]);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Create workflow' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        const body = vi.mocked(api.post).mock.calls[0][1] as { actions: Record<string, unknown>[] };
+        expect(body.actions).toHaveLength(2);
+        expect(body.actions[0].onFailure).toBe('Halt');
+        expect('onFailure' in body.actions[1]).toBe(false);
+    });
+});
+
+describe('the placeholder help', () => {
+    it('lists the names and the formats the API reports', async () => {
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation((async (url: string, ...rest: unknown[]) =>
+            url === '/api/workflows/variables'
+                ? {
+                      data: {
+                          systemVariables: [
+                              { name: '{{createdBy.email}}', description: 'The author', example: 'a@example.com', type: 'string' },
+                              { name: '{{transition.at}}', description: 'When', example: '', type: 'datetime' },
+                          ],
+                          dataFields: [],
+                          formats: [
+                              {
+                                  name: '{{createdAt | date "MMM d, h:mm tt"}}',
+                                  description: "A date in the site's time zone",
+                                  example: 'Dec 16, 6:00 PM',
+                                  type: 'string',
+                              },
+                              { name: '{{duration createdAt updatedAt}}', description: 'The time between two dates', example: '8 hours 30 minutes', type: 'string' },
+                          ],
+                      },
+                  }
+                : (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest)) as typeof api.get);
+
+        renderPage();
+
+        expect(await screen.findByText('{{createdBy.email}}')).toBeInTheDocument();
+        expect(screen.getByText('{{transition.at}}')).toBeInTheDocument();
+        const formats = screen.getByLabelText('Formats and durations');
+        expect(within(formats).getAllByRole('term', { hidden: true })).toHaveLength(2);
+        expect(screen.getByText('{{createdAt | date "MMM d, h:mm tt"}}')).toBeInTheDocument();
+        expect(screen.getByText(/For example: 8 hours 30 minutes/)).toBeInTheDocument();
+    });
+});

@@ -6,8 +6,15 @@ import { ReferenceField } from '@/components/content/reference-field';
 import { ChoiceField } from '@/components/content/choice-field';
 import { MenuItemsField } from '@/components/content/menu-items-field';
 import { BlocksField } from '@/components/content/blocks-field';
+import { FileField } from '@/components/content/file-field';
+import { InlineImageField } from '@/components/content/inline-image-field';
+import { ReferenceListField } from '@/components/content/reference-list-field';
+import { ImageUrlField } from '@/components/site/image-url-field';
+import { FieldError } from '@/components/content/field-error';
 import { isBlocksField } from '@/lib/blocks';
 import { isMenuItemsField } from '@/lib/menu-tree';
+import { chosenEditor } from '@/lib/field-presentation';
+import type { ResolvedFile } from '@/types/content';
 import type { FieldDefinition } from '@/types/schema';
 
 export { JsonField };
@@ -25,6 +32,19 @@ export interface DynamicFormProps {
      * sensitivity; a screen editing a real entry passes the signed-in user's roles.
      */
     viewerRoles?: readonly string[];
+    /**
+     * The files the entry's `file` fields name, as the entry read resolved them, keyed as the field
+     * is in the data. Absent on a create, and from an API older than file fields.
+     */
+    files?: Record<string, ResolvedFile>;
+}
+
+/** The resolved file for a field, found as the API keys it: by the name in the data, any case. */
+function resolvedFile(files: Record<string, ResolvedFile> | undefined, name: string) {
+    if (!files) return undefined;
+    if (files[name]) return files[name];
+    const key = Object.keys(files).find((k) => k.toLowerCase() === name.toLowerCase());
+    return key ? files[key] : undefined;
 }
 
 /**
@@ -43,8 +63,28 @@ export function DynamicForm({
     errors,
     contentType,
     viewerRoles,
+    files,
 }: DynamicFormProps) {
     const renderField = ({ field, type, label, value, error, onChange: set }: FieldRenderProps) => {
+        // The editor the field's hint names, or the one its name has always given it.
+        const editor = chosenEditor(field, {
+            isBlocks: isBlocksField,
+            isMenu: (name) => isMenuItemsField(contentType, name),
+        });
+
+        if (type === 'reference' && field.multiple && field.referenceType?.trim()) {
+            return (
+                <ReferenceListField
+                    field={field}
+                    referenceType={field.referenceType.trim()}
+                    label={label}
+                    value={value}
+                    error={error}
+                    onChange={set}
+                />
+            );
+        }
+
         // A reference is stored as the id of another entry, and the definition names the type that
         // id has to belong to, so it can be searched for instead of pasted. A definition with no
         // target names nothing to search, so that one keeps the id box the package gives it.
@@ -61,10 +101,11 @@ export function DynamicForm({
             );
         }
 
-        // A page's blocks, by the field name barakoPress reads them from. The editor is built from
+        // A page's blocks, by the `blocks` hint, or for a field with none by the name barakoPress
+        // reads them from. The editor is built from
         // the schema the site publishes, and falls back to the package's JSON editor when there is
         // none. docs/blocks.md is where a person setting up pages reads it.
-        if (type === 'json' && isBlocksField(field.name)) {
+        if (editor === 'blocks') {
             return (
                 <BlocksField
                     displayName={field.displayName}
@@ -91,9 +132,9 @@ export function DynamicForm({
             return <ChoiceField field={field} value={value} error={error} onChange={set} />;
         }
 
-        // By convention rather than by a hint on the definition, which the API has no place for
-        // yet. docs/menus.md is where a person modelling a menu reads it.
-        if (type === 'json' && isMenuItemsField(contentType, field.name)) {
+        // By the `menu` hint, or for a field with none by convention: a menu's Items. docs/menus.md
+        // is where a person modelling a menu reads it.
+        if (editor === 'menu') {
             return (
                 <MenuItemsField
                     fieldName={field.name}
@@ -112,6 +153,35 @@ export function DynamicForm({
                         />
                     }
                 />
+            );
+        }
+
+        if (type === 'file') {
+            return (
+                <FileField
+                    field={field}
+                    label={label}
+                    value={value}
+                    error={error}
+                    onChange={set}
+                    resolved={resolvedFile(files, field.name)}
+                    imagesOnly={editor === 'image'}
+                />
+            );
+        }
+
+        if (type === 'inlineimage') {
+            return <InlineImageField field={field} label={label} value={value} error={error} onChange={set} />;
+        }
+
+        // A url or string field with the image hint holds an image's address: typed, or picked from
+        // the public images in Files.
+        if (editor === 'image' && (type === 'url' || type === 'string')) {
+            return (
+                <div className="space-y-1">
+                    <ImageUrlField id={field.name} label={field.displayName} value={value} onChange={set} />
+                    <FieldError message={error} />
+                </div>
             );
         }
 
