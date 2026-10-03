@@ -11,9 +11,18 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
-- **Sign in through an OpenID Connect provider.** The sign-in page offers each provider the API
-  lists under `oidc` in `/api/auth/providers`, beside the social ones. An API before ExternalAuth
-  4.4.0 lists none and the page is unchanged.
+- **Sign in through an OpenID Connect provider, and finish any external sign-in.** The sign-in page
+  offers each provider the API lists under `oidc` in `/api/auth/providers`, beside the social ones.
+  The new `/auth/social` page takes the tokens or the MFA challenge the API puts in the fragment,
+  wipes the fragment from the address bar first, and trades the refresh token once for the usual
+  httpOnly cookie, so no token is kept in page storage. `/login?fberror=` shows the provider's
+  message as plain text. Before this no external sign-in could finish in the console.
+- **A Forms screen.** Settings, Forms lists every content type that can be a form, switches public
+  submissions on and off, and picks the email field to verify with an emailed code (barakoCMS 4.6).
+  Shown where the Forms module runs, to Admin and SuperAdmin.
+- **Deliveries.** Settings, Deliveries lists what workflow actions sent, newest first: requests
+  through a connector (barakoCMS 4.6) and webhooks, with status, target, attempt count and the
+  API's error text. Each connector links to its own.
 - **Share one entry or one page, and hand over a preview link.** The entry editor has a Share tab:
   links to that entry (with a page path, a link to that page) are created, listed and revoked
   there, and a 30 minute preview link is issued as `{site}{path}?preview=...`. The panel hides for
