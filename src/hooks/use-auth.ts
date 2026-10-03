@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { isAxiosError } from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { toast } from 'sonner';
 import {
     accessTokenExpired,
     api,
     beginSignOut,
     ensureSession,
+    getApiUrl,
     refreshSession,
     startSession,
     subscribeToAuth,
@@ -213,10 +214,42 @@ export function useRequestSignInCode() {
 /** Completes a two-step sign-in: challenge token + a TOTP or recovery code, in exchange for tokens. */
 export function useVerifyMfa() {
     return useMutation({
-        mutationFn: async (input: { challengeToken: string; code: string }) => {
-            const { data } = await api.post<LoginResponse>('/api/auth/mfa/verify', input);
+        mutationFn: async ({ tenant, ...input }: { challengeToken: string; code: string; tenant?: string }) => {
+            // An external sign-in names its club in the callback, and there is no token yet to read
+            // a tenant from, so the caller passes it on.
+            const { data } = await api.post<LoginResponse>(
+                '/api/auth/mfa/verify',
+                input,
+                tenant ? { headers: { 'X-Tenant': tenant } } : undefined,
+            );
             startSession(data.token);
             return data;
+        },
+    });
+}
+
+/**
+ * Finishes an external sign-in from the tokens the API put in the callback fragment.
+ *
+ * The console keeps the refresh token in an httpOnly cookie it never reads, and the callback hands
+ * it over in the fragment instead. So the fragment's refresh token is spent once on
+ * `POST /api/auth/refresh` in the body: the API rotates it, sets the cookie, and answers with a new
+ * access token. Neither token from the fragment is kept, stored or logged, and the replacement
+ * refresh token in the response body is dropped, as `refreshSession` drops it.
+ *
+ * Raw axios, as the ordinary refresh uses, so a refusal here cannot loop through the 401 handler.
+ */
+export function useCompleteSocialSignIn() {
+    return useMutation({
+        mutationFn: async (input: { refresh: string; tenant: string | null }) => {
+            const { data } = await axios.post<{ token: string }>(
+                `${getApiUrl()}/api/auth/refresh`,
+                { refreshToken: input.refresh },
+                { withCredentials: true, headers: input.tenant ? { 'X-Tenant': input.tenant } : undefined },
+            );
+            if (!data?.token) throw new Error('The sign-in did not return a session.');
+            startSession(data.token);
+            return true;
         },
     });
 }

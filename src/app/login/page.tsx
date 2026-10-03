@@ -17,6 +17,7 @@ import {
   type SocialProvider,
 } from '@/hooks/use-auth-providers';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
+import { signInErrorFromQuery } from '@/lib/social-callback';
 import { BrandBean } from '@/components/brand';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,11 @@ function apiHostSnapshot(): string | null {
   } catch {
     return null;
   }
+}
+
+/** What an external sign-in that failed left in `?fberror=`. Null on the server, like the host. */
+function signInErrorSnapshot(): string | null {
+  return signInErrorFromQuery(window.location.search);
 }
 
 /** The 42px form control the sign-in card uses, on the page tint rather than the card's white. */
@@ -82,6 +88,7 @@ export default function LoginPage() {
   // differs between the two renders is a hydration mismatch. The server snapshot is null, matching
   // what layout.tsx already does for the session token.
   const apiHost = useSyncExternalStore(emptySubscribe, apiHostSnapshot, () => null);
+  const externalError = useSyncExternalStore(emptySubscribe, signInErrorSnapshot, () => null);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.replace('/');
@@ -227,6 +234,15 @@ export default function LoginPage() {
             )}
           </div>
         </div>
+
+        {externalError && step === 'password' && (
+          <p
+            role="alert"
+            className="border-destructive/40 text-destructive mt-7 rounded-xl border px-4 py-3 text-[13px]"
+          >
+            {externalError}
+          </p>
+        )}
 
         <div className="bg-card mt-7 flex flex-col gap-4 rounded-2xl border p-6 shadow-[0_4px_16px_-8px_rgba(16,18,35,0.12)]">
           {step === 'mfa' ? (
