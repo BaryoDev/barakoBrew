@@ -95,6 +95,36 @@ export function siteShareScope(siteUrl: unknown): ShareLinkScope {
 }
 
 /**
+ * Links to one entry, or to one page when a path is given. Same `{site Url}/_share#{key}` link as
+ * the site's: the renderer opens it and the API answers with what the key is for.
+ *
+ * Only a caller who may update the entry can list or make these, so a 403 hides the panel. Against
+ * an API before 4.6 the route does not exist and the 404 hides it the same way the site panel hides.
+ */
+export function entryShareScope(entryId: string, siteUrl: unknown): ShareLinkScope {
+    return {
+        key: ['entry', entryId],
+        path: `/api/contents/${encodeURIComponent(entryId)}/share-links`,
+        description:
+            'Let someone see this entry, whatever its status, without opening the rest of the site. Only fields marked Public are shown. Give a page path to make it a link to that page.',
+        revokeWarning: 'Anyone opening this link loses access to this entry. This cannot be undone.',
+        link: (key) => {
+            const url = shareLinkUrl(siteUrl, key);
+            return url ? { value: url, complete: true } : { value: `/_share#${key}`, complete: false };
+        },
+        incompleteNote: 'The site has no saved address, so this is only the part that goes after it.',
+        acceptsPath: true,
+        hideWhenForbidden: true,
+    };
+}
+
+/** The site address without a trailing slash, or null when it is not an absolute http(s) URL. */
+export function siteBaseUrl(siteUrl: unknown): string | null {
+    if (typeof siteUrl !== 'string' || !isAbsoluteHttpUrl(siteUrl)) return null;
+    return siteUrl.trim().replace(/\/+$/, '');
+}
+
+/**
  * The link a client is given: `{site Url}/_share#{key}`. The key sits in the fragment so it never
  * reaches a server log or a referrer. Null when the site has no usable address.
  */

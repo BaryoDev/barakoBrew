@@ -8,7 +8,14 @@ export interface WorkflowAction {
     parameters: Record<string, string>; // values support {{template}} variables
     /** Read only. The API reports whether a Secret is stored and never returns the value. */
     secretSet?: boolean;
+    /**
+     * `Halt` stops the actions after this one until it has succeeded; `Continue`, the default, runs
+     * them anyway. Absent reads as `Continue`. An API before 4.6 ignores the field.
+     */
+    onFailure?: WorkflowFailurePolicy | null;
 }
+
+export type WorkflowFailurePolicy = 'Continue' | 'Halt';
 
 export interface WorkflowDefinition {
     id?: string;
@@ -17,6 +24,11 @@ export interface WorkflowDefinition {
     triggerEvent: TriggerEvent;
     conditions: Record<string, string>;
     actions: WorkflowAction[];
+    /**
+     * Off means no event starts a run. Absent from an API before 4.6, which has no switch, and
+     * absent from a definition stored before the field; both read as on.
+     */
+    enabled?: boolean;
 }
 
 // "transition:Approve" names a transition on the triggering type's own lifecycle. Prefixed so a
@@ -46,11 +58,21 @@ export interface TemplateVariable {
 export interface TemplateVariableCollection {
     systemVariables: TemplateVariable[];
     dataFields: TemplateVariable[];
+    /**
+     * The formats and durations a placeholder can carry, each an example to adapt, such as
+     * `{{createdAt | date "MMM d, h:mm tt"}}`. Absent from an API before 4.6.
+     */
+    formats?: TemplateVariable[];
 }
 
 export interface WorkflowValidationResult {
     isValid: boolean;
     errors: { field: string; message: string }[];
+    /**
+     * Placeholders the engine will send as written: a mistyped format or a name it does not know.
+     * They do not make the workflow invalid. Absent from an API before 4.6.
+     */
+    warnings?: { field: string; message: string }[];
     /** The trigger spelled as the content type declares it, when it names a transition. */
     normalisedTriggerEvent?: string | null;
 }

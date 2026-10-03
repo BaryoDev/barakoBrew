@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
     FALLBACK_MAX_SHARE_LINK_DAYS,
     defaultShareLinkDays,
+    entrySlug,
+    isSitePath,
     maxShareLinkDays,
+    previewLinkUrl,
     reportedMaxShareLinkDays,
     shareLinkExpiry,
     shareLinkExpiryChoices,
     shareLinkStatus,
 } from '@/lib/share-links';
-import { siteShareScope } from '@/lib/site-mode';
+import { entryShareScope, siteBaseUrl, siteShareScope } from '@/lib/site-mode';
 
 const NOW = new Date('2026-09-14T12:00:00Z');
 
@@ -135,5 +138,74 @@ describe('siteShareScope', () => {
         const scope = siteShareScope('');
         expect(scope.link('k9')).toEqual({ value: '/_share#k9', complete: false });
         expect(scope.incompleteNote).toContain('no saved address');
+    });
+});
+
+describe('isSitePath', () => {
+    it('accepts a path on the site', () => {
+        for (const path of ['/', '/about', '/blog/post/', '/a.b/c']) expect(isSitePath(path)).toBe(true);
+    });
+
+    it('refuses what the API refuses', () => {
+        const refused = ['', 'about', '//host', '/\\host', '/a//b', '/a/../b', '/./a', '/a?x=1', '/a#b', '/a%2fb', '/a b', '/a\u202eb', '/a\u200bb', '/a\u0000b'];
+        expect(refused).toHaveLength(14);
+        for (const path of refused) expect(isSitePath(path)).toBe(false);
+        expect(isSitePath('/' + 'a'.repeat(2048))).toBe(false);
+    });
+});
+
+describe('previewLinkUrl', () => {
+    it('puts the token in the query parameter the API names', () => {
+        expect(previewLinkUrl('https://example.com', '/article/hello', 'tok/en', 'preview')).toBe(
+            'https://example.com/article/hello?preview=tok%2Fen',
+        );
+    });
+
+    it('is null without a site address', () => {
+        expect(previewLinkUrl(null, '/article/hello', 't')).toBeNull();
+    });
+});
+
+describe('entrySlug', () => {
+    it('reads a field of type slug first', () => {
+        const fields = [
+            { name: 'Slug', type: 'string' },
+            { name: 'Handle', type: 'slug' },
+        ];
+        expect(entrySlug(fields, { Slug: 'by-name', Handle: 'by-type' })).toBe('by-type');
+    });
+
+    it('falls back to a Public string field named Slug', () => {
+        expect(entrySlug([{ name: 'Slug', type: 'string', sensitivity: 'Public' }], { Slug: 'hello' })).toBe('hello');
+    });
+
+    it('ignores a Slug field that is not Public, as the API does', () => {
+        expect(entrySlug([{ name: 'Slug', type: 'string', sensitivity: 'Hidden' }], { Slug: 'hello' })).toBeNull();
+    });
+
+    it('is null when the entry has no slug yet', () => {
+        expect(entrySlug([{ name: 'Slug', type: 'slug' }], { Slug: '' })).toBeNull();
+    });
+});
+
+describe('entryShareScope', () => {
+    it('lists, creates and revokes at the entry route and takes a page path', () => {
+        const scope = entryShareScope('abc', 'https://example.com');
+        expect(scope.path).toBe('/api/contents/abc/share-links');
+        expect(scope.key).toEqual(['entry', 'abc']);
+        expect(scope.acceptsPath).toBe(true);
+        expect(scope.link('k1')).toEqual({ value: 'https://example.com/_share#k1', complete: true });
+    });
+
+    it('keeps one entry apart from another in the cache', () => {
+        expect(entryShareScope('a', '').key).not.toEqual(entryShareScope('b', '').key);
+    });
+});
+
+describe('siteBaseUrl', () => {
+    it('trims a trailing slash and refuses anything that is not an http address', () => {
+        expect(siteBaseUrl('https://example.com/club/')).toBe('https://example.com/club');
+        expect(siteBaseUrl('javascript:alert(1)')).toBeNull();
+        expect(siteBaseUrl(undefined)).toBeNull();
     });
 });

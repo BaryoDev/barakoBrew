@@ -27,6 +27,7 @@ import { DynamicForm } from '@/components/content/dynamic-form';
 import { TransitionActions } from '@/components/content/transition-dialog';
 import { SaveRefusal, isRetryableRefusal } from '@/components/content/save-refusal';
 import { withoutTokenFields } from '@/lib/token-fields';
+import { EntrySharePanel } from '@/components/content/entry-share-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -299,6 +300,7 @@ export function ContentEditor({
             <IconHistory className="size-3.5" />
             History
           </TabsTrigger>
+          <TabsTrigger value="share">Share</TabsTrigger>
         </TabsList>
 
         <TabsContent value="edit" className="mt-4 max-w-2xl">
@@ -357,6 +359,17 @@ export function ContentEditor({
 
         <TabsContent value="history" className="mt-4">
           <HistoryPanel id={id} active={tab === 'history'} canRollback={canRollback} />
+        </TabsContent>
+
+        <TabsContent value="share" className="mt-4 max-w-3xl">
+          {tab === 'share' && (
+            <EntrySharePanel
+              entryId={id}
+              contentType={content.contentType}
+              fields={schema?.fields ?? []}
+              data={content.data}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </>

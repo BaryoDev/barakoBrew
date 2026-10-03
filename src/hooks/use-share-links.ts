@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, isNotFound } from '@/lib/api';
+import { api, isForbidden, isNotFound } from '@/lib/api';
 import { SECRET_MUTATION } from '@/lib/secrets';
 import { reportedMaxShareLinkDays, type CreatedShareLink, type ShareLink, type ShareLinkScope } from '@/lib/share-links';
 
@@ -28,6 +28,15 @@ export function shareLinksKey(scope: ShareLinkScope): readonly string[] {
 export interface CreateShareLinkInput {
     label: string;
     expiresAt?: string;
+    /** Entry scopes only: makes the link a page link. */
+    path?: string;
+}
+
+/** What `POST /api/preview` answers: a 30 minute key for one entry, read through `?{queryParam}=`. */
+export interface PreviewToken {
+    token: string;
+    expiresAt: string;
+    queryParam?: string;
 }
 
 function readLinks(data: unknown): ShareLink[] {
@@ -45,6 +54,7 @@ export function useShareLinks(scope: ShareLinkScope) {
                 return { kind: 'links', links: readLinks(data), maxExpiryDays: reportedMaxShareLinkDays(data) };
             } catch (error) {
                 if (isNotFound(error)) return { kind: 'disabled' };
+                if (scope.hideWhenForbidden && isForbidden(error)) return { kind: 'disabled' };
                 throw error;
             }
         },
@@ -67,5 +77,18 @@ export function useRevokeShareLink(scope: ShareLinkScope) {
             await api.delete(`${scope.path}/${encodeURIComponent(id)}`);
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: shareLinksKey(scope) }),
+    });
+}
+
+/**
+ * A preview token for one entry, found by type and slug. Needs read on the entry, not update.
+ *
+ * The key is in the result only, so the mutation is a secret one and nothing is cached.
+ */
+export function useCreatePreviewToken() {
+    return useMutation({
+        mutationFn: async (input: { type: string; slug: string }) =>
+            (await api.post<PreviewToken>('/api/preview', input)).data,
+        ...SECRET_MUTATION,
     });
 }

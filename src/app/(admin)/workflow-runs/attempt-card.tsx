@@ -30,6 +30,8 @@ interface AttemptCardProps {
    * also refuses a retry while one is in flight.
    */
   retrying: boolean;
+  /** False on a stopped run, where the API refuses every retry. */
+  canRetry?: boolean;
 }
 
 /**
@@ -65,7 +67,7 @@ function RetryButton({
  * A failure the API calls permanent keeps the button and asks first. The request it then sends is
  * the same one: the server works out for its audit entry whether the failure was permanent.
  */
-export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
+export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: AttemptCardProps) {
   const facts: { label: string; value: string }[] = [
     { label: 'Attempts', value: String(attempt.attempts) },
     { label: 'Took', value: formatDuration(attempt.durationMs) },
@@ -80,6 +82,12 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
 
   const next = formatMoment(attempt.nextAttemptAt);
   if (next) facts.push({ label: 'Next attempt', value: next });
+
+  if (attempt.onFailure === 'Halt') facts.push({ label: 'If it fails', value: 'Stops the run' });
+  if (typeof attempt.haltedBy === 'number') {
+    // Retrying this one is refused; retrying the action that halted the run queues it again.
+    facts.push({ label: 'Skipped because', value: `action ${attempt.haltedBy} failed` });
+  }
 
   const kind = failureKind(attempt);
 
@@ -113,7 +121,7 @@ export function AttemptCard({ attempt, onRetry, retrying }: AttemptCardProps) {
           </StatusBadge>
         )}
 
-        {isRetryable(attempt) &&
+        {canRetry && isRetryable(attempt) &&
           (kind === 'permanent' ? (
             <ConfirmDialog
               trigger={<RetryButton attempt={attempt} retrying={retrying} onClick={onAsk} />}

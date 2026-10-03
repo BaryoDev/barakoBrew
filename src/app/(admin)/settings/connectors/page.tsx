@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -9,6 +10,7 @@ import {
     probeOutcome,
     slugify,
     toSecretsPayload,
+    tokenUrlNeedsSecret,
     useConnectors,
     useCreateConnector,
     useDeleteConnector,
@@ -47,7 +49,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { IconBolt, IconPen, IconPlus, IconTrash, IconWarning, IconWebhook } from '@/components/icons';
+import { IconBolt, IconPen, IconPlus, IconTasks, IconTrash, IconWarning, IconWebhook } from '@/components/icons';
 
 const SELECT = 'h-9 w-full rounded-md border bg-transparent px-3 text-sm';
 
@@ -124,7 +126,15 @@ function ConnectorDialog({ connector, open, onOpenChange }: ConnectorDialogProps
     // The warning is for a slug the operator has typed on a create. An empty box is not yet wrong,
     // and an existing slug is fixed, so neither is flagged.
     const slugRefused = !editing && slug.length > 0 && !slugValid;
-    const canSave = name.trim().length > 0 && slugValid && baseUrl.trim().length > 0 && !pending;
+    const needsSecretAgain = tokenUrlNeedsSecret({
+        storedTokenUrl: connector?.settings?.TokenUrl,
+        tokenUrl: settings.TokenUrl,
+        secretStored: storedKeys.includes('ClientSecret'),
+        secretTyped: secretKey === 'ClientSecret' && secretValue.trim().length > 0,
+        secretCleared: clearKeys.includes('ClientSecret'),
+    });
+    const canSave =
+        name.trim().length > 0 && slugValid && baseUrl.trim().length > 0 && !needsSecretAgain && !pending;
 
     function onNameChange(value: string) {
         setName(value);
@@ -308,6 +318,15 @@ function ConnectorDialog({ connector, open, onOpenChange }: ConnectorDialogProps
                                         ? 'A stored credential is never sent back here, so this box starts blank. Blank means keep what is stored.'
                                         : 'Stored encrypted under Connectors:Key. Nothing reads it back out, so keep your own copy.'}
                                 </p>
+                                {needsSecretAgain && (
+                                    <p role="alert" className="text-warning flex gap-2 text-xs">
+                                        <IconWarning aria-hidden className="mt-0.5 shrink-0 size-3.5" />
+                                        <span>
+                                            The token URL changed, so enter the client secret again (or delete
+                                            the stored one) before saving. The secret is sent to that URL.
+                                        </span>
+                                    </p>
+                                )}
                             </div>
                         )}
 
@@ -434,10 +453,18 @@ export default function ConnectorsPage() {
     }
 
     const newButton = (
-        <Button size="sm" onClick={openCreate}>
-            <IconPlus />
-            New connector
-        </Button>
+        <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+                <Link href="/settings/deliveries?kind=requests">
+                    <IconTasks />
+                    Deliveries
+                </Link>
+            </Button>
+            <Button size="sm" onClick={openCreate}>
+                <IconPlus />
+                New connector
+            </Button>
+        </div>
     );
 
     return (
@@ -548,6 +575,18 @@ export default function ConnectorsPage() {
                                                         onClick={() => void onTest(connector)}
                                                     >
                                                         <IconBolt className="size-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon-sm"
+                                                        aria-label={`Deliveries for ${connector.name}`}
+                                                    >
+                                                        <Link
+                                                            href={`/settings/deliveries?kind=requests&connector=${encodeURIComponent(connector.slug)}`}
+                                                        >
+                                                            <IconTasks className="size-3.5" />
+                                                        </Link>
                                                     </Button>
                                                     <Button
                                                         type="button"

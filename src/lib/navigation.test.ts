@@ -303,3 +303,30 @@ describe('modules in the rail', () => {
         for (const item of named) expect(ALL).toContain(item.module);
     });
 });
+
+describe('forms and deliveries in the rail', () => {
+    it('offers Forms to Admin and SuperAdmin beside the other settings, and not to a plain user', () => {
+        const titles = (roles: string[]) => visibleGroups(NAV_GROUPS, roles).flatMap((g) => g.items.map((i) => i.title));
+        expect(titles(['Admin'])).toContain('Forms');
+        expect(titles(['SuperAdmin'])).toContain('Forms');
+        expect(titles(['User'])).not.toContain('Forms');
+
+        const system = NAV_GROUPS.find((g) => g.label === 'System')!;
+        expect(system.items.find((i) => i.title === 'Forms')?.href).toBe('/settings/forms');
+    });
+
+    it('drops Forms where the Forms module is not running', () => {
+        const seen = withModules(visibleGroups(NAV_GROUPS, ['SuperAdmin']), [MODULE.files]).flatMap((g) =>
+            g.items.map((i) => i.title),
+        );
+        expect(seen).toContain('Files');
+        expect(seen).not.toContain('Forms');
+    });
+
+    it('offers Deliveries to Admin and SuperAdmin and titles its crumb', () => {
+        const titles = visibleGroups(NAV_GROUPS, ['Admin']).flatMap((g) => g.items.map((i) => i.title));
+        expect(titles).toContain('Deliveries');
+        expect(breadcrumbsFor('/settings/deliveries').map((c) => c.title)).toEqual(['Settings', 'Deliveries']);
+        expect(breadcrumbsFor('/settings/forms').map((c) => c.title)).toEqual(['Settings', 'Forms']);
+    });
+});

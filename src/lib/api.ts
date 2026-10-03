@@ -321,7 +321,43 @@ export function isForbidden(error: unknown): boolean {
     return axios.isAxiosError(error) && error.response?.status === 403;
 }
 
+/**
+ * How long a 429 says to wait, in words, or null when it does not say.
+ *
+ * barakoCMS sends no `Retry-After` today (BaryoDev/barakoCMS#563), so this is null against every
+ * release so far and the plain message stands alone. A cross-origin console also needs the API to
+ * expose the header through CORS before the browser lets this read it.
+ */
+export function retryAfterText(value: unknown, now: Date = new Date()): string | null {
+    if (typeof value !== 'string' || value.trim() === '') return null;
+    const trimmed = value.trim();
+    let seconds: number;
+    if (/^\d+$/.test(trimmed)) {
+        seconds = Number(trimmed);
+    } else {
+        const at = Date.parse(trimmed);
+        if (Number.isNaN(at)) return null;
+        seconds = Math.ceil((at - now.getTime()) / 1000);
+    }
+    if (!Number.isFinite(seconds) || seconds <= 0) return null;
+    if (seconds < 60) return seconds === 1 ? '1 second' : `${seconds} seconds`;
+    const minutes = Math.ceil(seconds / 60);
+    return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+}
+
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
+    if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const data = error.response.data;
+        const said =
+            typeof data === 'string' && data.trim()
+                ? data.trim()
+                : typeof data?.message === 'string' && data.message
+                  ? data.message
+                  : null;
+        const wait = retryAfterText(error.response.headers?.['retry-after']);
+        if (wait) return `${said ?? 'Too many requests.'} Try again in ${wait}.`;
+        return said ?? 'Too many requests. Wait a moment and try again.';
+    }
     if (axios.isAxiosError(error)) {
         const data = error.response?.data;
         if (typeof data === 'string' && data) return data;

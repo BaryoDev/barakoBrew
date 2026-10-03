@@ -38,6 +38,31 @@ moved. Which API a console works against is stated per release instead.
 - **Audit entries read as sentences.** Role, API key, membership and field access entries show
   role names beside their ids, capped lists with how many were left out, and each permission as
   its content type and actions. The raw metadata is one click away.
+- **Sign in through an OpenID Connect provider, and finish any external sign-in.** The sign-in page
+  offers each provider the API lists under `oidc` in `/api/auth/providers`, beside the social ones.
+  The new `/auth/social` page takes the tokens or the MFA challenge the API puts in the fragment,
+  wipes the fragment from the address bar first, and trades the refresh token once for the usual
+  httpOnly cookie, so no token is kept in page storage. `/login?fberror=` shows the provider's
+  message as plain text. Before this no external sign-in could finish in the console.
+- **A Forms screen.** Settings, Forms lists every content type that can be a form, switches public
+  submissions on and off, and picks the email field to verify with an emailed code (barakoCMS 4.6).
+  Shown where the Forms module runs, to Admin and SuperAdmin.
+- **Deliveries.** Settings, Deliveries lists what workflow actions sent, newest first: requests
+  through a connector (barakoCMS 4.6) and webhooks, with status, target, attempt count and the
+  API's error text. Each connector links to its own.
+- **Share one entry or one page, and hand over a preview link.** The entry editor has a Share tab:
+  links to that entry (with a page path, a link to that page) are created, listed and revoked
+  there, and a 30 minute preview link is issued as `{site}{path}?preview=...`. The panel hides for
+  someone who cannot update the entry, and on an API before 4.6.
+- **Connectors take OAuth2 client credentials.** Token URL, client id, optional scope, and the
+  client secret, which is write only like every other credential. Moving the token URL asks for
+  the secret again, as the API does.
+- **Workflows can be switched off, deleted and stopped.** The list has an on switch and a delete
+  for each workflow, a waiting or running run has Cancel run, and an action can be set to stop the
+  actions after it when it fails. A skipped action says which failure skipped it. The placeholder
+  help lists the formats and durations the API reports. All of it needs barakoCMS 4.6; on an older
+  API the controls are not shown.
+- **A 429 says how long to wait** when the API sends `Retry-After`.
 
 - **Workflow runs say whether a failure is temporary or permanent.** A failed action shows
   Temporary or Permanent from the API's `retryable`, and the list marks a run by its worst failure.
