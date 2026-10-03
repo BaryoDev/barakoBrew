@@ -264,7 +264,7 @@ export function ContentEditor({
                       </Button>
                     }
                     title="Archive this entry?"
-                    description="Archived entries stay in the system and can be republished later. There is no delete — archiving is how entries retire."
+                    description="Archived entries stay in the system and can be republished later. There is no delete: archiving is how entries retire."
                     confirmLabel="Archive"
                     onConfirm={() => setStatus(ContentStatus.Archived, 'Archived')}
                   />
