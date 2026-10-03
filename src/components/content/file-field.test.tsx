@@ -73,7 +73,7 @@ describe('a file field', () => {
         );
         const onChange = renderForm({ editor: 'image' }, {});
 
-        fireEvent.click(screen.getByRole('button', { name: 'Choose image' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Choose image for Cover' }));
         const pick = await screen.findByRole('button', { name: /harbour\.png/ });
         expect(screen.queryByRole('button', { name: /terms\.pdf/ })).toBeNull();
         fireEvent.click(pick);
