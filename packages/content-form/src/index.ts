@@ -3,7 +3,14 @@ export { ContentForm, JsonField } from './content-form';
 // assert its own copies have not drifted from these.
 export { cn, FieldError, Input, Label, Switch, Textarea } from './ui';
 export type { ContentFormProps, FieldRenderProps } from './content-form';
-export { fieldIsVisibleTo, maskedNotice } from './sensitivity';
+export {
+    fieldIsVisibleTo,
+    maskedNotice,
+    SUPER_ADMIN_ROLE_ID,
+    VIEW_HIDDEN,
+    VIEW_SENSITIVE,
+} from './sensitivity';
+export type { Viewer } from './sensitivity';
 export { groupBySection, moneyScale, stepFor } from './presentation';
 export type { FieldGroup } from './presentation';
 export {

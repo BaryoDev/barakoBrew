@@ -2,7 +2,7 @@
 
 import { Fragment, useState, type ReactNode } from 'react';
 import { Input, Label, Switch, Textarea, FieldError, cn } from './ui';
-import { fieldIsVisibleTo, maskedNotice } from './sensitivity';
+import { fieldIsVisibleTo, maskedNotice, type Viewer } from './sensitivity';
 import { resolveFieldType, type FieldDefinition, type FieldType } from './definition';
 import { groupBySection, moneyScale, stepFor } from './presentation';
 
@@ -30,6 +30,14 @@ export interface ContentFormProps {
      */
     viewerRoles: readonly string[];
     /**
+     * The viewer's capabilities in the current tenant, when the host knows them. With them a
+     * Sensitive or Hidden field is decided the way API 4.6 decides it, by `view_sensitive` and
+     * `view_hidden`; without them, by role name as an older API did.
+     */
+    viewerCapabilities?: readonly string[];
+    /** The viewer's role ids, which is how the seeded SuperAdmin role is recognised. */
+    viewerRoleIds?: readonly string[];
+    /**
      * Lets the host draw a field itself, for a control needing data this package does not fetch:
      * a reference picker, a block editor, a menu tree. Return null to take the default.
      *
@@ -54,9 +62,12 @@ export function ContentForm({
     onChange,
     errors,
     viewerRoles,
+    viewerCapabilities,
+    viewerRoleIds,
     renderField,
     emptyMessage,
 }: ContentFormProps) {
+    const viewer: Viewer = { roles: viewerRoles, roleIds: viewerRoleIds, capabilities: viewerCapabilities };
     // Undefined removes the key, so a cleared optional value is left out of the save rather than
     // sent as an empty string the API would check against the field's type.
     const setField = (name: string, value: unknown) => {
@@ -82,7 +93,7 @@ export function ContentForm({
         <FieldControl
             key={field.name}
             field={field}
-            viewerRoles={viewerRoles}
+            viewer={viewer}
             renderField={renderField}
             value={values[field.name]}
             error={errors?.[field.name]}
@@ -110,14 +121,14 @@ export function ContentForm({
 
 function FieldControl({
     field,
-    viewerRoles,
+    viewer,
     renderField,
     value,
     error,
     onChange,
 }: {
     field: FieldDefinition;
-    viewerRoles: readonly string[];
+    viewer: Viewer;
     renderField?: (props: FieldRenderProps) => ReactNode | null;
     value: unknown;
     error?: string;
@@ -136,7 +147,7 @@ function FieldControl({
     // `string` and gets the roomier control at the bottom of the switch.
     const type = resolveFieldType(field.type);
 
-    if (!fieldIsVisibleTo(field, viewerRoles)) {
+    if (!fieldIsVisibleTo(field, viewer)) {
         return <MaskedField field={field} label={label} value={value} />;
     }
 

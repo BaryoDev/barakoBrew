@@ -24,6 +24,21 @@ moved. Which API a console works against is stated per release instead.
   transitions, asking first for the fields a transition requires. Against an older API the new
   members are absent and every screen behaves as before; the new endpoints answer 404 there and
   that message is shown.
+- **Role editor: labelled capabilities, reference conditions and field limits.** Core capabilities,
+  `view_sensitive`, `view_hidden` and `manage_all_files` are checkboxes with plain labels, and the
+  platform ones say that only a SuperAdmin can give a role holding them to a user. Against API
+  contract 6 each content type opens to conditions on Read, Update and Delete (a key written
+  `Reference.Field` follows a reference, BaryoDev/barakoCMS#827) and to field limits
+  (`readableFields`, `writableFields`, BaryoDev/barakoCMS#917). A save sends back every set,
+  condition and transition rule the screen does not show, and turning a limit off sends an empty
+  list, which is how the API removes it. An older API gets the grid as before. (#146)
+- **Site profile fields.** The Site screen edits About, contact email, location, map link, contact
+  link and social handle when the site type declares them, which the 4.6 site blueprint does.
+  (#211)
+- **Audit entries read as sentences.** Role, API key, membership and field access entries show
+  role names beside their ids, capped lists with how many were left out, and each permission as
+  its content type and actions. The raw metadata is one click away.
+
 - **Workflow runs say whether a failure is temporary or permanent.** A failed action shows
   Temporary or Permanent from the API's `retryable`, and the list marks a run by its worst failure.
   Retry on a permanent failure asks first: "This failure will not fix itself by retrying. Retry
@@ -33,6 +48,18 @@ moved. Which API a console works against is stated per release instead.
   or on "Retry anyway", now sends one request. (#150)
 
 ### Changed
+
+- **Field sensitivity can follow capabilities.** `barako-content-form` decides a Sensitive or
+  Hidden field by `view_sensitive` and `view_hidden`, with SuperAdmin by its seeded id, when the
+  host passes the viewer's capabilities, and by role name as before when it does not. The console
+  does not know the caller's capabilities yet, since no API route reports them, so it still
+  decides by name. The masked notice no longer blames the viewer's roles. (#162)
+- **Tenants no longer carry a profile.** The create dialog has no About box and the tenant type
+  has no profile fields, since barakoCMS 4.6 refuses them (BaryoDev/barakoCMS#885). A domain save
+  still sends the profile back to an older API that answered with it, so nothing is blanked there.
+  (#211)
+- **Tenant switch sends `tenant`.** The body carries the handle as `Tenant` and as `Club`, so 4.6
+  and older APIs both read it.
 
 - **Speaks API contracts 1 to 6.** The next barakoCMS release moves the contract to 6: an entry
   write that breaks a field's `validationRules` answers 400 naming the field and the rule, and
