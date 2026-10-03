@@ -34,8 +34,6 @@ const ACTIONS: PermissionAction[] = ['create', 'read', 'update', 'delete'];
  */
 const RULE_DETAILS_CONTRACT = 6;
 
-type DraftKey = `${string}:${PermissionAction}`;
-
 function splitKey(key: string): [string, PermissionAction] {
   const at = key.lastIndexOf(':');
   return [key.slice(0, at), key.slice(at + 1) as PermissionAction];
@@ -57,7 +55,7 @@ export function RoleEditor({ initial, submitLabel, isPending, onSubmit, onCancel
   const [capabilities, setCapabilities] = useState<string[]>(initial?.systemCapabilities ?? []);
   const [capabilityDraft, setCapabilityDraft] = useState('');
   const [open, setOpen] = useState<string | null>(null);
-  const [conditionDrafts, setConditionDrafts] = useState<Record<DraftKey, ConditionDraft>>({});
+  const [conditionDrafts, setConditionDrafts] = useState<Record<string, ConditionDraft>>({});
   const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
   const detailsSupported = contract.kind === 'ok' && contract.version >= RULE_DETAILS_CONTRACT;
 
