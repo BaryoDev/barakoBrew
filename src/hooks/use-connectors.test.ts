@@ -6,6 +6,7 @@ import {
     probeOutcome,
     slugify,
     toSecretsPayload,
+    tokenUrlNeedsSecret,
     type Connector,
 } from './use-connectors';
 
@@ -213,14 +214,28 @@ describe('configGap', () => {
         ).toContain('Username');
     });
 
-    it('reports that the sender refuses OAuth2 client credentials outright', () => {
+    it('names the missing token URL for OAuth2 client credentials', () => {
         const gap = configGap(
-            connector({ auth: 'OAuth2ClientCredentials', secretKeys: ['ClientSecret'] }),
+            connector({ auth: 'OAuth2ClientCredentials', settings: { ClientId: 'c' }, secretKeys: ['ClientSecret'] }),
         );
 
-        // Stored credential and all, the sender refuses this mode, so a stored ClientSecret is not
-        // enough to make it work.
-        expect(gap).toContain('refuses this mode');
+        expect(gap).toContain('TokenUrl');
+    });
+
+    it('names the missing client secret before the settings', () => {
+        expect(configGap(connector({ auth: 'OAuth2ClientCredentials' }))).toContain('ClientSecret');
+    });
+
+    it('is silent for OAuth2 with a token URL, a client id and a secret, and no scope', () => {
+        expect(
+            configGap(
+                connector({
+                    auth: 'OAuth2ClientCredentials',
+                    settings: { TokenUrl: 'https://id.example.com/token', ClientId: 'c' },
+                    secretKeys: ['ClientSecret'],
+                }),
+            ),
+        ).toBeNull();
     });
 
     it('says nothing about an auth mode this build does not recognise', () => {
@@ -244,16 +259,58 @@ describe('CONNECTOR_AUTH_MODES', () => {
     it('names the settings the sender reads, copied from ConnectorSettingKeys', () => {
         expect(authModeFor('Basic')?.settings.map((s) => s.key)).toEqual(['Username']);
         expect(authModeFor('ApiKeyHeader')?.settings.map((s) => s.key)).toEqual(['HeaderName']);
+        expect(authModeFor('OAuth2ClientCredentials')?.settings.map((s) => s.key)).toEqual([
+            'TokenUrl',
+            'ClientId',
+            'Scope',
+        ]);
+    });
+
+    it('no longer marks OAuth2 client credentials as refused by the sender', () => {
+        expect(authModeFor('OAuth2ClientCredentials')?.unsupported).toBeUndefined();
     });
 
     it('has no mode declaring a settings key of an unexpected shape', () => {
         const keys = CONNECTOR_AUTH_MODES.flatMap((mode) => mode.settings.map((s) => s.key));
 
-        expect(keys).toHaveLength(2);
+        expect(keys).toHaveLength(5);
         for (const key of keys) expect(key).toMatch(/^[A-Z][A-Za-z]+$/);
     });
 
     it('returns undefined for a mode name that is not in the table', () => {
         expect(authModeFor('MutualTls')).toBeUndefined();
+    });
+});
+
+describe('tokenUrlNeedsSecret', () => {
+    const base = {
+        storedTokenUrl: 'https://id.example.com/token',
+        tokenUrl: 'https://id.example.com/token',
+        secretStored: true,
+        secretTyped: false,
+        secretCleared: false,
+    };
+
+    it('is false while the token URL is unchanged', () => {
+        expect(tokenUrlNeedsSecret(base)).toBe(false);
+    });
+
+    it('is true when the token URL moves, even to another path on the same host', () => {
+        expect(tokenUrlNeedsSecret({ ...base, tokenUrl: 'https://id.example.com/other' })).toBe(true);
+    });
+
+    it('is true when a connector holding the secret is given its first token URL', () => {
+        expect(tokenUrlNeedsSecret({ ...base, storedTokenUrl: undefined })).toBe(true);
+    });
+
+    it('is false once the secret is typed again or cleared', () => {
+        const moved = { ...base, tokenUrl: 'https://elsewhere.example.com/token' };
+        expect(tokenUrlNeedsSecret({ ...moved, secretTyped: true })).toBe(false);
+        expect(tokenUrlNeedsSecret({ ...moved, secretCleared: true })).toBe(false);
+    });
+
+    it('is false when no secret is stored, or the token URL is removed', () => {
+        expect(tokenUrlNeedsSecret({ ...base, tokenUrl: 'https://x.example.com', secretStored: false })).toBe(false);
+        expect(tokenUrlNeedsSecret({ ...base, tokenUrl: '' })).toBe(false);
     });
 });

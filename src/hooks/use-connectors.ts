@@ -79,6 +79,8 @@ export interface AuthSetting {
      * checks the credential first, so this text is never shown while the credential is missing too.
      */
     whenMissing: string;
+    /** Sent only when set. A blank optional setting is not a gap. */
+    optional?: boolean;
 }
 
 export interface AuthMode {
@@ -148,11 +150,30 @@ export const CONNECTOR_AUTH_MODES: AuthMode[] = [
     {
         value: 'OAuth2ClientCredentials',
         label: 'OAuth2 client credentials',
-        description: 'A token exchange the sender does not perform yet.',
+        description:
+            'Before each call the API asks the token URL for a token with the client id and secret, and sends it as Authorization: Bearer. Needs barakoCMS 4.6 or later; an older API refuses this mode at send time.',
         secretKey: 'ClientSecret',
-        settings: [],
-        unsupported:
-            'The sender refuses this mode rather than calling without a token. Use a bearer token you obtained yourself, or an API key header.',
+        settings: [
+            {
+                key: 'TokenUrl',
+                label: 'Token URL',
+                placeholder: 'https://identity.example.com/connect/token',
+                whenMissing: 'TokenUrl is not set, so a call through this connector is refused before it is sent.',
+            },
+            {
+                key: 'ClientId',
+                label: 'Client id',
+                placeholder: 'the-client-id',
+                whenMissing: 'ClientId is not set, so the token request has no client to name and is refused.',
+            },
+            {
+                key: 'Scope',
+                label: 'Scope (optional)',
+                placeholder: 'invoices.read invoices.write',
+                whenMissing: '',
+                optional: true,
+            },
+        ],
     },
 ];
 
@@ -264,7 +285,8 @@ export function configGap(
     }
 
     for (const setting of mode.settings) {
-        const value = connector.settings[setting.key];
+        if (setting.optional) continue;
+        const value = connector.settings?.[setting.key];
         if (!value || value.trim().length === 0) {
             return setting.whenMissing;
         }
@@ -342,4 +364,24 @@ export function useTestConnector() {
         // returns and the column an operator came here to read would still show the old answer.
         onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
     });
+}
+
+/**
+ * Whether this save would be refused for moving the token URL without the client secret.
+ *
+ * `PUT /api/connectors/{slug}` refuses a `TokenUrl` that is new or changed (the whole URL, path
+ * included) unless `ClientSecret` is entered again or cleared in the same request, because the
+ * secret is sent to that URL. Only an edit of a connector that holds a `ClientSecret` can trip it.
+ */
+export function tokenUrlNeedsSecret(input: {
+    storedTokenUrl: string | undefined;
+    tokenUrl: string | undefined;
+    secretStored: boolean;
+    secretTyped: boolean;
+    secretCleared: boolean;
+}): boolean {
+    if (!input.secretStored || input.secretTyped || input.secretCleared) return false;
+    const next = (input.tokenUrl ?? '').trim();
+    // Removing the token URL is not refused: the secret then goes nowhere.
+    return next.length > 0 && next !== (input.storedTokenUrl ?? '').trim();
 }
