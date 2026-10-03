@@ -6,6 +6,9 @@ import { useTransitionContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
 import { missingTransitionFields, transitionFields } from '@/lib/transitions';
 import { DynamicForm } from '@/components/content/dynamic-form';
+import { isBlocksField } from '@/lib/blocks';
+import { isMenuItemsField } from '@/lib/menu-tree';
+import { chosenEditor } from '@/lib/field-presentation';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -87,6 +90,9 @@ export function TransitionActions({
     );
 }
 
+/** What the dialog's field names, and so its element ids, start with. */
+export const TRANSITION_ID_PREFIX = 'transition-';
+
 /** Asks for the fields a transition takes, then makes the move with their values. */
 export function TransitionDialog({
     entryId,
@@ -110,9 +116,27 @@ export function TransitionDialog({
     const move = useTransitionContent();
 
     const asked = transitionFields(transition, fields);
-    // The form marks what the move needs, which is not what the field needs on an ordinary save.
-    const formFields = asked.map((a) => ({ ...a.field, isRequired: a.required }));
     const missing = missingTransitionFields(asked, values);
+
+    // The entry's own form stays on the page under this dialog, and every control takes its id from
+    // the field name, so the same names here would give two inputs one id and a label could point
+    // at the wrong one. The dialog's form runs on prefixed names, mapped back to the real ones on
+    // the way in and out. The editor a field gets by its name is fixed first, while the name is
+    // still the real one. The form marks what the move needs, which is not what the field needs on
+    // an ordinary save.
+    const formFields = asked.map((a) => ({
+        ...a.field,
+        name: `${TRANSITION_ID_PREFIX}${a.field.name}`,
+        isRequired: a.required,
+        editor:
+            chosenEditor(a.field, {
+                isBlocks: isBlocksField,
+                isMenu: (name) => isMenuItemsField(contentType, name),
+            }) ?? null,
+    }));
+    const formValues = Object.fromEntries(
+        Object.entries(values).map(([name, value]) => [`${TRANSITION_ID_PREFIX}${name}`, value]),
+    );
 
     const confirm = () =>
         move.mutate(
@@ -139,10 +163,17 @@ export function TransitionDialog({
 
                 <DynamicForm
                     fields={formFields}
-                    values={values}
+                    values={formValues}
                     onChange={(next) => {
                         setRefusal(null);
-                        setValues(next);
+                        setValues(
+                            Object.fromEntries(
+                                Object.entries(next).map(([name, value]) => [
+                                    name.slice(TRANSITION_ID_PREFIX.length),
+                                    value,
+                                ]),
+                            ),
+                        );
                     }}
                     contentType={contentType}
                     viewerRoles={viewerRoles}
