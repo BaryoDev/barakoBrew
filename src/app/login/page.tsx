@@ -10,7 +10,12 @@ import {
   useVerifyDeviceCode,
   useVerifyMfa,
 } from '@/hooks/use-auth';
-import { useAuthProviders, externalSignInUrl, type AuthProviders } from '@/hooks/use-auth-providers';
+import {
+  useAuthProviders,
+  externalSignInUrl,
+  oidcSignInUrl,
+  type SocialProvider,
+} from '@/hooks/use-auth-providers';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
 import { BrandBean } from '@/components/brand';
 import { Button } from '@/components/ui/button';
@@ -31,7 +36,7 @@ function apiHostSnapshot(): string | null {
 /** The 42px form control the sign-in card uses, on the page tint rather than the card's white. */
 const FIELD = 'h-[42px] bg-background text-sm';
 
-const PROVIDER_LABELS: Record<keyof AuthProviders, string> = {
+const PROVIDER_LABELS: Record<SocialProvider, string> = {
   github: 'GitHub',
   google: 'Google',
   linkedin: 'LinkedIn',
@@ -39,7 +44,7 @@ const PROVIDER_LABELS: Record<keyof AuthProviders, string> = {
 };
 
 // Ordered, because the object key order of a JSON response is not a design decision.
-const PROVIDER_ORDER: (keyof AuthProviders)[] = ['github', 'google', 'linkedin', 'facebook'];
+const PROVIDER_ORDER: SocialProvider[] = ['github', 'google', 'linkedin', 'facebook'];
 
 /**
  * Which step the sign-in is on.
@@ -407,6 +412,18 @@ export default function LoginPage() {
                     }}
                   >
                     Continue with {PROVIDER_LABELS[provider]}
+                  </AlternateButton>
+                ))}
+                {/* OpenID Connect providers, in the order the API lists them (by name). */}
+                {(providers?.oidc ?? []).map((provider) => (
+                  <AlternateButton
+                    key={`oidc-${provider.name}`}
+                    icon={IconExternalLink}
+                    onClick={() => {
+                      window.location.href = oidcSignInUrl(provider.name);
+                    }}
+                  >
+                    Continue with {provider.displayName}
                   </AlternateButton>
                 ))}
               </div>
