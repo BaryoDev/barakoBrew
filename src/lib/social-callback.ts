@@ -78,7 +78,6 @@ export function signInErrorFromQuery(search: string): string | null {
         return null;
     }
     if (!value) return null;
-    // eslint-disable-next-line no-control-regex -- control characters are what this removes.
     const cleaned = value.replace(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim();
     if (cleaned.length === 0) return null;
     return cleaned.length > MAX_MESSAGE ? `${cleaned.slice(0, MAX_MESSAGE)}...` : cleaned;
