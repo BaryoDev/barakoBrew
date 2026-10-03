@@ -217,11 +217,9 @@ export function useVerifyMfa() {
         mutationFn: async ({ tenant, ...input }: { challengeToken: string; code: string; tenant?: string }) => {
             // An external sign-in names its club in the callback, and there is no token yet to read
             // a tenant from, so the caller passes it on.
-            const { data } = await api.post<LoginResponse>(
-                '/api/auth/mfa/verify',
-                input,
-                tenant ? { headers: { 'X-Tenant': tenant } } : undefined,
-            );
+            const { data } = tenant
+                ? await api.post<LoginResponse>('/api/auth/mfa/verify', input, { headers: { 'X-Tenant': tenant } })
+                : await api.post<LoginResponse>('/api/auth/mfa/verify', input);
             startSession(data.token);
             return data;
         },

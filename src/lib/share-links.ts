@@ -85,7 +85,6 @@ const MAX_PATH_LENGTH = 2048;
  * BMP still reaches the API, which refuses it.
  */
 const REFUSED_IN_PATH =
-    // eslint-disable-next-line no-control-regex -- control characters are exactly what this refuses.
     /[\\?#%\s\u0000-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB]/;
 
 /**
