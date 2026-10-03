@@ -6,20 +6,36 @@ const TENANT: Tenant = {
     id: 't1',
     slug: 'rckoronadal',
     name: 'Rotary Club of Koronadal',
+    domains: ['rckoronadal.org'],
+    isActive: true,
+};
+
+/** A tenant as an API before 4.6 answered it, with the profile still on the record. */
+const OLDER_TENANT = {
+    ...TENANT,
     about: 'Service above self',
     logoUrl: 'https://rckoronadal.org/logo.png',
     email: 'club@rckoronadal.org',
     location: 'Koronadal',
     locationUrl: 'https://maps.example/koronadal',
     socialHandle: '@rckoronadal',
-    contactUrl: 'https://rckoronadal.org/contact',
-    domains: ['rckoronadal.org'],
-    isActive: true,
-};
+    contactUrl: null,
+} as Tenant;
 
 describe('tenantDomainsBody', () => {
-    it('sends the whole profile back with the new domains, so a domain edit wipes nothing', () => {
+    it('sends no profile field to API 4.6, which refuses a value in one and keeps what is left out', () => {
         const body = tenantDomainsBody(TENANT, ['rckoronadal.org', ' www.rckoronadal.org ']);
+
+        expect(body).toEqual({
+            Handle: 'rckoronadal',
+            Name: 'Rotary Club of Koronadal',
+            IsActive: true,
+            Domains: ['rckoronadal.org', 'www.rckoronadal.org'],
+        });
+    });
+
+    it('sends the profile back to an older API that answered with it, so a domain edit wipes nothing', () => {
+        const body = tenantDomainsBody(OLDER_TENANT, ['rckoronadal.org']);
 
         expect(body).toEqual({
             Handle: 'rckoronadal',
@@ -30,9 +46,9 @@ describe('tenantDomainsBody', () => {
             LocationUrl: 'https://maps.example/koronadal',
             SocialHandle: '@rckoronadal',
             Email: 'club@rckoronadal.org',
-            ContactUrl: 'https://rckoronadal.org/contact',
+            ContactUrl: null,
             IsActive: true,
-            Domains: ['rckoronadal.org', 'www.rckoronadal.org'],
+            Domains: ['rckoronadal.org'],
         });
     });
 

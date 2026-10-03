@@ -3,6 +3,7 @@
 import { SiteForm } from '@/components/site/site-form';
 import { ShareLinksPanel } from '@/components/site/share-links-panel';
 import { SiteModeSection } from '@/components/site/site-mode-section';
+import { SiteProfileSection } from '@/components/site/profile-section';
 import { ImageUrlField } from '@/components/site/image-url-field';
 import { LinkList, PairList, Section, Structured, TextField } from '@/components/site/editors';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ export default function SitePage() {
     return (
         <SiteForm
             title="Site"
-            description="This tenant's name, mode, images, header, footer and social links, read by the site on each request."
+            description="This tenant's name, mode, profile, images, header, footer and social links, read by the site on each request."
             problem={siteProblem}
         >
             {({ values, set, entry, schema }) => (
@@ -63,6 +64,8 @@ export default function SitePage() {
                     </Section>
 
                     <SiteModeSection values={values} set={set} schema={schema} />
+
+                    <SiteProfileSection values={values} set={set} schema={schema} />
 
                     <Section title="Images" description="Uploaded files or any absolute address.">
                         <ImageUrlField id="site-logo" label="Logo" value={values.Logo} onChange={(v) => set('Logo', v)} />
