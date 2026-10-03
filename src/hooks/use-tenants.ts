@@ -77,13 +77,22 @@ export function useCurrentTenant(): string | null {
   );
 }
 
+/**
+ * The body of `POST /api/me/switch`. barakoCMS 4.6 takes `Tenant` and keeps `Club` as an alias, and
+ * an older API knows only `Club`, so both carry the handle. The same handle in both is not a
+ * disagreement the API refuses.
+ */
+export function switchTenantBody(slug: string) {
+  return { Tenant: slug, Club: slug };
+}
+
 /** Swap the session token for one scoped to another tenant the user belongs to (no re-auth). The new
  * token carries the tenant claim, so every subsequent request's X-Tenant follows automatically. */
 export function useSwitchTenant() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (slug: string) => {
-      const { data } = await api.post<SwitchResponse>('/api/me/switch', { Club: slug });
+      const { data } = await api.post<SwitchResponse>('/api/me/switch', switchTenantBody(slug));
       tokenStore.set(data.token);
       return data;
     },

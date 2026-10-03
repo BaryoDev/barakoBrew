@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
-import { domainClash, domainProblems, MAX_TENANT_DOMAINS, tenantDomainsBody, type Tenant } from './use-tenants';
+import {
+    domainClash,
+    domainProblems,
+    MAX_TENANT_DOMAINS,
+    switchTenantBody,
+    tenantDomainsBody,
+    type Tenant,
+} from './use-tenants';
 
 const TENANT: Tenant = {
     id: 't1',
@@ -54,6 +61,12 @@ describe('tenantDomainsBody', () => {
 
     it('sends an empty list to clear the domains, not null, which the API reads as keep', () => {
         expect(tenantDomainsBody(TENANT, []).Domains).toEqual([]);
+    });
+});
+
+describe('switchTenantBody', () => {
+    it('names the tenant as tenant for API 4.6 and as club for an older API', () => {
+        expect(switchTenantBody('north')).toEqual({ Tenant: 'north', Club: 'north' });
     });
 });
 
