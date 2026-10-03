@@ -8,6 +8,13 @@ vi.mock('@/lib/api', async () => {
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
 });
 
+// Radix's checkbox and switch measure themselves, and jsdom has no ResizeObserver.
+globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+};
+
 const { api } = await import('@/lib/api');
 const { recordContractVersion, __resetContractForTests } = await import('@/lib/api-contract');
 const { RoleEditor } = await import('./role-editor');
