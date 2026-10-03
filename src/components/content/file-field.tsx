@@ -63,6 +63,7 @@ export function FileField({
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     const id = typeof value === 'string' ? value : '';
+    const action = id ? 'Change' : imagesOnly ? 'Choose image' : 'Choose file';
     const shown: ShownFile | null =
         picked && picked.id === id ? picked : resolved && resolved.id.toLowerCase() === id.toLowerCase() ? fromResolved(resolved) : null;
 
@@ -103,9 +104,12 @@ export function FileField({
                     variant="outline"
                     size="sm"
                     aria-haspopup="dialog"
+                    // Named for what it does as well as the field: the field label points at this
+                    // button, and without this its name would be only the field's.
+                    aria-label={`${action} for ${field.displayName}`}
                     onClick={() => setOpen(true)}
                 >
-                    {id ? 'Change' : imagesOnly ? 'Choose image' : 'Choose file'}
+                    {action}
                 </Button>
                 {id && (
                     <Button

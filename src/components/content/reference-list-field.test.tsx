@@ -45,7 +45,9 @@ function row(e: (typeof SPEAKERS)[number]) {
     };
 }
 
+// cmdk measures its list and scrolls the active item into view; jsdom has neither.
 beforeAll(() => {
+    Element.prototype.scrollIntoView = () => {};
     globalThis.ResizeObserver = class {
         observe() {}
         unobserve() {}
@@ -71,14 +73,14 @@ beforeEach(() => {
     });
 });
 
-function Harness({ initial, saved }: { initial: unknown; saved: { current: unknown } }) {
+function Harness({ initial, onSaved }: { initial: unknown; onSaved: (value: unknown) => void }) {
     const [values, setValues] = useState<Record<string, unknown>>(initial === undefined ? {} : { Speakers: initial });
     return (
         <DynamicForm
             fields={[FIELD]}
             values={values}
             onChange={(next) => {
-                saved.current = next.Speakers;
+                onSaved(next.Speakers);
                 setValues(next);
             }}
         />
@@ -90,7 +92,12 @@ function renderList(initial?: unknown) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
         <QueryClientProvider client={client}>
-            <Harness initial={initial} saved={saved} />
+            <Harness
+                initial={initial}
+                onSaved={(value) => {
+                    saved.current = value;
+                }}
+            />
         </QueryClientProvider>,
     );
     return saved;

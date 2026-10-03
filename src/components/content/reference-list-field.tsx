@@ -134,6 +134,8 @@ export function ReferenceListField({
                     size="sm"
                     aria-haspopup="dialog"
                     disabled={full}
+                    // The field label points at this button; this keeps the action in its name.
+                    aria-label={`Add ${targetLabel} to ${field.displayName}`}
                     onClick={() => setOpen(true)}
                 >
                     <IconPlus className="size-3.5" />

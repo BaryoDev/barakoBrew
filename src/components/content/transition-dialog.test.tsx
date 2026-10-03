@@ -84,7 +84,7 @@ describe('a transition', () => {
             <QueryClientProvider client={client}>
                 {/* The entry form under the dialog, holding the same field names. */}
                 <label htmlFor="Reason">Reason</label>
-                <input id="Reason" defaultValue="from the entry form" />
+                <input id="Reason" aria-label="Reason" defaultValue="from the entry form" />
                 <TransitionActions entryId={ID} contentType="expense" transitions={TRANSITIONS} fields={FIELDS} />
             </QueryClientProvider>,
         );
