@@ -15,7 +15,9 @@ site has to answer that request from the console's origin: either the console is
 same origin as the site, or the site's `/api/blocks` sends an `Access-Control-Allow-Origin` header
 that allows the console.
 
-Any json field named `Blocks` (in any casing) on any content type gets the block editor. barakoPress
+A json or array field whose definition sets the editor hint `"editor": "blocks"` gets the block
+editor, whatever it is called (API 4.6 and later). A json field with no hint gets it when it is named
+`Blocks`, in any casing, as before hints existed. A field with a different hint does not. barakoPress
 reads `Blocks` on the page type unless its `pageFields.blocks` says otherwise.
 
 ## What the editor does

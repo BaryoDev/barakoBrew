@@ -129,7 +129,7 @@ function DuplicatesList({ typeName, rule }: { typeName: string; rule: string }) 
     const [page, setPage] = useState(1);
     const { data, isLoading, isError, error } = useUniquenessDuplicates(typeName, rule, page);
 
-    if (isLoading) return <p className="text-muted-foreground text-xs">Loading…</p>;
+    if (isLoading) return <p className="text-muted-foreground text-xs">Loading...</p>;
     if (isError || !data) {
         return (
             <p role="alert" className="text-destructive text-xs">
@@ -233,7 +233,7 @@ export function UniquenessDialog({
                 <DialogHeader>
                     <DialogTitle>Uniqueness rules for {schema.displayName}</DialogTitle>
                     <DialogDescription>
-                        The list replaces the type&rsquo;s rules. Only Public fields holding one value can be
+                        The list replaces the type&apos;s rules. Only Public fields holding one value can be
                         compared. Entries that already share values are left as they are.
                     </DialogDescription>
                 </DialogHeader>
@@ -355,7 +355,7 @@ export function UniquenessDialog({
                         disabled={invalid || setUniqueness.isPending || refusal !== null}
                         onClick={() => send(false)}
                     >
-                        {setUniqueness.isPending ? 'Saving…' : 'Save rules'}
+                        {setUniqueness.isPending ? 'Saving...' : 'Save rules'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

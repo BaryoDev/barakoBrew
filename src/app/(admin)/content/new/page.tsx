@@ -13,6 +13,8 @@ import { ContentStatus, SensitivityLevel, SENSITIVITY_META } from '@/types/conte
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { DynamicForm } from '@/components/content/dynamic-form';
+import { SaveRefusal, isRetryableRefusal } from '@/components/content/save-refusal';
+import { withoutTokenFields } from '@/lib/token-fields';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -40,6 +42,7 @@ function NewContentInner() {
     return parent && field ? { [field]: parent } : {};
   });
   const [sensitivity, setSensitivity] = useState(SensitivityLevel.Public);
+  const [refusal, setRefusal] = useState<{ message: string; status: ContentStatus } | null>(null);
 
   const schema = schemas?.find((s) => s.name === contentType);
   const singleton = schema?.isSingleton === true;
@@ -50,14 +53,21 @@ function NewContentInner() {
   }, [schema, singleton, router]);
 
   const submit = (status: ContentStatus) => {
+    setRefusal(null);
     createContent.mutate(
-      { contentType, data: values, status, sensitivity },
+      { contentType, data: withoutTokenFields(schema?.fields ?? [], values), status, sensitivity },
       {
         onSuccess: ({ id }) => {
           toast.success(status === ContentStatus.Published ? 'Entry published' : 'Draft saved');
           router.push(`/content/${id}`);
         },
-        onError: (error) => toast.error(apiErrorMessage(error, 'The entry could not be saved.')),
+        // Kept on the page as well: a uniqueness 409 or a refused field has to stay readable while
+        // it is fixed.
+        onError: (error) => {
+          const message = apiErrorMessage(error, 'The entry could not be saved.');
+          setRefusal({ message, status });
+          toast.error(message);
+        },
       }
     );
   };
@@ -77,6 +87,7 @@ function NewContentInner() {
               onValueChange={(v) => {
                 setContentType(v);
                 setValues({});
+                setRefusal(null);
               }}
             >
               {/* id and htmlFor, not aria-label: the visible text is the right accessible name, and
@@ -142,6 +153,13 @@ function NewContentInner() {
                 Cancel
               </Button>
             </div>
+            {refusal && (
+              <SaveRefusal
+                message={refusal.message}
+                retrying={createContent.isPending}
+                onRetry={isRetryableRefusal(refusal.message) ? () => submit(refusal.status) : undefined}
+              />
+            )}
           </>
         )}
       </div>

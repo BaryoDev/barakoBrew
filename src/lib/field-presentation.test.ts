@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    chosenEditor,
     currencyProblem,
     editorsFor,
     rolesFor,
@@ -53,5 +54,32 @@ describe('the checks made before the API is asked', () => {
         expect(tokenLengthProblem('16')).toBeNull();
         expect(tokenLengthProblem('15')).not.toBeNull();
         expect(tokenLengthProblem('129')).not.toBeNull();
+    });
+});
+
+describe('the editor a field gets', () => {
+    const conventions = {
+        isBlocks: (name: string) => name.toLowerCase() === 'blocks',
+        isMenu: (name: string) => name === 'Items',
+    };
+
+    it('follows the hint whatever the field is called', () => {
+        expect(chosenEditor({ name: 'Sections', type: 'json', editor: 'blocks' }, conventions)).toBe('blocks');
+        expect(chosenEditor({ name: 'FooterItems', type: 'array', editor: 'menu' }, conventions)).toBe('menu');
+        expect(chosenEditor({ name: 'Cover', type: 'file', editor: 'image' }, conventions)).toBe('image');
+    });
+
+    it('lets a hint win over the name', () => {
+        expect(chosenEditor({ name: 'Blocks', type: 'json', editor: 'links' }, conventions)).toBe('links');
+    });
+
+    it('falls back to the name when there is no hint, as before hints existed', () => {
+        expect(chosenEditor({ name: 'Blocks', type: 'json' }, conventions)).toBe('blocks');
+        expect(chosenEditor({ name: 'Items', type: 'json', editor: null }, conventions)).toBe('menu');
+        expect(chosenEditor({ name: 'Sections', type: 'json' }, conventions)).toBeUndefined();
+    });
+
+    it('ignores a hint on a type it is not for', () => {
+        expect(chosenEditor({ name: 'Blocks', type: 'string', editor: 'blocks' }, conventions)).toBeUndefined();
     });
 });

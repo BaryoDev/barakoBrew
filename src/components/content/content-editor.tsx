@@ -24,6 +24,9 @@ import { StatusBadge } from '@/components/patterns/status-badge';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { DynamicForm } from '@/components/content/dynamic-form';
+import { TransitionActions } from '@/components/content/transition-dialog';
+import { SaveRefusal, isRetryableRefusal } from '@/components/content/save-refusal';
+import { withoutTokenFields } from '@/lib/token-fields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,6 +84,9 @@ export function ContentEditor({
 
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [tab, setTab] = useState('edit');
+  // The API's own words for the last refused save, kept on the page: a uniqueness 409 or a field
+  // the API refused has to stay readable while it is fixed, and a toast is gone in seconds.
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   // What was last seeded from the server, kept whole so "has this editor changed anything" is
   // answerable without comparing against a value that moves underneath the question.
@@ -148,6 +154,7 @@ export function ContentEditor({
   const save = async (status?: ContentStatus) => {
     const base = seeded;
     if (!base) return;
+    setRefusal(null);
 
     try {
       const outcome = await saver.save({
@@ -158,10 +165,15 @@ export function ContentEditor({
           if (!fresh) throw new Error('The entry could not be read back.');
           return { data: fresh.data, version: fresh.version, etag: fresh.etag, status: fresh.status };
         },
+        // A token is never sent: the server keeps the stored one when it is left out.
         write: (data, against) =>
           updateContent.mutateAsync({
             id,
-            data: { data, status: status ?? against.status, version: against.version },
+            data: {
+              data: withoutTokenFields(schema?.fields ?? [], data),
+              status: status ?? against.status,
+              version: against.version,
+            },
             etag: against.etag,
           }),
       });
@@ -182,11 +194,14 @@ export function ContentEditor({
       // A refused save is the one failure where a toast is not enough: it is gone in seconds and it
       // is the moment somebody has to choose between two versions of the entry. The banner the hook
       // raised stays on the page.
-      toast.error(
-        error instanceof SaveConflictError
-          ? error.message
-          : apiErrorMessage(error, 'The entry could not be saved.')
-      );
+      if (error instanceof SaveConflictError) {
+        toast.error(error.message);
+      } else {
+        const message = apiErrorMessage(error, 'The entry could not be saved.');
+        // A 412 already has the conflict banner, which is where that decision is made.
+        if (!isConflict(error)) setRefusal(message);
+        toast.error(message);
+      }
     }
   };
 
@@ -217,28 +232,43 @@ export function ContentEditor({
         actions={
           <div className="flex items-center gap-2">
             <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
-            {content.status !== ContentStatus.Published && (
-              <Button
-                size="sm"
-                onClick={() => setStatus(ContentStatus.Published, 'Published')}
-                disabled={updateStatus.isPending}
-              >
-                Publish
-              </Button>
-            )}
-            {content.status !== ContentStatus.Archived && (
-              <ConfirmDialog
-                trigger={
-                  <Button variant="outline" size="sm" disabled={updateStatus.isPending}>
-                    <IconArchive className="size-3.5" />
-                    Archive
-                  </Button>
-                }
-                title="Archive this entry?"
-                description="Archived entries stay in the system and can be republished later. There is no delete — archiving is how entries retire."
-                confirmLabel="Archive"
-                onConfirm={() => setStatus(ContentStatus.Archived, 'Archived')}
+            {/* A type with its own lifecycle moves by named transitions, and the API refuses a
+                plain status change for it, so it gets its transitions instead of Publish and
+                Archive. */}
+            {schema?.lifecycle ? (
+              <TransitionActions
+                entryId={id}
+                contentType={content.contentType}
+                transitions={schema.lifecycle.transitions ?? []}
+                fields={schema.fields}
+                viewerRoles={user?.roles}
               />
+            ) : (
+              <>
+                {content.status !== ContentStatus.Published && (
+                  <Button
+                    size="sm"
+                    onClick={() => setStatus(ContentStatus.Published, 'Published')}
+                    disabled={updateStatus.isPending}
+                  >
+                    Publish
+                  </Button>
+                )}
+                {content.status !== ContentStatus.Archived && (
+                  <ConfirmDialog
+                    trigger={
+                      <Button variant="outline" size="sm" disabled={updateStatus.isPending}>
+                        <IconArchive className="size-3.5" />
+                        Archive
+                      </Button>
+                    }
+                    title="Archive this entry?"
+                    description="Archived entries stay in the system and can be republished later. There is no delete — archiving is how entries retire."
+                    confirmLabel="Archive"
+                    onConfirm={() => setStatus(ContentStatus.Archived, 'Archived')}
+                  />
+                )}
+              </>
             )}
           </div>
         }
@@ -280,6 +310,7 @@ export function ContentEditor({
                 onChange={setValues}
                 contentType={content.contentType}
                 viewerRoles={user?.roles}
+                files={content.files}
               />
               <Separator className="my-6" />
               <div className="flex items-center gap-2">
@@ -292,6 +323,13 @@ export function ContentEditor({
                   </Button>
                 )}
               </div>
+              {refusal && (
+                <SaveRefusal
+                  message={refusal}
+                  retrying={updateContent.isPending}
+                  onRetry={isRetryableRefusal(refusal) ? () => save() : undefined}
+                />
+              )}
               {blocked && (
                 <p role="alert" className="text-destructive mt-3 text-sm">
                   A choice above holds a value that is not offered any more. Pick another before saving.

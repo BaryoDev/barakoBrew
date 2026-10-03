@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState, type ReactNode } from 'react';
-import { JsonField } from '@/components/content/dynamic-form';
+import { JsonField } from 'barako-content-form';
 import { FieldError } from '@/components/content/field-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

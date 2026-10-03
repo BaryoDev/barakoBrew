@@ -154,7 +154,7 @@ export function FieldPresentationDialog({
                         Cancel
                     </Button>
                     <Button type="button" disabled={!!sectionIssue || setPresentation.isPending} onClick={save}>
-                        {setPresentation.isPending ? 'Saving…' : 'Save'}
+                        {setPresentation.isPending ? 'Saving...' : 'Save'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

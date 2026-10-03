@@ -137,7 +137,7 @@ export function FieldCurrencyDialog({
                         disabled={!!issue || setFieldCurrency.isPending || refusal !== null}
                         onClick={() => send(false)}
                     >
-                        {setFieldCurrency.isPending ? 'Saving…' : 'Save currency'}
+                        {setFieldCurrency.isPending ? 'Saving...' : 'Save currency'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

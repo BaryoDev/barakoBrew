@@ -46,12 +46,12 @@ export function RouteTemplatePanel({ typeName, current }: { typeName: string; cu
                     disabled={!!issue || unchanged || setRouteTemplate.isPending}
                     onClick={save}
                 >
-                    {setRouteTemplate.isPending ? 'Saving…' : 'Save path'}
+                    {setRouteTemplate.isPending ? 'Saving...' : 'Save path'}
                 </Button>
             </div>
             <p className="text-muted-foreground text-sm">
                 Holds {'{slug}'} once. The feed and the sitemap link entries here, after up to a minute. Empty
-                uses the server&rsquo;s setting.
+                uses the server&apos;s setting.
             </p>
             {issue && <p className="text-destructive text-sm">{issue}</p>}
             {refusal && (

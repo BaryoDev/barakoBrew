@@ -158,7 +158,7 @@ export default function NewSchemaPage() {
           />
           <p className="text-sm text-muted-foreground">
             Where an entry lives on the site, with {'{slug}'} once. The feed and the sitemap build links
-            from it. Leave empty to use the server&rsquo;s setting. You can change this later.
+            from it. Leave empty to use the server&apos;s setting. You can change this later.
           </p>
           {routeIssue && <p className="text-destructive text-sm">{routeIssue}</p>}
         </div>

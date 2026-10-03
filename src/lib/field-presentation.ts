@@ -33,17 +33,6 @@ export function rolesFor(type: string) {
     return FIELD_ROLES.filter((r) => resolved !== undefined && r.fieldTypes.includes(resolved));
 }
 
-/**
- * The editor hint a field declares, when it is one this console knows, or undefined.
- *
- * Undefined means "no hint": the console then picks the editor from the type and the name, as it
- * did before hints existed. A hint naming an editor this console does not have is still a hint, so
- * it is returned and the caller falls back to the plain control rather than guessing by name.
- */
-export function editorHint(field: Pick<FieldDefinition, 'editor'>): string | undefined {
-    return field.editor ? field.editor : undefined;
-}
-
 /** Why a section would be refused, or null. The API's rules, checked before the round trip. */
 export function sectionProblem(section: string): string | null {
     if (section === '') return null;
@@ -94,4 +83,24 @@ export function tokenLengthProblem(length: string): string | null {
         return `A token is ${TOKEN_LENGTH.min} to ${TOKEN_LENGTH.max} characters long.`;
     }
     return null;
+}
+
+/**
+ * The console editor a field gets: the one its hint names, or by convention when it has no hint.
+ *
+ * A hint wins over the name, so a block list can be called `Sections`. A field with no hint keeps
+ * what it had before hints existed: blocks for a json field named `Blocks`, the menu tree for a
+ * menu's `Items`. A hint on a type it is not for is ignored, since the API refuses that anyway.
+ */
+export function chosenEditor(
+    field: Pick<FieldDefinition, 'name' | 'type' | 'editor'>,
+    conventions: { isBlocks: (name: string) => boolean; isMenu: (name: string) => boolean },
+): string | undefined {
+    if (field.editor) {
+        return editorsFor(field.type).some((e) => e.name === field.editor) ? field.editor : undefined;
+    }
+    if (resolveFieldType(field.type) !== 'json') return undefined;
+    if (conventions.isBlocks(field.name)) return 'blocks';
+    if (conventions.isMenu(field.name)) return 'menu';
+    return undefined;
 }
