@@ -445,3 +445,13 @@ describe('OAuth2 client credentials', () => {
         expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
     });
 });
+
+describe('the way to a connector deliveries', () => {
+    it('links each connector to its own request deliveries', async () => {
+        renderPage([connector({ slug: 'crm', name: 'CRM' })]);
+
+        const link = await screen.findByRole('link', { name: 'Deliveries for CRM' });
+        expect(link).toHaveAttribute('href', '/settings/deliveries?kind=requests&connector=crm');
+        expect(screen.getByRole('link', { name: 'Deliveries' })).toHaveAttribute('href', '/settings/deliveries?kind=requests');
+    });
+});

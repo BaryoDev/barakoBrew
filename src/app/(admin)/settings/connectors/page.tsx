@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -48,7 +49,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { IconBolt, IconPen, IconPlus, IconTrash, IconWarning, IconWebhook } from '@/components/icons';
+import { IconBolt, IconPen, IconPlus, IconTasks, IconTrash, IconWarning, IconWebhook } from '@/components/icons';
 
 const SELECT = 'h-9 w-full rounded-md border bg-transparent px-3 text-sm';
 
@@ -452,10 +453,18 @@ export default function ConnectorsPage() {
     }
 
     const newButton = (
-        <Button size="sm" onClick={openCreate}>
-            <IconPlus />
-            New connector
-        </Button>
+        <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+                <Link href="/settings/deliveries?kind=requests">
+                    <IconTasks />
+                    Deliveries
+                </Link>
+            </Button>
+            <Button size="sm" onClick={openCreate}>
+                <IconPlus />
+                New connector
+            </Button>
+        </div>
     );
 
     return (
@@ -566,6 +575,18 @@ export default function ConnectorsPage() {
                                                         onClick={() => void onTest(connector)}
                                                     >
                                                         <IconBolt className="size-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon-sm"
+                                                        aria-label={`Deliveries for ${connector.name}`}
+                                                    >
+                                                        <Link
+                                                            href={`/settings/deliveries?kind=requests&connector=${encodeURIComponent(connector.slug)}`}
+                                                        >
+                                                            <IconTasks className="size-3.5" />
+                                                        </Link>
                                                     </Button>
                                                     <Button
                                                         type="button"
