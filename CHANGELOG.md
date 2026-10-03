@@ -11,6 +11,23 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Sign in through an OpenID Connect provider.** The sign-in page offers each provider the API
+  lists under `oidc` in `/api/auth/providers`, beside the social ones. An API before ExternalAuth
+  4.4.0 lists none and the page is unchanged.
+- **Share one entry or one page, and hand over a preview link.** The entry editor has a Share tab:
+  links to that entry (with a page path, a link to that page) are created, listed and revoked
+  there, and a 30 minute preview link is issued as `{site}{path}?preview=...`. The panel hides for
+  someone who cannot update the entry, and on an API before 4.6.
+- **Connectors take OAuth2 client credentials.** Token URL, client id, optional scope, and the
+  client secret, which is write only like every other credential. Moving the token URL asks for
+  the secret again, as the API does.
+- **Workflows can be switched off, deleted and stopped.** The list has an on switch and a delete
+  for each workflow, a waiting or running run has Cancel run, and an action can be set to stop the
+  actions after it when it fails. A skipped action says which failure skipped it. The placeholder
+  help lists the formats and durations the API reports. All of it needs barakoCMS 4.6; on an older
+  API the controls are not shown.
+- **A 429 says how long to wait** when the API sends `Retry-After`.
+
 - **Workflow runs say whether a failure is temporary or permanent.** A failed action shows
   Temporary or Permanent from the API's `retryable`, and the list marks a run by its worst failure.
   Retry on a permanent failure asks first: "This failure will not fix itself by retrying. Retry
