@@ -25,13 +25,17 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { IconRefresh, IconWorkflows } from '@/components/icons';
+import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { apiErrorMessage } from '@/lib/api';
 import {
   ANY_STATUS,
   FAILURE_KINDS,
   RUN_STATUSES,
+  isCancellable,
+  isStopped,
   runFailureKind,
   toneForRunStatus,
+  useCancelRun,
   useRetryAttempt,
   useWorkflowRun,
   useWorkflowRuns,
@@ -89,6 +93,7 @@ export default function WorkflowRunsPage() {
   const runs = useWorkflowRuns({ page, pageSize: 25, status });
   const run = useWorkflowRun(selectedId);
   const retry = useRetryAttempt();
+  const cancel = useCancelRun();
 
   const rows = runs.data?.items ?? [];
 
@@ -110,6 +115,16 @@ export default function WorkflowRunsPage() {
       toast.error(apiErrorMessage(error));
     } finally {
       retryInFlight.current = false;
+    }
+  }
+
+  async function onCancel(runId: string) {
+    try {
+      await cancel.mutateAsync(runId);
+      toast.success('Run cancelled. An action already out finishes and is recorded.');
+    } catch (error) {
+      // 409 when the run finished first, or the runner wrote it at the same moment.
+      toast.error(apiErrorMessage(error, 'The run could not be cancelled.'));
     }
   }
 
@@ -247,6 +262,20 @@ export default function WorkflowRunsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[15px] font-bold">{run.data.workflowName}</h2>
                 <StatusBadge tone={toneForRunStatus(run.data.status)}>{run.data.status}</StatusBadge>
+                {isCancellable(run.data) && (
+                  <ConfirmDialog
+                    trigger={
+                      <Button className="ml-auto" size="sm" variant="outline" disabled={cancel.isPending}>
+                        {cancel.isPending ? 'Cancelling...' : 'Cancel run'}
+                      </Button>
+                    }
+                    title={`Cancel this ${run.data.workflowName} run?`}
+                    description="Actions that have not started will not run. One already out finishes and its outcome is kept. A cancelled run cannot be retried."
+                    confirmLabel="Yes, cancel the run"
+                    destructive
+                    onConfirm={() => void onCancel(run.data!.id)}
+                  />
+                )}
               </div>
 
               <RunFacts run={run.data} />
@@ -263,6 +292,7 @@ export default function WorkflowRunsPage() {
                       key={attempt.ordinal}
                       attempt={attempt}
                       retrying={retry.isPending}
+                      canRetry={!isStopped(run.data!)}
                       onRetry={(ordinal) => void onRetry(ordinal)}
                     />
                   ))}

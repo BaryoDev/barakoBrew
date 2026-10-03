@@ -17,10 +17,11 @@ import type { TriggerEvent, WorkflowAction, WorkflowDefinition } from '@/types/w
 import { PageHeader } from '@/components/patterns/page-header';
 import { ActionIcon } from '@/components/workflow/action-icon';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
+import { TemplateVariablesHelp } from '@/components/workflow/template-variables-help';
 import {
   Select,
   SelectContent,
@@ -88,7 +89,11 @@ export default function NewWorkflowPage() {
   const validate = () => {
     validateWorkflow.mutate(definition(), {
       onSuccess: (result) => {
-        if (result.isValid) toast.success('The workflow is valid');
+        if (result.isValid && result.warnings?.length)
+          toast.warning(
+            `Valid, but these placeholders will be sent as written: ${result.warnings.map((w) => `${w.field}: ${w.message}`).join('; ')}`
+          );
+        else if (result.isValid) toast.success('The workflow is valid');
         else
           toast.error(
             `Fix before saving: ${result.errors.map((e) => `${e.field}: ${e.message}`).join('; ')}`
@@ -317,27 +322,32 @@ export default function NewWorkflowPage() {
                     </div>
                   );
                 })}
+                <div className="flex items-center gap-2.5">
+                  <Checkbox
+                    id={`action-${i}-halt`}
+                    checked={action.onFailure === 'Halt'}
+                    onCheckedChange={(checked) =>
+                      setActions((prev) =>
+                        prev.map((a, j) => {
+                          if (j !== i) return a;
+                          // Left off rather than sent as Continue, so a definition that never
+                          // halts looks the same as it always did.
+                          const next: WorkflowAction = { ...a };
+                          delete next.onFailure;
+                          return checked === true ? { ...next, onFailure: 'Halt' } : next;
+                        })
+                      )
+                    }
+                  />
+                  <Label htmlFor={`action-${i}-halt`} className="text-xs font-normal">
+                    Stop the actions after this one if it fails
+                  </Label>
+                </div>
               </div>
             );
           })}
 
-          {variables && (variables.systemVariables.length > 0 || variables.dataFields.length > 0) && (
-            <details className="text-sm">
-              <summary className="text-muted-foreground cursor-pointer">Available template variables</summary>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {[...variables.systemVariables, ...variables.dataFields].map((variable) => (
-                  <Badge
-                    key={variable.name}
-                    variant="secondary"
-                    className="font-mono font-normal"
-                    title={variable.description}
-                  >
-                    {variable.name}
-                  </Badge>
-                ))}
-              </div>
-            </details>
-          )}
+          <TemplateVariablesHelp variables={variables} />
         </div>
 
         <div className="flex items-center gap-2">
