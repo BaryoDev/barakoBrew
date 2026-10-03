@@ -112,6 +112,19 @@ describe('a field the viewer may not read', () => {
         expect(renderSensitive(['SuperAdmin'])).not.toHaveAttribute('readonly');
     });
 
+    it('is editable for a role the API lets through by capability, when the host passes capabilities', () => {
+        render(
+            <ContentForm
+                fields={sensitive}
+                values={{ Salary: '90000' }}
+                onChange={() => {}}
+                viewerRoles={['Nurse']}
+                viewerCapabilities={['view_sensitive']}
+            />
+        );
+        expect(document.getElementById('Salary')).not.toHaveAttribute('readonly');
+    });
+
     // The reason sensitivity lives here and not in the caller: a host that draws its own control
     // for this field would otherwise have to remember, and would be the only thing standing between
     // an editor and a box whose edits the API silently throws away.
