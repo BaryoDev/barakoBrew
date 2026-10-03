@@ -11,6 +11,19 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Content types and entries speak the barakoCMS 4.6 field members.** The type builder sets a
+  field's section, editor hint and role, a type's path on the site, a money field's currency and
+  decimal places, a token field's length, and a reference that holds several entries; a stored type
+  gets the same through their own endpoints, plus its uniqueness rules with the confirmation the API
+  asks for when entries already share values, and the list of those entries. The entry editor groups
+  fields by section, opens the block, menu or image editor the hint names (the field name stays the
+  fallback), shows money with its currency, shows a token read only and never sends it, picks a
+  stored file for a file field, takes a PNG, JPEG, GIF or WebP up to 64 KB for an inline image,
+  keeps an ordered list of up to 100 entries for a list reference, keeps a refused save's message
+  on the page with a retry for "Try again shortly", and moves a type with its own lifecycle by its
+  transitions, asking first for the fields a transition requires. Against an older API the new
+  members are absent and every screen behaves as before; the new endpoints answer 404 there and
+  that message is shown.
 - **Workflow runs say whether a failure is temporary or permanent.** A failed action shows
   Temporary or Permanent from the API's `retryable`, and the list marks a run by its worst failure.
   Retry on a permanent failure asks first: "This failure will not fix itself by retrying. Retry
