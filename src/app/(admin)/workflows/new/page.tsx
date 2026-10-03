@@ -334,7 +334,7 @@ export default function NewWorkflowPage() {
                           // halts looks the same as it always did.
                           const next: WorkflowAction = { ...a };
                           delete next.onFailure;
-                          return checked === true ? { ...next, onFailure: 'Halt' } : next;
+                          return checked === true ? { ...next, onFailure: 'Halt' as const } : next;
                         })
                       )
                     }

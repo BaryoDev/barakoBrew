@@ -79,6 +79,16 @@ export interface ShareLinkScope {
 const MAX_PATH_LENGTH = 2048;
 
 /**
+ * Backslash, `?`, `#`, `%`, whitespace, control characters and the Basic Multilingual Plane's format
+ * characters (soft hyphen, zero width spaces, the bidi marks and overrides, the byte order mark).
+ * Spelled out rather than `\p{Cf}`, which needs an ES2018 target. A format character outside the
+ * BMP still reaches the API, which refuses it.
+ */
+const REFUSED_IN_PATH =
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what this refuses.
+    /[\\?#%\s\u0000-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB]/;
+
+/**
  * The API's rule for a page link's path: a leading slash, no empty, `.` or `..` segment, and no
  * whitespace, backslash, `?`, `#`, `%`, control or format character. The API is still the one that
  * refuses; this lets the form say so before a round trip.
@@ -87,8 +97,7 @@ export function isSitePath(path: string): boolean {
     if (path.length === 0 || path.length > MAX_PATH_LENGTH || path[0] !== '/') return false;
     if (path.includes('//')) return false;
     if (path.split('/').some((segment) => segment === '.' || segment === '..')) return false;
-    // \p{Cf} is the Unicode format category, which holds the bidi overrides and zero width spaces.
-    return !/[\\?#%\s\p{Cc}\p{Cf}]/u.test(path);
+    return !REFUSED_IN_PATH.test(path);
 }
 
 /**

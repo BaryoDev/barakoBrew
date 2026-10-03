@@ -117,7 +117,7 @@ function PreviewLinkSection({
                     />
                 </div>
                 <Button type="button" variant="outline" onClick={issue} disabled={!pathOk || create.isPending}>
-                    {create.isPending ? 'Issuing…' : 'Issue preview link'}
+                    {create.isPending ? 'Issuing...' : 'Issue preview link'}
                 </Button>
             </div>
 
