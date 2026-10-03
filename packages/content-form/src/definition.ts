@@ -47,8 +47,26 @@ export interface FieldDefinition {
     referenceType?: string;
     /** For a `choice` field, the options it accepts, in display order. Refused on any other type. */
     options?: FieldOption[];
-    /** For a `choice` field, whether an entry holds a list of values rather than one. */
+    /**
+     * For a `choice` or `reference` field, whether an entry holds a list of values rather than one.
+     * A many-valued reference holds at most 100 ids, each once.
+     */
     multiple?: boolean;
+    /** For a `money` field, the ISO 4217 code its amounts are in. Absent is a plain number. */
+    currency?: string | null;
+    /** For a `money` field with a currency, the most decimal places. Absent takes the currency's own. */
+    scale?: number | null;
+    /** For a `token` field, how many characters a generated token has. Absent is 32. */
+    tokenLength?: number | null;
+    /**
+     * The editor a console should open for the field: `blocks`, `menu`, `links` or `image`. Absent
+     * means pick one from the type and the name, as before the hint existed.
+     */
+    editor?: string | null;
+    /** The group the field sits in on an edit screen. Absent is no group. */
+    section?: string | null;
+    /** What the field is to its entry: `title`, `summary` or `date`. */
+    role?: string | null;
     isRequired: boolean;
     defaultValue?: unknown;
     validationRules?: Record<string, unknown>;
@@ -89,7 +107,10 @@ export type FieldType =
     | 'array'
     | 'object'
     | 'geopoint'
-    | 'choice';
+    | 'choice'
+    | 'token'
+    | 'file'
+    | 'inlineimage';
 
 /** Historical spellings the registry still accepts. Never offered as a type of its own. */
 export type FieldTypeAlias = 'integer' | 'number' | 'boolean';
@@ -123,6 +144,7 @@ export const FIELD_TYPE_GROUPS: {
             { value: 'markdown', label: 'Markdown', description: 'Markdown-formatted text' },
             { value: 'slug', label: 'Slug', description: 'URL-friendly identifier, e.g. my-post' },
             { value: 'uuid', label: 'UUID', description: 'A unique identifier' },
+            { value: 'token', label: 'Token', description: 'A random value the server generates, never edited' },
         ],
     },
     {
@@ -152,6 +174,13 @@ export const FIELD_TYPE_GROUPS: {
             { value: 'object', label: 'Nested object', description: 'Structured JSON data' },
             { value: 'json', label: 'JSON', description: 'An arbitrary JSON object or array' },
             { value: 'geopoint', label: 'Location', description: 'A latitude and longitude pair' },
+        ],
+    },
+    {
+        label: 'Files and images',
+        types: [
+            { value: 'file', label: 'File', description: 'A file stored in Files' },
+            { value: 'inlineimage', label: 'Inline image', description: 'A small image kept in the entry, up to 64 KB' },
         ],
     },
     {

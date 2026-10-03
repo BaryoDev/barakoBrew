@@ -14,7 +14,7 @@ import {
  * on its own passes when one type is swapped for another.
  *
  * Every canonical name in Core/Validation/FieldTypeRegistry.cs, as of 4.0, plus choice from
- * BaryoDev/barakoCMS#820.
+ * BaryoDev/barakoCMS#820, and token, file and inlineimage from 4.6.
  */
 const REGISTRY_CANONICAL = [
     'array',
@@ -24,7 +24,9 @@ const REGISTRY_CANONICAL = [
     'datetime',
     'decimal',
     'email',
+    'file',
     'geopoint',
+    'inlineimage',
     'int',
     'json',
     'markdown',
@@ -36,6 +38,7 @@ const REGISTRY_CANONICAL = [
     'string',
     'text',
     'time',
+    'token',
     'url',
     'uuid',
 ];

@@ -4,6 +4,8 @@ export { ContentForm, JsonField } from './content-form';
 export { cn, FieldError, Input, Label, Switch, Textarea } from './ui';
 export type { ContentFormProps, FieldRenderProps } from './content-form';
 export { fieldIsVisibleTo, maskedNotice } from './sensitivity';
+export { groupBySection, moneyScale, stepFor } from './presentation';
+export type { FieldGroup } from './presentation';
 export {
     FieldMask,
     SensitivityLevel,
