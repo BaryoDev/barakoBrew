@@ -61,12 +61,10 @@ function NewContentInner() {
           toast.success(status === ContentStatus.Published ? 'Entry published' : 'Draft saved');
           router.push(`/content/${id}`);
         },
-        // Kept on the page as well: a uniqueness 409 or a refused field has to stay readable while
-        // it is fixed.
+        // Kept on the page instead of toasted: a uniqueness 409 or a refused field has to stay
+        // readable while it is fixed, and showing it twice says nothing more.
         onError: (error) => {
-          const message = apiErrorMessage(error, 'The entry could not be saved.');
-          setRefusal({ message, status });
-          toast.error(message);
+          setRefusal({ message: apiErrorMessage(error, 'The entry could not be saved.'), status });
         },
       }
     );

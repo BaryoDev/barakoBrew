@@ -199,9 +199,10 @@ export function ContentEditor({
         toast.error(error.message);
       } else {
         const message = apiErrorMessage(error, 'The entry could not be saved.');
-        // A 412 already has the conflict banner, which is where that decision is made.
-        if (!isConflict(error)) setRefusal(message);
-        toast.error(message);
+        // Any other refusal is kept on the page instead of toasted, so it is shown once. A 412 has
+        // the conflict banner, which is where that decision is made, so it keeps its toast.
+        if (isConflict(error)) toast.error(message);
+        else setRefusal(message);
       }
     }
   };
