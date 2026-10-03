@@ -20,7 +20,7 @@ globalThis.ResizeObserver ??= class {
 
 const { api } = await import('@/lib/api');
 const { ShareLinksPanel } = await import('./share-links-panel');
-const { siteShareScope } = await import('@/lib/site-mode');
+const { entryShareScope, siteShareScope } = await import('@/lib/site-mode');
 
 function httpError(status: number) {
     return new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
@@ -265,5 +265,87 @@ describe('a scope other than the site', () => {
 
         fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }));
         await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/api/entries/e-7/share-links/e1'));
+    });
+});
+
+describe('an entry scope', () => {
+    const ENTRY = '0d3c2a10-0000-4000-8000-000000000001';
+
+    it('creates a page link with the path given, at the entry route', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [] } });
+        vi.mocked(api.post).mockResolvedValue({
+            data: { id: 'p1', label: 'About draft', createdAt: inDays(0), expiresAt: inDays(30), scope: 'page', path: '/about', key: 'page-key' },
+        });
+
+        renderScope(entryShareScope(ENTRY, 'https://example.com'));
+        await screen.findByText('No share links yet.');
+
+        fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'About draft' } });
+        fireEvent.change(screen.getByLabelText('Page path (optional)'), { target: { value: '/about' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+
+        expect(await screen.findByRole('textbox', { name: 'Share link' })).toHaveValue('https://example.com/_share#page-key');
+        const [url, body] = vi.mocked(api.post).mock.calls[0] as [string, { path?: string }];
+        expect(url).toBe(`/api/contents/${ENTRY}/share-links`);
+        expect(body.path).toBe('/about');
+    });
+
+    it('sends no path when none is given, which makes it an entry link', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [] } });
+        vi.mocked(api.post).mockResolvedValue({
+            data: { id: 'e1', label: 'Draft', createdAt: inDays(0), expiresAt: inDays(30), scope: 'entry', key: 'k' },
+        });
+
+        renderScope(entryShareScope(ENTRY, 'https://example.com'));
+        await screen.findByText('No share links yet.');
+        fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Draft' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+
+        await screen.findByRole('textbox', { name: 'Share link' });
+        const [, body] = vi.mocked(api.post).mock.calls[0] as [string, Record<string, unknown>];
+        expect('path' in body).toBe(false);
+    });
+
+    it('refuses a path that leaves the site before asking the API', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [] } });
+
+        renderScope(entryShareScope(ENTRY, 'https://example.com'));
+        await screen.findByText('No share links yet.');
+        fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Bad' } });
+        fireEvent.change(screen.getByLabelText('Page path (optional)'), { target: { value: '//evil.example' } });
+
+        expect(screen.getByRole('alert')).toHaveTextContent('A page path starts with /');
+        expect(screen.getByRole('button', { name: 'Create link' })).toBeDisabled();
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('shows the path of a page link in the list', async () => {
+        vi.mocked(api.get).mockResolvedValue({
+            data: { items: [{ id: 'p1', label: 'About draft', createdAt: inDays(-1), expiresAt: inDays(10), scope: 'page', path: '/about' }] },
+        });
+
+        renderScope(entryShareScope(ENTRY, 'https://example.com'));
+
+        const rows = (await screen.findAllByRole('row')).slice(1);
+        expect(rows).toHaveLength(1);
+        expect(within(rows[0]).getByText('/about')).toBeInTheDocument();
+    });
+
+    it('is hidden for someone who may read the entry but not update it', async () => {
+        vi.mocked(api.get).mockRejectedValue(httpError(403));
+
+        const { container } = renderScope(entryShareScope(ENTRY, 'https://example.com'));
+
+        await waitFor(() => expect(container).toBeEmptyDOMElement());
+        expect(api.get).toHaveBeenCalledWith(`/api/contents/${ENTRY}/share-links`);
+    });
+
+    it('a site scope offers no page path and still shows a 403 as an error', async () => {
+        vi.mocked(api.get).mockRejectedValue(httpError(403));
+
+        renderPanel();
+
+        expect(await screen.findByText('The share links could not be loaded.')).toBeInTheDocument();
+        expect(screen.queryByLabelText('Page path (optional)')).toBeNull();
     });
 });

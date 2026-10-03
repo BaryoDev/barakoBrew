@@ -11,7 +11,7 @@ vi.mock('@/lib/api', async () => {
 const { api } = await import('@/lib/api');
 const { useCreateApiKey } = await import('./use-api-keys');
 const { useMfaSetup, useMfaEnable } = await import('./use-mfa');
-const { useCreateShareLink } = await import('./use-share-links');
+const { useCreateShareLink, useCreatePreviewToken } = await import('./use-share-links');
 const { siteShareScope } = await import('@/lib/site-mode');
 
 /**
@@ -53,6 +53,13 @@ const CASES: {
         response: { id: 'l1', label: 'Preview', createdAt: '2026-09-14T00:00:00Z', key: 'share-KEY-1' },
         use: () => useCreateShareLink(siteShareScope('https://example.com')) as never,
         variables: { label: 'Preview' },
+    },
+    {
+        name: 'the preview token',
+        secret: 'preview-KEY-1',
+        response: { token: 'preview-KEY-1', expiresAt: '2026-09-14T00:30:00Z', queryParam: 'preview' },
+        use: () => useCreatePreviewToken() as never,
+        variables: { type: 'article', slug: 'hello' },
     },
 ];
 
