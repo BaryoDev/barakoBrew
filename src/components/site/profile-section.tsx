@@ -16,7 +16,7 @@ const LINKS = new Set<string>(['LocationUrl', 'ContactUrl']);
 
 const PLACEHOLDERS: Record<string, string> = {
     Email: 'hello@example.com',
-    LocationUrl: 'https://maps.example.com/…',
+    LocationUrl: 'https://maps.example.com/place',
     ContactUrl: 'https://example.com/contact',
     SocialHandle: '@example',
 };
