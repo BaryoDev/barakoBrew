@@ -2,7 +2,16 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useWorkflows } from '@/hooks/use-workflows';
+import { toast } from 'sonner';
+import {
+  supportsWorkflowSwitch,
+  useDeleteWorkflow,
+  useSetWorkflowEnabled,
+  useWorkflows,
+} from '@/hooks/use-workflows';
+import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
+import { Switch } from '@/components/ui/switch';
+import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -17,11 +26,31 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { IconBolt, IconPlus, IconWorkflows } from '@/components/icons';
+import { IconBolt, IconPlus, IconTrash, IconWorkflows } from '@/components/icons';
 
 export default function WorkflowsPage() {
   const router = useRouter();
   const { data: workflows, isLoading, isError, refetch } = useWorkflows();
+  const setEnabled = useSetWorkflowEnabled();
+  const remove = useDeleteWorkflow();
+  // An API before 4.6 has neither route, and no workflow it returns carries `enabled`.
+  const switchable = supportsWorkflowSwitch(workflows);
+
+  const toggle = (id: string, name: string, enabled: boolean) =>
+    setEnabled.mutate(
+      { id, enabled },
+      {
+        onSuccess: () => toast.success(enabled ? `Switched "${name}" on` : `Switched "${name}" off`),
+        onError: (error) => toast.error(apiErrorMessage(error, 'The workflow could not be switched.')),
+      },
+    );
+
+  const destroy = (id: string, name: string) =>
+    remove.mutate(id, {
+      onSuccess: () => toast.success(`Deleted "${name}"`),
+      // 409 past 200 queued runs: the message says to switch it off first and let the runner clear them.
+      onError: (error) => toast.error(apiErrorMessage(error, 'The workflow could not be deleted.')),
+    });
 
   return (
     <>
@@ -64,13 +93,19 @@ export default function WorkflowsPage() {
                 <TableHead>Workflow</TableHead>
                 <TableHead>Trigger</TableHead>
                 <TableHead className="hidden sm:table-cell">Actions</TableHead>
+                {switchable && <TableHead>On</TableHead>}
+                {switchable && (
+                  <TableHead className="w-10">
+                    <span className="sr-only">Delete</span>
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {workflows.map((workflow) => (
                 <TableRow
                   key={workflow.id}
-                  className="cursor-pointer"
+                  className={workflow.enabled === false ? 'cursor-pointer opacity-70' : 'cursor-pointer'}
                   onClick={() => router.push(`/workflows/${workflow.id}`)}
                 >
                   <TableCell className="font-medium">{workflow.name}</TableCell>
@@ -90,6 +125,40 @@ export default function WorkflowsPage() {
                       ))}
                     </div>
                   </TableCell>
+                  {switchable && workflow.id && (
+                    // The row opens the workflow on click, so the controls keep their clicks.
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Switch
+                        checked={workflow.enabled !== false}
+                        disabled={setEnabled.isPending}
+                        aria-label={`${workflow.name} is on`}
+                        onCheckedChange={(checked) => toggle(workflow.id!, workflow.name, checked)}
+                      />
+                    </TableCell>
+                  )}
+                  {switchable && workflow.id && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <ConfirmDialog
+                        trigger={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Delete ${workflow.name}`}
+                            className="text-destructive hover:text-destructive"
+                            disabled={remove.isPending}
+                          >
+                            <IconTrash className="size-3.5" />
+                          </Button>
+                        }
+                        title={`Delete "${workflow.name}"?`}
+                        description="Its waiting runs are cancelled and it never fires again. Finished runs stay in the run history. This cannot be undone. To stop it for now, switch it off instead."
+                        confirmLabel="Delete"
+                        destructive
+                        onConfirm={() => destroy(workflow.id!, workflow.name)}
+                      />
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

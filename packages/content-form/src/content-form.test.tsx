@@ -112,6 +112,19 @@ describe('a field the viewer may not read', () => {
         expect(renderSensitive(['SuperAdmin'])).not.toHaveAttribute('readonly');
     });
 
+    it('is editable for a role the API lets through by capability, when the host passes capabilities', () => {
+        render(
+            <ContentForm
+                fields={sensitive}
+                values={{ Salary: '90000' }}
+                onChange={() => {}}
+                viewerRoles={['Nurse']}
+                viewerCapabilities={['view_sensitive']}
+            />
+        );
+        expect(document.getElementById('Salary')).not.toHaveAttribute('readonly');
+    });
+
     // The reason sensitivity lives here and not in the caller: a host that draws its own control
     // for this field would otherwise have to remember, and would be the only thing standing between
     // an editor and a box whose edits the API silently throws away.
@@ -161,6 +174,112 @@ describe('a JSON field whose value is replaced from outside', () => {
 
         expect((document.getElementById('Prefs') as HTMLTextAreaElement).value).toBe('{ "theme": ');
         expect(screen.getByText(/Not valid JSON yet/)).toBeInTheDocument();
+    });
+});
+
+describe('sections', () => {
+    const sectioned: FieldDefinition[] = [
+        { name: 'Name', displayName: 'Name', type: 'string', isRequired: false, section: 'Details' },
+        { name: 'Note', displayName: 'Note', type: 'string', isRequired: false },
+        { name: 'Logo', displayName: 'Logo', type: 'url', isRequired: false, section: 'Branding' },
+        { name: 'Starts', displayName: 'Starts', type: 'date', isRequired: false, section: 'Details' },
+    ];
+
+    it('groups fields under their section, in the order each section first appears', () => {
+        render(<ContentForm fields={sectioned} values={{}} onChange={() => {}} viewerRoles={[]} />);
+
+        const groups = screen.getAllByRole('group');
+        expect(groups).toHaveLength(2);
+        expect(groups.map((g) => g.querySelector('legend')?.textContent)).toEqual(['Details', 'Branding']);
+        // Starts comes after Logo in the type and still sits with the first Details field.
+        expect(groups[0].querySelector('#Name')).not.toBeNull();
+        expect(groups[0].querySelector('#Starts')).not.toBeNull();
+        expect(groups[1].querySelector('#Logo')).not.toBeNull();
+    });
+
+    it('leaves a field in no section outside every group', () => {
+        render(<ContentForm fields={sectioned} values={{}} onChange={() => {}} viewerRoles={[]} />);
+
+        expect(document.getElementById('Note')).not.toBeNull();
+        expect(document.getElementById('Note')!.closest('fieldset')).toBeNull();
+    });
+
+    it('draws no group at all for a type that names no section', () => {
+        renderForm();
+        expect(screen.queryAllByRole('group')).toHaveLength(0);
+    });
+});
+
+describe('a money field', () => {
+    it('with a currency, shows the code and steps by its decimal places', () => {
+        render(
+            <ContentForm
+                fields={[{ name: 'Total', displayName: 'Total', type: 'money', isRequired: false, currency: 'USD' }]}
+                values={{ Total: 12.5 }}
+                onChange={() => {}}
+                viewerRoles={[]}
+            />
+        );
+
+        expect(document.getElementById('Total')).toHaveAttribute('step', '0.01');
+        expect(screen.getByText('An amount in USD, up to 2 decimal places.')).toBeInTheDocument();
+    });
+
+    it('takes a declared scale over the currency default', () => {
+        render(
+            <ContentForm
+                fields={[
+                    { name: 'Price', displayName: 'Price', type: 'money', isRequired: false, currency: 'USD', scale: 4 },
+                ]}
+                values={{}}
+                onChange={() => {}}
+                viewerRoles={[]}
+            />
+        );
+
+        expect(document.getElementById('Price')).toHaveAttribute('step', '0.0001');
+    });
+
+    it('without a currency, stays a plain number', () => {
+        render(
+            <ContentForm
+                fields={[{ name: 'Total', displayName: 'Total', type: 'money', isRequired: false }]}
+                values={{}}
+                onChange={() => {}}
+                viewerRoles={[]}
+            />
+        );
+
+        expect(document.getElementById('Total')).toHaveAttribute('step', 'any');
+        expect(screen.queryByText(/An amount in/)).toBeNull();
+    });
+});
+
+describe('a token field', () => {
+    it('shows the token read only', () => {
+        const onChange = vi.fn();
+        render(
+            <ContentForm
+                fields={[
+                    {
+                        name: 'Claim',
+                        displayName: 'Claim',
+                        type: 'token',
+                        isRequired: false,
+                        sensitivity: SensitivityLevel.Hidden,
+                        visibleToRoles: ['Desk'],
+                    },
+                ]}
+                values={{ Claim: 'abc123defg456hjk' }}
+                onChange={onChange}
+                viewerRoles={['Desk']}
+            />
+        );
+
+        const box = document.getElementById('Claim') as HTMLInputElement;
+        expect(box).toHaveAttribute('readonly');
+        expect(box.value).toBe('abc123defg456hjk');
+        expect(screen.getByText(/cannot be changed/)).toBeInTheDocument();
     });
 });
 

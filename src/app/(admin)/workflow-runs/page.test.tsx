@@ -193,3 +193,66 @@ describe('the workflow runs screen and the kind of a failure', () => {
     expect(within(rows[2]).queryByText('Permanent')).not.toBeInTheDocument();
   });
 });
+
+describe('cancelling a run', () => {
+  const WAITING = { ...run('run-wait', 'Send the invoice', 'Pending', [action(1, 'Pending')]), cancelledAt: null };
+  const WAITING_OLD_API = run('run-wait-old', 'Old waiting run', 'Pending', [action(1, 'Pending')]);
+  const STOPPED = {
+    ...run('run-stopped', 'Stopped run', 'Cancelled', [action(1, 'Failed', { retryable: true }), action(2, 'Cancelled')]),
+    cancelledAt: '2026-09-03T10:00:03Z',
+  };
+  const ALL = [WAITING, WAITING_OLD_API, STOPPED];
+
+  function renderRuns() {
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') {
+        return {
+          data: { items: ALL, page: 1, pageSize: 25, totalItems: ALL.length, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+        };
+      }
+      return { data: ALL.find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    vi.mocked(api.post).mockResolvedValue({ data: {} });
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('cancels a waiting run only after confirming', async () => {
+    renderRuns();
+    fireEvent.click(await screen.findByRole('radio', { name: /Send the invoice/ }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel run' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(api.post).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, cancel the run' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/workflow-runs/run-wait/cancel', {}));
+  });
+
+  it('offers no cancel on an API that sends no cancelledAt', async () => {
+    renderRuns();
+    fireEvent.click(await screen.findByRole('radio', { name: /Old waiting run/ }));
+
+    await screen.findByRole('list', { name: 'Actions' });
+    expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
+  });
+
+  it('offers neither cancel nor retry on a stopped run', async () => {
+    renderRuns();
+    fireEvent.click(await screen.findByRole('radio', { name: /Stopped run/ }));
+
+    const list = await screen.findByRole('list', { name: 'Actions' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Retry action/ })).toBeNull();
+  });
+});

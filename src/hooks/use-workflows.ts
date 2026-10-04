@@ -77,6 +77,46 @@ export function useCreateWorkflow() {
     });
 }
 
+/**
+ * Whether this API can switch a workflow off and delete one.
+ *
+ * Both arrived with `enabled` on the workflow, so a list where no workflow carries the field is an
+ * API before 4.6, where the routes do not exist. An empty list says nothing either way.
+ */
+export function supportsWorkflowSwitch(workflows: Pick<WorkflowDefinition, 'enabled'>[] | undefined): boolean {
+    return (workflows ?? []).some((workflow) => typeof workflow.enabled === 'boolean');
+}
+
+export function useSetWorkflowEnabled() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (input: { id: string; enabled: boolean }) => {
+            const response = await api.put<WorkflowDefinition>(
+                `/api/workflows/${encodeURIComponent(input.id)}/enabled`,
+                { enabled: input.enabled },
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflows'] });
+        },
+    });
+}
+
+/** Deletes the definition and cancels its queued runs. The API refuses with 409 past 200 queued runs. */
+export function useDeleteWorkflow() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (id: string) => {
+            await api.delete(`/api/workflows/${encodeURIComponent(id)}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['workflows'] });
+            queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
+        },
+    });
+}
+
 export function useValidateWorkflow() {
     return useMutation({
         mutationFn: async (data: WorkflowDefinition) => {

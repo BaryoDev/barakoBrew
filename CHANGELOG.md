@@ -11,6 +11,59 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Content types and entries speak the barakoCMS 4.6 field members.** The type builder sets a
+  field's section, editor hint and role, a type's path on the site, a money field's currency and
+  decimal places, a token field's length, and a reference that holds several entries; a stored type
+  gets the same through their own endpoints, plus its uniqueness rules with the confirmation the API
+  asks for when entries already share values, and the list of those entries. The entry editor groups
+  fields by section, opens the block, menu or image editor the hint names (the field name stays the
+  fallback), shows money with its currency, shows a token read only and never sends it, picks a
+  stored file for a file field, takes a PNG, JPEG, GIF or WebP up to 64 KB for an inline image,
+  keeps an ordered list of up to 100 entries for a list reference, keeps a refused save's message
+  on the page with a retry for "Try again shortly", and moves a type with its own lifecycle by its
+  transitions, asking first for the fields a transition requires. Against an older API the new
+  members are absent and every screen behaves as before; the new endpoints answer 404 there and
+  that message is shown.
+- **Role editor: labelled capabilities, reference conditions and field limits.** Core capabilities,
+  `view_sensitive`, `view_hidden` and `manage_all_files` are checkboxes with plain labels, and the
+  platform ones say that only a SuperAdmin can give a role holding them to a user. Against API
+  contract 6 each content type opens to conditions on Read, Update and Delete (a key written
+  `Reference.Field` follows a reference, BaryoDev/barakoCMS#827) and to field limits
+  (`readableFields`, `writableFields`, BaryoDev/barakoCMS#917). A save sends back every set,
+  condition and transition rule the screen does not show, and turning a limit off sends an empty
+  list, which is how the API removes it. An older API gets the grid as before. (#146)
+- **Site profile fields.** The Site screen edits About, contact email, location, map link, contact
+  link and social handle when the site type declares them, which the 4.6 site blueprint does.
+  (#211)
+- **Audit entries read as sentences.** Role, API key, membership and field access entries show
+  role names beside their ids, capped lists with how many were left out, and each permission as
+  its content type and actions. The raw metadata is one click away.
+- **Sign in through an OpenID Connect provider, and finish any external sign-in.** The sign-in page
+  offers each provider the API lists under `oidc` in `/api/auth/providers`, beside the social ones.
+  The new `/auth/social` page takes the tokens or the MFA challenge the API puts in the fragment,
+  wipes the fragment from the address bar first, and trades the refresh token once for the usual
+  httpOnly cookie, so no token is kept in page storage. `/login?fberror=` shows the provider's
+  message as plain text. Before this no external sign-in could finish in the console.
+- **A Forms screen.** Settings, Forms lists every content type that can be a form, switches public
+  submissions on and off, and picks the email field to verify with an emailed code (barakoCMS 4.6).
+  Shown where the Forms module runs, to Admin and SuperAdmin.
+- **Deliveries.** Settings, Deliveries lists what workflow actions sent, newest first: requests
+  through a connector (barakoCMS 4.6) and webhooks, with status, target, attempt count and the
+  API's error text. Each connector links to its own.
+- **Share one entry or one page, and hand over a preview link.** The entry editor has a Share tab:
+  links to that entry (with a page path, a link to that page) are created, listed and revoked
+  there, and a 30 minute preview link is issued as `{site}{path}?preview=...`. The panel hides for
+  someone who cannot update the entry, and on an API before 4.6.
+- **Connectors take OAuth2 client credentials.** Token URL, client id, optional scope, and the
+  client secret, which is write only like every other credential. Moving the token URL asks for
+  the secret again, as the API does.
+- **Workflows can be switched off, deleted and stopped.** The list has an on switch and a delete
+  for each workflow, a waiting or running run has Cancel run, and an action can be set to stop the
+  actions after it when it fails. A skipped action says which failure skipped it. The placeholder
+  help lists the formats and durations the API reports. All of it needs barakoCMS 4.6; on an older
+  API the controls are not shown.
+- **A 429 says how long to wait** when the API sends `Retry-After`.
+
 - **Workflow runs say whether a failure is temporary or permanent.** A failed action shows
   Temporary or Permanent from the API's `retryable`, and the list marks a run by its worst failure.
   Retry on a permanent failure asks first: "This failure will not fix itself by retrying. Retry
@@ -20,6 +73,18 @@ moved. Which API a console works against is stated per release instead.
   or on "Retry anyway", now sends one request. (#150)
 
 ### Changed
+
+- **Field sensitivity can follow capabilities.** `barako-content-form` decides a Sensitive or
+  Hidden field by `view_sensitive` and `view_hidden`, with SuperAdmin by its seeded id, when the
+  host passes the viewer's capabilities, and by role name as before when it does not. The console
+  does not know the caller's capabilities yet, since no API route reports them, so it still
+  decides by name. The masked notice no longer blames the viewer's roles. (#162)
+- **Tenants no longer carry a profile.** The create dialog has no About box and the tenant type
+  has no profile fields, since barakoCMS 4.6 refuses them (BaryoDev/barakoCMS#885). A domain save
+  still sends the profile back to an older API that answered with it, so nothing is blanked there.
+  (#211)
+- **Tenant switch sends `tenant`.** The body carries the handle as `Tenant` and as `Club`, so 4.6
+  and older APIs both read it.
 
 - **Speaks API contracts 1 to 6.** The next barakoCMS release moves the contract to 6: an entry
   write that breaks a field's `validationRules` answers 400 naming the field and the rule, and

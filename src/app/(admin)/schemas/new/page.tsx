@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useCreateSchema } from '@/hooks/use-schemas';
+import { useCreateSchema, useSchemas } from '@/hooks/use-schemas';
+import { routeTemplateProblem } from '@/lib/field-presentation';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { FieldEditor } from '@/components/schema/field-editor';
@@ -22,6 +23,7 @@ function slugify(input: string): string {
 export default function NewSchemaPage() {
   const router = useRouter();
   const createSchema = useCreateSchema();
+  const { data: schemas } = useSchemas();
   const [displayName, setDisplayName] = useState('');
   const [name, setName] = useState('');
   const [nameEdited, setNameEdited] = useState(false);
@@ -29,16 +31,26 @@ export default function NewSchemaPage() {
   const [publiclyDeliverable, setPubliclyDeliverable] = useState(false);
   const [singleton, setSingleton] = useState(false);
   const [fields, setFields] = useState<FieldDefinition[]>([]);
+  const [routeTemplate, setRouteTemplate] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
 
-  const canSave = displayName.trim() && name.trim() && fields.length > 0;
+  const routeIssue = routeTemplateProblem(routeTemplate);
+  const canSave = displayName.trim() && name.trim() && fields.length > 0 && !routeIssue;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSave) return;
     setRefusal(null);
     createSchema.mutate(
-      { name, displayName, description: description || undefined, fields, isPubliclyDeliverable: publiclyDeliverable, isSingleton: singleton },
+      {
+        name,
+        displayName,
+        description: description || undefined,
+        fields,
+        isPubliclyDeliverable: publiclyDeliverable,
+        isSingleton: singleton,
+        routeTemplate: routeTemplate || undefined,
+      },
       {
         onSuccess: () => {
           toast.success(`Content type “${displayName}” created`);
@@ -135,9 +147,29 @@ export default function NewSchemaPage() {
           <Switch id="singleton" checked={singleton} onCheckedChange={setSingleton} />
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="routeTemplate">Path on the site</Label>
+          <Input
+            id="routeTemplate"
+            value={routeTemplate}
+            placeholder={`/${name || 'type'}/{slug}`}
+            className="font-mono"
+            onChange={(e) => setRouteTemplate(e.target.value.trim())}
+          />
+          <p className="text-sm text-muted-foreground">
+            Where an entry lives on the site, with {'{slug}'} once. The feed and the sitemap build links
+            from it. Leave empty to use the server&apos;s setting. You can change this later.
+          </p>
+          {routeIssue && <p className="text-destructive text-sm">{routeIssue}</p>}
+        </div>
+
         <Separator />
 
-        <FieldEditor fields={fields} onChange={setFields} />
+        <FieldEditor
+          fields={fields}
+          onChange={setFields}
+          contentTypes={schemas?.map((s) => ({ name: s.name, displayName: s.displayName }))}
+        />
 
         {refusal && (
           <p role="alert" className="text-destructive text-sm">

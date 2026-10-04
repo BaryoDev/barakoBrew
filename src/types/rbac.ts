@@ -5,8 +5,16 @@ export type PermissionAction = 'create' | 'read' | 'update' | 'delete';
 
 export interface PermissionRule {
     enabled: boolean;
-    // Directus-style conditions, e.g. { "CreatedBy": { "_eq": "$CURRENT_USER" } }
-    conditions?: Record<string, Record<string, unknown>> | null;
+    // Directus-style conditions, e.g. { "CreatedBy": { "_eq": "$CURRENT_USER" } }. A key written
+    // Reference.Field follows the entry's reference and compares a field of the entry it points at.
+    conditions?: Record<string, unknown> | null;
+    /**
+     * On a Read rule, the fields an entry this rule grants shows. Absent or null shows every field.
+     * On a save, absent or null keeps the set the role holds and an empty list removes it.
+     */
+    readableFields?: string[] | null;
+    /** On a Create or Update rule, the fields this rule lets the caller set. Same absent rules. */
+    writableFields?: string[] | null;
 }
 
 export interface ContentTypePermission {
@@ -15,6 +23,8 @@ export interface ContentTypePermission {
     read: PermissionRule;
     update: PermissionRule;
     delete: PermissionRule;
+    /** One rule per named transition of the type's own lifecycle. Not edited here, always sent back. */
+    transitions?: Record<string, PermissionRule>;
 }
 
 export interface Role {

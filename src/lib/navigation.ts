@@ -186,6 +186,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , module: MODULE.import, roles: ['SuperAdmin', 'Admin'] },
       { title: 'Connectors', href: '/settings/connectors', icon: IconWebhook , roles: ['SuperAdmin', 'Admin'] },
       { title: 'Outbound requests', href: '/settings/requests', icon: IconWebhook , roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Deliveries', href: '/settings/deliveries', icon: IconTasks, roles: ['SuperAdmin', 'Admin'] },
+      // manage_forms, which BarakoCMS.Forms seeds to Admin; SuperAdmin passes every gate.
+      { title: 'Forms', href: '/settings/forms', icon: IconList, module: MODULE.forms, roles: ['SuperAdmin', 'Admin'] },
       { title: 'Settings', href: '/settings', icon: IconSettings , roles: ['SuperAdmin', 'Admin'] },
     ],
   },
@@ -261,6 +264,8 @@ const SEGMENT_TITLES: Record<string, string> = {
   portability: 'Export and import',
   connectors: 'Connectors',
   requests: 'Outbound requests',
+  deliveries: 'Deliveries',
+  forms: 'Forms',
   settings: 'Settings',
   site: 'Site',
   theme: 'Theme',

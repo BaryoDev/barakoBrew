@@ -3,9 +3,13 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useSchema, useSetPublicDelivery } from '@/hooks/use-schemas';
-import { fieldTypeLabel, type FieldDefinition } from '@/types/schema';
+import { fieldTypeLabel, resolveFieldType, type FieldDefinition } from '@/types/schema';
 import { isChoiceField, optionLabel } from '@/lib/choice';
 import { FieldOptionsDialog } from '@/components/schema/field-options-dialog';
+import { FieldPresentationDialog } from '@/components/schema/field-presentation-dialog';
+import { FieldCurrencyDialog } from '@/components/schema/field-currency-dialog';
+import { RouteTemplatePanel } from '@/components/schema/route-template-panel';
+import { UniquenessPanel } from '@/components/schema/uniqueness-panel';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -30,6 +34,8 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
   const { data: schema, isLoading } = useSchema(name);
   const setPublicDelivery = useSetPublicDelivery(name);
   const [editingOptions, setEditingOptions] = useState<FieldDefinition | null>(null);
+  const [editingPresentation, setEditingPresentation] = useState<FieldDefinition | null>(null);
+  const [editingCurrency, setEditingCurrency] = useState<FieldDefinition | null>(null);
 
   if (isLoading) return <TableSkeleton />;
 
@@ -84,8 +90,9 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
         <IconInfo className="mt-0.5 size-4 shrink-0" />
         <p>
           A content type&rsquo;s fields are permanent: the API has no update or delete for them. To
-          change the shape, create a new type and migrate entries. Public delivery, below, and the options
-          of a choice field are what you can change afterwards.
+          change the shape, create a new type and migrate entries. What you can change afterwards: public
+          delivery, the path on the site, uniqueness rules, how each field is edited, the options of a
+          choice field and the currency of a money field.
         </p>
       </div>
 
@@ -126,6 +133,14 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
         />
       </div>
 
+      <RouteTemplatePanel
+        key={schema.routeTemplate ?? ''}
+        typeName={schema.name}
+        current={schema.routeTemplate}
+      />
+
+      <UniquenessPanel schema={schema} />
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
@@ -134,17 +149,32 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
               <TableHead>API name</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Required</TableHead>
+              <TableHead className="sr-only">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {schema.fields.map((field) => (
               <TableRow key={field.name}>
-                <TableCell className="font-medium">{field.displayName}</TableCell>
+                <TableCell className="font-medium">
+                  {field.displayName}
+                  {(field.section || field.editor || field.role) && (
+                    <p className="text-muted-foreground text-xs font-normal">
+                      {[
+                        field.section && `Section ${field.section}`,
+                        field.editor && `${field.editor} editor`,
+                        field.role && `${field.role} role`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground font-mono text-xs">{field.name}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="font-normal">
                     {fieldTypeLabel(field.type)}
-                    {isChoiceField(field) && field.multiple ? ', several' : ''}
+                    {field.multiple ? ', several' : ''}
+                    {field.currency ? ` in ${field.currency}` : ''}
                   </Badge>
                   {isChoiceField(field) && (
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -166,11 +196,59 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
                 <TableCell className="text-muted-foreground text-right text-sm">
                   {field.isRequired ? 'Yes' : '—'}
                 </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {resolveFieldType(field.type) === 'money' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Currency for ${field.displayName}`}
+                        onClick={() => setEditingCurrency(field)}
+                      >
+                        Currency
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label={`How ${field.displayName} is edited`}
+                      onClick={() => setEditingPresentation(field)}
+                    >
+                      Editing
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      {editingPresentation && (
+        <FieldPresentationDialog
+          key={editingPresentation.name}
+          typeName={schema.name}
+          field={editingPresentation}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditingPresentation(null);
+          }}
+        />
+      )}
+
+      {editingCurrency && (
+        <FieldCurrencyDialog
+          key={editingCurrency.name}
+          typeName={schema.name}
+          field={editingCurrency}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditingCurrency(null);
+          }}
+        />
+      )}
 
       {editingOptions && (
         <FieldOptionsDialog

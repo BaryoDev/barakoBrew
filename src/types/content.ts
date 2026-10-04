@@ -29,6 +29,23 @@ export interface ContentDetail extends ContentListItem {
     // the browser is.
     scheduledPublishAt?: string | null;
     scheduledUnpublishAt?: string | null;
+    /**
+     * The file each `file` field names, keyed as the field is in `data`, for files this caller may
+     * download. Absent when none resolves, and always absent from an API older than 4.6.
+     */
+    files?: Record<string, ResolvedFile>;
+}
+
+/** A stored file as an entry read resolves it. Mirrors Infrastructure/Services/ResolvedFile. */
+export interface ResolvedFile {
+    id: string;
+    /** Null for a private file, which is fetched from `/api/files/{id}` with the caller's token. */
+    url: string | null;
+    fileName: string;
+    contentType: string;
+    size: number;
+    alt: string | null;
+    caption: string | null;
 }
 
 /**

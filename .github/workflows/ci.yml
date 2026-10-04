@@ -103,6 +103,9 @@ jobs:
       # repository runs for this same lockfile, copied whole, so the two hold the same line. It used
       # to fail on Critical only, because three High advisories in `next` had no fix we could take
       # and a permanently red gate is one everybody learns to ignore. Taking Next 16.3 cleared them.
+      - name: The audit gate keeps its rules
+        run: bash scripts/test-audit-gate.sh
+
       - name: Audit dependencies (fail on Critical or High)
         run: |
           # `npm audit` exits non-zero when it finds anything, so its status cannot distinguish
@@ -119,24 +122,10 @@ jobs:
             sleep 60
           done
 
-          CRIT=$(jq -r '.metadata.vulnerabilities.critical // empty' audit.json 2>/dev/null || true)
-          HIGH=$(jq -r '.metadata.vulnerabilities.high // empty' audit.json 2>/dev/null || true)
-          case "${CRIT}|${HIGH}" in
-            *[!0-9]\|*|*\|*[!0-9]*|\|*|*\|)
-              echo "::error::npm audit did not return a usable report, failing closed"
-              head -c 500 audit.json || true
-              exit 1
-              ;;
-          esac
-
-          echo "npm audit: critical=$CRIT high=$HIGH" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$CRIT" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "::error::npm audit found $CRIT critical and $HIGH high severity vulnerabilities"
-            jq -r '.vulnerabilities | to_entries[]
-                   | select(.value.severity == "critical" or .value.severity == "high")
-                   | "\(.value.severity)\t\(.key)"' audit.json
-            exit 1
-          fi
+          # Counts advisories, and accepts one only while .github/audit-allowlist.json names it
+          # with a reason and an unexpired date (see scripts/audit-gate.sh).
+          bash scripts/audit-gate.sh audit.json | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
 
   # Licence gate (#39). MPL-2.0 is file-level copyleft and §3.3 lets MPL files be combined into a
   # Larger Work under other terms, so permissive dependencies are fine. What must not enter the tree

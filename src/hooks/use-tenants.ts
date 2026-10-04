@@ -24,13 +24,6 @@ export interface Tenant {
   id: string;
   slug: string;
   name: string;
-  about?: string | null;
-  logoUrl?: string | null;
-  email?: string | null;
-  location?: string | null;
-  locationUrl?: string | null;
-  socialHandle?: string | null;
-  contactUrl?: string | null;
   /** Bare hosts the tenant answers on. Absent from an API older than custom domains. */
   domains?: string[];
   isActive: boolean;
@@ -39,7 +32,6 @@ export interface Tenant {
 export interface CreateTenantInput {
   Handle: string;
   Name: string;
-  About?: string;
   IsActive: boolean;
 }
 
@@ -85,13 +77,22 @@ export function useCurrentTenant(): string | null {
   );
 }
 
+/**
+ * The body of `POST /api/me/switch`. barakoCMS 4.6 takes `Tenant` and keeps `Club` as an alias, and
+ * an older API knows only `Club`, so both carry the handle. The same handle in both is not a
+ * disagreement the API refuses.
+ */
+export function switchTenantBody(slug: string) {
+  return { Tenant: slug, Club: slug };
+}
+
 /** Swap the session token for one scoped to another tenant the user belongs to (no re-auth). The new
  * token carries the tenant claim, so every subsequent request's X-Tenant follows automatically. */
 export function useSwitchTenant() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (slug: string) => {
-      const { data } = await api.post<SwitchResponse>('/api/me/switch', { Club: slug });
+      const { data } = await api.post<SwitchResponse>('/api/me/switch', switchTenantBody(slug));
       tokenStore.set(data.token);
       return data;
     },
@@ -166,26 +167,36 @@ export function domainProblems(domains: readonly string[]): string[] {
 }
 
 /**
+ * The profile fields an API before 4.6 kept on the tenant record, as it answered them and as its
+ * update takes them. barakoCMS 4.6 moved them to the tenant's site entry (BaryoDev/barakoCMS#885).
+ */
+const LEGACY_PROFILE = [
+  ['logoUrl', 'LogoUrl'],
+  ['about', 'About'],
+  ['location', 'Location'],
+  ['locationUrl', 'LocationUrl'],
+  ['socialHandle', 'SocialHandle'],
+  ['email', 'Email'],
+  ['contactUrl', 'ContactUrl'],
+] as const;
+
+/**
  * The body of `PUT /api/tenants/{handle}` that changes only the domains.
  *
- * The endpoint overwrites every profile field with what it is sent, so the rest of the tenant goes
- * back exactly as it was read. Sending `Domains` alone would blank the name, logo and contact
- * details.
+ * The name and the active flag go back as they were read. A profile field goes back only when the
+ * tenant answer carried it: an API before 4.6 overwrites every profile field with what it is sent,
+ * so leaving one out there would blank it, and API 4.6 answers with none of them and keeps what the
+ * record holds when they are left out.
  */
-export function tenantDomainsBody(tenant: Tenant, domains: readonly string[]) {
-  return {
-    Handle: tenant.slug,
-    Name: tenant.name,
-    LogoUrl: tenant.logoUrl ?? null,
-    About: tenant.about ?? null,
-    Location: tenant.location ?? null,
-    LocationUrl: tenant.locationUrl ?? null,
-    SocialHandle: tenant.socialHandle ?? null,
-    Email: tenant.email ?? null,
-    ContactUrl: tenant.contactUrl ?? null,
-    IsActive: tenant.isActive,
-    Domains: domains.map((d) => d.trim()),
-  };
+export function tenantDomainsBody(tenant: Tenant, domains: readonly string[]): Record<string, unknown> {
+  const read = tenant as Tenant & Record<string, unknown>;
+  const body: Record<string, unknown> = { Handle: tenant.slug, Name: tenant.name };
+  for (const [answered, sent] of LEGACY_PROFILE) {
+    if (answered in read) body[sent] = read[answered] ?? null;
+  }
+  body.IsActive = tenant.isActive;
+  body.Domains = domains.map((d) => d.trim());
+  return body;
 }
 
 export function useUpdateTenantDomains() {

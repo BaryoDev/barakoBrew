@@ -15,6 +15,7 @@ import { useCreateShareLink, useRevokeShareLink, useShareLinks } from '@/hooks/u
 import { apiErrorMessage } from '@/lib/api';
 import {
     defaultShareLinkDays,
+    isSitePath,
     maxShareLinkDays,
     shareLinkExpiry,
     shareLinkExpiryChoices,
@@ -59,6 +60,7 @@ export function ShareLinksPanel({ scope }: { scope: ShareLinkScope }) {
     const create = useCreateShareLink(scope);
     const revoke = useRevokeShareLink(scope);
     const [label, setLabel] = useState('');
+    const [path, setPath] = useState('');
     const [days, setDays] = useState<number | null>(null);
     const [shown, setShown] = useState<Shown | null>(null);
 
@@ -70,17 +72,28 @@ export function ShareLinksPanel({ scope }: { scope: ShareLinkScope }) {
     // the select can never sit on a value the API would refuse.
     const selected = days !== null && choices.includes(days) ? days : defaultShareLinkDays(maxDays);
 
+    const pagePath = scope.acceptsPath ? path.trim() : '';
+    const pathProblem =
+        pagePath && !isSitePath(pagePath)
+            ? 'A page path starts with / and has no empty, . or .. part, and no spaces, \\, ?, # or %.'
+            : null;
+
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
         const trimmed = label.trim();
-        if (!trimmed || create.isPending) return;
+        if (!trimmed || pathProblem || create.isPending) return;
         create.mutate(
-            { label: trimmed, expiresAt: shareLinkExpiry(selected, maxDays) },
+            {
+                label: trimmed,
+                expiresAt: shareLinkExpiry(selected, maxDays),
+                ...(pagePath ? { path: pagePath } : {}),
+            },
             {
                 onSuccess: (result) => {
                     const target = scope.link(result.key);
                     setShown({ label: result.label, link: target.value, complete: target.complete });
                     setLabel('');
+                    setPath('');
                     setDays(null);
                     // The mutation keeps its last result, key included, until reset.
                     create.reset();
@@ -120,10 +133,28 @@ export function ShareLinksPanel({ scope }: { scope: ShareLinkScope }) {
                         ))}
                     </select>
                 </div>
-                <Button type="submit" disabled={!label.trim() || create.isPending}>
+                {scope.acceptsPath && (
+                    <div className="min-w-48 flex-1 space-y-1.5">
+                        <Label htmlFor="share-link-path">Page path (optional)</Label>
+                        <Input
+                            id="share-link-path"
+                            value={path}
+                            placeholder="/about"
+                            aria-invalid={pathProblem ? true : undefined}
+                            aria-describedby={pathProblem ? 'share-link-path-problem' : undefined}
+                            onChange={(e) => setPath(e.target.value)}
+                        />
+                    </div>
+                )}
+                <Button type="submit" disabled={!label.trim() || !!pathProblem || create.isPending}>
                     {create.isPending ? 'Creating…' : 'Create link'}
                 </Button>
             </form>
+            {pathProblem && (
+                <p id="share-link-path-problem" role="alert" className="text-destructive text-xs">
+                    {pathProblem}
+                </p>
+            )}
 
             {shown && (
                 <div className="rounded-lg border p-4" role="status">
@@ -173,7 +204,14 @@ export function ShareLinksPanel({ scope }: { scope: ShareLinkScope }) {
                                 const status = shareLinkStatus(link);
                                 return (
                                     <TableRow key={link.id}>
-                                        <TableCell className="font-medium">{link.label}</TableCell>
+                                        <TableCell className="font-medium">
+                                            {link.label}
+                                            {link.path && (
+                                                <span className="text-muted-foreground block font-mono text-xs font-normal">
+                                                    {link.path}
+                                                </span>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             <StatusBadge tone={STATUS[status].tone}>{STATUS[status].label}</StatusBadge>
                                         </TableCell>

@@ -11,7 +11,7 @@ import { useCurrentTenant } from '@/hooks/use-tenants';
 export const ANY_STATUS = 'all';
 
 /** RunStatus on the server. Widened to string on the DTOs so a new member parses rather than throws. */
-export const RUN_STATUSES = ['Pending', 'Running', 'Succeeded', 'Failed', 'PartiallyFailed'] as const;
+export const RUN_STATUSES = ['Pending', 'Running', 'Succeeded', 'Failed', 'PartiallyFailed', 'Cancelled'] as const;
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
@@ -32,6 +32,10 @@ export interface WorkflowActionAttempt {
   retryable?: boolean | null;
   completedAt?: string | null;
   durationMs?: number | null;
+  /** `Halt` or `Continue`. Absent from an API before 4.6. */
+  onFailure?: string | null;
+  /** Set on a Skipped action: the ordinal of the halting action whose failure skipped it. */
+  haltedBy?: number | null;
 }
 
 export interface WorkflowRun {
@@ -44,6 +48,8 @@ export interface WorkflowRun {
   status: string;
   createdAt: string;
   completedAt?: string | null;
+  /** Set once someone stopped the run. Absent from an API before 4.6, which cannot cancel. */
+  cancelledAt?: string | null;
   actions: WorkflowActionAttempt[];
 }
 
@@ -94,6 +100,20 @@ export function runListParams(query: WorkflowRunsQuery): Record<string, string |
  */
 export function isRetryable(attempt: Pick<WorkflowActionAttempt, 'status'>): boolean {
   return attempt.status === 'Failed' || attempt.status === 'Unknown';
+}
+
+/**
+ * Whether the run can be cancelled from here: it is still waiting or running, nobody has stopped it
+ * yet, and the API is new enough to have the route (it sends `cancelledAt`, null until a cancel).
+ */
+export function isCancellable(run: Pick<WorkflowRun, 'status' | 'cancelledAt'>): boolean {
+  if (!('cancelledAt' in run) || run.cancelledAt) return false;
+  return run.status === 'Pending' || run.status === 'Running';
+}
+
+/** A stopped run starts nothing again, and the API answers 409 to a retry on one. */
+export function isStopped(run: Pick<WorkflowRun, 'status' | 'cancelledAt'>): boolean {
+  return run.status === 'Cancelled' || !!run.cancelledAt;
 }
 
 export type FailureKind = 'temporary' | 'permanent';
@@ -241,6 +261,25 @@ export function useRetryAttempt() {
     },
     onSuccess: (_result, input) => {
       void queryClient.invalidateQueries({ queryKey: ['workflow-run', input.runId] });
+      void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
+    },
+  });
+}
+
+/**
+ * Stops a run. Actions not yet started become Cancelled; one already out under a live lease
+ * finishes and its outcome is kept. Invalidates rather than painting the response, for the same
+ * reason the retry does.
+ */
+export function useCancelRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (runId: string) => {
+      await api.post(`/api/workflow-runs/${encodeURIComponent(runId)}/cancel`, {});
+    },
+    onSuccess: (_result, runId) => {
+      void queryClient.invalidateQueries({ queryKey: ['workflow-run', runId] });
       void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
     },
   });

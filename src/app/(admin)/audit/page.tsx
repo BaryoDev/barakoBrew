@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuditLog, type AuditEventDto } from '@/hooks/use-audit-log';
+import { auditDetails } from '@/lib/audit-metadata';
 
 function formatDate(value?: string | null): string {
   if (!value) return '—';
@@ -202,11 +203,26 @@ export default function AuditLogPage() {
               </dl>
 
               {selected.metadata && Object.keys(selected.metadata).length > 0 && (
-                <div>
-                  <p className="text-muted-foreground mb-1 text-xs font-medium">Metadata</p>
-                  <pre className="bg-muted max-h-56 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-                    {JSON.stringify(selected.metadata, null, 2)}
-                  </pre>
+                <div className="space-y-2">
+                  <p className="text-muted-foreground text-xs font-medium">Details</p>
+                  <dl className="max-h-56 space-y-1.5 overflow-auto text-sm">
+                    {auditDetails(selected.metadata).map((detail, index) => (
+                      <div key={index} className="grid grid-cols-[9rem_1fr] gap-x-3">
+                        <dt className="text-muted-foreground text-xs">{detail.label}</dt>
+                        <dd className="break-words">
+                          {detail.lines.map((line, i) => (
+                            <div key={i}>{line}</div>
+                          ))}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <details>
+                    <summary className="text-muted-foreground cursor-pointer text-xs">Raw metadata</summary>
+                    <pre className="bg-muted mt-1 max-h-56 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
+                      {JSON.stringify(selected.metadata, null, 2)}
+                    </pre>
+                  </details>
                 </div>
               )}
             </>

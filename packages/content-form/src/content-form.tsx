@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Input, Label, Switch, Textarea, FieldError, cn } from './ui';
-import { fieldIsVisibleTo, maskedNotice } from './sensitivity';
+import { fieldIsVisibleTo, maskedNotice, type Viewer } from './sensitivity';
 import { resolveFieldType, type FieldDefinition, type FieldType } from './definition';
+import { groupBySection, moneyScale, stepFor } from './presentation';
 
 /** What a host control is handed when it takes a field over. */
 export interface FieldRenderProps {
@@ -29,6 +30,14 @@ export interface ContentFormProps {
      */
     viewerRoles: readonly string[];
     /**
+     * The viewer's capabilities in the current tenant, when the host knows them. With them a
+     * Sensitive or Hidden field is decided the way API 4.6 decides it, by `view_sensitive` and
+     * `view_hidden`; without them, by role name as an older API did.
+     */
+    viewerCapabilities?: readonly string[];
+    /** The viewer's role ids, which is how the seeded SuperAdmin role is recognised. */
+    viewerRoleIds?: readonly string[];
+    /**
      * Lets the host draw a field itself, for a control needing data this package does not fetch:
      * a reference picker, a block editor, a menu tree. Return null to take the default.
      *
@@ -53,9 +62,12 @@ export function ContentForm({
     onChange,
     errors,
     viewerRoles,
+    viewerCapabilities,
+    viewerRoleIds,
     renderField,
     emptyMessage,
 }: ContentFormProps) {
+    const viewer: Viewer = { roles: viewerRoles, roleIds: viewerRoleIds, capabilities: viewerCapabilities };
     // Undefined removes the key, so a cleared optional value is left out of the save rather than
     // sent as an empty string the API would check against the field's type.
     const setField = (name: string, value: unknown) => {
@@ -77,33 +89,46 @@ export function ContentForm({
         );
     }
 
+    const control = (field: FieldDefinition) => (
+        <FieldControl
+            key={field.name}
+            field={field}
+            viewer={viewer}
+            renderField={renderField}
+            value={values[field.name]}
+            error={errors?.[field.name]}
+            onChange={(v) => setField(field.name, v)}
+        />
+    );
+
+    // A field's section groups it under a heading. Fields in no section are drawn as they always
+    // were, so a type that names no section looks exactly as it did.
     return (
         <div className="space-y-5">
-            {fields.map((field) => (
-                <FieldControl
-                    key={field.name}
-                    field={field}
-                    viewerRoles={viewerRoles}
-                    renderField={renderField}
-                    value={values[field.name]}
-                    error={errors?.[field.name]}
-                    onChange={(v) => setField(field.name, v)}
-                />
-            ))}
+            {groupBySection(fields).map((group) =>
+                group.section === null ? (
+                    <Fragment key="section:none">{group.fields.map(control)}</Fragment>
+                ) : (
+                    <fieldset key={`section:${group.section}`} className="space-y-5 rounded-lg border p-4">
+                        <legend className="px-1 text-sm font-medium">{group.section}</legend>
+                        {group.fields.map(control)}
+                    </fieldset>
+                )
+            )}
         </div>
     );
 }
 
 function FieldControl({
     field,
-    viewerRoles,
+    viewer,
     renderField,
     value,
     error,
     onChange,
 }: {
     field: FieldDefinition;
-    viewerRoles: readonly string[];
+    viewer: Viewer;
     renderField?: (props: FieldRenderProps) => ReactNode | null;
     value: unknown;
     error?: string;
@@ -122,7 +147,7 @@ function FieldControl({
     // `string` and gets the roomier control at the bottom of the switch.
     const type = resolveFieldType(field.type);
 
-    if (!fieldIsVisibleTo(field, viewerRoles)) {
+    if (!fieldIsVisibleTo(field, viewer)) {
         return <MaskedField field={field} label={label} value={value} />;
     }
 
@@ -138,6 +163,67 @@ function FieldControl({
                 </div>
             );
 
+        // A money field with a currency holds amounts to that currency's decimal places. The value
+        // stays a plain JSON number either way; the code is on the definition, not in the entry.
+        case 'money': {
+            const scale = moneyScale(field);
+            if (scale === undefined) break;
+            const currency = field.currency as string;
+            return (
+                <div className="space-y-2">
+                    {label}
+                    <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-mono text-sm" aria-hidden="true">
+                            {currency}
+                        </span>
+                        <Input
+                            id={field.name}
+                            type="number"
+                            step={stepFor(scale)}
+                            inputMode="decimal"
+                            aria-describedby={`${field.name}-currency`}
+                            value={value === null || value === undefined ? '' : String(value)}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === '') return onChange(null);
+                                onChange(parseFloat(raw));
+                            }}
+                            className="w-fit"
+                        />
+                    </div>
+                    <p id={`${field.name}-currency`} className="text-muted-foreground text-xs">
+                        {scale === 0
+                            ? `An amount in ${currency}, in whole units.`
+                            : `An amount in ${currency}, up to ${scale} decimal ${scale === 1 ? 'place' : 'places'}.`}
+                    </p>
+                    <FieldError message={error} />
+                </div>
+            );
+        }
+
+        // The server generates a token when the entry is created and discards any value sent for
+        // one, so it is shown and never edited. A reader who may not see it never gets here.
+        case 'token':
+            return (
+                <div className="space-y-2">
+                    {label}
+                    <Input
+                        id={field.name}
+                        type="text"
+                        readOnly
+                        value={typeof value === 'string' ? value : ''}
+                        placeholder="Generated when the entry is saved"
+                        aria-describedby={`${field.name}-token`}
+                        className="text-muted-foreground font-mono"
+                    />
+                    <p id={`${field.name}-token`} className="text-muted-foreground text-xs">
+                        Generated by the server. It cannot be changed.
+                    </p>
+                </div>
+            );
+    }
+
+    switch (type) {
         case 'int':
         case 'decimal':
         case 'money':
@@ -188,6 +274,7 @@ function FieldControl({
         case 'slug':
         case 'uuid':
         case 'reference':
+        case 'file':
             return (
                 <div className="space-y-2">
                     {label}
@@ -210,6 +297,7 @@ function FieldControl({
         case 'array':
         case 'object':
         case 'geopoint':
+        case 'inlineimage':
             return (
                 <JsonField
                     field={field}
@@ -301,11 +389,13 @@ const PLACEHOLDERS: Partial<Record<FieldType, string>> = {
     slug: 'my-post-title',
     uuid: '00000000-0000-0000-0000-000000000000',
     reference: '00000000-0000-0000-0000-000000000000',
+    file: '00000000-0000-0000-0000-000000000000',
 };
 
 const JSON_HINTS: Partial<Record<FieldType, string>> = {
     array: 'JSON list, e.g. ["one", "two"]',
     geopoint: 'A position, e.g. {"lat": 14.5995, "lng": 120.9842}',
+    inlineimage: 'An image as {"url": "data:image/png;base64,...", "alt": "..."}, up to 64 KB',
 };
 
 /** A value as the JSON an editor types, with an empty list or object for one that is not there. */

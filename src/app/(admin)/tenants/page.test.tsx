@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -65,6 +65,24 @@ describe('the Tenants screen', () => {
 
         await waitFor(() => expect(screen.getByText('North club')).toBeInTheDocument());
         expect(screen.getByRole('button', { name: /new tenant/i })).toBeInTheDocument();
+    });
+
+    // API 4.6 moved the profile to the site entry and answers a create carrying About with 400.
+    it('creates a tenant without a profile field, since the profile lives on the site entry', async () => {
+        session.user.roles = ['SuperAdmin'];
+        vi.mocked(api.post).mockResolvedValue({ data: { ...TENANT, slug: 'south', name: 'South club' } });
+        await renderPage();
+
+        fireEvent.click(screen.getByRole('button', { name: /new tenant/i }));
+        expect(screen.queryByLabelText(/about/i)).not.toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'South club' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create tenant' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.post).mock.calls[0]).toEqual([
+            '/api/tenants',
+            { Handle: 'south-club', Name: 'South club', IsActive: true },
+        ]);
     });
 
     it('shows a tenant Admin only the members of their tenant', async () => {
