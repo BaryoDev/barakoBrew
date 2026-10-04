@@ -9,6 +9,13 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-04
+
+**Speaks API contracts 1 to 6, which covers barakoCMS 4.0.1 to 4.6.0.** barakoCMS 4.6.0 moves the
+contract to 6. This console reads the new field members, roles and tenant shapes it brings, and still
+works against an older API, where the new members are absent. Deploy this console before or with
+barakoCMS 4.6.0. (#207, #212)
+
 ### Added
 
 - **Content types and entries speak the barakoCMS 4.6 field members.** The type builder sets a
