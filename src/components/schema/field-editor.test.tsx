@@ -245,4 +245,21 @@ describe('the members a field type adds', () => {
         expect(screen.getByText(/already holds this role/)).toBeInTheDocument();
         expect(addButton()).toBeDisabled();
     });
+
+    it('refuses a name another field holds in another case', () => {
+        render(
+            <FieldEditor
+                fields={[{ name: 'Title', displayName: 'Title', type: 'string', isRequired: false }]}
+                onChange={() => {}}
+            />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+        fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Heading' } });
+        expect(addButton()).toBeEnabled();
+
+        fireEvent.change(screen.getByLabelText('Field name (API)'), { target: { value: 'TItle' } });
+
+        expect(screen.getByText(/already exists, ignoring case/)).toBeInTheDocument();
+        expect(addButton()).toBeDisabled();
+    });
 });
