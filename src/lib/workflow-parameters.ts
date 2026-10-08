@@ -6,11 +6,13 @@ export interface ParameterField {
     secret: boolean;
 }
 
-// The same list the API redacts on read (WebhookSigning.IsSensitiveParameterName), so anything the
-// API will never show again is masked while it is typed.
+// A copy of the words barakoCMS checks names against (CredentialNames.cs), so anything the API will
+// never show again is masked while it is typed. "auth" alone is not one, since it matches "author".
+// Reading them from the API instead is #215.
 const SENSITIVE_NAME_PARTS = [
     'secret', 'password', 'passwd', 'pwd', 'token', 'apikey', 'api_key',
     'credential', 'privatekey', 'private_key', 'accesskey', 'access_key',
+    'authorization', 'bearer',
 ];
 
 export function isSecretParameter(name: string): boolean {
