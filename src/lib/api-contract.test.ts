@@ -146,15 +146,16 @@ describe('recording what the last response said', () => {
  * account like a wrong password (BaryoDev/barakoCMS#640) and caps fields per content type
  * (BaryoDev/barakoCMS#650), 5 is the release where only a platform admin changes global roles
  * (BaryoDev/barakoCMS#1028), 6 is the release that enforces a field's validation rules
- * (BaryoDev/barakoCMS#927), and a console that speaks only some of them goes blank against the
+ * (BaryoDev/barakoCMS#927), 7 is 4.7.0, which replays an idempotent retry and refuses credential-named
+ * connector settings, and a console that speaks only some of them goes blank against the
  * rest.
  *
  * Widening the range is a decision about what this build handles, not a number carried along, so
  * these have to be edited by hand when it moves.
  */
 describe('the contract versions this build speaks', () => {
-    it('speaks 1, 2, 3, 4, 5 and 6', () => {
-        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 6 });
+    it('speaks 1, 2, 3, 4, 5, 6 and 7', () => {
+        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 7 });
     });
 
     it('accepts both of them from a response', () => {
@@ -164,10 +165,11 @@ describe('the contract versions this build speaks', () => {
         expect(classifyContract('4')).toEqual({ kind: 'ok', version: 4 });
         expect(classifyContract('5')).toEqual({ kind: 'ok', version: 5 });
         expect(classifyContract('6')).toEqual({ kind: 'ok', version: 6 });
+        expect(classifyContract('7')).toEqual({ kind: 'ok', version: 7 });
     });
 
-    it('still refuses 0 as too old and 7 as too new', () => {
+    it('still refuses 0 as too old and 8 as too new', () => {
         expect(classifyContract('0')).toEqual({ kind: 'api-older', version: 0 });
-        expect(classifyContract('7')).toEqual({ kind: 'api-newer', version: 7 });
+        expect(classifyContract('8')).toEqual({ kind: 'api-newer', version: 8 });
     });
 });
