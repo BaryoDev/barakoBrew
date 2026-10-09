@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CONNECTORS_PAGE_SIZE, type Connector } from '@/hooks/use-connectors';
 import type { Paginated } from '@/lib/api';
@@ -453,5 +453,51 @@ describe('the way to a connector deliveries', () => {
         const link = await screen.findByRole('link', { name: 'Deliveries for CRM' });
         expect(link).toHaveAttribute('href', '/settings/deliveries?kind=requests&connector=crm');
         expect(screen.getByRole('link', { name: 'Deliveries' })).toHaveAttribute('href', '/settings/deliveries?kind=requests');
+    });
+});
+
+describe('a stored setting whose name reads as a credential', () => {
+    // Saved before barakoCMS 4.7, which now refuses a save that sends one. The screen sends the
+    // settings back whole, so without a way to drop it the connector could not be saved at all.
+    const legacy = () => connector({ settings: { Username: 'reporting-bot', ApiToken: 'plain-text' } });
+
+    it('is listed with the reason, and the settings the modes read are not', async () => {
+        await openEdit(legacy());
+
+        const alert = screen.getByRole('alert');
+        expect(within(alert).getByText('ApiToken')).toBeInTheDocument();
+        expect(within(alert).queryByText('Username')).toBeNull();
+        expect(alert.textContent).toMatch(/secrets fields \(Token, Password, ApiKey, ClientSecret\)/);
+    });
+
+    it('can be removed, and the save then leaves it out and keeps the rest', async () => {
+        vi.mocked(api.put).mockResolvedValue({ data: connector() });
+        await openEdit(legacy());
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove the setting ApiToken' }));
+        expect(screen.queryByRole('alert')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        const body = vi.mocked(api.put).mock.calls[0][1] as { settings: Record<string, string> };
+        expect(body.settings).toEqual({ Username: 'reporting-bot' });
+    });
+
+    it('is not flagged for a connector holding only the settings the modes read', async () => {
+        await openEdit(connector({ auth: 'OAuth2ClientCredentials', settings: { TokenUrl: 'https://id.example.com/token', ClientId: 'c' } }));
+        expect(screen.queryByText(/reads as a credential/)).toBeNull();
+    });
+
+    it('is judged by the words the API publishes', async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) =>
+            url === '/api/meta/describe'
+                ? { data: { credentialNameParts: ['signature'] } }
+                : { data: pageOf([connector({ settings: { Username: 'bot', Signature: 'x' } })]) },
+        );
+        renderWith();
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit Company Jira' }));
+        await screen.findByRole('dialog');
+
+        expect(await screen.findByText('Signature')).toBeInTheDocument();
     });
 });
