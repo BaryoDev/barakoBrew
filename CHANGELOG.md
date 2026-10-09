@@ -9,6 +9,13 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-09
+
+**Speaks API contracts 1 to 7, which covers barakoCMS 4.0.1 to 4.8.0.** barakoCMS 4.7.0 moves the
+contract to 7, and 4.8.0 keeps it. Against 4.7 or later this console also decides what a person may
+do by the capabilities the API reports; against an older API it keeps the rule by role name. Deploy
+this console before or with barakoCMS 4.7.0. (#216, #217)
+
 ### Added
 
 - **The console asks the API what the caller may do.** Against barakoCMS 4.7 it reads `GET /api/me`
