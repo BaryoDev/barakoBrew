@@ -160,6 +160,41 @@ describe('the new workflow form', () => {
         expect(screen.getByLabelText(/^Url/)).toHaveAttribute('type', 'text');
     });
 
+    it('masks a parameter by a word the API publishes and the console copy lacks', async () => {
+        // An action whose example names a Signature. "signature" is not in the fallback list, so
+        // only the words from GET /api/meta/describe can mask it.
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation((async (url: string, ...rest: unknown[]) => {
+            if (url === '/api/meta/describe') return { data: { credentialNameParts: ['secret', 'signature'] } };
+            if (url === '/api/workflows/actions') {
+                return {
+                    data: [
+                        {
+                            ...ACTIONS[0],
+                            exampleConfiguration:
+                                '{"Type":"Webhook","Parameters":{"Url":"https://example.com/webhook","Signature":"optional"}}',
+                        },
+                    ],
+                };
+            }
+            return (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest);
+        }) as typeof api.get);
+
+        renderPage();
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/meta/describe'));
+        await addWebhook();
+
+        await waitFor(() => expect(screen.getByLabelText(/^Signature/)).toHaveAttribute('type', 'password'));
+        expect(screen.getByLabelText(/^Url/)).toHaveAttribute('type', 'text');
+    });
+
+    it('keeps masking by the console copy when the API publishes no words', async () => {
+        renderPage();
+        await addWebhook();
+
+        expect(screen.getByLabelText(/^Secret/)).toHaveAttribute('type', 'password');
+    });
+
     it('sends a Published trigger and the typed Secret when the workflow is created', async () => {
         renderPage();
         fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Invalidate the site cache' } });

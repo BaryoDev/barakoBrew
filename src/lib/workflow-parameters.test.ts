@@ -79,3 +79,17 @@ describe('withoutBlankOptional', () => {
         });
     });
 });
+
+describe('credential words from the API', () => {
+    it('masks a parameter by a word the API returns that the fallback lacks', () => {
+        const fields = parameterFields(WEBHOOK, { ClientCert: '' }, ['secret', 'clientcert']);
+        expect(fields.map((f) => f.name)).toEqual(['Url', 'Secret', 'ClientCert']);
+        expect(fields.find((f) => f.name === 'ClientCert')?.secret).toBe(true);
+        expect(isSecretParameter('ClientCert')).toBe(false);
+    });
+
+    it('stops masking a word the API no longer lists', () => {
+        expect(parameterFields(WEBHOOK, { Password: '' }, ['secret']).find((f) => f.name === 'Password')?.secret).toBe(false);
+        expect(isSecretParameter('Password')).toBe(true);
+    });
+});

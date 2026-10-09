@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { credentialNameParts } from '@/lib/credential-names';
 
 export interface ApiMeta {
   /** The version of the API this admin is talking to, as the API itself reports it. */
@@ -34,4 +35,19 @@ export function useApiMeta() {
 /** The admin bundle's own version, stamped into the image at build time. */
 export function adminVersion(): string | null {
   return process.env.NEXT_PUBLIC_ADMIN_VERSION || null;
+}
+
+/**
+ * The words that make a name read as a credential, from `GET /api/meta/describe` (barakoCMS 4.7 on),
+ * or the console's own copy while it loads, when it fails, and for an API that does not send them.
+ * Read once and kept, like the version: a deploy is what changes it.
+ */
+export function useCredentialNameParts(): readonly string[] {
+  const { data } = useQuery({
+    queryKey: ['meta', 'describe'],
+    queryFn: async () => (await api.get<unknown>('/api/meta/describe')).data,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  return credentialNameParts(data);
 }
