@@ -33,13 +33,35 @@ async function fetchMe(): Promise<Me | null> {
 
 const noTokenOnServer = () => null;
 
+/** How long an answer is trusted with no new token: the access token's own lifetime. */
+export const ME_STALE_MS = 15 * 60 * 1000;
+
 /**
- * What the signed-in caller may do, read once per session and tenant.
+ * Which token this is, without keeping the token: its `jti`, else its expiry. A refresh mints a new
+ * one, so the answer is read again whenever the session is renewed, and a capability revoked in the
+ * meantime stops being offered within one token lifetime.
+ */
+function tokenStamp(token: string | null): string | null {
+    if (!token) return null;
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        const stamp = payload.jti ?? payload.exp;
+        return stamp === undefined ? null : String(stamp);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * What the signed-in caller may do, read once per token.
  *
- * The key holds the user and the tenant the token was minted for, so switching tenants reads again
- * and a refreshed token for the same tenant does not. Sign-out clears the query cache. Until the
- * answer lands, and whenever the read fails, `known` is false and every check falls back to the
- * role names on the token, which is what the console did before 4.7.
+ * The key holds the user, the tenant the token was minted for and which token it is, so switching
+ * tenants reads again and so does each refresh, about every fifteen minutes. Within a tenant the last
+ * answer stays in use while the next one loads, so the screen does not fall back to role names on
+ * every refresh.
+ * Sign-out clears the query cache. Until the first answer lands, and whenever the read fails,
+ * `known` is false and every check falls back to the role names on the token, which is what the
+ * console did before 4.7.
  */
 export function useAccess(): Access {
     const { user } = useAuth();
@@ -47,10 +69,16 @@ export function useAccess(): Access {
     const tenant = tenantOfToken(token);
 
     const { data: me } = useQuery({
-        queryKey: ['me', user?.userId ?? null, tenant],
+        queryKey: ['me', user?.userId ?? null, tenant, tokenStamp(token)],
         queryFn: fetchMe,
         enabled: !!user,
-        staleTime: Infinity,
+        staleTime: ME_STALE_MS,
+        // The previous token's answer, for the same user in the same tenant only. Another tenant's
+        // capabilities are not this one's, so a switch falls back to role names until it lands.
+        placeholderData: (previous, previousQuery) =>
+            previousQuery?.queryKey[1] === (user?.userId ?? null) && previousQuery?.queryKey[2] === tenant
+                ? previous
+                : undefined,
         retry: false,
     });
 
