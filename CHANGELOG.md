@@ -9,6 +9,29 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **The console asks the API what the caller may do.** Against barakoCMS 4.7 it reads `GET /api/me`
+  once per session and tenant, and the rail, rollback, deleting another user's file, the tenant list
+  and Sensitive and Hidden fields in every entry form decide by the capabilities it reports, as the
+  API decides. A custom role granted `upload_files` gets Files, one granted `rollback_content` gets
+  Restore, one granted `view_sensitive` can edit a Sensitive field. The seeded SuperAdmin role is
+  recognised by its id, here and on the Roles screen. Against an older API, which answers 404, every
+  screen keeps the rule by role name it had. Security and Devices, which are the caller's own, are
+  offered to every signed-in caller once capabilities are known. (#162)
+- **A link can open a transition.** `/content/{id}?transition=Approve`, which barakoCMS 4.8 builds
+  with `{{links.transition "Approve"}}`, opens that transition's dialog on the entry page, asking
+  before the move even when it takes no fields. A name the type does not declare is ignored.
+
+### Fixed
+
+- **The entry editor shows a value stored under another case of its field name.** An entry holding
+  `title` for the field `Title` showed an empty box, and a save added a second spelling, which
+  barakoCMS 4.7 refuses with a 400. The form now reads the stored key and saves under it only.
+- **A connector holding a setting named like a credential can be saved again.** barakoCMS 4.7
+  refuses such a setting, and the screen sent the stored settings back whole. The connector form now
+  lists them, explains that a secret goes in the secrets fields, and lets each one be removed.
+
 ### Changed
 
 - **Speaks API contracts 1 to 7.** barakoCMS 4.7.0 moves the contract to 7. The console sends no
@@ -23,7 +46,10 @@ moved. Which API a console works against is stated per release instead.
 - **The content type builder refuses a field name another field holds in another case**, as
   barakoCMS 4.7 does.
 - **`authorization` and `bearer` mask a workflow parameter as a credential**, matching the words
-  barakoCMS 4.7 checks. Reading them from `/api/meta/describe` instead is #215.
+  barakoCMS 4.7 checks.
+- **The credential words come from the API.** The workflow form and the connector form read
+  `credentialNameParts` from `GET /api/meta/describe` when it is there, and keep the console's own
+  list for an older API. (#215)
 
 ## [1.7.0] - 2026-10-04
 
