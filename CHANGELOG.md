@@ -12,13 +12,21 @@ moved. Which API a console works against is stated per release instead.
 ### Added
 
 - **The console asks the API what the caller may do.** Against barakoCMS 4.7 it reads `GET /api/me`
-  once per session and tenant, and the rail, rollback, deleting another user's file, the tenant list
-  and Sensitive and Hidden fields in every entry form decide by the capabilities it reports, as the
-  API decides. A custom role granted `upload_files` gets Files, one granted `rollback_content` gets
-  Restore, one granted `view_sensitive` can edit a Sensitive field. The seeded SuperAdmin role is
-  recognised by its id, here and on the Roles screen. Against an older API, which answers 404, every
-  screen keeps the rule by role name it had. Security and Devices, which are the caller's own, are
-  offered to every signed-in caller once capabilities are known. (#162)
+  for each access token (so again on every refresh) and tenant, and the rail, rollback, deleting
+  another user's file, the tenant list, the email settings buttons and Sensitive and Hidden fields in
+  every entry form decide by the capabilities it reports, as the API decides. A custom role granted
+  `upload_files` gets Files, one granted `rollback_content` gets Restore, one granted
+  `view_sensitive` can edit a Sensitive field. The seeded SuperAdmin role is recognised by its id,
+  here and on the Roles screen, which now shows a role holding `*` as all capabilities plus its own
+  content types, since `*` does not skip content rules. The Email screen is offered for
+  `manage_settings`, which reads it, and its Save and test send need `manage_email_settings`.
+  Against an older API, which answers 404, every screen keeps the rule by role name it had. Security
+  and Devices, which are the caller's own, are offered to every signed-in caller once capabilities
+  are known. (#162)
+- **Known gap: `Auth:LegacyRoleFallback`.** A deployment that sets it lets the legacy role names
+  through capability gates, and the API does not report the flag, so against 4.7 the rail hides
+  screens such a role can still open by name. Grant the capabilities to the role, or reach the
+  screen by its address, until the API reports the flag.
 - **A link can open a transition.** `/content/{id}?transition=Approve`, which barakoCMS 4.8 builds
   with `{{links.transition "Approve"}}`, opens that transition's dialog on the entry page, asking
   before the move even when it takes no fields. A name the type does not declare is ignored.
@@ -27,7 +35,9 @@ moved. Which API a console works against is stated per release instead.
 
 - **The entry editor shows a value stored under another case of its field name.** An entry holding
   `title` for the field `Title` showed an empty box, and a save added a second spelling, which
-  barakoCMS 4.7 refuses with a 400. The form now reads the stored key and saves under it only.
+  barakoCMS 4.7 refuses with a 400. The form now reads the stored key and saves under it. An entry
+  that already holds both spellings shows the other one under the field with a Remove control, since
+  it cannot be saved with both.
 - **A connector holding a setting named like a credential can be saved again.** barakoCMS 4.7
   refuses such a setting, and the screen sent the stored settings back whole. The connector form now
   lists them, explains that a secret goes in the secrets fields, and lets each one be removed.
