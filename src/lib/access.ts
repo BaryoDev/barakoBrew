@@ -42,11 +42,27 @@ export function grants(capabilities: readonly string[], name: string): boolean {
 }
 
 /**
- * Whether a role is let through everything: the seeded SuperAdmin role, recognised by its id as the
- * API recognises it, or a role holding `*`.
+ * Whether a role is let through everything, content rules included: only the seeded SuperAdmin
+ * role, recognised by its id as the API recognises it. A role holding `*` passes every capability
+ * gate and is still held to its content type permissions.
  */
-export function roleGrantsEverything(role: { id: string; systemCapabilities?: readonly string[] | null }): boolean {
-    return role.id.toLowerCase() === SUPER_ADMIN_ROLE_ID || (role.systemCapabilities ?? []).includes('*');
+export function isSuperAdminRole(role: { id: string }): boolean {
+    return role.id.toLowerCase() === SUPER_ADMIN_ROLE_ID;
+}
+
+/**
+ * What a role reaches, for the Roles list. A role holding `*` gets every capability and only the
+ * content types its permissions name.
+ */
+export function roleReach(role: {
+    id: string;
+    permissions?: readonly unknown[] | null;
+    systemCapabilities?: readonly string[] | null;
+}): string {
+    if (isSuperAdminRole(role)) return 'Everything';
+    const count = role.permissions?.length ?? 0;
+    const types = `${count} content ${count === 1 ? 'type' : 'types'}`;
+    return (role.systemCapabilities ?? []).includes('*') ? `All capabilities, ${types}` : types;
 }
 
 export function accessFrom(me: Me | null | undefined, tokenRoles: readonly string[] | undefined): Access {

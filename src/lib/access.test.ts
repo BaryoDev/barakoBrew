@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SUPER_ADMIN_ROLE_ID } from 'barako-content-form';
-import { accessFrom, grants, roleGrantsEverything, type Me } from './access';
+import { accessFrom, grants, isSuperAdminRole, roleReach, type Me } from './access';
 
 const me = (capabilities: string[], roles = [{ id: 'r-1', name: 'Registrar' }]): Me => ({
     userId: 'u',
@@ -49,15 +49,26 @@ describe('accessFrom without /api/me', () => {
     });
 });
 
-describe('grants and roleGrantsEverything', () => {
+describe('grants and isSuperAdminRole', () => {
     it('reads * as every capability', () => {
         expect(grants(['*'], 'anything')).toBe(true);
         expect(grants(['upload_files'], 'manage_all_files')).toBe(false);
     });
 
-    it('recognises the SuperAdmin role by id or a role holding *, not by name', () => {
-        expect(roleGrantsEverything({ id: SUPER_ADMIN_ROLE_ID, systemCapabilities: [] })).toBe(true);
-        expect(roleGrantsEverything({ id: 'r-1', systemCapabilities: ['*'] })).toBe(true);
-        expect(roleGrantsEverything({ id: 'r-1', systemCapabilities: ['manage_roles'] })).toBe(false);
+    it('recognises the SuperAdmin role by its id only, not by name and not by holding *', () => {
+        expect(isSuperAdminRole({ id: SUPER_ADMIN_ROLE_ID.toUpperCase() })).toBe(true);
+        // * passes capability gates only; the API still applies this role's content rules.
+        expect(isSuperAdminRole({ id: 'r-1' })).toBe(false);
+    });
+});
+
+describe('roleReach', () => {
+    it('says Everything for the seeded SuperAdmin role only', () => {
+        expect(roleReach({ id: SUPER_ADMIN_ROLE_ID, permissions: [], systemCapabilities: ['*'] })).toBe('Everything');
+    });
+
+    it('shows a * role as every capability and its own content types', () => {
+        expect(roleReach({ id: 'r-1', permissions: [{}, {}], systemCapabilities: ['*'] })).toBe('All capabilities, 2 content types');
+        expect(roleReach({ id: 'r-1', permissions: [{}], systemCapabilities: ['manage_roles'] })).toBe('1 content type');
     });
 });
