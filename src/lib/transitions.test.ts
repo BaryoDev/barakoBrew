@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { missingTransitionFields, transitionFields } from './transitions';
+import { missingTransitionFields, requestedTransition, transitionFields } from './transitions';
 import type { FieldDefinition, StateTransition } from '@/types/schema';
 
 const FIELDS: FieldDefinition[] = [
@@ -37,5 +37,22 @@ describe('the fields a transition asks for', () => {
         expect(missingTransitionFields(asked, {}).map((f) => f.name)).toEqual(['Reason']);
         expect(missingTransitionFields(asked, { Reason: '   ' }).map((f) => f.name)).toEqual(['Reason']);
         expect(missingTransitionFields(asked, { Reason: 'Wrong amount' })).toHaveLength(0);
+    });
+});
+
+describe('requestedTransition', () => {
+    const transitions = [
+        { name: 'Approve', from: 'Review', to: 'Approved' },
+        { name: 'Reject', from: 'Review', to: 'Draft' },
+    ];
+
+    it('finds the transition a link names, ignoring case', () => {
+        expect(requestedTransition(transitions, 'approve')?.name).toBe('Approve');
+    });
+
+    it('finds nothing for a name the type does not declare, or no name', () => {
+        expect(requestedTransition(transitions, 'Publish')).toBeNull();
+        expect(requestedTransition(transitions, '')).toBeNull();
+        expect(requestedTransition(transitions, null)).toBeNull();
     });
 });

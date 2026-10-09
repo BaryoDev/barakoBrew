@@ -75,10 +75,13 @@ export function ContentEditor({
   id,
   heading,
   backHref,
+  transition,
 }: {
   id: string;
   heading?: string;
   backHref?: string | null;
+  /** The transition a link asks to open, from `?transition=` on the entry page. */
+  transition?: string | null;
 }) {
   const router = useRouter();
   const access = useAccess();
@@ -253,6 +256,7 @@ export function ContentEditor({
                 transitions={schema.lifecycle.transitions ?? []}
                 fields={schema.fields}
                 viewer={access.viewer}
+                requested={transition}
               />
             ) : (
               <>
