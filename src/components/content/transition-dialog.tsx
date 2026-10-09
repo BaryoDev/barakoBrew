@@ -18,6 +18,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import type { Viewer } from 'barako-content-form';
 import type { FieldDefinition, StateTransition } from '@/types/schema';
 
 /**
@@ -33,13 +34,13 @@ export function TransitionActions({
     contentType,
     transitions,
     fields,
-    viewerRoles,
+    viewer,
 }: {
     entryId: string;
     contentType: string;
     transitions: readonly StateTransition[];
     fields: readonly FieldDefinition[];
-    viewerRoles?: readonly string[];
+    viewer?: Viewer;
 }) {
     const [asking, setAsking] = useState<StateTransition | null>(null);
     const move = useTransitionContent();
@@ -79,7 +80,7 @@ export function TransitionActions({
                     contentType={contentType}
                     transition={asking}
                     fields={fields}
-                    viewerRoles={viewerRoles}
+                    viewer={viewer}
                     open
                     onOpenChange={(open) => {
                         if (!open) setAsking(null);
@@ -99,7 +100,7 @@ export function TransitionDialog({
     contentType,
     transition,
     fields,
-    viewerRoles,
+    viewer,
     open,
     onOpenChange,
 }: {
@@ -107,7 +108,7 @@ export function TransitionDialog({
     contentType: string;
     transition: StateTransition;
     fields: readonly FieldDefinition[];
-    viewerRoles?: readonly string[];
+    viewer?: Viewer;
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
@@ -176,7 +177,7 @@ export function TransitionDialog({
                         );
                     }}
                     contentType={contentType}
-                    viewerRoles={viewerRoles}
+                    viewer={viewer}
                 />
 
                 {missing.length > 0 && (

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useAccess } from '@/hooks/use-access';
 import { BrandMark, BrandWordmark } from '@/components/brand';
 import {
   NAV_GROUPS,
@@ -142,7 +143,8 @@ export function AppSidebar() {
   // Filtered rather than rendered whole. Every item used to be shown to every role, so a User saw
   // all nineteen destinations and sixteen of them answered 403 on arrival. The backend was never
   // the problem; the sidebar was advertising doors it knew were locked.
-  const roleFiltered = visibleGroups(NAV_GROUPS, user?.roles);
+  const access = useAccess();
+  const roleFiltered = visibleGroups(NAV_GROUPS, user?.roles, access.known ? access.can : undefined);
 
   // And filtered again by what the deployment actually runs. Until /api/modules answers, and for a
   // caller it will not answer, this is the role-filtered list unchanged: see withModules.

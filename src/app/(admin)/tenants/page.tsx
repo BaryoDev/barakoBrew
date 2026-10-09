@@ -11,7 +11,7 @@ import {
   type Tenant,
 } from '@/hooks/use-tenants';
 import { apiErrorMessage } from '@/lib/api';
-import { useAuth } from '@/hooks/use-auth';
+import { useAccess } from '@/hooks/use-access';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -248,9 +248,9 @@ function DomainsForm({ tenant, onDone }: { tenant: Tenant; onDone: () => void })
 }
 
 export default function TenantsPage() {
-  // Listing and creating tenants are SuperAdmin acts. A tenant Admin comes here for the members list.
-  const { user } = useAuth();
-  const platformAdmin = user?.roles.includes('SuperAdmin') ?? false;
+  // Listing and creating tenants take manage_tenants. A tenant Admin comes here for the members list.
+  const access = useAccess();
+  const platformAdmin = access.can('manage_tenants', ['SuperAdmin']);
   const { data: tenants, isLoading, isError, refetch } = useTenants({ enabled: platformAdmin });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDomains, setEditingDomains] = useState<Tenant | null>(null);

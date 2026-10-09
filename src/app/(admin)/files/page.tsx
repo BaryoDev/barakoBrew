@@ -12,6 +12,7 @@ import {
   type StoredFile,
 } from '@/hooks/use-files';
 import { useAuth } from '@/hooks/use-auth';
+import { useAccess } from '@/hooks/use-access';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
 import { UPLOAD_RULES, canDeleteFile, contentProblem, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
@@ -224,6 +225,7 @@ function UploadDialog({
 
 export default function FilesPage() {
   const { user } = useAuth();
+  const access = useAccess();
   const { add } = useUploads();
   const [dropping, setDropping] = useState(false);
   const [page, setPage] = useState(1);
@@ -425,7 +427,7 @@ export default function FilesPage() {
                             Copy link
                           </Button>
                         )}
-                        {canDeleteFile(user, file) && (
+                        {canDeleteFile(user, file, access) && (
                           <Button
                             variant="ghost"
                             size="sm"

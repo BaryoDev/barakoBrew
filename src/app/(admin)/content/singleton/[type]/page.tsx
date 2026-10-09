@@ -4,7 +4,7 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useAuth } from '@/hooks/use-auth';
+import { useAccess } from '@/hooks/use-access';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useContents, useCreateContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
@@ -99,7 +99,7 @@ function FirstEntry({
   schema: ContentTypeDefinition;
   onRefused: () => void;
 }) {
-  const { user } = useAuth();
+  const access = useAccess();
   const createContent = useCreateContent();
   const [values, setValues] = useState<Record<string, unknown>>({});
 
@@ -131,7 +131,7 @@ function FirstEntry({
             values={values}
             onChange={setValues}
             contentType={schema.name}
-            viewerRoles={user?.roles}
+            viewer={access.viewer}
         />
         <Separator className="my-6" />
         <div className="flex items-center gap-2">

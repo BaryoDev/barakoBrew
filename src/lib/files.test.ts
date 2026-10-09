@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { accessFrom } from './access';
 import { MAX_UPLOAD_BYTES, canDeleteFile, contentProblem, formatBytes, publicFileLink, uploadProblem } from './files';
 import { SAMPLES, sample } from '@/test/file-samples';
 
@@ -101,6 +102,32 @@ describe('canDeleteFile', () => {
         const editor = { userId: 'aaaaaaaa-0000-0000-0000-000000000001', roles: ['Editor'] };
         expect(canDeleteFile(editor, mine)).toBe(true);
         expect(canDeleteFile(editor, theirs)).toBe(false);
+    });
+
+    it('lets a custom role holding manage_all_files delete anyone’s file when the API reports it', () => {
+        const registrar = { userId: 'x', roles: ['Registrar'] };
+        const me = {
+            userId: 'x',
+            username: 'r',
+            tenant: 'default',
+            roles: [{ id: 'r-1', name: 'Registrar' }],
+            capabilities: ['manage_all_files', 'upload_files'],
+        };
+        expect(canDeleteFile(registrar, theirs, accessFrom(me, registrar.roles))).toBe(true);
+        // The same role by name only, as an older API leaves it: no capability, no override.
+        expect(canDeleteFile(registrar, theirs, accessFrom(null, registrar.roles))).toBe(false);
+    });
+
+    it('does not let an Admin by name delete another’s file once the API says the role lacks the capability', () => {
+        const admin = { userId: 'x', roles: ['Admin'] };
+        const me = {
+            userId: 'x',
+            username: 'a',
+            tenant: 'default',
+            roles: [{ id: 'r-2', name: 'Admin' }],
+            capabilities: ['upload_files'],
+        };
+        expect(canDeleteFile(admin, theirs, accessFrom(me, admin.roles))).toBe(false);
     });
 
     it('offers nothing without a session, or to a session without a user id', () => {

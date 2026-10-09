@@ -1,3 +1,5 @@
+import { accessFrom, type Access } from '@/lib/access';
+
 /**
  * The rules `POST /api/files` enforces, copied from the upload endpoint in BarakoCMS.Files.
  *
@@ -91,15 +93,18 @@ export async function contentProblem(file: Blob): Promise<string | null> {
 }
 
 /**
- * Whether the API would let this caller delete this file: an Admin or SuperAdmin, or whoever
- * uploaded it. Mirrors `FileOwnership.CanAccess`, which answers 403 to everyone else.
+ * Whether the API would let this caller delete this file: a caller holding `manage_all_files`, or
+ * whoever uploaded it. Mirrors `FileAccessRule`, which answers 403 to everyone else. Without
+ * `access`, or against an API that does not report capabilities, Admin and SuperAdmin by name stand
+ * in for the capability, which is who the Files module seeds it to.
  */
 export function canDeleteFile(
     user: { userId?: string; roles: readonly string[] } | null | undefined,
     file: { uploadedBy: string },
+    access: Pick<Access, 'can'> = accessFrom(null, user?.roles),
 ): boolean {
     if (!user) return false;
-    if (user.roles.includes('SuperAdmin') || user.roles.includes('Admin')) return true;
+    if (access.can('manage_all_files', ['SuperAdmin', 'Admin'])) return true;
     return !!user.userId && user.userId.toLowerCase() === file.uploadedBy.toLowerCase();
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentForm, JsonField, type FieldRenderProps } from 'barako-content-form';
+import { ContentForm, JsonField, type FieldRenderProps, type Viewer } from 'barako-content-form';
 import { MarkdownField } from '@/components/content/markdown-field';
 import { ReferenceField } from '@/components/content/reference-field';
 import { ChoiceField } from '@/components/content/choice-field';
@@ -27,11 +27,12 @@ export interface DynamicFormProps {
     /** The type the entry belongs to, which is how a menu's Items field gets the menu editor. */
     contentType?: string;
     /**
-     * The roles of the person editing, which decide whether a sensitive field is editable. Left off
-     * by the block editor, whose sub-forms come from the site's block schema and carry no
-     * sensitivity; a screen editing a real entry passes the signed-in user's roles.
+     * Who is editing, which decides whether a Sensitive or Hidden field is editable: `useAccess`'s
+     * viewer, with the capabilities and role ids from `GET /api/me` when the API reports them. Left
+     * off by the block editor, whose sub-forms come from the site's block schema and carry no
+     * sensitivity; a screen editing a real entry passes it.
      */
-    viewerRoles?: readonly string[];
+    viewer?: Viewer;
     /**
      * The files the entry's `file` fields name, as the entry read resolved them, keyed as the field
      * is in the data. Absent on a create, and from an API older than file fields.
@@ -62,7 +63,7 @@ export function DynamicForm({
     onChange,
     errors,
     contentType,
-    viewerRoles,
+    viewer,
     files,
 }: DynamicFormProps) {
     const renderField = ({ field, type, label, value, error, onChange: set }: FieldRenderProps) => {
@@ -201,7 +202,9 @@ export function DynamicForm({
             values={values}
             onChange={onChange}
             errors={errors}
-            viewerRoles={viewerRoles ?? []}
+            viewerRoles={viewer?.roles ?? []}
+            viewerRoleIds={viewer?.roleIds}
+            viewerCapabilities={viewer?.capabilities}
             renderField={renderField}
         />
     );

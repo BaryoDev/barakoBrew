@@ -140,6 +140,10 @@ export async function stubShell(page: Page) {
     );
     await page.route('**/health**', (r) => r.fulfill({ json: { status: 'Healthy', entries: {} } }));
     await page.route('**/api/me/tenants**', (r) => r.fulfill({ json: pageOf([]) }));
+    // GET /api/me is barakoCMS 4.7's. Answered as an older API answers it, so every spec keeps
+    // describing the rail and the forms by the role names on the mock token. A spec about
+    // capabilities registers its own route.
+    await page.route(/\/api\/me(\?|$)/, (r) => r.fulfill({ status: 404, json: {} }));
 
     // The sidebar rail's counts and badges. These are shell calls now (they run on every admin
     // route, not just the page that owns the list), so a spec that does not care about them still

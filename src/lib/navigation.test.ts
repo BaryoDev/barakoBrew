@@ -10,6 +10,8 @@ import {
     withSingletons,
 } from './navigation';
 import { MODULE } from '@/types/modules';
+import { SUPER_ADMIN_ROLE_ID } from 'barako-content-form';
+import { accessFrom } from './access';
 
 const count = (roles: string[] | undefined) =>
     visibleGroups(NAV_GROUPS, roles).reduce((n, g) => n + g.items.length, 0);
@@ -328,5 +330,65 @@ describe('forms and deliveries in the rail', () => {
         expect(titles).toContain('Deliveries');
         expect(breadcrumbsFor('/settings/deliveries').map((c) => c.title)).toEqual(['Settings', 'Deliveries']);
         expect(breadcrumbsFor('/settings/forms').map((c) => c.title)).toEqual(['Settings', 'Forms']);
+    });
+});
+
+describe('the rail against an API that reports capabilities', () => {
+    const me = (capabilities: string[], roles = [{ id: 'r-9', name: 'Registrar' }]) => ({
+        userId: 'u',
+        username: 'u',
+        tenant: 'default',
+        roles,
+        capabilities,
+    });
+    const seen = (capabilities: string[], roles?: { id: string; name: string }[]) => {
+        const access = accessFrom(me(capabilities, roles), ['Registrar']);
+        return visibleGroups(NAV_GROUPS, ['Registrar'], access.can).flatMap((g) => g.items.map((i) => i.title));
+    };
+
+    it('offers Files to a custom role granted upload_files', () => {
+        const titles = seen(['upload_files']);
+        expect(titles).toContain('Files');
+        expect(titles).not.toContain('Users');
+    });
+
+    it('offers a custom role only what its capabilities open, plus what every caller may use', () => {
+        expect(seen([])).toEqual(['Overview', 'Health', 'Security', 'Devices']);
+    });
+
+    it('decides by capability rather than by the Admin name', () => {
+        const admin = accessFrom(me(['upload_files'], [{ id: 'r-2', name: 'Admin' }]), ['Admin']);
+        const titles = visibleGroups(NAV_GROUPS, ['Admin'], admin.can).flatMap((g) => g.items.map((i) => i.title));
+        expect(titles).toContain('Files');
+        expect(titles).not.toContain('Audit log');
+    });
+
+    it('shows the seeded SuperAdmin role, by its id, everything', () => {
+        const all = NAV_GROUPS.reduce((n, g) => n + g.items.length, 0);
+        const titles = seen([], [{ id: SUPER_ADMIN_ROLE_ID, name: 'Renamed' }]);
+        expect(titles).toHaveLength(all);
+    });
+
+    it('shows a role holding * everything', () => {
+        expect(seen(['*'])).toHaveLength(NAV_GROUPS.reduce((n, g) => n + g.items.length, 0));
+    });
+
+    it('gates every role-gated item on a capability, except the two every caller may use', () => {
+        const ungated = NAV_GROUPS.flatMap((g) => g.items)
+            .filter((i) => i.roles && i.capability === undefined)
+            .map((i) => i.title);
+        expect(ungated).toEqual(['Security', 'Devices']);
+    });
+
+    it('keeps a single-entry type gated like Entries', () => {
+        const types = [{ name: 'about', displayName: 'About', isSingleton: true }];
+        const access = accessFrom(me(['manage_content_types']), ['Registrar']);
+        const titles = withSingletons(visibleGroups(NAV_GROUPS, ['Registrar'], access.can), types)
+            .flatMap((g) => g.items.map((i) => i.title));
+        expect(titles).toContain('About');
+        const without = withSingletons(visibleGroups(NAV_GROUPS, ['Registrar'], accessFrom(me([]), ['Registrar']).can), types)
+            .flatMap((g) => g.items.map((i) => i.title));
+        expect(without.length).toBeGreaterThan(0);
+        expect(without).not.toContain('About');
     });
 });

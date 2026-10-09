@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { useAuth } from '@/hooks/use-auth';
+import { useAccess } from '@/hooks/use-access';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useCreateContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
@@ -29,7 +29,7 @@ import {
 function NewContentInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const access = useAccess();
   const { data: schemas, isLoading } = useSchemas();
   const createContent = useCreateContent();
 
@@ -131,7 +131,7 @@ function NewContentInner() {
                 values={values}
                 onChange={setValues}
                 contentType={schema.name}
-                viewerRoles={user?.roles}
+                viewer={access.viewer}
             />
             <div className="flex items-center gap-2">
               <Button
