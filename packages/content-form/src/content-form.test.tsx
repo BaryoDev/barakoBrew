@@ -322,4 +322,21 @@ describe('a value stored under another spelling of the field name', () => {
         renderForm({ values: { title: 'lower', Title: 'exact' } });
         expect(document.getElementById('Title')).toHaveValue('exact');
     });
+
+    it('shows the other spelling of an entry holding both, and removes it only when asked', () => {
+        const onChange = renderForm({ values: { title: 'lower', Title: 'exact', Body: 'Kept' } });
+
+        const notice = screen.getByRole('alert');
+        expect(notice.textContent).toContain('title: lower');
+        expect(onChange).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove the spelling title' }));
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange.mock.calls[0][0]).toEqual({ Title: 'exact', Body: 'Kept' });
+    });
+
+    it('shows no notice when the entry holds one spelling', () => {
+        renderForm({ values: { title: 'lower' } });
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
 });

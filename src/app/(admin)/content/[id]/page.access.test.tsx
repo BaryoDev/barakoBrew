@@ -192,6 +192,21 @@ describe('a value stored under another spelling of its field name', () => {
     });
 });
 
+describe('an entry holding a field under two spellings', () => {
+    it('saves once the other spelling is removed, sending one spelling only', async () => {
+        vi.mocked(api.put).mockResolvedValue({ data: { id: ID, version: 3 }, headers: {} });
+        renderEditor({ data: { Title: 'Exact', title: 'Lower', Salary: '***' } });
+
+        const save = await screen.findByRole('button', { name: /save changes/i });
+        fireEvent.click(screen.getByRole('button', { name: 'Remove the spelling title' }));
+        fireEvent.click(save);
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        const [, body] = vi.mocked(api.put).mock.calls[0];
+        expect((body as { data: Record<string, unknown> }).data).toEqual({ Title: 'Exact', Salary: '***' });
+    });
+});
+
 describe('a link naming a transition', () => {
     const LIFECYCLE = {
         ...SCHEMA,

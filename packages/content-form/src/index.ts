@@ -1,4 +1,4 @@
-export { ContentForm, JsonField, fieldValueKey } from './content-form';
+export { ContentForm, JsonField, fieldValueKey, otherSpellings } from './content-form';
 // The controls the form draws with, exported so a consumer can match them and so the console can
 // assert its own copies have not drifted from these.
 export { cn, FieldError, Input, Label, Switch, Textarea } from './ui';
