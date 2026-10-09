@@ -41,6 +41,10 @@ differs only in case, and writes back under the key it read from (the field's na
 stored). It never adds a second spelling, which barakoCMS 4.7 refuses with a 400. `fieldValueKey`
 is that lookup, exported for a host that reads the values itself.
 
+An entry that already holds both spellings cannot be saved as it is. The form shows the other
+spelling under the field, with its value and a Remove control, and drops it only when asked.
+`otherSpellings` lists them.
+
 ## Host controls
 
 `renderField` lets the host draw a field itself, for the types whose control needs data the package
