@@ -199,7 +199,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Errors', href: '/errors', icon: IconBug, metric: 'unresolvedErrors', tone: 'danger', capability: 'manage_client_errors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Workflow runs', href: '/workflow-runs', icon: IconTasks, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Health', href: '/ops/health', icon: IconHealth },
-      { title: 'Email', href: '/settings/email', icon: IconEnvelope, capability: 'manage_email_settings', roles: ['SuperAdmin'] },
+      // Reading takes manage_settings; saving and the test send take manage_email_settings, which the
+      // screen checks for its buttons.
+      { title: 'Email', href: '/settings/email', icon: IconEnvelope, capability: 'manage_settings', roles: ['SuperAdmin'] },
       // The caller's own second factor. With capabilities known it is offered to every signed-in
       // caller, as the API serves it; the roles are what an older API's console offered.
       { title: 'Security', href: '/settings/security', icon: IconShield , roles: ['SuperAdmin', 'Admin'] },

@@ -391,4 +391,9 @@ describe('the rail against an API that reports capabilities', () => {
         expect(without.length).toBeGreaterThan(0);
         expect(without).not.toContain('About');
     });
+
+    it('offers Email to a role that may read the settings, which is manage_settings', () => {
+        expect(seen(['manage_settings'])).toContain('Email');
+        expect(seen(['manage_email_settings'])).not.toContain('Email');
+    });
 });
