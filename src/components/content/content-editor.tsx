@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useAuth } from '@/hooks/use-auth';
+import { useAccess } from '@/hooks/use-access';
 import { useSchemas } from '@/hooks/use-schemas';
 import {
   useContent,
@@ -75,13 +75,16 @@ export function ContentEditor({
   id,
   heading,
   backHref,
+  transition,
 }: {
   id: string;
   heading?: string;
   backHref?: string | null;
+  /** The transition a link asks to open, from `?transition=` on the entry page. */
+  transition?: string | null;
 }) {
   const router = useRouter();
-  const { user } = useAuth();
+  const access = useAccess();
   const { data: schemas } = useSchemas();
   const { data: content, isLoading, refetch: refetchContent } = useContent(id);
   const updateContent = useUpdateContent();
@@ -137,7 +140,7 @@ export function ContentEditor({
   };
 
   const schema = schemas?.find((s) => s.name === content?.contentType);
-  const canRollback = user?.roles.some((r) => r === 'SuperAdmin' || r === 'Admin') ?? false;
+  const canRollback = access.can('rollback_content', ['SuperAdmin', 'Admin']);
   const title = heading ?? (content ? contentTitle(content.data, id) : '');
 
   // Before the loading guard, because hooks cannot sit after an early return. An empty title sets
@@ -252,7 +255,8 @@ export function ContentEditor({
                 contentType={content.contentType}
                 transitions={schema.lifecycle.transitions ?? []}
                 fields={schema.fields}
-                viewerRoles={user?.roles}
+                viewer={access.viewer}
+                requested={transition}
               />
             ) : (
               <>
@@ -321,7 +325,7 @@ export function ContentEditor({
                 values={values}
                 onChange={setValues}
                 contentType={content.contentType}
-                viewerRoles={user?.roles}
+                viewer={access.viewer}
                 files={content.files}
               />
               <Separator className="my-6" />

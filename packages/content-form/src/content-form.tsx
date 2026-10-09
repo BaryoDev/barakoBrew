@@ -50,6 +50,31 @@ export interface ContentFormProps {
 }
 
 /**
+ * The key an entry holds a field's value under.
+ *
+ * The API finds a field by its name ignoring case, so an entry can hold `title` for a field named
+ * `Title`. The field's own spelling wins when it is stored, then a stored key that differs only in
+ * case, then the field's name for a value not stored yet. Reading and writing through this keeps one
+ * spelling per field: API 4.7 refuses a save that sends two.
+ */
+export function fieldValueKey(values: Record<string, unknown>, name: string): string {
+    if (Object.hasOwn(values, name)) return name;
+    const lower = name.toLowerCase();
+    return Object.keys(values).find((key) => key.toLowerCase() === lower) ?? name;
+}
+
+/**
+ * The keys the entry holds for this field besides the one the form edits: other spellings that
+ * differ only in case. API 4.7 refuses a save that sends a field under two spellings, so an entry
+ * already holding both cannot be saved until one goes.
+ */
+export function otherSpellings(values: Record<string, unknown>, name: string): string[] {
+    const kept = fieldValueKey(values, name);
+    const lower = name.toLowerCase();
+    return Object.keys(values).filter((key) => key !== kept && key.toLowerCase() === lower);
+}
+
+/**
  * Draws an editing form from a content type definition.
  *
  * One control per field type. The accepted set is defined server-side in FieldTypeRegistry; each
@@ -89,17 +114,34 @@ export function ContentForm({
         );
     }
 
-    const control = (field: FieldDefinition) => (
-        <FieldControl
-            key={field.name}
-            field={field}
-            viewer={viewer}
-            renderField={renderField}
-            value={values[field.name]}
-            error={errors?.[field.name]}
-            onChange={(v) => setField(field.name, v)}
-        />
-    );
+    const control = (field: FieldDefinition) => {
+        const key = fieldValueKey(values, field.name);
+        const input = (
+            <FieldControl
+                key={field.name}
+                field={field}
+                viewer={viewer}
+                renderField={renderField}
+                value={values[key]}
+                error={errors?.[field.name]}
+                onChange={(v) => setField(key, v)}
+            />
+        );
+        const others = otherSpellings(values, field.name);
+        if (others.length === 0) return input;
+        return (
+            <Fragment key={field.name}>
+                {input}
+                <DuplicateSpellings
+                    field={field}
+                    kept={key}
+                    others={others}
+                    values={values}
+                    onRemove={(k) => setField(k, undefined)}
+                />
+            </Fragment>
+        );
+    };
 
     // A field's section groups it under a heading. Fields in no section are drawn as they always
     // were, so a type that names no section looks exactly as it did.
@@ -346,6 +388,58 @@ function FieldControl({
                 </div>
             );
     }
+}
+
+/**
+ * The other spellings an entry holds for a field, each with a way to drop it. Nothing is dropped
+ * without the person asking: the value under the other spelling may be the one they want, and
+ * they can copy it across before removing it.
+ */
+function DuplicateSpellings({
+    field,
+    kept,
+    others,
+    values,
+    onRemove,
+}: {
+    field: FieldDefinition;
+    kept: string;
+    others: string[];
+    values: Record<string, unknown>;
+    onRemove: (key: string) => void;
+}) {
+    return (
+        <div role="alert" className="space-y-2 rounded-lg border p-3 text-xs">
+            <p>
+                This entry also holds {field.displayName} under another spelling. The box above edits
+                &quot;{kept}&quot;. The API refuses a save that sends a field under two spellings, so remove
+                the other before saving, after copying its value across if it is the one to keep.
+            </p>
+            <ul className="space-y-1.5">
+                {others.map((key) => (
+                    <li key={key} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate font-mono">
+                            {key}: {preview(values[key])}
+                        </span>
+                        <button
+                            type="button"
+                            aria-label={`Remove the spelling ${key}`}
+                            onClick={() => onRemove(key)}
+                            className="shrink-0 rounded-md border px-2 py-1"
+                        >
+                            Remove
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+function preview(value: unknown): string {
+    if (value === null || value === undefined) return '(empty)';
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    return text.length > 80 ? `${text.slice(0, 80)}...` : text;
 }
 
 /**

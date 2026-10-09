@@ -9,6 +9,7 @@ import {
   type EmailSettingSource,
 } from '@/hooks/use-settings';
 import { apiErrorMessage } from '@/lib/api';
+import { useAccess } from '@/hooks/use-access';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,9 @@ export default function EmailSettingsPage() {
   const { data, isLoading } = useEmailSettings();
   const update = useUpdateEmailSettings();
   const sendTest = useSendTestEmail();
+  // Reading needs manage_settings. Changing where email comes from, and the test send, need
+  // manage_email_settings, which the API gives SuperAdmin alone by legacy name.
+  const canChange = useAccess().can('manage_email_settings', ['SuperAdmin']);
 
   // Undefined until somebody types, so an untouched field is sent as null and left alone. The API
   // cannot return the current key, so there is nothing to prefill and nothing to send back.
@@ -118,15 +122,17 @@ export default function EmailSettingsPage() {
             )}
 
             <div className="flex gap-2">
-              <Button onClick={save} disabled={update.isPending}>
+              <Button onClick={save} disabled={!canChange || update.isPending}>
                 {update.isPending ? 'Saving…' : 'Save'}
               </Button>
-              <Button variant="outline" onClick={test} disabled={sendTest.isPending}>
+              <Button variant="outline" onClick={test} disabled={!canChange || sendTest.isPending}>
                 {sendTest.isPending ? 'Sending…' : 'Send a test to myself'}
               </Button>
             </div>
             <p className="text-muted-foreground text-xs">
-              The test goes to your own address and nowhere else.
+              {canChange
+                ? 'The test goes to your own address and nowhere else.'
+                : 'Changing these settings and sending a test need the Manage email settings capability, which your roles do not hold.'}
             </p>
           </CardContent>
         </Card>

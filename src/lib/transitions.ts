@@ -37,3 +37,17 @@ export function missingTransitionFields(
 ): FieldDefinition[] {
     return asked.filter((a) => a.required && !hasValue(values[a.field.name])).map((a) => a.field);
 }
+
+/**
+ * The transition a link names (`?transition=Approve`, which `{{links.transition "Approve"}}` builds
+ * in a barakoCMS 4.8 email), or null when the type declares none by that name. Matched without
+ * regard to case, as the API matches a transition name.
+ */
+export function requestedTransition(
+    transitions: readonly StateTransition[],
+    name: string | null | undefined,
+): StateTransition | null {
+    const wanted = name?.trim().toLowerCase();
+    if (!wanted) return null;
+    return transitions.find((t) => t.name.toLowerCase() === wanted) ?? null;
+}

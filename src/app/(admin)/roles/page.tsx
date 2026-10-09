@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useRoles, useDeleteRole } from '@/hooks/use-rbac';
 import { apiErrorMessage } from '@/lib/api';
+import { roleReach } from '@/lib/access';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -88,11 +89,7 @@ export default function RolesPage() {
                         {role.description || '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {role.name === 'SuperAdmin'
-                          ? 'Everything'
-                          : `${role.permissions?.length ?? 0} content ${
-                              (role.permissions?.length ?? 0) === 1 ? 'type' : 'types'
-                            }`}
+                        {roleReach(role)}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         {!isSystem && (

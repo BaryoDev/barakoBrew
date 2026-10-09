@@ -140,7 +140,7 @@ describe('the console draws its form with the package', () => {
         // Same definition through both, compared as markup. A console that went back to picking its
         // own controls would draw something, and something is not the same as the same thing.
         const viaConsole = render(
-            <DynamicForm fields={PLAIN} values={{}} onChange={() => {}} viewerRoles={['Editor']} />,
+            <DynamicForm fields={PLAIN} values={{}} onChange={() => {}} viewer={{ roles: ['Editor'] }} />,
         );
         const consoleHtml = viaConsole.container.innerHTML;
         viaConsole.unmount();
@@ -176,7 +176,7 @@ describe('the console draws its form with the package', () => {
                 fields={fields}
                 values={{ Salary: '***' }}
                 onChange={() => {}}
-                viewerRoles={['Editor']}
+                viewer={{ roles: ['Editor'] }}
             />,
         );
 
@@ -203,7 +203,32 @@ describe('the console draws its form with the package', () => {
                 fields={fields}
                 values={{ Salary: '90000' }}
                 onChange={() => {}}
-                viewerRoles={['HR']}
+                viewer={{ roles: ['HR'] }}
+            />,
+        );
+
+        expect(document.getElementById('Salary')).not.toHaveAttribute('readonly');
+    });
+
+    it('leaves a Sensitive field editable for a custom role holding view_sensitive', () => {
+        // API 4.6 opens an unlisted Sensitive field by the capability, not by the name HR. The
+        // console used to pass only role names, so this role got a read-only box.
+        const fields: FieldDefinition[] = [
+            {
+                name: 'Salary',
+                displayName: 'Salary',
+                type: 'string',
+                isRequired: false,
+                sensitivity: SensitivityLevel.Sensitive,
+            },
+        ];
+
+        render(
+            <DynamicForm
+                fields={fields}
+                values={{ Salary: '90000' }}
+                onChange={() => {}}
+                viewer={{ roles: ['Registrar'], roleIds: ['r-1'], capabilities: ['view_sensitive'] }}
             />,
         );
 

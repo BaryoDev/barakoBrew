@@ -1,4 +1,5 @@
 import type { WorkflowActionMetadata } from '@/types/workflow';
+import { readsAsCredential } from '@/lib/credential-names';
 
 export interface ParameterField {
     name: string;
@@ -6,18 +7,13 @@ export interface ParameterField {
     secret: boolean;
 }
 
-// A copy of the words barakoCMS checks names against (CredentialNames.cs), so anything the API will
-// never show again is masked while it is typed. "auth" alone is not one, since it matches "author".
-// Reading them from the API instead is #215.
-const SENSITIVE_NAME_PARTS = [
-    'secret', 'password', 'passwd', 'pwd', 'token', 'apikey', 'api_key',
-    'credential', 'privatekey', 'private_key', 'accesskey', 'access_key',
-    'authorization', 'bearer',
-];
-
+/**
+ * Whether a parameter is masked while it is typed, by the console's copy of the credential words.
+ * `parameterFields` takes the API's own list (`credentialNameParts`) when it has one. The API never
+ * shows such a value again once saved.
+ */
 export function isSecretParameter(name: string): boolean {
-    const lower = name.toLowerCase();
-    return SENSITIVE_NAME_PARTS.some((part) => lower.includes(part));
+    return readsAsCredential(name);
 }
 
 /**
@@ -42,14 +38,15 @@ export function optionalParameters(meta: WorkflowActionMetadata | undefined): st
 
 export function parameterFields(
     meta: WorkflowActionMetadata | undefined,
-    current: Record<string, string>
+    current: Record<string, string>,
+    credentialParts?: readonly string[],
 ): ParameterField[] {
     const required = meta?.requiredParameters ?? [];
     const names = [...new Set([...required, ...optionalParameters(meta), ...Object.keys(current)])];
     return names.map((name) => ({
         name,
         required: required.includes(name),
-        secret: isSecretParameter(name),
+        secret: readsAsCredential(name, credentialParts),
     }));
 }
 

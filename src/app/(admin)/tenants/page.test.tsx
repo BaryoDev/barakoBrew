@@ -95,4 +95,28 @@ describe('the Tenants screen', () => {
         expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
         expect(vi.mocked(api.get).mock.calls.map((c) => c[0])).not.toContain('/api/tenants');
     });
+
+    it('shows a custom role holding manage_tenants every tenant, as the API serves it', async () => {
+        session.user.roles = ['Platform'];
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation(async (url: string, ...rest: unknown[]) => {
+            if (url === '/api/me') {
+                return {
+                    data: {
+                        userId: 'me',
+                        username: 'me',
+                        tenant: 'default',
+                        roles: [{ id: 'r-7', name: 'Platform' }],
+                        capabilities: ['manage_tenant_members', 'manage_tenants'],
+                    },
+                };
+            }
+            if (url === '/api/tenants') return page([TENANT]);
+            return (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest);
+        });
+        await renderPage();
+
+        await waitFor(() => expect(screen.getByText('North club')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: /new tenant/i })).toBeInTheDocument();
+    });
 });

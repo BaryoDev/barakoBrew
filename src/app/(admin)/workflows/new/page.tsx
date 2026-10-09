@@ -12,6 +12,7 @@ import {
 import { useSchemas } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
 import { parameterFields, withoutBlankOptional } from '@/lib/workflow-parameters';
+import { useCredentialNameParts } from '@/hooks/use-meta';
 import { groupActions, OTHER_ACTION_GROUP } from '@/lib/workflow-action-groups';
 import type { TriggerEvent, WorkflowAction, WorkflowDefinition } from '@/types/workflow';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -37,6 +38,7 @@ export default function NewWorkflowPage() {
   const router = useRouter();
   const { data: schemas } = useSchemas();
   const { data: actionTypes } = useWorkflowActions();
+  const credentialParts = useCredentialNameParts();
   // An API older than the group field sends none, so everything lands in Other. Headings would add
   // nothing then, so that case is listed flat, as it was before groups.
   const actionGroups = groupActions(actionTypes ?? []);
@@ -294,7 +296,7 @@ export default function NewWorkflowPage() {
                 {meta?.description && (
                   <p className="text-muted-foreground text-xs">{meta.description}</p>
                 )}
-                {parameterFields(meta, action.parameters).map((field) => {
+                {parameterFields(meta, action.parameters, credentialParts).map((field) => {
                   const id = `action-${i}-${field.name}`;
                   return (
                     <div key={field.name} className="space-y-1.5">

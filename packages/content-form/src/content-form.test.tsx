@@ -296,3 +296,47 @@ describe('the package', () => {
         expect(reaching).toEqual([]);
     });
 });
+
+describe('a value stored under another spelling of the field name', () => {
+    it('shows a value stored as title for the field Title', () => {
+        renderForm({ values: { title: 'Stored in lower case' } });
+        expect(document.getElementById('Title')).toHaveValue('Stored in lower case');
+    });
+
+    it('saves under the stored key and never adds a second spelling', () => {
+        const onChange = renderForm({ values: { title: 'Old', Body: 'Kept' } });
+        fireEvent.change(document.getElementById('Title')!, { target: { value: 'New' } });
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange.mock.calls[0][0]).toEqual({ title: 'New', Body: 'Kept' });
+    });
+
+    it('saves a value nothing stored yet under the field name', () => {
+        const onChange = renderForm({ values: { Body: 'Kept' } });
+        fireEvent.change(document.getElementById('Title')!, { target: { value: 'New' } });
+
+        expect(onChange.mock.calls[0][0]).toEqual({ Body: 'Kept', Title: 'New' });
+    });
+
+    it('takes the exact spelling when the entry holds both', () => {
+        renderForm({ values: { title: 'lower', Title: 'exact' } });
+        expect(document.getElementById('Title')).toHaveValue('exact');
+    });
+
+    it('shows the other spelling of an entry holding both, and removes it only when asked', () => {
+        const onChange = renderForm({ values: { title: 'lower', Title: 'exact', Body: 'Kept' } });
+
+        const notice = screen.getByRole('alert');
+        expect(notice.textContent).toContain('title: lower');
+        expect(onChange).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove the spelling title' }));
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange.mock.calls[0][0]).toEqual({ Title: 'exact', Body: 'Kept' });
+    });
+
+    it('shows no notice when the entry holds one spelling', () => {
+        renderForm({ values: { title: 'lower' } });
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
+});

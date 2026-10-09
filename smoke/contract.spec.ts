@@ -290,3 +290,47 @@ test('the module list names the modules the rail gates on', async ({ request }) 
             + 'be hidden against this deployment.'
     ).toBeGreaterThan(0);
 });
+
+/**
+ * `GET /api/me`, which the rail, rollback, files, tenants and Sensitive fields decide by from
+ * barakoCMS 4.7. An older API answers 404 and the console falls back to role names, so a 404 skips.
+ * What cannot happen is a 200 the console does not recognise: `useAccess` would read it as no
+ * answer and fall back, and the screen would quietly decide by name against an API that said more.
+ */
+test('the caller description is the shape the console reads', async ({ request }) => {
+    const token = process.env.SMOKE_TOKEN;
+    const api = smokeApiUrl();
+    expect(token, 'SMOKE_TOKEN must be set by scripts/smoke-check.sh').toBeTruthy();
+
+    const response = await request.get(`${api}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+    test.skip(response.status() === 404, 'this API predates GET /api/me (barakoCMS 4.7)');
+    expect(response.ok(), `GET /api/me returned ${response.status()}`).toBeTruthy();
+
+    const body = await response.json();
+    expect(Array.isArray(body.capabilities), 'capabilities must be an array').toBe(true);
+    expect(Array.isArray(body.roles), 'roles must be an array').toBe(true);
+    // The seeded administrator holds at least one role, so the element checks below have something to run on.
+    expect(body.roles.length).toBeGreaterThan(0);
+    expect(typeof body.roles[0].id, 'a role id must be a string').toBe('string');
+    expect(typeof body.roles[0].name, 'a role name must be a string').toBe('string');
+});
+
+/**
+ * `credentialNameParts` on `GET /api/meta/describe`, which masks workflow parameters and flags
+ * connector settings from barakoCMS 4.7. Absent on an older API, where the console keeps its copy.
+ */
+test('the credential name words are a list of words', async ({ request }) => {
+    const token = process.env.SMOKE_TOKEN;
+    const api = smokeApiUrl();
+    expect(token, 'SMOKE_TOKEN must be set by scripts/smoke-check.sh').toBeTruthy();
+
+    const response = await request.get(`${api}/api/meta/describe`, { headers: { Authorization: `Bearer ${token}` } });
+    test.skip(response.status() === 404, 'this API predates GET /api/meta/describe');
+    expect(response.ok(), `GET /api/meta/describe returned ${response.status()}`).toBeTruthy();
+
+    const body = await response.json();
+    test.skip(body.credentialNameParts === undefined, 'this API predates credentialNameParts (barakoCMS 4.7)');
+    expect(Array.isArray(body.credentialNameParts), 'credentialNameParts must be an array').toBe(true);
+    expect(body.credentialNameParts.length).toBeGreaterThan(0);
+    expect(body.credentialNameParts.every((w: unknown) => typeof w === 'string')).toBe(true);
+});

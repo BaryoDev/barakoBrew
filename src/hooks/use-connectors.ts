@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
+import { readsAsCredential } from '@/lib/credential-names';
 
 /**
  * A connector as `GET /api/connectors` returns it.
@@ -232,6 +233,31 @@ export function toSecretsPayload(
     }
 
     return Object.keys(payload).length > 0 ? payload : undefined;
+}
+
+/** The credential names a connector stores encrypted (`ConnectorSecretKeys.All`). */
+export const CONNECTOR_SECRET_KEYS = ['Token', 'Password', 'ApiKey', 'ClientSecret'] as const;
+
+/**
+ * The setting names the auth modes read, which the API takes whatever their words, so `TokenUrl` is
+ * a setting and not a credential. Compared exactly, as the API's own list is.
+ */
+const KNOWN_SETTING_KEYS: ReadonlySet<string> = new Set([
+    'Username', 'HeaderName', 'TokenUrl', 'ClientId', 'Scope', 'Audience', 'ClientAuth', 'IdempotencyHeader',
+]);
+
+/**
+ * The stored settings whose names read as a credential, which barakoCMS 4.7 refuses on a save.
+ *
+ * A connector saved before 4.7 can hold one, and the screen sends the settings back whole, so it
+ * could not be saved at all until the setting goes. Settings are stored and returned as plain text;
+ * a credential belongs in the secrets, which are encrypted and never returned.
+ */
+export function credentialNamedSettings(
+    settings: Readonly<Record<string, string>> | undefined,
+    parts?: readonly string[],
+): string[] {
+    return Object.keys(settings ?? {}).filter((key) => !KNOWN_SETTING_KEYS.has(key) && readsAsCredential(key, parts));
 }
 
 export type ProbeOutcome = 'untested' | 'succeeded' | 'failed';

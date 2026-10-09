@@ -5,7 +5,9 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
     CONNECTOR_AUTH_MODES,
+    CONNECTOR_SECRET_KEYS,
     authModeFor,
+    credentialNamedSettings,
     configGap,
     probeOutcome,
     slugify,
@@ -20,6 +22,7 @@ import {
     type SaveConnectorInput,
 } from '@/hooks/use-connectors';
 import { apiErrorMessage } from '@/lib/api';
+import { useCredentialNameParts } from '@/hooks/use-meta';
 import { PageHeader } from '@/components/patterns/page-header';
 import { PaginationControls } from '@/components/patterns/pagination-controls';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -110,6 +113,7 @@ function ConnectorDialog({ connector, open, onOpenChange }: ConnectorDialogProps
     const [probePath, setProbePath] = useState(connector?.probePath ?? '/');
     const [enabled, setEnabled] = useState(connector?.enabled ?? true);
     const [settings, setSettings] = useState<Record<string, string>>({ ...(connector?.settings ?? {}) });
+    const refusedSettings = credentialNamedSettings(settings, useCredentialNameParts());
 
     // The credential the operator typed this session, and the stored ones they asked to delete.
     // There is no third state: nothing holds a value read back from the server, because no endpoint
@@ -148,6 +152,14 @@ function ConnectorDialog({ connector, open, onOpenChange }: ConnectorDialogProps
         // The typed box belonged to the old mode's credential name. Carrying it over would store,
         // say, a Password under the name Token.
         setSecretValue('');
+    }
+
+    function removeSetting(key: string) {
+        setSettings((current) => {
+            const next = { ...current };
+            delete next[key];
+            return next;
+        });
     }
 
     function toggleClear(key: string, checked: boolean) {
@@ -299,6 +311,41 @@ function ConnectorDialog({ connector, open, onOpenChange }: ConnectorDialogProps
                                 </p>
                             </div>
                         ))}
+
+                        {refusedSettings.length > 0 && (
+                            <div role="alert" className="border-warning/40 space-y-2 rounded-lg border p-3">
+                                <p className="text-warning flex gap-2 text-xs font-bold">
+                                    <IconWarning aria-hidden className="mt-0.5 shrink-0 size-3.5" />
+                                    <span>
+                                        {refusedSettings.length === 1
+                                            ? 'A stored setting reads as a credential'
+                                            : 'Stored settings read as credentials'}
+                                    </span>
+                                </p>
+                                <p className="text-muted-foreground text-xs">
+                                    Settings are stored and returned as plain text, so barakoCMS 4.7 and later refuse
+                                    to save a connector holding one whose name reads as a credential. Remove it to
+                                    save. A secret goes in the secrets fields ({CONNECTOR_SECRET_KEYS.join(', ')}),
+                                    which are stored encrypted and never returned.
+                                </p>
+                                <ul className="space-y-1.5">
+                                    {refusedSettings.map((key) => (
+                                        <li key={key} className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-xs">{key}</span>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                aria-label={`Remove the setting ${key}`}
+                                                onClick={() => removeSetting(key)}
+                                            >
+                                                Remove
+                                            </Button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
 
                         {secretKey && (
                             <div className="space-y-1.5">
