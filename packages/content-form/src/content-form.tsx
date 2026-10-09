@@ -50,6 +50,20 @@ export interface ContentFormProps {
 }
 
 /**
+ * The key an entry holds a field's value under.
+ *
+ * The API finds a field by its name ignoring case, so an entry can hold `title` for a field named
+ * `Title`. The field's own spelling wins when it is stored, then a stored key that differs only in
+ * case, then the field's name for a value not stored yet. Reading and writing through this keeps one
+ * spelling per field: API 4.7 refuses a save that sends two.
+ */
+export function fieldValueKey(values: Record<string, unknown>, name: string): string {
+    if (Object.hasOwn(values, name)) return name;
+    const lower = name.toLowerCase();
+    return Object.keys(values).find((key) => key.toLowerCase() === lower) ?? name;
+}
+
+/**
  * Draws an editing form from a content type definition.
  *
  * One control per field type. The accepted set is defined server-side in FieldTypeRegistry; each
@@ -89,17 +103,20 @@ export function ContentForm({
         );
     }
 
-    const control = (field: FieldDefinition) => (
-        <FieldControl
-            key={field.name}
-            field={field}
-            viewer={viewer}
-            renderField={renderField}
-            value={values[field.name]}
-            error={errors?.[field.name]}
-            onChange={(v) => setField(field.name, v)}
-        />
-    );
+    const control = (field: FieldDefinition) => {
+        const key = fieldValueKey(values, field.name);
+        return (
+            <FieldControl
+                key={field.name}
+                field={field}
+                viewer={viewer}
+                renderField={renderField}
+                value={values[key]}
+                error={errors?.[field.name]}
+                onChange={(v) => setField(key, v)}
+            />
+        );
+    };
 
     // A field's section groups it under a heading. Fields in no section are drawn as they always
     // were, so a type that names no section looks exactly as it did.

@@ -33,6 +33,14 @@ but SuperAdmin for `Hidden`.
 The API would refuse the write anyway, silently, by putting the stored value back. Drawing an
 editable box over a value the server will not take is the thing this stops.
 
+## Field names in the values
+
+The API finds a field by its name ignoring case, so an entry can hold `title` for a field named
+`Title`. The form reads a value under the field's own spelling first, then under a stored key that
+differs only in case, and writes back under the key it read from (the field's name when nothing is
+stored). It never adds a second spelling, which barakoCMS 4.7 refuses with a 400. `fieldValueKey`
+is that lookup, exported for a host that reads the values itself.
+
 ## Host controls
 
 `renderField` lets the host draw a field itself, for the types whose control needs data the package

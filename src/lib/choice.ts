@@ -1,3 +1,4 @@
+import { fieldValueKey } from 'barako-content-form';
 import { resolveFieldType, type FieldDefinition, type FieldOption } from '@/types/schema';
 
 /** Limits the API enforces on a choice, from ContentTypeValidatorService. */
@@ -102,8 +103,9 @@ export function choiceProblems(
     const problems: Record<string, string> = {};
     for (const field of fields) {
         if (!isChoiceField(field)) continue;
-        if (stored && sameStoredValue(stored, field.name, values[field.name])) continue;
-        const message = notOfferedMessage(notOfferedValues(field, values[field.name]));
+        const value = values[fieldValueKey(values, field.name)];
+        if (stored && sameStoredValue(stored, field.name, value)) continue;
+        const message = notOfferedMessage(notOfferedValues(field, value));
         if (message) problems[field.name] = message;
     }
     return problems;
