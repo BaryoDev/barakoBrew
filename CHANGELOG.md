@@ -9,6 +9,22 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **Speaks API contracts 1 to 7.** barakoCMS 4.7.0 moves the contract to 7. The console sends no
+  `Idempotency-Key`, reads no delivery route, and already shows the API's message when a write is
+  refused (a malformed email, a field sent twice, a credential-named connector setting, a 403 from a
+  rule), so most of 4.7 needs nothing here. A console that stops at 6 refuses that API outright, so
+  deploy this console before or with barakoCMS 4.7.0.
+- **An entry holding a choice the field stopped offering saves again against contract 7.** From 4.7
+  the API checks only a choice that changed, so the editor no longer holds the save while the
+  stored value is kept. Against an older API it still waits until another value is picked. The
+  field's note now reads only that the value is not offered any more.
+- **The content type builder refuses a field name another field holds in another case**, as
+  barakoCMS 4.7 does.
+- **`authorization` and `bearer` mask a workflow parameter as a credential**, matching the words
+  barakoCMS 4.7 checks. Reading them from `/api/meta/describe` instead is #215.
+
 ## [1.7.0] - 2026-10-04
 
 **Speaks API contracts 1 to 6, which covers barakoCMS 4.0.1 to 4.6.0.** barakoCMS 4.6.0 moves the

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
@@ -37,6 +37,7 @@ import { IconArchive, IconHistory, IconRollback } from '@/components/icons';
 import { format } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
 import { choiceProblems } from '@/lib/choice';
+import { getContractServerState, getContractState, subscribeToContract } from '@/lib/api-contract';
 import { useSetCrumbTitle } from '@/components/crumb-title';
 import { entriesHref } from '@/lib/navigation';
 
@@ -51,6 +52,9 @@ function sameValues(a: Record<string, unknown>, b: Record<string, unknown>) {
   const keys = Object.keys(a);
   return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
 }
+
+/** From this contract the API does not check again a choice left holding what is stored. */
+const STORED_CHOICE_KEPT_CONTRACT = 7;
 
 /** The entry as this screen last read it: what an edit is written against, and what proves it. */
 interface Seeded {
@@ -139,12 +143,17 @@ export function ContentEditor({
   // Before the loading guard, because hooks cannot sit after an early return. An empty title sets
   // nothing, so the crumb stays the path until the entry has actually loaded.
   useSetCrumbTitle(title || undefined);
+  const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
 
   if (isLoading || !content) return <TableSkeleton />;
 
   const meta = statusMeta(content.status);
   // A value the field stopped offering is refused by the API, so the save waits until it is changed.
-  const blocked = schema ? Object.keys(choiceProblems(schema.fields, values)).length > 0 : false;
+  // From contract 7 only a changed one is refused, so a value kept as stored does not hold it up.
+  const storedChoiceKept = contract.kind === 'ok' && contract.version >= STORED_CHOICE_KEPT_CONTRACT;
+  const blocked = schema
+    ? Object.keys(choiceProblems(schema.fields, values, storedChoiceKept ? seeded?.data : undefined)).length > 0
+    : false;
   const sensitivityMeta = SENSITIVITY_META[content.sensitivity];
 
   // The version and the ETag come from what was seeded, never from the latest read. Sending the

@@ -105,7 +105,7 @@ describe('a single choice', () => {
         renderChoice({}, { EntryType: 'WALK' });
 
         expect(screen.getByLabelText('WALK (not offered any more)')).toBeChecked();
-        expect(screen.getByText('"WALK" is not offered any more. Pick another value before saving.')).toBeInTheDocument();
+        expect(screen.getByText('"WALK" is not offered any more.')).toBeInTheDocument();
     });
 
     it('does not treat a value differing only in case as offered', () => {

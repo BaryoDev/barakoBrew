@@ -47,8 +47,14 @@ describe('isSecretParameter', () => {
         ]);
     });
 
+    it('matches authorization and bearer, as barakoCMS 4.7 does', () => {
+        expect(['Authorization', 'BearerValue', 'X-Authorization'].map(isSecretParameter)).toEqual([true, true, true]);
+    });
+
     it('leaves ordinary names alone', () => {
-        expect(['Url', 'To', 'Subject'].map(isSecretParameter)).toEqual([false, false, false]);
+        expect(['Url', 'To', 'Subject', 'Author', 'AuthMode'].map(isSecretParameter)).toEqual([
+            false, false, false, false, false,
+        ]);
     });
 });
 

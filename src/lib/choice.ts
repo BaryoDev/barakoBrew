@@ -83,25 +83,34 @@ export function notOfferedValues(field: FieldDefinition, value: unknown): string
 export function notOfferedMessage(values: string[]): string | undefined {
     if (values.length === 0) return undefined;
     const quoted = values.map((v) => `"${v}"`).join(', ');
-    return values.length === 1
-        ? `${quoted} is not offered any more. Pick another value before saving.`
-        : `${quoted} are not offered any more. Pick other values before saving.`;
+    return values.length === 1 ? `${quoted} is not offered any more.` : `${quoted} are not offered any more.`;
 }
 
 /**
  * The choice fields holding a value the field no longer offers, with the message for each.
  *
  * The API refuses such an entry on save, so the editor stops the save first and says which field.
+ * From API contract 7 a field left holding exactly what is stored is not checked again, so with
+ * `stored` given those fields are skipped. The comparison is the API's: the whole value, list order
+ * included.
  */
 export function choiceProblems(
     fields: FieldDefinition[],
     values: Record<string, unknown>,
+    stored?: Record<string, unknown>,
 ): Record<string, string> {
     const problems: Record<string, string> = {};
     for (const field of fields) {
         if (!isChoiceField(field)) continue;
+        if (stored && sameStoredValue(stored, field.name, values[field.name])) continue;
         const message = notOfferedMessage(notOfferedValues(field, values[field.name]));
         if (message) problems[field.name] = message;
     }
     return problems;
+}
+
+function sameStoredValue(stored: Record<string, unknown>, name: string, value: unknown): boolean {
+    const key = Object.keys(stored).find((k) => k.toLowerCase() === name.toLowerCase());
+    if (key === undefined || stored[key] === null || stored[key] === undefined) return false;
+    return JSON.stringify(stored[key]) === JSON.stringify(value);
 }

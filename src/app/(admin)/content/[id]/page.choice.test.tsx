@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ContentStatus } from '@/types/content';
 
 /**
- * An entry holding a value its choice field stopped offering. The API refuses that entry on its
- * next save, so the editor says which field and does not send the save until it is changed.
+ * An entry holding a value its choice field stopped offering. Up to API contract 6 the API refuses
+ * that entry on its next save, so the editor says which field and does not send the save until it
+ * is changed. From contract 7 the API checks only a choice that changed, so the save goes through.
  */
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -31,6 +32,7 @@ globalThis.ResizeObserver ??= class {
 
 const { api } = await import('@/lib/api');
 const { default: ContentDetailPage } = await import('./page');
+const { recordContractVersion, __resetContractForTests } = await import('@/lib/api-contract');
 
 const ID = '0b7a5b8e-7a57-4d38-9d0e-2f1f0f0c5a11';
 
@@ -95,9 +97,11 @@ function renderEditor(stored: string) {
 describe('a stored choice value no longer offered', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        __resetContractForTests();
     });
 
-    it('blocks the save with a message until another value is picked', async () => {
+    it('blocks the save with a message until another value is picked, against contract 6', async () => {
+        recordContractVersion('6');
         renderEditor('WALK');
 
         const save = await screen.findByRole('button', { name: /save changes/i });
@@ -115,6 +119,20 @@ describe('a stored choice value no longer offered', () => {
         await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
         const [, body] = vi.mocked(api.put).mock.calls[0];
         expect((body as { data: Record<string, unknown> }).data).toEqual({ EntryType: 'FUN' });
+    });
+
+    it('lets the entry save with the stored value kept, against contract 7', async () => {
+        recordContractVersion('7');
+        renderEditor('WALK');
+
+        const save = await screen.findByRole('button', { name: /save changes/i });
+        expect(screen.getByText('"WALK" is not offered any more.')).toBeInTheDocument();
+        expect(save).toBeEnabled();
+
+        fireEvent.click(save);
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        const [, body] = vi.mocked(api.put).mock.calls[0];
+        expect((body as { data: Record<string, unknown> }).data).toEqual({ EntryType: 'WALK' });
     });
 
     it('leaves the save alone when the stored value is still offered', async () => {

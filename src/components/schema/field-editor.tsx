@@ -145,8 +145,9 @@ export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps
     const [form, setForm] = useState<FieldDefinition>(EMPTY_FIELD);
 
     const nameIsValid = PASCAL_CASE.test(form.name);
+    // Ignoring case, as barakoCMS 4.7 refuses it: every reader finds a field by its name ignoring case.
     const nameIsDuplicate = fields.some(
-        (f, i) => f.name === form.name && i !== editingIndex
+        (f, i) => f.name.toLowerCase() === form.name.toLowerCase() && i !== editingIndex
     );
     const resolvedType = resolveFieldType(form.type);
     const isChoice = resolvedType === 'choice';
@@ -343,7 +344,7 @@ export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps
                                 </p>
                             )}
                             {nameIsDuplicate && (
-                                <p className="text-destructive text-xs">A field with this name already exists.</p>
+                                <p className="text-destructive text-xs">A field with this name already exists, ignoring case.</p>
                             )}
                         </div>
                         <div className="space-y-2">

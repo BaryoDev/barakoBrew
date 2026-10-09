@@ -60,4 +60,29 @@ describe('choiceProblems', () => {
         expect(choiceProblems(fields, { Title: 'B', Kind: 'A' })).toEqual({});
         expect(Object.keys(choiceProblems(fields, { Title: 'B', Kind: 'B' }))).toEqual(['Kind']);
     });
+
+    it('skips a choice left holding exactly what is stored, when the stored entry is given', () => {
+        expect(Object.keys(choiceProblems(fields, { Kind: 'B' }))).toEqual(['Kind']);
+        expect(choiceProblems(fields, { Kind: 'B' }, { Kind: 'B' })).toEqual({});
+        expect(Object.keys(choiceProblems(fields, { Kind: 'C' }, { Kind: 'B' }))).toEqual(['Kind']);
+    });
+
+    it('compares a stored list whole, order included, as the API does', () => {
+        const multiple: FieldDefinition[] = [
+            {
+                name: 'Sizes',
+                displayName: 'Sizes',
+                type: 'choice',
+                isRequired: false,
+                multiple: true,
+                options: [{ value: 'S', label: 'S' }, { value: 'M', label: 'M' }],
+            },
+        ];
+
+        expect(choiceProblems(multiple, { Sizes: ['S', 'XXL'] }, { Sizes: ['S', 'XXL'] })).toEqual({});
+        expect(Object.keys(choiceProblems(multiple, { Sizes: ['XXL', 'S'] }, { Sizes: ['S', 'XXL'] }))).toEqual(['Sizes']);
+        expect(Object.keys(choiceProblems(multiple, { Sizes: ['S', 'M', 'XXL'] }, { Sizes: ['S', 'XXL'] }))).toEqual([
+            'Sizes',
+        ]);
+    });
 });
