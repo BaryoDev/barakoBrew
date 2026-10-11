@@ -31,8 +31,8 @@ PUBLIC_API_URL=https://cms.example.com        # what the browser calls
 ALLOWED_ORIGINS=https://console.example.com   # where the console is served
 APP_BASE_URL=https://cms.example.com          # what the API puts in links it hands out
 ALLOWED_HOSTS=cms.example.com                 # the Host headers the API answers to
-BARAKO_API_TAG=4.4.1                          # pin releases rather than latest
-BARAKO_CONSOLE_TAG=1.5.0
+BARAKO_API_TAG=4.7.0                          # pin releases rather than latest
+BARAKO_CONSOLE_TAG=1.8.0
 ```
 
 Pick the pair from the compatibility table in the main README's "Which barakoCMS it works with".
