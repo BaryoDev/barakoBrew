@@ -91,5 +91,7 @@ test('a status filter redraws every cell of every row, the version column includ
         await expect(row).toContainText('Published');
         await expect(row).not.toContainText('Draft');
     }
-    await expect(rows(page).nth(1).getByRole('cell').nth(3)).toHaveText('4');
+    // The version column is display:none below md, so it is out of the accessibility tree on a phone
+    // project; the cell is still rendered, and it is the rendered cell that has to be redrawn.
+    await expect(rows(page).nth(1).locator('td').nth(3)).toHaveText('4');
 });
