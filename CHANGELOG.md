@@ -18,6 +18,9 @@ moved. Which API a console works against is stated per release instead.
   keyboard; each move is announced to screen readers, and the focus stays on the field that moved.
   Enter inside an open field no longer submits the whole type. The Sensitivity and Mask pickers are
   now named by their labels. (#12)
+- **`docs/` is published to the GitHub wiki on every push to master that changes it**, by the same
+  sync barakoCMS uses. The wiki needs its first page saved on GitHub before the first run can
+  succeed. (BaryoDev/barakoCMS#995)
 
 ### Changed
 
