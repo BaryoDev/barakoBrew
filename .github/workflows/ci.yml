@@ -82,6 +82,13 @@ jobs:
         if: '!cancelled()'
         run: bash scripts/check-env-config.sh
 
+      # The wiki workflow is green or red on this script's exit code alone, so a rejected push or a
+      # failed sync that still exited zero would leave the wiki stale under a green run. A local
+      # bare repository stands in for the wiki, so this step never touches the network.
+      - name: The wiki publish fails when the wiki was not updated
+        if: '!cancelled()'
+        run: bash scripts/test-wiki-publish.sh
+
   audit:
     name: Audit dependencies
     if: github.event_name != 'schedule'

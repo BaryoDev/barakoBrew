@@ -59,9 +59,17 @@ interface Setup {
     /** The /api/me answer, or 'missing' for an API older than 4.7. */
     me?: { roles: { id: string; name: string }[]; capabilities: string[] } | 'missing';
     transition?: string;
+    /** The history body, in place of the two versions every other test reads. */
+    history?: unknown;
 }
 
-function renderEditor({ schema = SCHEMA, data = { Title: 'Ana', Salary: '90000' }, me = 'missing', transition }: Setup = {}) {
+function renderEditor({
+    schema = SCHEMA,
+    data = { Title: 'Ana', Salary: '90000' },
+    me = 'missing',
+    transition,
+    history,
+}: Setup = {}) {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url === '/api/me') {
             if (me === 'missing') throw notFound();
@@ -86,6 +94,7 @@ function renderEditor({ schema = SCHEMA, data = { Title: 'Ana', Salary: '90000' 
             };
         }
         if (url === `/api/contents/${ID}/history`) {
+            if (history !== undefined) return { data: history };
             const version = (n: number) => ({
                 id: ID,
                 versionId: `v${n}`,
@@ -93,7 +102,17 @@ function renderEditor({ schema = SCHEMA, data = { Title: 'Ana', Salary: '90000' 
                 data,
                 timestamp: `2026-09-0${n}T00:00:00Z`,
             });
-            return { data: { items: [version(1), version(2)], totalItems: 2, page: 1, pageSize: 20 } };
+            return {
+                data: {
+                    items: [version(1), version(2)],
+                    totalItems: 2,
+                    page: 1,
+                    pageSize: 20,
+                    totalPages: 1,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                },
+            };
         }
         return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
     });
@@ -171,6 +190,24 @@ describe('rollback', () => {
         await openHistory();
 
         expect(await screen.findByRole('button', { name: /restore this version/i })).toBeInTheDocument();
+    });
+});
+
+describe('the history panel', () => {
+    it('says it could not read a history in a shape it does not know, rather than showing none', async () => {
+        // The body the endpoint sent before the envelope: the panel read it as an empty history.
+        const created = { id: ID, versionId: 'v1', changeType: 'Created', timestamp: '2026-09-01T00:00:00Z' };
+        renderEditor({ history: { versions: [created] } });
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const tab = await screen.findByRole('tab', { name: /history/i });
+        fireEvent.mouseDown(tab);
+        fireEvent.click(tab);
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent("Couldn't load the history");
+        expect(alert).toHaveTextContent(/shape this console does not read/);
+        expect(screen.queryByText(/No earlier versions recorded/)).toBeNull();
     });
 });
 

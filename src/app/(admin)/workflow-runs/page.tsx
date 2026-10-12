@@ -181,7 +181,12 @@ export default function WorkflowRunsPage() {
               <TableSkeleton rows={6} />
             </div>
           ) : runs.isError ? (
-            <ErrorState className="mt-4" entity="workflow runs" onRetry={() => void runs.refetch()} />
+            <ErrorState
+              className="mt-4"
+              entity="workflow runs"
+              error={runs.error}
+              onRetry={() => void runs.refetch()}
+            />
           ) : rows.length === 0 ? (
             <EmptyState
               className="mt-4"
@@ -256,7 +261,7 @@ export default function WorkflowRunsPage() {
           ) : run.isLoading ? (
             <TableSkeleton rows={4} />
           ) : run.isError ? (
-            <ErrorState entity="that run" onRetry={() => void run.refetch()} />
+            <ErrorState entity="that run" error={run.error} onRetry={() => void run.refetch()} />
           ) : run.data ? (
             <>
               <div className="flex flex-wrap items-center gap-2">

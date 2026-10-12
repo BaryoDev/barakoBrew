@@ -9,6 +9,33 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **The content type builder edits fields in their rows, and the rows can be dragged.** Every row
+  shows the field's sensitivity, and its mask and the roles that see it when it is not Public, so
+  none of that is behind a dialog any more. Edit opens the field's form inside its row, and Add field
+  opens one below the list. Drag a row by its handle to reorder it, or use its move buttons from the
+  keyboard; each move is announced to screen readers, and the focus stays on the field that moved.
+  Enter inside an open field no longer submits the whole type, and Create content type waits while a
+  field is open, so edits that were never saved are not sent without them. The Sensitivity and Mask
+  pickers are now named by their labels. (#12)
+- **`docs/` is published to the GitHub wiki on every push to master that changes it**, by the same
+  sync barakoCMS uses. The wiki needs its first page saved on GitHub before the first run can
+  succeed. (BaryoDev/barakoCMS#995)
+
+### Changed
+
+- **The entry history and the workflow runs are checked as they arrive.** A body in a shape the
+  console does not read (the history under `versions` instead of `items`, a run status the filter
+  does not offer, a status sent as a number) now shows an error saying so, instead of an empty
+  history or a run the filter cannot find. The History panel had no error state at all and showed
+  "No earlier versions recorded." for a failed read; it has one now. (#40)
+- **The field editor in the content type designer is built on react-hook-form and zod**, as the
+  pattern for the console's forms. Nothing about what it accepts or saves changed. (#40)
+- **The entries list renders through TanStack Table**, keeping the existing table styling, and
+  paging, search and the filters stay on the server and in the URL. Nothing on the screen changed;
+  it is the base the search, status and version work on that list builds on. (#41)
+
 ## [1.8.0] - 2026-10-09
 
 **Speaks API contracts 1 to 7, which covers barakoCMS 4.0.1 to 4.8.0.** barakoCMS 4.7.0 moves the

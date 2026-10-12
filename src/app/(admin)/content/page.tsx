@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useContents } from '@/hooks/use-contents';
-import { ContentStatus } from '@/types/content';
+import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
+import { ContentStatus, type ContentListItem } from '@/types/content';
 import { STATUS_ORDER, STATUS_VOCABULARY, statusFromParam, statusMeta } from '@/lib/status-vocabulary';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -73,6 +74,80 @@ const HEAD =
 
 /** Machine-produced cell values: mono, tabular, muted. Types, versions, timestamps. */
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
+
+/**
+ * The entries table, as TanStack Table columns. Core features only: the server pages, searches and
+ * filters (see the filter bar below), so the table renders the page it is handed and nothing in it
+ * sorts or slices rows. Paging stays in the URL and in PaginationControls, where a link can carry it.
+ */
+const features = tableFeatures({});
+const column = createColumnHelper<typeof features, ContentListItem>();
+
+/** The Signal classes for each column's head and cells, by column id. */
+const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
+  entry: { head: `${HEAD} pl-6`, cell: 'max-w-md py-3.5 pl-6' },
+  type: { head: HEAD, cell: `${META} py-3.5` },
+  status: { head: HEAD, cell: 'py-3.5' },
+  version: { head: `${HEAD} hidden text-right md:table-cell`, cell: `${META} hidden py-3.5 text-right md:table-cell` },
+  updated: {
+    head: `${HEAD} hidden pr-6 text-right sm:table-cell`,
+    cell: `${META} hidden py-3.5 pr-6 text-right sm:table-cell`,
+  },
+};
+
+const NO_ROWS: ContentListItem[] = [];
+
+function entryColumns(privateTypes: ReadonlySet<string>) {
+  return column.columns([
+    column.display({
+      id: 'entry',
+      header: 'Entry',
+      cell: ({ row }) => (
+        <Link
+          href={`/content/${row.original.id}`}
+          className="focus-visible:ring-ring block truncate text-[13.5px] font-bold rounded-sm outline-none focus-visible:ring-[3px]"
+        >
+          {contentTitle(row.original.data, row.original.id)}
+        </Link>
+      ),
+    }),
+    column.accessor('contentType', { id: 'type', header: 'Type' }),
+    column.accessor('status', {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const meta = statusMeta(row.original.status);
+        return (
+          <div className="flex items-center gap-1.5">
+            <StatusBadge tone={meta.tone} dot={false}>
+              {meta.label}
+            </StatusBadge>
+            {privateTypes.has(row.original.contentType) && (
+              <StatusBadge tone="accent" dot={false}>
+                <IconLock aria-hidden />
+                Private
+              </StatusBadge>
+            )}
+          </div>
+        );
+      },
+    }),
+    column.accessor('version', {
+      id: 'version',
+      header: 'V',
+      // Nothing, not a zero, when the server did not send a version. A cell reading 0 is a claim
+      // about the entry; an empty one says the server did not answer. Absent is a pre-4.0 API. Zero
+      // is a 4.x one saying the entry has no event stream behind it, which is every seeded row, so
+      // the two mean the same thing here and read the same way.
+      cell: ({ getValue }) => getValue() || '',
+    }),
+    column.accessor('updatedAt', {
+      id: 'updated',
+      header: 'Updated',
+      cell: ({ getValue }) => formatDistanceToNowStrict(new Date(getValue()), { addSuffix: true }),
+    }),
+  ]);
+}
 
 function ContentListInner() {
   const router = useRouter();
@@ -179,6 +254,14 @@ function ContentListInner() {
       ),
     [schemas]
   );
+
+  const columns = useMemo(() => entryColumns(privateTypes), [privateTypes]);
+  const table = useTable({
+    features,
+    columns,
+    data: contents?.items ?? NO_ROWS,
+    getRowId: (item) => item.id,
+  });
 
   const setType = (value: string) => {
     setParams({ type: value === ALL_TYPES ? null : value, page: null });
@@ -304,68 +387,36 @@ function ContentListInner() {
           <div className="bg-card overflow-hidden rounded-xl border shadow-[var(--shadow-card)]">
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-background">
-                  <TableHead className={`${HEAD} pl-6`}>Entry</TableHead>
-                  <TableHead className={HEAD}>Type</TableHead>
-                  <TableHead className={HEAD}>Status</TableHead>
-                  <TableHead className={`${HEAD} hidden text-right md:table-cell`}>V</TableHead>
-                  <TableHead className={`${HEAD} hidden pr-6 text-right sm:table-cell`}>
-                    Updated
-                  </TableHead>
-                </TableRow>
+                {table.getHeaderGroups().map((group) => (
+                  <TableRow key={group.id} className="hover:bg-background">
+                    {group.headers.map((header) => (
+                      <TableHead key={header.id} className={COLUMN_CLASSES[header.column.id]?.head}>
+                        {header.isPlaceholder ? null : <table.FlexRender header={header} />}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
               </TableHeader>
               <TableBody>
-                {contents.items.map((item) => {
-                  const meta = statusMeta(item.status);
-                  const href = `/content/${item.id}`;
-                  return (
-                    <TableRow
-                      key={item.id}
-                      className="hover:bg-background cursor-pointer"
-                      onClick={(e) => {
-                        // The title is a real link, so keyboard users have a focusable target and
-                        // the row is a convenience for the mouse. Without this guard a click on the
-                        // link navigates twice.
-                        if ((e.target as HTMLElement).closest('a')) return;
-                        router.push(href);
-                      }}
-                    >
-                      <TableCell className="max-w-md py-3.5 pl-6">
-                        <Link
-                          href={href}
-                          className="focus-visible:ring-ring block truncate text-[13.5px] font-bold rounded-sm outline-none focus-visible:ring-[3px]"
-                        >
-                          {contentTitle(item.data, item.id)}
-                        </Link>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="hover:bg-background cursor-pointer"
+                    onClick={(e) => {
+                      // The title is a real link, so keyboard users have a focusable target and
+                      // the row is a convenience for the mouse. Without this guard a click on the
+                      // link navigates twice.
+                      if ((e.target as HTMLElement).closest('a')) return;
+                      router.push(`/content/${row.original.id}`);
+                    }}
+                  >
+                    {row.getAllCells().map((cell) => (
+                      <TableCell key={cell.id} className={COLUMN_CLASSES[cell.column.id]?.cell}>
+                        <table.FlexRender cell={cell} />
                       </TableCell>
-                      <TableCell className={`${META} py-3.5`}>{item.contentType}</TableCell>
-                      <TableCell className="py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <StatusBadge tone={meta.tone} dot={false}>
-                            {meta.label}
-                          </StatusBadge>
-                          {privateTypes.has(item.contentType) && (
-                            <StatusBadge tone="accent" dot={false}>
-                              <IconLock aria-hidden />
-                              Private
-                            </StatusBadge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className={`${META} hidden py-3.5 text-right md:table-cell`}>
-                        {/* Nothing, not a zero, when the server did not send a version. A cell
-                            reading 0 is a claim about the entry; an empty one says the server did
-                            not answer. Absent is a pre-4.0 API. Zero is a 4.x one saying the entry
-                            has no event stream behind it, which is every seeded row, so the two mean
-                            the same thing here and read the same way. */}
-                        {item.version ? item.version : ''}
-                      </TableCell>
-                      <TableCell className={`${META} hidden py-3.5 pr-6 text-right sm:table-cell`}>
-                        {formatDistanceToNowStrict(new Date(item.updatedAt), { addSuffix: true })}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                    ))}
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>

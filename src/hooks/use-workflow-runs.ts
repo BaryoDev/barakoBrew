@@ -1,7 +1,8 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type Paginated } from '@/lib/api';
+import { z } from 'zod';
+import { api, paginatedSchema, parseResponse } from '@/lib/api';
 import type { Tone } from '@/components/patterns/status-badge';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 
@@ -10,7 +11,12 @@ import { useCurrentTenant } from '@/hooks/use-tenants';
 /** The value the status filter uses for "do not filter". Not a status the API knows. */
 export const ANY_STATUS = 'all';
 
-/** RunStatus on the server. Widened to string on the DTOs so a new member parses rather than throws. */
+/**
+ * RunStatus on the server. The status filter offers exactly these, and every run read is parsed
+ * against them, so a member the server adds or drops fails the read loudly instead of leaving the
+ * filter unable to ask for it. smoke/enums.spec.ts cannot hold this one to the server: the API
+ * publishes the field as a bare string.
+ */
 export const RUN_STATUSES = ['Pending', 'Running', 'Succeeded', 'Failed', 'PartiallyFailed', 'Cancelled'] as const;
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
@@ -52,6 +58,40 @@ export interface WorkflowRun {
   cancelledAt?: string | null;
   actions: WorkflowActionAttempt[];
 }
+
+/**
+ * What a run read is parsed against. Loose, so a member the API adds (correlationId, for one) still
+ * reaches the screen. An action's status stays a string: the screen only compares it, and it is a
+ * different enum from the run's.
+ */
+const attemptSchema = z.looseObject({
+  ordinal: z.number(),
+  actionType: z.string(),
+  status: z.string(),
+  attempts: z.number(),
+  nextAttemptAt: z.string().nullish(),
+  responseStatus: z.number().nullish(),
+  error: z.string().nullish(),
+  retryable: z.boolean().nullish(),
+  completedAt: z.string().nullish(),
+  durationMs: z.number().nullish(),
+  onFailure: z.string().nullish(),
+  haltedBy: z.number().nullish(),
+}) satisfies z.ZodType<WorkflowActionAttempt>;
+
+export const workflowRunSchema = z.looseObject({
+  id: z.string(),
+  workflowDefinitionId: z.string(),
+  workflowName: z.string(),
+  contentId: z.string(),
+  contentType: z.string(),
+  triggerEvent: z.string(),
+  status: z.enum(RUN_STATUSES),
+  createdAt: z.string(),
+  completedAt: z.string().nullish(),
+  cancelledAt: z.string().nullish(),
+  actions: z.array(attemptSchema),
+}) satisfies z.ZodType<WorkflowRun>;
 
 export interface WorkflowRunsQuery {
   page?: number;
@@ -225,8 +265,8 @@ export function useWorkflowRuns(query: WorkflowRunsQuery) {
   return useQuery({
     queryKey: ['workflow-runs', params, tenant],
     queryFn: async () => {
-      const response = await api.get<Paginated<WorkflowRun>>('/api/workflow-runs', { params });
-      return response.data;
+      const response = await api.get<unknown>('/api/workflow-runs', { params });
+      return parseResponse(paginatedSchema(workflowRunSchema), response.data, 'GET /api/workflow-runs');
     },
   });
 }
@@ -237,8 +277,8 @@ export function useWorkflowRun(id: string | null) {
   return useQuery({
     queryKey: ['workflow-run', id, tenant],
     queryFn: async () => {
-      const response = await api.get<WorkflowRun>(`/api/workflow-runs/${id}`);
-      return response.data;
+      const response = await api.get<unknown>(`/api/workflow-runs/${id}`);
+      return parseResponse(workflowRunSchema, response.data, 'GET /api/workflow-runs/{id}');
     },
     enabled: !!id,
   });

@@ -33,9 +33,10 @@ export default function NewSchemaPage() {
   const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [routeTemplate, setRouteTemplate] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState(false);
 
   const routeIssue = routeTemplateProblem(routeTemplate);
-  const canSave = displayName.trim() && name.trim() && fields.length > 0 && !routeIssue;
+  const canSave = displayName.trim() && name.trim() && fields.length > 0 && !routeIssue && !editingField;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,6 +169,7 @@ export default function NewSchemaPage() {
         <FieldEditor
           fields={fields}
           onChange={setFields}
+          onEditingChange={setEditingField}
           contentTypes={schemas?.map((s) => ({ name: s.name, displayName: s.displayName }))}
         />
 
@@ -177,8 +179,19 @@ export default function NewSchemaPage() {
           </p>
         )}
 
+        {editingField && (
+          <p id="field-open-hint" className="text-sm text-muted-foreground">
+            Save or cancel the open field before creating the type. Its changes are not in the type
+            until it is saved.
+          </p>
+        )}
+
         <div className="flex items-center gap-2">
-          <Button type="submit" disabled={!canSave || createSchema.isPending}>
+          <Button
+            type="submit"
+            aria-describedby={editingField ? 'field-open-hint' : undefined}
+            disabled={!canSave || createSchema.isPending}
+          >
             {createSchema.isPending ? 'Creating…' : 'Create content type'}
           </Button>
           <Button type="button" variant="ghost" onClick={() => router.push('/schemas')}>

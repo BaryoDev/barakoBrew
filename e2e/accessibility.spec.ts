@@ -401,6 +401,33 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
+    test('the content type builder, with two field rows and a Sensitive one open for editing', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [SCHEMA]);
+
+        await page.goto('/schemas/new');
+        for (const name of ['Headline', 'Salary']) {
+            await page.getByRole('button', { name: 'Add field' }).first().click();
+            const form = page.getByRole('group', { name: 'New field' });
+            await form.getByLabel('Display name').fill(name);
+            await form.getByRole('button', { name: 'Add field' }).click();
+        }
+        // Not Public, so the scan sees the row's mask summary and, reopened, the Mask picker and the
+        // roles input, which render only for a field that is not Public.
+        await page.getByRole('button', { name: 'Edit Salary' }).click();
+        const salary = page.getByRole('group', { name: 'Edit Salary' });
+        await salary.getByLabel('Sensitivity').click();
+        await page.getByRole('option', { name: /Sensitive/ }).click();
+        await salary.getByRole('button', { name: 'Save field' }).click();
+        await expect(salary).toHaveCount(0);
+        await page.getByRole('button', { name: 'Edit Salary' }).click();
+        // By text, not by label, so a lost label is the scan's finding rather than this wait's.
+        await expect(salary.getByText('Mask', { exact: true })).toBeVisible();
+        await expect(salary.getByText('Visible to roles', { exact: true })).toBeVisible();
+        await scan(page);
+    });
+
     test('the workflow runs screen, with a run open and every badge tone on screen', async ({ page }) => {
         await authed(page);
         await stubShell(page);

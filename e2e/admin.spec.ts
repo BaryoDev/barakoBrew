@@ -64,11 +64,12 @@ test.describe('Admin flows (mocked API)', () => {
         await page.getByLabel('Display name').fill('Secret doc');
         await expect(page.getByLabel('API name (slug)')).toHaveValue('secret-doc');
 
-        // Add a field via the dialog; the API name auto-PascalCases.
+        // Add a field in the inline form; the API name auto-PascalCases.
         await page.getByRole('button', { name: 'Add field' }).first().click();
-        await page.getByLabel('Display name').last().fill('Document title');
-        await expect(page.getByLabel('Field name (API)')).toHaveValue('DocumentTitle');
-        await page.getByRole('dialog').getByRole('button', { name: 'Add field' }).click();
+        const form = page.getByRole('group', { name: 'New field' });
+        await form.getByLabel('Display name').fill('Document title');
+        await expect(form.getByLabel('Field name (API)')).toHaveValue('DocumentTitle');
+        await form.getByRole('button', { name: 'Add field' }).click();
 
         const requestPromise = page.waitForRequest(
             (request) => request.url().includes('/api/content-types') && request.method() === 'POST'
