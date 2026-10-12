@@ -14,7 +14,12 @@ import { apiErrorMessage } from '@/lib/api';
 import { parameterFields, withoutBlankOptional } from '@/lib/workflow-parameters';
 import { useCredentialNameParts } from '@/hooks/use-meta';
 import { groupActions, OTHER_ACTION_GROUP } from '@/lib/workflow-action-groups';
-import type { TriggerEvent, WorkflowAction, WorkflowDefinition } from '@/types/workflow';
+import type {
+  TriggerEvent,
+  WorkflowAction,
+  WorkflowActionMetadata,
+  WorkflowDefinition,
+} from '@/types/workflow';
 import { PageHeader } from '@/components/patterns/page-header';
 import { ActionIcon } from '@/components/workflow/action-icon';
 import { Button } from '@/components/ui/button';
@@ -23,6 +28,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TemplateVariablesHelp } from '@/components/workflow/template-variables-help';
 import { RequestParameterField } from '@/components/workflow/request-parameter-field';
+import { EmailTemplatePicker, takesTemplate } from '@/components/workflow/email-template-picker';
+import { TEMPLATE_PARAMETER } from '@/types/email-template';
 import {
   Select,
   SelectContent,
@@ -80,6 +87,27 @@ export default function NewWorkflowPage() {
     const meta = actionTypes?.find((a) => a.type === type);
     const parameters = Object.fromEntries((meta?.requiredParameters ?? []).map((p) => [p, '']));
     setActions((prev) => [...prev, { type, parameters }]);
+  };
+
+  // Subject and Body beside a Template are refused with 400, so choosing a template drops them and
+  // choosing none brings them back empty.
+  const setActionTemplate = (index: number, template: string) => {
+    setActions((prev) =>
+      prev.map((a, i) => {
+        if (i !== index) return a;
+        const parameters = { ...a.parameters };
+        if (template) {
+          delete parameters.Subject;
+          delete parameters.Body;
+          parameters[TEMPLATE_PARAMETER] = template;
+        } else {
+          delete parameters[TEMPLATE_PARAMETER];
+          parameters.Subject = parameters.Subject ?? '';
+          parameters.Body = parameters.Body ?? '';
+        }
+        return { ...a, parameters };
+      })
+    );
   };
 
   const setActionParam = (index: number, key: string, value: string) => {
@@ -296,46 +324,57 @@ export default function NewWorkflowPage() {
                       {meta?.description && (
                         <p className="text-muted-foreground text-xs">{meta.description}</p>
                       )}
-                      {parameterFields(meta, action.parameters, credentialParts).map((field) => {
-                        const id = `action-${i}-${field.name}`;
-                        if (isRequestPicker(action.type, field.name))
+                      {action.type === 'Email' && takesTemplate(meta) && (
+                        <EmailTemplatePicker
+                          id={`action-${i}-${TEMPLATE_PARAMETER}`}
+                          value={action.parameters[TEMPLATE_PARAMETER] ?? ''}
+                          subject={action.parameters.Subject ?? ''}
+                          body={action.parameters.Body ?? ''}
+                          onChange={(template) => setActionTemplate(i, template)}
+                        />
+                      )}
+                      {parameterFields(meta, action.parameters, credentialParts)
+                        .filter((field) => !templateCovers(action, meta, field.name))
+                        .map((field) => {
+                          const id = `action-${i}-${field.name}`;
+                          if (isRequestPicker(action.type, field.name))
+                            return (
+                              <RequestParameterField
+                                key={field.name}
+                                id={id}
+                                value={action.parameters[field.name] ?? ''}
+                                onChange={(value) => setActionParam(i, field.name, value)}
+                              />
+                            );
                           return (
-                            <RequestParameterField
-                              key={field.name}
-                              id={id}
-                              value={action.parameters[field.name] ?? ''}
-                              onChange={(value) => setActionParam(i, field.name, value)}
-                            />
-                          );
-                        return (
-                          <div key={field.name} className="space-y-1.5">
-                            <Label htmlFor={id} className="text-xs">
-                              {field.name}{' '}
-                              {!field.required && (
-                                <span className="text-muted-foreground font-normal">
-                                  (optional)
-                                </span>
+                            <div key={field.name} className="space-y-1.5">
+                              <Label htmlFor={id} className="text-xs">
+                                {field.name}{' '}
+                                {!field.required && (
+                                  <span className="text-muted-foreground font-normal">
+                                    (optional)
+                                  </span>
+                                )}
+                              </Label>
+                              <Input
+                                id={id}
+                                type={field.secret ? 'password' : 'text'}
+                                autoComplete={field.secret ? 'new-password' : undefined}
+                                spellCheck={field.secret ? false : undefined}
+                                aria-describedby={field.secret ? `${id}-hint` : undefined}
+                                value={action.parameters[field.name] ?? ''}
+                                className="font-mono text-xs"
+                                onChange={(e) => setActionParam(i, field.name, e.target.value)}
+                              />
+                              {field.secret && (
+                                <p id={`${id}-hint`} className="text-muted-foreground text-xs">
+                                  Stored encrypted and never shown again, so keep a copy for the
+                                  receiving end.
+                                </p>
                               )}
-                            </Label>
-                            <Input
-                              id={id}
-                              type={field.secret ? 'password' : 'text'}
-                              autoComplete={field.secret ? 'new-password' : undefined}
-                              spellCheck={field.secret ? false : undefined}
-                              aria-describedby={field.secret ? `${id}-hint` : undefined}
-                              value={action.parameters[field.name] ?? ''}
-                              className="font-mono text-xs"
-                              onChange={(e) => setActionParam(i, field.name, e.target.value)}
-                            />
-                            {field.secret && (
-                              <p id={`${id}-hint`} className="text-muted-foreground text-xs">
-                                Stored encrypted and never shown again, so keep a copy for the
-                                receiving end.
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
+                            </div>
+                          );
+                        })}
                       <div className="flex items-center gap-2.5">
                         <Checkbox
                           id={`action-${i}-halt`}
@@ -447,6 +486,19 @@ export default function NewWorkflowPage() {
  */
 function isRequestPicker(actionType: string, parameter: string) {
   return actionType === 'Request' && parameter === 'Request';
+}
+
+/** The fields an Email action's template picker stands in for: Template itself, and Subject and Body once one is chosen. */
+function templateCovers(
+  action: WorkflowAction,
+  meta: WorkflowActionMetadata | undefined,
+  parameter: string
+) {
+  if (action.type !== 'Email' || !takesTemplate(meta)) return false;
+  if (parameter === TEMPLATE_PARAMETER) return true;
+  return (
+    !!action.parameters[TEMPLATE_PARAMETER] && (parameter === 'Subject' || parameter === 'Body')
+  );
 }
 
 function TimelineStep({

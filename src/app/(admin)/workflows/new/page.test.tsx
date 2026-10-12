@@ -399,3 +399,90 @@ describe('the Request action', () => {
         expect(screen.getByText(/could not be listed/)).toBeInTheDocument();
     });
 });
+
+describe('the Email action template', () => {
+    // As GET /api/workflows/actions returns EmailAction on barakoCMS 5.0, Template among its optional parameters.
+    const EMAIL_META: WorkflowActionMetadata = {
+        type: 'Email',
+        description: 'Send email notifications',
+        requiredParameters: ['To', 'Subject', 'Body'],
+        optionalParameters: ['Attachments', 'Template'],
+        exampleConfiguration:
+            '{"Type":"Email","Parameters":{"To":"admin@example.com","Subject":"Workflow Triggered","Body":"Content {{id}} was updated"}}',
+        group: 'Comms',
+    };
+
+    const TEMPLATES = [
+        { id: 't1', contentType: 'email-template', status: 'Published', data: { Name: 'Receipt', Slug: 'receipt' } },
+        { id: 't2', contentType: 'email-template', status: 'Published', data: { Name: 'Welcome', Slug: 'welcome' } },
+    ];
+
+    function serve(meta: WorkflowActionMetadata) {
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation((async (url: string, ...rest: unknown[]) => {
+            if (url === '/api/workflows/actions') return { data: [meta] };
+            if (url === '/api/contents') return { data: page(TEMPLATES) };
+            return (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest);
+        }) as typeof api.get);
+    }
+
+    async function addEmail() {
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/actions'));
+        await choose('Add an action', 'Email');
+        return screen.findByLabelText(/^To/);
+    }
+
+    it('sends the chosen template by slug, with no Subject or Body beside it', async () => {
+        serve(EMAIL_META);
+        renderPage();
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Welcome a booker' } });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/content-types'));
+        await choose('When an entry of type…', 'Post');
+        fireEvent.change(await addEmail(), { target: { value: '{{createdBy.email}}' } });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/contents', expect.anything()));
+        await choose('Template (optional)', 'Welcome');
+
+        expect(screen.queryByLabelText(/^Subject/)).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/^Body/)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Create workflow' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        const body = vi.mocked(api.post).mock.calls[0][1] as { actions: unknown[] };
+        expect(body.actions).toEqual([
+            { type: 'Email', parameters: { To: '{{createdBy.email}}', Template: 'welcome' } },
+        ]);
+    });
+
+    it('saves an inline subject and body as a draft template', async () => {
+        serve(EMAIL_META);
+        renderPage();
+        await addEmail();
+        fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: 'Booked' } });
+        fireEvent.change(screen.getByLabelText(/^Body/), { target: { value: 'See you {{data.Date}}' } });
+
+        fireEvent.click(screen.getByRole('button', { name: 'save this subject and body as a template' }));
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Booked' } });
+        fireEvent.change(within(dialog).getByLabelText('Slug'), { target: { value: 'booked' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save template' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.post).mock.calls[0]).toEqual([
+            '/api/contents',
+            {
+                contentType: 'email-template',
+                status: 'Draft',
+                data: { Name: 'Booked', Slug: 'booked', Subject: 'Booked', Body: 'See you {{data.Date}}' },
+            },
+        ]);
+    });
+
+    it('offers no template picker to an API whose Email action takes no Template', async () => {
+        serve({ ...EMAIL_META, optionalParameters: undefined });
+        renderPage();
+        await addEmail();
+
+        expect(screen.getByLabelText(/^Subject/)).toBeInTheDocument();
+        expect(screen.queryByRole('combobox', { name: 'Template (optional)' })).not.toBeInTheDocument();
+    });
+});

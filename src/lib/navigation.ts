@@ -154,6 +154,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // GET /api/content-types before it can move anything.
       { title: 'Pages', href: '/pages', icon: IconList, module: MODULE.pages, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Workflows', href: '/workflows', icon: IconWorkflows, metric: 'workflows', capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
+      // manage_workflows, which the preview asks for; the templates themselves are entries.
+      { title: 'Email templates', href: '/email-templates', icon: IconEnvelope, capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Queries', href: '/queries', icon: IconFilter, capability: 'manage_queries', roles: ['SuperAdmin', 'Admin'] },
     ],
   },
@@ -274,6 +276,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   content: 'Entries',
   pages: 'Pages',
   workflows: 'Workflows',
+  'email-templates': 'Email templates',
   'workflow-runs': 'Workflow runs',
   queries: 'Queries',
   users: 'Users',
