@@ -22,7 +22,19 @@ function tokenFor(tenant: string): string {
 }
 
 function run(id: string, workflowName: string) {
-  return { id, workflowName, status: 'Succeeded', startedAt: '2026-09-01T00:00:00Z', attempts: [] };
+  return {
+    id,
+    workflowDefinitionId: 'wf-1',
+    workflowName,
+    contentId: 'c1',
+    contentType: 'article',
+    triggerEvent: 'Created',
+    status: 'Succeeded',
+    createdAt: '2026-09-01T00:00:00Z',
+    completedAt: '2026-09-01T00:00:01Z',
+    cancelledAt: null,
+    actions: [],
+  };
 }
 
 function List() {

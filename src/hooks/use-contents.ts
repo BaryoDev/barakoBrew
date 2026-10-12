@@ -1,15 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Paginated, type PageParams } from '@/lib/api';
+import { api, paginatedSchema, parseResponse, type Paginated, type PageParams } from '@/lib/api';
 import type {
     ContentListItem,
     ContentDetail,
     ContentDetailRead,
-    ContentVersion,
     CreateContentRequest,
     UpdateContentRequest,
     ContentStatus,
     ScheduleContentRequest,
 } from '@/types/content';
+import { contentVersionSchema } from '@/types/content';
 
 export function useContents(
     params: PageParams & { contentType?: string; search?: string; status?: ContentStatus } = {},
@@ -48,11 +48,14 @@ export function useContentHistory(id: string, enabled = true) {
     return useQuery({
         queryKey: ['contents', 'history', id],
         queryFn: async () => {
-            // History is a collection like any other and uses the paginated envelope. It read
-            // `versions` here, which the endpoint stopped returning when the envelope landed, so the
-            // panel has been rendering an empty list rather than failing visibly.
-            const response = await api.get<Paginated<ContentVersion>>(`/api/contents/${id}/history`);
-            return response.data.items;
+            // Parsed, because this is where reading `versions` from an `items` envelope once
+            // rendered an empty list for months instead of failing.
+            const response = await api.get<unknown>(`/api/contents/${id}/history`);
+            return parseResponse(
+                paginatedSchema(contentVersionSchema),
+                response.data,
+                'GET /api/contents/{id}/history'
+            ).items;
         },
         enabled: !!id && enabled,
     });

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { FieldEditor } from './field-editor';
 import { FIELD_TYPES, FIELD_TYPE_GROUPS, type FieldDefinition } from '@/types/schema';
 
@@ -75,6 +75,19 @@ describe('a field whose type is an alias', () => {
         expect(screen.queryByText(/· boolean/)).not.toBeInTheDocument();
     });
 
+    it('is saved with the alias it was written with when nothing about the type changed', async () => {
+        const saved: FieldDefinition[][] = [];
+        render(<FieldEditor fields={ALIASED} onChange={(f) => saved.push(f)} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Edit Views' }));
+        const save = screen.getByRole('button', { name: 'Save field' });
+        await waitFor(() => expect(save).toBeEnabled());
+        fireEvent.click(save);
+
+        await waitFor(() => expect(saved).toHaveLength(1));
+        expect(saved[0]).toHaveLength(2);
+        expect(saved[0][0]).toEqual(ALIASED[0]);
+    });
+
     it('opens in the editor with its canonical type already chosen', () => {
         render(<FieldEditor fields={ALIASED} onChange={() => {}} />);
         fireEvent.click(screen.getByRole('button', { name: 'Edit Views' }));
@@ -108,7 +121,7 @@ describe('a choice field', () => {
         expect(screen.getByLabelText('Value for option 1')).toBeInTheDocument();
     });
 
-    it('flags values that differ only in case before the API refuses them', () => {
+    it('flags values that differ only in case before the API refuses them', async () => {
         startChoice();
 
         fireEvent.change(screen.getByLabelText('Value for option 1'), { target: { value: 'FUN' } });
@@ -116,15 +129,15 @@ describe('a choice field', () => {
         fireEvent.change(screen.getByLabelText('Value for option 2'), { target: { value: 'fun' } });
 
         expect(screen.getByText(/"fun" differs from "FUN" only in case/)).toBeInTheDocument();
-        expect(addButton()).toBeDisabled();
+        await waitFor(() => expect(addButton()).toBeDisabled());
 
         fireEvent.change(screen.getByLabelText('Value for option 2'), { target: { value: 'COMPETE' } });
 
         expect(screen.queryByText(/only in case/)).not.toBeInTheDocument();
-        expect(addButton()).toBeEnabled();
+        await waitFor(() => expect(addButton()).toBeEnabled());
     });
 
-    it('saves the options with the field, and drops them if the type changes away from choice', () => {
+    it('saves the options with the field, and drops them if the type changes away from choice', async () => {
         const saved: FieldDefinition[][] = [];
         render(<FieldEditor fields={[]} onChange={(f) => saved.push(f)} />);
         fireEvent.click(screen.getAllByRole('button', { name: 'Add field' })[0]);
@@ -142,9 +155,11 @@ describe('a choice field', () => {
         fireEvent.change(screen.getByLabelText('Value for option 1'), { target: { value: 'A' } });
         pick('Long text');
         const buttons = screen.getAllByRole('button', { name: 'Add field' });
-        fireEvent.click(buttons[buttons.length - 1]);
+        const add = buttons[buttons.length - 1];
+        await waitFor(() => expect(add).toBeEnabled());
+        fireEvent.click(add);
 
-        expect(saved).toHaveLength(1);
+        await waitFor(() => expect(saved).toHaveLength(1));
         expect(saved[0][0].type).toBe('text');
         expect('options' in saved[0][0]).toBe(false);
         expect('multiple' in saved[0][0]).toBe(false);
@@ -168,66 +183,70 @@ describe('the members a field type adds', () => {
         return buttons[buttons.length - 1];
     }
 
-    it('saves a money field with its currency and scale', () => {
+    it('saves a money field with its currency and scale', async () => {
         const saved: FieldDefinition[][] = [];
         start((f) => saved.push(f), 'Unit price', 'Money');
 
         fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'usd' } });
         fireEvent.change(screen.getByLabelText('Decimal places'), { target: { value: '4' } });
+        await waitFor(() => expect(addButton()).toBeEnabled());
         fireEvent.click(addButton());
 
-        expect(saved).toHaveLength(1);
+        await waitFor(() => expect(saved).toHaveLength(1));
         expect(saved[0][0]).toMatchObject({ type: 'money', currency: 'USD', scale: 4 });
     });
 
-    it('will not save a scale without a currency', () => {
+    it('will not save a scale without a currency', async () => {
         start(() => {}, 'Total', 'Money');
 
         fireEvent.change(screen.getByLabelText('Decimal places'), { target: { value: '2' } });
 
-        expect(screen.getByText(/Set a currency before/)).toBeInTheDocument();
-        expect(addButton()).toBeDisabled();
+        expect(await screen.findByText(/Set a currency before/)).toBeInTheDocument();
+        await waitFor(() => expect(addButton()).toBeDisabled());
     });
 
-    it('saves a token field with its length, not required and not Public', () => {
+    it('saves a token field with its length, not required and not Public', async () => {
         const saved: FieldDefinition[][] = [];
         start((f) => saved.push(f), 'Claim token', 'Token');
 
         expect(screen.queryByRole('switch', { name: 'Required' })).toBeNull();
         fireEvent.change(screen.getByLabelText('Token length'), { target: { value: '24' } });
+        await waitFor(() => expect(addButton()).toBeEnabled());
         fireEvent.click(addButton());
 
-        expect(saved).toHaveLength(1);
+        await waitFor(() => expect(saved).toHaveLength(1));
         expect(saved[0][0]).toMatchObject({ type: 'token', tokenLength: 24, isRequired: false, sensitivity: 'Hidden' });
     });
 
-    it('needs a target for a reference, and saves it with several entries allowed', () => {
+    it('needs a target for a reference, and saves it with several entries allowed', async () => {
         const saved: FieldDefinition[][] = [];
         start((f) => saved.push(f), 'Speakers', 'Reference');
 
-        expect(addButton()).toBeDisabled();
+        await waitFor(() => expect(addButton()).toBeDisabled());
         fireEvent.change(screen.getByLabelText('Points at (content type)'), { target: { value: 'speaker' } });
         fireEvent.click(screen.getByRole('switch', { name: 'Holds several entries' }));
+        await waitFor(() => expect(addButton()).toBeEnabled());
         fireEvent.click(addButton());
 
-        expect(saved).toHaveLength(1);
+        await waitFor(() => expect(saved).toHaveLength(1));
         expect(saved[0][0]).toMatchObject({ type: 'reference', referenceType: 'speaker', multiple: true });
     });
 
-    it('saves a section, and leaves out an editor and role nobody picked', () => {
+    it('saves a section, and leaves out an editor and role nobody picked', async () => {
         const saved: FieldDefinition[][] = [];
         start((f) => saved.push(f), 'Headline', 'Text');
 
         fireEvent.change(screen.getByLabelText('Section'), { target: { value: 'Details' } });
+        await waitFor(() => expect(addButton()).toBeEnabled());
         fireEvent.click(addButton());
 
-        expect(saved).toHaveLength(1);
+        await waitFor(() => expect(saved).toHaveLength(1));
         expect(saved[0][0].section).toBe('Details');
         expect('editor' in saved[0][0]).toBe(false);
         expect('role' in saved[0][0]).toBe(false);
     });
 
-    it('refuses a role another field already holds', () => {
+    it('refuses a role another field already holds', async () => {
         render(
             <FieldEditor
                 fields={[{ name: 'Title', displayName: 'Title', type: 'string', isRequired: false, role: 'title' }]}
@@ -236,17 +255,19 @@ describe('the members a field type adds', () => {
         );
         fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
         fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Name' } });
+        // Enabled first, so the refusal below is the role's doing and not a name still being checked.
+        await waitFor(() => expect(addButton()).toBeEnabled());
         fireEvent.keyDown(screen.getByRole('combobox', { name: 'Role' }), { key: 'ArrowDown' });
         const title = within(screen.getByRole('listbox'))
             .getAllByRole('option')
             .find((o) => o.textContent === 'Title')!;
         fireEvent.keyDown(title, { key: 'Enter' });
 
-        expect(screen.getByText(/already holds this role/)).toBeInTheDocument();
-        expect(addButton()).toBeDisabled();
+        expect(await screen.findByText(/already holds this role/)).toBeInTheDocument();
+        await waitFor(() => expect(addButton()).toBeDisabled());
     });
 
-    it('refuses a name another field holds in another case', () => {
+    it('refuses a name another field holds in another case', async () => {
         render(
             <FieldEditor
                 fields={[{ name: 'Title', displayName: 'Title', type: 'string', isRequired: false }]}
@@ -255,11 +276,11 @@ describe('the members a field type adds', () => {
         );
         fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
         fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Heading' } });
-        expect(addButton()).toBeEnabled();
+        await waitFor(() => expect(addButton()).toBeEnabled());
 
         fireEvent.change(screen.getByLabelText('Field name (API)'), { target: { value: 'TItle' } });
 
-        expect(screen.getByText(/already exists, ignoring case/)).toBeInTheDocument();
-        expect(addButton()).toBeDisabled();
+        expect(await screen.findByText(/already exists, ignoring case/)).toBeInTheDocument();
+        await waitFor(() => expect(addButton()).toBeDisabled());
     });
 });

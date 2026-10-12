@@ -132,6 +132,28 @@ expect(rows).toHaveLength(3);
 expect(rows.every(r => r.status === 'Draft')).toBe(true);
 ```
 
+## Forms and API responses
+
+**A form is react-hook-form plus one zod schema.** `src/components/schema/field-editor.tsx` is the
+example to copy. The values live in `useForm`, every rule lives in one schema passed through
+`zodResolver`, and each rule files its message under the member the person has to change, which is
+where the form shows it (`src/lib/field-form.ts`). Read values with `useWatch` and state with
+`useFormState`, not `watch()` and `formState`: React Compiler is on and cannot see those change.
+Validation is asynchronous, so a unit test waits for the button or the message (`waitFor`,
+`findBy*`) instead of asserting on the line after the event. Forms written before this still use
+`useState`; convert one when you are changing it anyway, not in a sweep.
+
+**A response that has bitten us is parsed at the boundary.** The hook passes the body through
+`parseResponse(schema, data, endpoint)` from `src/lib/api.ts`, with the schema beside the type it
+checks (`contentVersionSchema` in `src/types/content.ts`, `workflowRunSchema` in
+`src/hooks/use-workflow-runs.ts`). A body that does not match throws `ResponseShapeError`, so the
+query lands in its error state, and the screen must render that state with `ErrorState` and pass it
+the query's `error`, which then says the shape was wrong rather than blaming the connection. That is
+deliberate: tolerating a bad body is how the History panel showed an empty list for months. Use
+`z.looseObject` for items, so a member the API adds still reaches the screen, and `nullish()` for
+anything the API can send as null. A parse is a second line of defence behind `smoke/`, not a
+replacement for it: the mocked pack's fixtures are still written by the same person as the schema.
+
 ## Dependencies
 
 - `package-lock.json` is committed and is the truth. CI and the Dockerfile run `npm ci`.

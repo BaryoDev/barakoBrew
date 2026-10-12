@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { z } from 'zod';
 import { CONTRACT_HEADER, recordContractVersion } from './api-contract';
 
 export function getApiUrl(): string {
@@ -277,6 +278,63 @@ export interface Paginated<T> {
     totalPages: number;
     hasNextPage: boolean;
     hasPreviousPage: boolean;
+}
+
+/**
+ * The envelope as a schema, for a read that parses at the boundary. Every member is required: the
+ * API always sends all seven, so one going missing is the change this exists to notice.
+ */
+export function paginatedSchema<T extends z.ZodType>(item: T) {
+    return z.object({
+        items: z.array(item),
+        page: z.number(),
+        pageSize: z.number(),
+        totalItems: z.number(),
+        totalPages: z.number(),
+        hasNextPage: z.boolean(),
+        hasPreviousPage: z.boolean(),
+    });
+}
+
+/**
+ * A response that arrived but is not the shape this console reads.
+ *
+ * Thrown rather than tolerated. The History panel once read `versions` from a response that had
+ * returned `items` for months and rendered "no versions" the whole time, and every mocked spec
+ * agreed with it. A query that throws this lands in its error state, which says something is wrong
+ * instead of showing an empty list that looks like data.
+ */
+export class ResponseShapeError extends Error {
+    readonly endpoint: string;
+    readonly issues: readonly { path: string; message: string }[];
+
+    constructor(endpoint: string, error: z.ZodError) {
+        const issues = error.issues.map((issue) => ({
+            path: issue.path.map(String).join('.') || '(root)',
+            message: issue.message,
+        }));
+        super(`${endpoint} answered in a shape this console does not read: ${issues.map((i) => `${i.path}: ${i.message}`).join('; ')}`);
+        this.name = 'ResponseShapeError';
+        this.endpoint = endpoint;
+        this.issues = issues;
+    }
+}
+
+export function isResponseShapeError(error: unknown): error is ResponseShapeError {
+    return error instanceof ResponseShapeError;
+}
+
+/**
+ * Checks a response body against its schema and hands back the parsed value, or throws
+ * ResponseShapeError. The message names paths and reasons only, never values, so a body carrying a
+ * token or a masked field cannot end up in a log through here.
+ */
+export function parseResponse<S extends z.ZodType>(schema: S, data: unknown, endpoint: string): z.output<S> {
+    const result = schema.safeParse(data);
+    if (result.success) return result.data;
+    const error = new ResponseShapeError(endpoint, result.error);
+    console.error(error.message);
+    throw error;
 }
 
 export interface PageParams {

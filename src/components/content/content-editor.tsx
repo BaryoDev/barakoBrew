@@ -22,6 +22,7 @@ import type { ContentDetail } from '@/types/content';
 import { PageHeader } from '@/components/patterns/page-header';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
+import { ErrorState } from '@/components/patterns/error-state';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { DynamicForm } from '@/components/content/dynamic-form';
 import { TransitionActions } from '@/components/content/transition-dialog';
@@ -530,11 +531,12 @@ function HistoryPanel({
   active: boolean;
   canRollback: boolean;
 }) {
-  const { data: versions, isLoading } = useContentHistory(id, active);
+  const { data: versions, isLoading, isError, error, refetch } = useContentHistory(id, active);
   const rollback = useRollbackContent();
 
   if (!active) return null;
   if (isLoading) return <TableSkeleton rows={3} />;
+  if (isError) return <ErrorState entity="the history" error={error} onRetry={() => void refetch()} />;
   if (!versions?.length) {
     return <p className="text-muted-foreground py-8 text-center text-sm">No earlier versions recorded.</p>;
   }

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { Controller, useForm, useFormState, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,15 +45,8 @@ import {
 } from '@/types/schema';
 import { SENSITIVITY_META } from '@/types/content';
 import { OptionsEditor } from '@/components/schema/options-editor';
-import { hasOptionIssues, optionIssues } from '@/lib/choice';
-import {
-    TOKEN_LENGTH,
-    currencyProblem,
-    editorsFor,
-    rolesFor,
-    sectionProblem,
-    tokenLengthProblem,
-} from '@/lib/field-presentation';
+import { TOKEN_LENGTH, editorsFor, rolesFor } from '@/lib/field-presentation';
+import { fieldFormSchema, numberText } from '@/lib/field-form';
 
 interface FieldEditorProps {
     fields: FieldDefinition[];
@@ -66,7 +61,6 @@ interface FieldEditorProps {
 /** A Select item cannot carry an empty value, so "none" is spelled with this. */
 const NONE = '__none';
 
-// The backend requires PascalCase field names (FieldTypeValidator).
 function toPascalCase(input: string): string {
     return input
         .replace(/[^A-Za-z0-9\s_-]/g, '')
@@ -75,8 +69,6 @@ function toPascalCase(input: string): string {
         .map((word) => word[0].toUpperCase() + word.slice(1))
         .join('');
 }
-
-const PASCAL_CASE = /^[A-Z][A-Za-z0-9]*$/;
 
 // The API refuses each of these members on a type it does not belong to, so they go when the type
 // changes: options on anything but choice, multiple on anything but choice and reference, a target
@@ -110,9 +102,16 @@ function withType(field: FieldDefinition, type: FieldType): FieldDefinition {
     return next;
 }
 
-/** The field as it is sent: optional members left blank are left out, not sent empty. */
+/**
+ * The field as it is sent: optional members left blank are left out, not sent empty, and members
+ * its type cannot hold are dropped once more, whatever the form kept for an input it unmounted.
+ */
 function cleaned(field: FieldDefinition): FieldDefinition {
-    const next = { ...field };
+    // By the type the alias stands for, keeping the alias the definition was written with.
+    const next = { ...withType(field, resolveFieldType(field.type) ?? 'string'), type: field.type };
+    for (const key of Object.keys(next) as (keyof FieldDefinition)[]) {
+        if (next[key] === undefined) delete next[key];
+    }
     if (!next.section) delete next.section;
     if (!next.editor) delete next.editor;
     if (!next.role) delete next.role;
@@ -126,7 +125,6 @@ function cleaned(field: FieldDefinition): FieldDefinition {
     return next;
 }
 
-const numberText = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
 const textNumber = (text: string) => (text.trim() === '' ? null : Number(text));
 
 const EMPTY_FIELD: FieldDefinition = {
@@ -142,58 +140,21 @@ const EMPTY_FIELD: FieldDefinition = {
 export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
-    const [form, setForm] = useState<FieldDefinition>(EMPTY_FIELD);
-
-    const nameIsValid = PASCAL_CASE.test(form.name);
-    // Ignoring case, as barakoCMS 4.7 refuses it: every reader finds a field by its name ignoring case.
-    const nameIsDuplicate = fields.some(
-        (f, i) => f.name.toLowerCase() === form.name.toLowerCase() && i !== editingIndex
-    );
-    const resolvedType = resolveFieldType(form.type);
-    const isChoice = resolvedType === 'choice';
-    const isReference = resolvedType === 'reference';
-    const isMoney = resolvedType === 'money';
-    const isToken = resolvedType === 'token';
-    const optionsInvalid = isChoice && hasOptionIssues(optionIssues(form.options ?? []));
-    const editors = editorsFor(form.type);
-    const roles = rolesFor(form.type);
-    const sectionIssue = sectionProblem(form.section ?? '');
-    const currencyIssue = isMoney ? currencyProblem(form.currency ?? '', numberText(form.scale)) : null;
-    const tokenIssue = isToken ? tokenLengthProblem(numberText(form.tokenLength)) : null;
-    const roleHolder = form.role
-        ? fields.find((f, i) => f.role === form.role && i !== editingIndex)
-        : undefined;
-    // The API refuses a reference that names no target, so the dialog does too.
-    const targetMissing = isReference && !form.referenceType?.trim();
-    const canSave =
-        form.name &&
-        form.displayName &&
-        nameIsValid &&
-        !nameIsDuplicate &&
-        !optionsInvalid &&
-        !sectionIssue &&
-        !currencyIssue &&
-        !tokenIssue &&
-        !roleHolder &&
-        !targetMissing;
 
     const openNew = () => {
-        setForm(EMPTY_FIELD);
         setEditingIndex(null);
         setIsDialogOpen(true);
     };
 
     const openEdit = (index: number) => {
-        setForm(fields[index]);
         setEditingIndex(index);
         setIsDialogOpen(true);
     };
 
-    const save = () => {
-        if (!canSave) return;
+    const save = (field: FieldDefinition) => {
         const next = [...fields];
-        if (editingIndex !== null) next[editingIndex] = cleaned(form);
-        else next.push(cleaned(form));
+        if (editingIndex !== null) next[editingIndex] = cleaned(field);
+        else next.push(cleaned(field));
         onChange(next);
         setIsDialogOpen(false);
     };
@@ -309,231 +270,326 @@ export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps
                             The field name is how the API stores the value; the display name is what editors see.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="field-display-name">Display name</Label>
+                    {/* Mounted with the dialog, so each opening starts a fresh form from the field it edits. */}
+                    <FieldForm
+                        key={editingIndex ?? 'new'}
+                        initial={editingIndex !== null ? fields[editingIndex] : EMPTY_FIELD}
+                        isNew={editingIndex === null}
+                        others={fields.filter((_, i) => i !== editingIndex)}
+                        contentTypes={contentTypes}
+                        onSave={save}
+                        onCancel={() => setIsDialogOpen(false)}
+                    />
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+interface FieldFormProps {
+    initial: FieldDefinition;
+    isNew: boolean;
+    /** The type's other fields, which a name and a role have to be unique across. */
+    others: FieldDefinition[];
+    contentTypes?: { name: string; displayName: string }[];
+    onSave: (field: FieldDefinition) => void;
+    onCancel: () => void;
+}
+
+/**
+ * One field's form. The pattern for a form in this console: react-hook-form holds the values, one
+ * zod schema holds the rules (src/lib/field-form.ts), and the values are read through useWatch and
+ * useFormState rather than watch() and formState, which React Compiler cannot see change.
+ */
+function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: FieldFormProps) {
+    const { control, register, getValues, setValue, reset, trigger, handleSubmit } = useForm<FieldDefinition>({
+        defaultValues: initial,
+        resolver: zodResolver(fieldFormSchema(others)),
+        mode: 'onChange',
+    });
+    const form = useWatch({ control }) as FieldDefinition;
+    const { errors, isValid } = useFormState({ control });
+
+    const resolvedType = resolveFieldType(form.type);
+    const isChoice = resolvedType === 'choice';
+    const isReference = resolvedType === 'reference';
+    const isMoney = resolvedType === 'money';
+    const isToken = resolvedType === 'token';
+    const editors = editorsFor(form.type);
+    const roles = rolesFor(form.type);
+
+    // A type change rewrites several members at once (see withType), so the form starts again from
+    // the rewritten field and checks all of it.
+    const changeType = (type: FieldType) => {
+        reset(withType(getValues(), type), { keepDefaultValues: true });
+        void trigger();
+    };
+
+    return (
+        <>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                    <Label htmlFor="field-display-name">Display name</Label>
+                    <Controller
+                        control={control}
+                        name="displayName"
+                        render={({ field }) => (
                             <Input
                                 id="field-display-name"
-                                value={form.displayName}
+                                ref={field.ref}
+                                name={field.name}
+                                value={field.value ?? ''}
+                                onBlur={field.onBlur}
                                 placeholder="Publish date"
-                                onChange={(e) =>
-                                    setForm((f) => ({
-                                        ...f,
-                                        displayName: e.target.value,
-                                        // Keep the API name in sync until the user edits it directly.
-                                        name:
-                                            editingIndex === null && (f.name === '' || f.name === toPascalCase(f.displayName))
-                                                ? toPascalCase(e.target.value)
-                                                : f.name,
-                                    }))
-                                }
+                                onChange={(e) => {
+                                    const before = field.value ?? '';
+                                    field.onChange(e.target.value);
+                                    // Keep the API name in sync until the user edits it directly.
+                                    const name = getValues('name');
+                                    if (isNew && (name === '' || name === toPascalCase(before))) {
+                                        setValue('name', toPascalCase(e.target.value), { shouldValidate: true });
+                                    }
+                                }}
                             />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="field-name">Field name (API)</Label>
-                            <Input
-                                id="field-name"
-                                value={form.name}
-                                placeholder="PublishDate"
-                                className="font-mono"
-                                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                            />
-                            {form.name && !nameIsValid && (
-                                <p className="text-destructive text-xs">
-                                    Use PascalCase — start with a capital letter, letters and numbers only.
-                                </p>
-                            )}
-                            {nameIsDuplicate && (
-                                <p className="text-destructive text-xs">A field with this name already exists, ignoring case.</p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="field-type">Type</Label>
-                            <Select
-                                // A definition can carry an alias ('integer' for 'int'), which is not a
-                                // value the picker offers, so an unresolved one would show as empty.
-                                value={resolveFieldType(form.type) ?? 'string'}
-                                onValueChange={(value) => setForm((f) => withType(f, value as FieldType))}
-                            >
-                                <SelectTrigger id="field-type" className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {FIELD_TYPE_GROUPS.map((group) => (
-                                        <SelectGroup key={group.label}>
-                                            <SelectLabel>{group.label}</SelectLabel>
-                                            {group.types.map((type) => (
-                                                <SelectItem key={type.value} value={type.value}>
-                                                    <span className="font-medium">{type.label}</span>
-                                                    <span className="text-muted-foreground ml-1.5 text-xs">
-                                                        {type.description}
-                                                    </span>
-                                                </SelectItem>
-                                            ))}
-                                        </SelectGroup>
+                        )}
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="field-name">Field name (API)</Label>
+                    <Input id="field-name" placeholder="PublishDate" className="font-mono" {...register('name')} />
+                    {form.name && errors.name?.message && (
+                        <p className="text-destructive text-xs">{errors.name.message}</p>
+                    )}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="field-type">Type</Label>
+                    <Select
+                        // A definition can carry an alias ('integer' for 'int'), which is not a
+                        // value the picker offers, so an unresolved one would show as empty.
+                        value={resolveFieldType(form.type) ?? 'string'}
+                        onValueChange={(value) => changeType(value as FieldType)}
+                    >
+                        <SelectTrigger id="field-type" className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {FIELD_TYPE_GROUPS.map((group) => (
+                                <SelectGroup key={group.label}>
+                                    <SelectLabel>{group.label}</SelectLabel>
+                                    {group.types.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                            <span className="font-medium">{type.label}</span>
+                                            <span className="text-muted-foreground ml-1.5 text-xs">
+                                                {type.description}
+                                            </span>
+                                        </SelectItem>
                                     ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {isChoice && (
-                            <>
-                                <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
-                                    <div className="space-y-0.5">
-                                        <Label htmlFor="field-multiple">Holds several values</Label>
-                                        <p className="text-muted-foreground text-xs">
-                                            Checkboxes instead of one pick. This cannot be changed later.
-                                        </p>
-                                    </div>
+                                </SelectGroup>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {isChoice && (
+                    <>
+                        <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+                            <div className="space-y-0.5">
+                                <Label htmlFor="field-multiple">Holds several values</Label>
+                                <p className="text-muted-foreground text-xs">
+                                    Checkboxes instead of one pick. This cannot be changed later.
+                                </p>
+                            </div>
+                            <Controller
+                                control={control}
+                                name="multiple"
+                                render={({ field }) => (
                                     <Switch
                                         id="field-multiple"
-                                        checked={form.multiple ?? false}
-                                        onCheckedChange={(checked) => setForm((f) => ({ ...f, multiple: checked }))}
+                                        checked={field.value ?? false}
+                                        onCheckedChange={field.onChange}
                                     />
-                                </div>
-                                <fieldset className="space-y-2">
-                                    <legend className="text-sm font-medium">Options</legend>
-                                    <OptionsEditor
-                                        options={form.options ?? []}
-                                        onChange={(options) => setForm((f) => ({ ...f, options }))}
-                                    />
-                                </fieldset>
-                            </>
-                        )}
-                        {isReference && (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="field-reference-type">Points at (content type)</Label>
-                                    <Input
-                                        id="field-reference-type"
-                                        value={form.referenceType ?? ''}
-                                        placeholder="author"
-                                        className="font-mono"
-                                        list={contentTypes?.length ? 'field-reference-types' : undefined}
-                                        onChange={(e) => setForm((f) => ({ ...f, referenceType: e.target.value }))}
-                                    />
-                                    {contentTypes?.length ? (
-                                        <datalist id="field-reference-types">
-                                            {contentTypes.map((t) => (
-                                                <option key={t.name} value={t.name}>
-                                                    {t.displayName}
-                                                </option>
-                                            ))}
-                                        </datalist>
-                                    ) : null}
-                                    {targetMissing && (
-                                        <p className="text-muted-foreground text-xs">
-                                            The API name of the type the entries are picked from.
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
-                                    <div className="space-y-0.5">
-                                        <Label htmlFor="field-reference-multiple">Holds several entries</Label>
-                                        <p className="text-muted-foreground text-xs">
-                                            A list of up to 100 entries, in the order they are picked.
-                                        </p>
-                                    </div>
+                                )}
+                            />
+                        </div>
+                        <fieldset className="space-y-2">
+                            <legend className="text-sm font-medium">Options</legend>
+                            <Controller
+                                control={control}
+                                name="options"
+                                render={({ field }) => (
+                                    <OptionsEditor options={field.value ?? []} onChange={field.onChange} />
+                                )}
+                            />
+                        </fieldset>
+                    </>
+                )}
+                {isReference && (
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="field-reference-type">Points at (content type)</Label>
+                            <Input
+                                id="field-reference-type"
+                                placeholder="author"
+                                className="font-mono"
+                                list={contentTypes?.length ? 'field-reference-types' : undefined}
+                                {...register('referenceType')}
+                            />
+                            {contentTypes?.length ? (
+                                <datalist id="field-reference-types">
+                                    {contentTypes.map((t) => (
+                                        <option key={t.name} value={t.name}>
+                                            {t.displayName}
+                                        </option>
+                                    ))}
+                                </datalist>
+                            ) : null}
+                            {!form.referenceType?.trim() && (
+                                <p className="text-muted-foreground text-xs">
+                                    The API name of the type the entries are picked from.
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+                            <div className="space-y-0.5">
+                                <Label htmlFor="field-reference-multiple">Holds several entries</Label>
+                                <p className="text-muted-foreground text-xs">
+                                    A list of up to 100 entries, in the order they are picked.
+                                </p>
+                            </div>
+                            <Controller
+                                control={control}
+                                name="multiple"
+                                render={({ field }) => (
                                     <Switch
                                         id="field-reference-multiple"
-                                        checked={form.multiple ?? false}
-                                        onCheckedChange={(checked) => setForm((f) => ({ ...f, multiple: checked }))}
+                                        checked={field.value ?? false}
+                                        onCheckedChange={field.onChange}
                                     />
-                                </div>
-                            </>
-                        )}
-                        {isMoney && (
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="field-currency">Currency</Label>
+                                )}
+                            />
+                        </div>
+                    </>
+                )}
+                {isMoney && (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="field-currency">Currency</Label>
+                            <Controller
+                                control={control}
+                                name="currency"
+                                render={({ field }) => (
                                     <Input
                                         id="field-currency"
-                                        value={form.currency ?? ''}
+                                        ref={field.ref}
+                                        name={field.name}
+                                        value={field.value ?? ''}
+                                        onBlur={field.onBlur}
                                         placeholder="USD"
                                         maxLength={3}
                                         className="font-mono"
-                                        onChange={(e) =>
-                                            setForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))
-                                        }
+                                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                                     />
-                                    <p className="text-muted-foreground text-xs">
-                                        Leave empty for a plain number. Nothing is rounded: an amount with too
-                                        many decimal places is refused.
-                                    </p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="field-scale">Decimal places</Label>
+                                )}
+                            />
+                            <p className="text-muted-foreground text-xs">
+                                Leave empty for a plain number. Nothing is rounded: an amount with too
+                                many decimal places is refused.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="field-scale">Decimal places</Label>
+                            <Controller
+                                control={control}
+                                name="scale"
+                                // Its rule is filed under currency, so a change here checks that.
+                                rules={{ deps: ['currency'] }}
+                                render={({ field }) => (
                                     <Input
                                         id="field-scale"
+                                        ref={field.ref}
+                                        name={field.name}
                                         type="number"
                                         min={0}
                                         max={8}
                                         step={1}
-                                        value={numberText(form.scale)}
+                                        value={numberText(field.value)}
+                                        onBlur={field.onBlur}
                                         placeholder="The currency's own"
-                                        onChange={(e) => setForm((f) => ({ ...f, scale: textNumber(e.target.value) }))}
+                                        onChange={(e) => field.onChange(textNumber(e.target.value))}
                                     />
-                                </div>
-                                {currencyIssue && (
-                                    <p className="text-destructive text-xs sm:col-span-2">{currencyIssue}</p>
                                 )}
-                            </div>
+                            />
+                        </div>
+                        {errors.currency?.message && (
+                            <p className="text-destructive text-xs sm:col-span-2">{errors.currency.message}</p>
                         )}
-                        {isToken && (
-                            <div className="space-y-2">
-                                <Label htmlFor="field-token-length">Token length</Label>
+                    </div>
+                )}
+                {isToken && (
+                    <div className="space-y-2">
+                        <Label htmlFor="field-token-length">Token length</Label>
+                        <Controller
+                            control={control}
+                            name="tokenLength"
+                            render={({ field }) => (
                                 <Input
                                     id="field-token-length"
+                                    ref={field.ref}
+                                    name={field.name}
                                     type="number"
                                     min={TOKEN_LENGTH.min}
                                     max={TOKEN_LENGTH.max}
                                     step={1}
-                                    value={numberText(form.tokenLength)}
+                                    value={numberText(field.value)}
+                                    onBlur={field.onBlur}
                                     placeholder={String(TOKEN_LENGTH.default)}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, tokenLength: textNumber(e.target.value) }))
-                                    }
+                                    onChange={(e) => field.onChange(textNumber(e.target.value))}
                                 />
-                                <p className="text-muted-foreground text-xs">
-                                    The server generates the token when an entry is created, and nobody can set
-                                    or change it. A token is never public.
-                                </p>
-                                {tokenIssue && <p className="text-destructive text-xs">{tokenIssue}</p>}
-                            </div>
+                            )}
+                        />
+                        <p className="text-muted-foreground text-xs">
+                            The server generates the token when an entry is created, and nobody can set
+                            or change it. A token is never public.
+                        </p>
+                        {errors.tokenLength?.message && (
+                            <p className="text-destructive text-xs">{errors.tokenLength.message}</p>
                         )}
-                        {!isToken && (
-                            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                                <Label htmlFor="field-required">Required</Label>
-                                <Switch
-                                    id="field-required"
-                                    checked={form.isRequired}
-                                    onCheckedChange={(checked) => setForm((f) => ({ ...f, isRequired: checked }))}
-                                />
-                            </div>
-                        )}
+                    </div>
+                )}
+                {!isToken && (
+                    <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                        <Label htmlFor="field-required">Required</Label>
+                        <Controller
+                            control={control}
+                            name="isRequired"
+                            render={({ field }) => (
+                                <Switch id="field-required" checked={field.value} onCheckedChange={field.onChange} />
+                            )}
+                        />
+                    </div>
+                )}
 
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div className="space-y-2 sm:col-span-2">
-                                <Label htmlFor="field-section">Section</Label>
-                                <Input
-                                    id="field-section"
-                                    value={form.section ?? ''}
-                                    placeholder="Details"
-                                    onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))}
-                                />
-                                <p className="text-muted-foreground text-xs">
-                                    Fields with the same section are grouped on the edit screen. Leave empty for
-                                    none.
-                                </p>
-                                {sectionIssue && <p className="text-destructive text-xs">{sectionIssue}</p>}
-                            </div>
-                            {editors.length > 0 && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="field-editor-hint">Editor</Label>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="field-section">Section</Label>
+                        <Input id="field-section" placeholder="Details" {...register('section')} />
+                        <p className="text-muted-foreground text-xs">
+                            Fields with the same section are grouped on the edit screen. Leave empty for
+                            none.
+                        </p>
+                        {errors.section?.message && (
+                            <p className="text-destructive text-xs">{errors.section.message}</p>
+                        )}
+                    </div>
+                    {editors.length > 0 && (
+                        <div className="space-y-2">
+                            <Label htmlFor="field-editor-hint">Editor</Label>
+                            <Controller
+                                control={control}
+                                name="editor"
+                                render={({ field }) => (
                                     <Select
-                                        value={form.editor ?? NONE}
-                                        onValueChange={(value) =>
-                                            setForm((f) => ({ ...f, editor: value === NONE ? null : value }))
-                                        }
+                                        value={field.value ?? NONE}
+                                        onValueChange={(value) => field.onChange(value === NONE ? null : value)}
                                     >
                                         <SelectTrigger id="field-editor-hint" className="w-full">
                                             <SelectValue />
@@ -547,16 +603,20 @@ export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                </div>
-                            )}
-                            {roles.length > 0 && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="field-role">Role</Label>
+                                )}
+                            />
+                        </div>
+                    )}
+                    {roles.length > 0 && (
+                        <div className="space-y-2">
+                            <Label htmlFor="field-role">Role</Label>
+                            <Controller
+                                control={control}
+                                name="role"
+                                render={({ field }) => (
                                     <Select
-                                        value={form.role ?? NONE}
-                                        onValueChange={(value) =>
-                                            setForm((f) => ({ ...f, role: value === NONE ? null : value }))
-                                        }
+                                        value={field.value ?? NONE}
+                                        onValueChange={(value) => field.onChange(value === NONE ? null : value)}
                                     >
                                         <SelectTrigger id="field-role" className="w-full">
                                             <SelectValue />
@@ -570,23 +630,22 @@ export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    {roleHolder && (
-                                        <p className="text-destructive text-xs">
-                                            {roleHolder.displayName} already holds this role. One field of a type
-                                            holds a role.
-                                        </p>
-                                    )}
-                                </div>
-                            )}
+                                )}
+                            />
+                            {errors.role?.message && <p className="text-destructive text-xs">{errors.role.message}</p>}
                         </div>
+                    )}
+                </div>
 
-                        <div className="space-y-2">
-                            <Label>Sensitivity</Label>
+                <div className="space-y-2">
+                    <Label>Sensitivity</Label>
+                    <Controller
+                        control={control}
+                        name="sensitivity"
+                        render={({ field }) => (
                             <Select
-                                value={String(form.sensitivity ?? SensitivityLevel.Public)}
-                                onValueChange={(value) =>
-                                    setForm((f) => ({ ...f, sensitivity: value as SensitivityLevel }))
-                                }
+                                value={String(field.value ?? SensitivityLevel.Public)}
+                                onValueChange={(value) => field.onChange(value as SensitivityLevel)}
                             >
                                 <SelectTrigger className="w-full">
                                     <SelectValue />
@@ -595,56 +654,66 @@ export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps
                                     {(isToken
                                         ? [SensitivityLevel.Sensitive, SensitivityLevel.Hidden]
                                         : [SensitivityLevel.Public, SensitivityLevel.Sensitive, SensitivityLevel.Hidden]
-                                    ).map(
-                                        (level) => (
-                                            <SelectItem key={level} value={String(level)}>
-                                                <span className="font-medium">{SENSITIVITY_META[level].label}</span>
-                                                <span className="text-muted-foreground ml-1.5 text-xs">
-                                                    {SENSITIVITY_META[level].description}
-                                                </span>
-                                            </SelectItem>
-                                        )
-                                    )}
+                                    ).map((level) => (
+                                        <SelectItem key={level} value={String(level)}>
+                                            <span className="font-medium">{SENSITIVITY_META[level].label}</span>
+                                            <span className="text-muted-foreground ml-1.5 text-xs">
+                                                {SENSITIVITY_META[level].description}
+                                            </span>
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
-                        </div>
+                        )}
+                    />
+                </div>
 
-                        {form.sensitivity !== undefined && form.sensitivity !== SensitivityLevel.Public && (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="field-roles">Visible to roles</Label>
+                {form.sensitivity !== undefined && form.sensitivity !== SensitivityLevel.Public && (
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="field-roles">Visible to roles</Label>
+                            <Controller
+                                control={control}
+                                name="visibleToRoles"
+                                render={({ field }) => (
                                     <Input
                                         id="field-roles"
-                                        value={(form.visibleToRoles ?? []).join(', ')}
+                                        ref={field.ref}
+                                        name={field.name}
+                                        value={(field.value ?? []).join(', ')}
+                                        onBlur={field.onBlur}
                                         placeholder="Admin, HR"
                                         onChange={(e) =>
-                                            setForm((f) => ({
-                                                ...f,
-                                                visibleToRoles: e.target.value
+                                            field.onChange(
+                                                e.target.value
                                                     .split(',')
                                                     .map((r) => r.trim())
-                                                    .filter(Boolean),
-                                            }))
+                                                    .filter(Boolean)
+                                            )
                                         }
                                     />
-                                    <p className="text-muted-foreground text-xs">
-                                        {/* The specific default used to be spelled out here as
-                                            "Sensitive to HR; Hidden to SuperAdmin only". That is server
-                                            policy transcribed into the client: it goes stale silently
-                                            when the server changes, and #272 replaces role names with
-                                            capabilities outright. Describe the behaviour, name no
-                                            roles, and let the server keep the policy. */}
-                                        Comma-separated. Leave empty to use the default policy the server applies for
-                                        this sensitivity level.
-                                    </p>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Mask</Label>
+                                )}
+                            />
+                            <p className="text-muted-foreground text-xs">
+                                {/* The specific default used to be spelled out here as
+                                    "Sensitive to HR; Hidden to SuperAdmin only". That is server
+                                    policy transcribed into the client: it goes stale silently
+                                    when the server changes, and #272 replaces role names with
+                                    capabilities outright. Describe the behaviour, name no
+                                    roles, and let the server keep the policy. */}
+                                Comma-separated. Leave empty to use the default policy the server applies for
+                                this sensitivity level.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Mask</Label>
+                            <Controller
+                                control={control}
+                                name="mask"
+                                render={({ field }) => (
                                     <Select
-                                        value={String(form.mask ?? FieldMask.Default)}
-                                        onValueChange={(value) =>
-                                            setForm((f) => ({ ...f, mask: value as FieldMask }))
-                                        }
+                                        value={String(field.value ?? FieldMask.Default)}
+                                        onValueChange={(value) => field.onChange(value as FieldMask)}
                                     >
                                         <SelectTrigger className="w-full">
                                             <SelectValue />
@@ -657,20 +726,20 @@ export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button type="button" onClick={save} disabled={!canSave}>
-                            {editingIndex !== null ? 'Save field' : 'Add field'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </div>
+                                )}
+                            />
+                        </div>
+                    </>
+                )}
+            </div>
+            <DialogFooter>
+                <Button type="button" variant="outline" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button type="button" onClick={handleSubmit(onSave)} disabled={!isValid}>
+                    {isNew ? 'Add field' : 'Save field'}
+                </Button>
+            </DialogFooter>
+        </>
     );
 }

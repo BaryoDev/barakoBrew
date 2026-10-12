@@ -3,6 +3,7 @@
 // Field sensitivity is the form renderer's business as much as the API's, so the vocabulary lives
 // in barako-content-form and is re-exported here, where every screen already looks for it.
 import { SensitivityLevel } from 'barako-content-form';
+import { z } from 'zod';
 
 export { SensitivityLevel };
 
@@ -99,23 +100,47 @@ export interface UpdateContentRequest {
     version: number;
 }
 
-/** One event from a content stream. Not every event is a document version. */
+/**
+ * One event from a content stream. Not every event is a document version.
+ *
+ * Mirrors Features/Content/History/VersionResponse. The API writes an empty member as null, not by
+ * leaving it out, so every optional member here can be either.
+ */
 export interface ContentVersion {
     id: string;
     /** Which kind of change this was. Decided server side, not the event class name. */
     changeType: 'Created' | 'Updated' | 'StatusChanged' | 'Scheduled' | 'SensitivityChanged' | string;
-    /** Only Created and Updated carry a document. Absent on the rest. */
-    data?: Record<string, unknown>;
+    /** Only Created and Updated carry a document. Null on the rest. */
+    data?: Record<string, unknown> | null;
     lastModifiedBy?: string;
     versionId: string;
     // UTC, with a zone. There used to be an updatedAt here carrying the same instant without one,
     // which new Date() read as local time.
     timestamp: string;
-    status?: ContentStatus;
-    scheduledPublishAt?: string;
-    scheduledUnpublishAt?: string;
-    sensitivity?: SensitivityLevel;
+    status?: ContentStatus | null;
+    scheduledPublishAt?: string | null;
+    scheduledUnpublishAt?: string | null;
+    sensitivity?: SensitivityLevel | null;
 }
+
+/**
+ * What GET /api/contents/{id}/history is parsed against, item by item.
+ *
+ * Loose, so a member the API adds (scheduledSensitivity, for one) still reaches the screen. Status
+ * and sensitivity are held to the enums, which smoke/enums.spec.ts holds to the server's own.
+ */
+export const contentVersionSchema = z.looseObject({
+    id: z.string(),
+    changeType: z.string(),
+    data: z.record(z.string(), z.unknown()).nullish(),
+    lastModifiedBy: z.string().optional(),
+    versionId: z.string(),
+    timestamp: z.string(),
+    status: z.enum(ContentStatus).nullish(),
+    scheduledPublishAt: z.string().nullish(),
+    scheduledUnpublishAt: z.string().nullish(),
+    sensitivity: z.enum(SensitivityLevel).nullish(),
+}) satisfies z.ZodType<ContentVersion>;
 
 export const SENSITIVITY_META: Record<SensitivityLevel, { label: string; description: string }> = {
     [SensitivityLevel.Public]: { label: 'Public', description: 'Visible to every reader' },

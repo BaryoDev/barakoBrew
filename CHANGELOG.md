@@ -9,6 +9,16 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **The entry history and the workflow runs are checked as they arrive.** A body in a shape the
+  console does not read (the history under `versions` instead of `items`, a run status the filter
+  does not offer, a status sent as a number) now shows an error saying so, instead of an empty
+  history or a run the filter cannot find. The History panel had no error state at all and showed
+  "No earlier versions recorded." for a failed read; it has one now. (#40)
+- **The field editor in the content type designer is built on react-hook-form and zod**, as the
+  pattern for the console's forms. Nothing about what it accepts or saves changed. (#40)
+
 ## [1.8.0] - 2026-10-09
 
 **Speaks API contracts 1 to 7, which covers barakoCMS 4.0.1 to 4.8.0.** barakoCMS 4.7.0 moves the
