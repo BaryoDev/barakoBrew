@@ -517,6 +517,50 @@ test.describe('accessibility', () => {
         await scan(page, 'iframe[title="Email preview"]');
     });
 
+    test('the image fields: an upload dialog, the picker over Files, and an inline image', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [
+            {
+                id: 's9',
+                name: 'story',
+                displayName: 'Story',
+                fields: [
+                    { name: 'Title', displayName: 'Title', type: 'string', isRequired: true },
+                    { name: 'Cover', displayName: 'Cover', type: 'file', editor: 'image', isRequired: false },
+                    { name: 'Badge', displayName: 'Badge', type: 'inlineimage', isRequired: false },
+                ],
+            },
+        ]);
+        await page.route(/\/api\/files(\?|$)/, (r) =>
+            r.fulfill({
+                json: pageOf(
+                    [
+                        { id: 'f1', fileName: 'jetty.png', contentType: 'image/png', size: 68, isPublic: true, publicUrl: null, alt: 'A jetty', caption: null, uploadedBy: 'u', createdAt: new Date().toISOString() },
+                    ],
+                    20
+                ),
+            })
+        );
+        await page.route(/\/api\/public\/files\/.*/, (r) => r.fulfill({ body: PNG, contentType: 'image/png' }));
+
+        await page.goto('/content/new?type=story');
+        await expect(page.locator('#Title')).toBeVisible({ timeout: 15000 });
+        await page.locator('#Badge').setInputFiles({ name: 'star.png', mimeType: 'image/png', buffer: PNG });
+        await expect(page.getByLabel('Alt text', { exact: true })).toBeVisible();
+        await scan(page);
+
+        await page.getByRole('button', { name: 'Upload an image for Cover' }).click();
+        await page.getByRole('dialog').getByLabel('Choose a file').setInputFiles({ name: 'harbour.png', mimeType: 'image/png', buffer: PNG });
+        await expect(page.getByRole('dialog').getByLabel('Alt text')).toBeVisible();
+        await scan(page);
+        await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+
+        await page.getByRole('button', { name: 'Choose image for Cover' }).click();
+        await expect(page.getByRole('dialog').getByRole('button', { name: /A jetty/ })).toBeVisible();
+        await scan(page);
+    });
+
     test('the queries screen, with the builder open and a preview rendered', async ({ page }) => {
         await authed(page);
         await stubShell(page);

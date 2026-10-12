@@ -1,17 +1,22 @@
 'use client';
 
-import { useRef, useState, type ReactNode } from 'react';
-import { FILES_PAGE_SIZE, isForbidden, useFiles, type StoredFile } from '@/hooks/use-files';
-import { isNotFound } from '@/lib/api';
-import { formatBytes } from '@/lib/files';
+import { useId, useRef, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { FILES_PAGE_SIZE, isForbidden, uploadFile, useFiles, type StoredFile } from '@/hooks/use-files';
+import { api, apiErrorMessage, isNotFound } from '@/lib/api';
+import { contentProblem, formatBytes, UPLOAD_RULES, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { FieldError } from '@/components/content/field-error';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
@@ -34,12 +39,28 @@ function fromResolved(file: ResolvedFile): ShownFile {
     return { ...file, isPublic: file.url !== null };
 }
 
+/** The alt text cap PATCH /api/files/{id} enforces (MaxAlt in BarakoCMS.Files). */
+const MAX_ALT = 500;
+
+const IMAGE_UPLOAD_TYPES = 'image/png,image/jpeg,image/gif,image/webp,image/avif';
+const ANY_UPLOAD_TYPES = `${IMAGE_UPLOAD_TYPES},application/pdf`;
+
+function isImage(contentType: string) {
+    return contentType.toLowerCase().startsWith('image/');
+}
+
+/** Alt text is kept on the file, not in the entry, so every entry using the image reads the same words. */
+async function saveAlt(id: string, alt: string) {
+    await api.patch(`/api/files/${id}`, { alt });
+}
+
 /**
  * A `file` field: the id of a stored file, picked from Files rather than pasted.
  *
  * The entry keeps the id. What the field shows comes from the `files` member of the entry read, which
  * resolves only files this caller may download, or from the row just picked. With the `image` editor
- * hint the picker lists images only. Uploading stays on the Files screen.
+ * hint the picker lists images only. A new file can be uploaded from here too, and an image is not
+ * uploaded without alt text.
  */
 export function FileField({
     field,
@@ -59,7 +80,8 @@ export function FileField({
     imagesOnly: boolean;
 }) {
     const [open, setOpen] = useState(false);
-    const [picked, setPicked] = useState<StoredFile | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [picked, setPicked] = useState<ShownFile | null>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     const id = typeof value === 'string' ? value : '';
@@ -111,6 +133,16 @@ export function FileField({
                 >
                     {action}
                 </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-haspopup="dialog"
+                    aria-label={`Upload ${imagesOnly ? 'an image' : 'a file'} for ${field.displayName}`}
+                    onClick={() => setUploading(true)}
+                >
+                    Upload
+                </Button>
                 {id && (
                     <Button
                         type="button"
@@ -126,7 +158,27 @@ export function FileField({
                     </Button>
                 )}
             </div>
+            {shown && isImage(shown.contentType) && !shown.alt && (
+                <MissingAlt
+                    fileId={shown.id}
+                    fieldName={field.displayName}
+                    onSaved={(alt) => setPicked({ ...shown, alt })}
+                />
+            )}
             <FieldError message={error} />
+
+            {uploading && (
+                <UploadDialog
+                    fieldName={field.displayName}
+                    imagesOnly={imagesOnly}
+                    onClose={() => setUploading(false)}
+                    onUploaded={(file) => {
+                        setPicked(file);
+                        onChange(file.id);
+                        setUploading(false);
+                    }}
+                />
+            )}
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent
@@ -139,7 +191,7 @@ export function FileField({
                     <DialogHeader>
                         <DialogTitle>Choose {imagesOnly ? 'an image' : 'a file'} for {field.displayName}</DialogTitle>
                         <DialogDescription>
-                            From Files. To add a new one, upload it on the Files screen first.
+                            From Files. To add a new one, close this and choose Upload.
                         </DialogDescription>
                     </DialogHeader>
                     {open && (
@@ -223,5 +275,170 @@ function StoredFilePicker({ imagesOnly, onPick }: { imagesOnly: boolean; onPick:
                 </div>
             )}
         </div>
+    );
+}
+
+/** An image already in the field with no alt text. The words are saved on the file. */
+function MissingAlt({
+    fileId,
+    fieldName,
+    onSaved,
+}: {
+    fileId: string;
+    fieldName: string;
+    onSaved: (alt: string) => void;
+}) {
+    const altId = useId();
+    const [alt, setAlt] = useState('');
+    const [problem, setProblem] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
+
+    const save = async () => {
+        setSaving(true);
+        setProblem(null);
+        try {
+            await saveAlt(fileId, alt.trim());
+            onSaved(alt.trim());
+        } catch (err) {
+            setProblem(apiErrorMessage(err, 'The alt text could not be saved.'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-1.5">
+            <Label htmlFor={altId}>Alt text for {fieldName}</Label>
+            <div className="flex items-center gap-2">
+                <Input
+                    id={altId}
+                    value={alt}
+                    required
+                    aria-invalid={!alt.trim()}
+                    aria-describedby={`${altId}-hint`}
+                    maxLength={MAX_ALT}
+                    onChange={(e) => setAlt(e.target.value)}
+                />
+                <Button type="button" variant="outline" size="sm" disabled={!alt.trim() || saving} onClick={save}>
+                    {saving ? 'Saving…' : 'Save alt text'}
+                </Button>
+            </div>
+            <p id={`${altId}-hint`} className="text-muted-foreground text-xs">
+                This image has no alt text. Describe it for someone who cannot see it; it is saved on the file.
+            </p>
+            <FieldError message={problem ?? undefined} />
+        </div>
+    );
+}
+
+function UploadDialog({
+    fieldName,
+    imagesOnly,
+    onClose,
+    onUploaded,
+}: {
+    fieldName: string;
+    imagesOnly: boolean;
+    onClose: () => void;
+    onUploaded: (file: ShownFile) => void;
+}) {
+    const queryClient = useQueryClient();
+    const [file, setFile] = useState<File | null>(null);
+    const [problem, setProblem] = useState<string | null>(null);
+    const [alt, setAlt] = useState('');
+    const [isPublic, setIsPublic] = useState(false);
+    const [sending, setSending] = useState(false);
+    const needsAlt = file !== null && isImage(file.type);
+
+    const choose = async (chosen: File | undefined) => {
+        setFile(null);
+        if (!chosen) return setProblem(null);
+        const refused =
+            imagesOnly && !isImage(chosen.type)
+                ? 'Only an image can go in this field.'
+                : (uploadProblem(chosen) ?? (await contentProblem(chosen).catch(() => 'The file could not be read.')));
+        setProblem(refused);
+        if (!refused) setFile(chosen);
+    };
+
+    const upload = async () => {
+        if (!file) return;
+        setSending(true);
+        setProblem(null);
+        try {
+            const uploaded = await uploadFile(file, isPublic);
+            const words = alt.trim();
+            if (words) await saveAlt(uploaded.id, words);
+            queryClient.invalidateQueries({ queryKey: ['files'] });
+            onUploaded({ ...uploaded, alt: words || null });
+        } catch (err) {
+            setProblem(apiErrorMessage(err, 'The file could not be uploaded.'));
+            setSending(false);
+        }
+    };
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Upload {imagesOnly ? 'an image' : 'a file'} for {fieldName}</DialogTitle>
+                    <DialogDescription>{UPLOAD_RULES}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="field-upload-input">Choose a file</Label>
+                        <Input
+                            id="field-upload-input"
+                            type="file"
+                            accept={imagesOnly ? IMAGE_UPLOAD_TYPES : ANY_UPLOAD_TYPES}
+                            onChange={(e) => void choose(e.target.files?.[0])}
+                        />
+                        <FieldError message={problem ?? undefined} />
+                    </div>
+                    {needsAlt && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="field-upload-alt">Alt text</Label>
+                            <Input
+                                id="field-upload-alt"
+                                value={alt}
+                                required
+                                aria-describedby="field-upload-alt-hint"
+                                maxLength={MAX_ALT}
+                                onChange={(e) => setAlt(e.target.value)}
+                            />
+                            <p id="field-upload-alt-hint" className="text-muted-foreground text-xs">
+                                Required for an image. Describe it for someone who cannot see it.
+                            </p>
+                        </div>
+                    )}
+                    <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="field-upload-public">Public</Label>
+                            <p id="field-upload-public-help" className="text-muted-foreground text-xs">
+                                Anyone with the link can open a public file. This cannot be changed after upload.
+                            </p>
+                        </div>
+                        <Switch
+                            id="field-upload-public"
+                            checked={isPublic}
+                            onCheckedChange={setIsPublic}
+                            aria-describedby="field-upload-public-help"
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button
+                        type="button"
+                        disabled={!file || (needsAlt && !alt.trim()) || sending}
+                        onClick={() => void upload()}
+                    >
+                        {sending ? 'Uploading…' : 'Upload'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
