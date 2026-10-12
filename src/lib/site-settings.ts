@@ -198,3 +198,27 @@ export function siteProblem(values: Record<string, unknown>): string | null {
         ? null
         : 'The site needs a name before it can be saved.';
 }
+
+/**
+ * The site fields the Theme screen edits. Its editors read and write their own value shapes
+ * (colour slots, token maps, contrast checks), so the Site screen leaves these to it in either layout.
+ */
+export const THEME_FIELDS: ReadonlySet<string> = new Set([
+    'Colors',
+    'Fonts',
+    'Radii',
+    'Layout',
+    'OptionColors',
+    'Variants',
+    'Tokens',
+    'Tones',
+]);
+
+/**
+ * Whether the site type arranges its own edit screen: some field names a section. Then the Site
+ * screen is drawn from the type, each field with the editor its type and hint give it. A type that
+ * names no section, which is the blueprint as shipped, keeps the screen's own layout.
+ */
+export function siteSchemaArranged(schema: { fields: readonly { section?: string | null }[] }): boolean {
+    return schema.fields.some((field) => !!field.section);
+}

@@ -10,10 +10,12 @@ import { FileField } from '@/components/content/file-field';
 import { InlineImageField } from '@/components/content/inline-image-field';
 import { ReferenceListField } from '@/components/content/reference-list-field';
 import { ImageUrlField } from '@/components/site/image-url-field';
+import { LinkList, Structured } from '@/components/site/editors';
 import { FieldError } from '@/components/content/field-error';
 import { isBlocksField } from '@/lib/blocks';
 import { isMenuItemsField } from '@/lib/menu-tree';
 import { chosenEditor } from '@/lib/field-presentation';
+import { readLinks } from '@/lib/site-settings';
 import type { ResolvedFile } from '@/types/content';
 import type { FieldDefinition } from '@/types/schema';
 
@@ -154,6 +156,19 @@ export function DynamicForm({
                         />
                     }
                 />
+            );
+        }
+
+        // By the `links` hint only: a list of label and address pairs, as the site's header links are.
+        if (editor === 'links') {
+            return (
+                <div className="space-y-2">
+                    {label}
+                    <Structured field={field.name} label={field.displayName} value={value} read={readLinks} onChange={set}>
+                        {(links) => <LinkList links={links} onChange={set} />}
+                    </Structured>
+                    <FieldError message={error} />
+                </div>
             );
         }
 
