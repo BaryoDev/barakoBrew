@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
+import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { Controller, useForm, useFormState, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -16,19 +18,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/patterns/empty-state';
 import {
     IconChevronDown,
     IconContentTypes,
+    IconMore,
     IconPen,
     IconPlus,
     IconTrash,
@@ -47,6 +42,8 @@ import { SENSITIVITY_META } from '@/types/content';
 import { OptionsEditor } from '@/components/schema/options-editor';
 import { TOKEN_LENGTH, editorsFor, rolesFor } from '@/lib/field-presentation';
 import { fieldFormSchema, numberText } from '@/lib/field-form';
+import { dropIndex, move } from '@/lib/blocks';
+import { cn } from '@/lib/utils';
 
 interface FieldEditorProps {
     fields: FieldDefinition[];
@@ -138,151 +135,296 @@ const EMPTY_FIELD: FieldDefinition = {
 };
 
 export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps) {
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingIndex, setEditingIndex] = useState<number | null>(null);
+    // One field open at a time: an index into `fields`, NEW for the form that adds one, or nothing.
+    const [open, setOpen] = useState<number | typeof NEW | null>(null);
+    const [announcement, setAnnouncement] = useState('');
+    const [focus, setFocus] = useState<{ name: string; action: 'up' | 'down' } | null>(null);
+    const listId = useId();
+    const listRef = useRef<HTMLUListElement>(null);
 
-    const openNew = () => {
-        setEditingIndex(null);
-        setIsDialogOpen(true);
-    };
+    // A row that moves is put back into the DOM, which takes the focus off the button that moved
+    // it. Put it back on that button, or on the other one once the row reaches an end.
+    useEffect(() => {
+        if (!focus) return;
+        const row = listRef.current?.querySelector(`:scope > [data-field-key="${focus.name}"]`);
+        const target =
+            row?.querySelector<HTMLElement>(`[data-action="${focus.action}"]:not(:disabled)`) ??
+            row?.querySelector<HTMLElement>('[data-action]:not(:disabled)');
+        target?.focus();
+    }, [focus]);
 
-    const openEdit = (index: number) => {
-        setEditingIndex(index);
-        setIsDialogOpen(true);
-    };
-
-    const save = (field: FieldDefinition) => {
+    const save = (index: number | typeof NEW, field: FieldDefinition) => {
         const next = [...fields];
-        if (editingIndex !== null) next[editingIndex] = cleaned(field);
-        else next.push(cleaned(field));
+        if (index === NEW) next.push(cleaned(field));
+        else next[index] = cleaned(field);
         onChange(next);
-        setIsDialogOpen(false);
+        setOpen(null);
     };
 
     const remove = (index: number) => {
         onChange(fields.filter((_, i) => i !== index));
+        if (open === index) setOpen(null);
+        else if (typeof open === 'number' && open > index) setOpen(open - 1);
     };
 
-    const move = (index: number, delta: -1 | 1) => {
-        const target = index + delta;
-        if (target < 0 || target >= fields.length) return;
-        const next = [...fields];
-        [next[index], next[target]] = [next[target], next[index]];
+    const moveField = (from: number, to: number, how: 'up' | 'down' | 'drag') => {
+        const next = move(fields, from, to);
+        if (next === fields) return;
         onChange(next);
+        // The open row follows its field rather than staying at the position it was in.
+        if (open === from) setOpen(to);
+        else if (typeof open === 'number' && open >= Math.min(from, to) && open <= Math.max(from, to)) {
+            setOpen(from < to ? open - 1 : open + 1);
+        }
+        if (how !== 'drag') setFocus({ name: fields[from].name, action: how });
+        setAnnouncement(`${fields[from].displayName} moved to position ${to + 1} of ${fields.length}`);
     };
+
+    const newForm = (
+        <div role="group" aria-label="New field" className="rounded-lg border p-4">
+            <FieldForm
+                key="new"
+                initial={EMPTY_FIELD}
+                isNew
+                others={fields}
+                contentTypes={contentTypes}
+                onSave={(field) => save(NEW, field)}
+                onCancel={() => setOpen(null)}
+            />
+        </div>
+    );
 
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Fields</h3>
-                <Button type="button" variant="outline" size="sm" onClick={openNew}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setOpen(NEW)}>
                     <IconPlus />
                     Add field
                 </Button>
             </div>
 
-            {fields.length === 0 ? (
+            {fields.length === 0 && open !== NEW ? (
                 <EmptyState
                     icon={IconContentTypes}
                     title="No fields yet"
                     description="Every entry of this type will have the fields you define here."
                     action={
-                        <Button type="button" variant="outline" size="sm" onClick={openNew}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(NEW)}>
                             <IconPlus />
                             Add field
                         </Button>
                     }
                 />
-            ) : (
-                <ul className="divide-y rounded-lg border">
+            ) : fields.length > 0 ? (
+                <ul ref={listRef} aria-label="Fields" className="divide-y rounded-lg border">
                     {fields.map((field, index) => (
-                        <li key={field.name} className="flex items-center gap-3 px-4 py-3">
-                            <div className="flex flex-col">
-                                <button
-                                    type="button"
-                                    onClick={() => move(index, -1)}
-                                    disabled={index === 0}
-                                    aria-label={`Move ${field.displayName} up`}
-                                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                                >
-                                    <IconChevronDown className="size-3 rotate-180" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => move(index, 1)}
-                                    disabled={index === fields.length - 1}
-                                    aria-label={`Move ${field.displayName} down`}
-                                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                                >
-                                    <IconChevronDown className="size-3" />
-                                </button>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                    <span className="truncate text-sm font-medium">{field.displayName}</span>
-                                    {field.isRequired && (
-                                        <Badge variant="secondary" className="text-xs">
-                                            Required
-                                        </Badge>
-                                    )}
-                                    {field.sensitivity !== undefined && field.sensitivity !== SensitivityLevel.Public && (
-                                        <Badge variant="outline" className="text-xs">
-                                            {SENSITIVITY_META[field.sensitivity].label}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <p className="text-muted-foreground text-xs">
-                                    <code className="font-mono">{field.name}</code> · {fieldTypeLabel(field.type)}
-                                    {field.multiple ? ', several' : ''}
-                                    {field.currency ? ` in ${field.currency}` : ''}
-                                    {field.section ? ` · ${field.section}` : ''}
-                                </p>
-                            </div>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openEdit(index)}
-                                aria-label={`Edit ${field.displayName}`}
-                            >
-                                <IconPen className="size-3.5" />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => remove(index)}
-                                aria-label={`Remove ${field.displayName}`}
-                                className="text-destructive hover:text-destructive"
-                            >
-                                <IconTrash className="size-3.5" />
-                            </Button>
-                        </li>
+                        <FieldRow
+                            key={field.name}
+                            field={field}
+                            index={index}
+                            count={fields.length}
+                            listId={listId}
+                            open={open === index}
+                            onToggle={() => setOpen(open === index ? null : index)}
+                            onMove={moveField}
+                            onRemove={() => remove(index)}
+                        >
+                            <FieldForm
+                                initial={field}
+                                isNew={false}
+                                others={fields.filter((_, i) => i !== index)}
+                                contentTypes={contentTypes}
+                                onSave={(saved) => save(index, saved)}
+                                onCancel={() => setOpen(null)}
+                            />
+                        </FieldRow>
                     ))}
                 </ul>
-            )}
+            ) : null}
 
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>{editingIndex !== null ? 'Edit field' : 'Add field'}</DialogTitle>
-                        <DialogDescription>
-                            The field name is how the API stores the value; the display name is what editors see.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {/* Mounted with the dialog, so each opening starts a fresh form from the field it edits. */}
-                    <FieldForm
-                        key={editingIndex ?? 'new'}
-                        initial={editingIndex !== null ? fields[editingIndex] : EMPTY_FIELD}
-                        isNew={editingIndex === null}
-                        others={fields.filter((_, i) => i !== editingIndex)}
-                        contentTypes={contentTypes}
-                        onSave={save}
-                        onCancel={() => setIsDialogOpen(false)}
-                    />
-                </DialogContent>
-            </Dialog>
+            {open === NEW && newForm}
+
+            <p aria-live="polite" className="sr-only">
+                {announcement}
+            </p>
         </div>
+    );
+}
+
+/** The open state that means "the form adding a field", as against the index of one being edited. */
+const NEW = 'new';
+
+/**
+ * One field as a row: what it is, how sensitive it is and how it is masked, all without opening it.
+ * Open, the row holds the field's form below that line.
+ *
+ * Reordered by dragging the handle, or with the two move buttons, which are the keyboard's way and
+ * what the handle stands for: the handle is hidden from assistive technology for that reason.
+ */
+function FieldRow({
+    field,
+    index,
+    count,
+    listId,
+    open,
+    onToggle,
+    onMove,
+    onRemove,
+    children,
+}: {
+    field: FieldDefinition;
+    index: number;
+    count: number;
+    listId: string;
+    open: boolean;
+    onToggle: () => void;
+    onMove: (from: number, to: number, how: 'up' | 'down' | 'drag') => void;
+    onRemove: () => void;
+    children: ReactNode;
+}) {
+    const rowRef = useRef<HTMLLIElement>(null);
+    const handleRef = useRef<HTMLSpanElement>(null);
+    const moveRef = useRef(onMove);
+    const [edge, setEdge] = useState<'top' | 'bottom' | null>(null);
+    const [dragging, setDragging] = useState(false);
+
+    useEffect(() => {
+        moveRef.current = onMove;
+    });
+
+    // Registered once per position, not per render: a drag in progress would be dropped if its
+    // element were unregistered and registered again while the pointer moves.
+    useEffect(() => {
+        const element = rowRef.current;
+        const dragHandle = handleRef.current;
+        if (!element || !dragHandle) return;
+        const edgeAt = (clientY: number) => {
+            const rect = element.getBoundingClientRect();
+            return clientY < rect.top + rect.height / 2 ? 'top' : 'bottom';
+        };
+        return combine(
+            draggable({
+                element,
+                dragHandle,
+                getInitialData: () => ({ listId, index }),
+                onDragStart: () => setDragging(true),
+                onDrop: () => setDragging(false),
+            }),
+            dropTargetForElements({
+                element,
+                canDrop: ({ source }) => source.data.listId === listId,
+                getData: () => ({ listId, index }),
+                onDrag: ({ source, location }) =>
+                    setEdge(source.data.index === index ? null : edgeAt(location.current.input.clientY)),
+                onDragLeave: () => setEdge(null),
+                onDrop: ({ source, location }) => {
+                    setEdge(null);
+                    const from = source.data.index;
+                    if (typeof from !== 'number' || from === index) return;
+                    moveRef.current(from, dropIndex(from, index, edgeAt(location.current.input.clientY)), 'drag');
+                },
+            }),
+        );
+    }, [listId, index]);
+
+    const sensitivity = field.sensitivity ?? SensitivityLevel.Public;
+    const mask = FIELD_MASKS.find((m) => m.value === (field.mask ?? FieldMask.Default));
+    const formId = `${listId}-field-${index}`;
+
+    return (
+        <li ref={rowRef} data-field-key={field.name} className={cn('relative', dragging && 'opacity-50')}>
+            {edge && (
+                <div
+                    aria-hidden="true"
+                    className={cn('bg-primary absolute inset-x-0 h-0.5', edge === 'top' ? '-top-px' : '-bottom-px')}
+                />
+            )}
+            <div className="flex items-center gap-3 px-4 py-3">
+                <span
+                    ref={handleRef}
+                    aria-hidden="true"
+                    title="Drag to reorder"
+                    data-drag-handle
+                    className="text-muted-foreground cursor-grab"
+                >
+                    <IconMore className="size-4 rotate-90" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <span className="truncate text-sm font-medium">{field.displayName}</span>
+                        {field.isRequired && (
+                            <Badge variant="secondary" className="text-xs">
+                                Required
+                            </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">
+                            {SENSITIVITY_META[sensitivity].label}
+                        </Badge>
+                    </div>
+                    <p className="text-muted-foreground text-xs">
+                        <code className="font-mono">{field.name}</code> · {fieldTypeLabel(field.type)}
+                        {field.multiple ? ', several' : ''}
+                        {field.currency ? ` in ${field.currency}` : ''}
+                        {field.section ? ` · ${field.section}` : ''}
+                    </p>
+                    {sensitivity !== SensitivityLevel.Public && (
+                        <p className="text-muted-foreground text-xs">
+                            Mask: {mask?.label}
+                            {field.visibleToRoles?.length ? ` · Visible to ${field.visibleToRoles.join(', ')}` : ''}
+                        </p>
+                    )}
+                </div>
+                <div className="flex flex-col">
+                    <button
+                        type="button"
+                        data-action="up"
+                        onClick={() => onMove(index, index - 1, 'up')}
+                        disabled={index === 0}
+                        aria-label={`Move ${field.displayName} up`}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    >
+                        <IconChevronDown className="size-3 rotate-180" />
+                    </button>
+                    <button
+                        type="button"
+                        data-action="down"
+                        onClick={() => onMove(index, index + 1, 'down')}
+                        disabled={index === count - 1}
+                        aria-label={`Move ${field.displayName} down`}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    >
+                        <IconChevronDown className="size-3" />
+                    </button>
+                </div>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={onToggle}
+                    aria-expanded={open}
+                    aria-controls={formId}
+                    aria-label={`Edit ${field.displayName}`}
+                >
+                    <IconPen className="size-3.5" />
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={onRemove}
+                    aria-label={`Remove ${field.displayName}`}
+                    className="text-destructive hover:text-destructive"
+                >
+                    <IconTrash className="size-3.5" />
+                </Button>
+            </div>
+            {open && (
+                <div id={formId} role="group" aria-label={`Edit ${field.displayName}`} className="border-t px-4 py-4">
+                    {children}
+                </div>
+            )}
+        </li>
     );
 }
 
@@ -325,8 +467,22 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
         void trigger();
     };
 
+    // The form sits inside the page's own form, not in a dialog, so Enter in one of its inputs would
+    // submit the page and create the type around a half-typed field. Here Enter does nothing. A
+    // native listener rather than onKeyDown, since this wrapper is not itself a control.
+    const rootRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const root = rootRef.current;
+        if (!root) return;
+        const swallowEnter = (e: KeyboardEvent) => {
+            if (e.key === 'Enter' && e.target instanceof HTMLInputElement) e.preventDefault();
+        };
+        root.addEventListener('keydown', swallowEnter);
+        return () => root.removeEventListener('keydown', swallowEnter);
+    }, []);
+
     return (
-        <>
+        <div ref={rootRef}>
             <div className="space-y-4 py-2">
                 <div className="space-y-2">
                     <Label htmlFor="field-display-name">Display name</Label>
@@ -638,7 +794,7 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Sensitivity</Label>
+                    <Label htmlFor="field-sensitivity">Sensitivity</Label>
                     <Controller
                         control={control}
                         name="sensitivity"
@@ -647,7 +803,7 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                                 value={String(field.value ?? SensitivityLevel.Public)}
                                 onValueChange={(value) => field.onChange(value as SensitivityLevel)}
                             >
-                                <SelectTrigger className="w-full">
+                                <SelectTrigger id="field-sensitivity" className="w-full">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -706,7 +862,7 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                             </p>
                         </div>
                         <div className="space-y-2">
-                            <Label>Mask</Label>
+                            <Label htmlFor="field-mask">Mask</Label>
                             <Controller
                                 control={control}
                                 name="mask"
@@ -715,7 +871,7 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                                         value={String(field.value ?? FieldMask.Default)}
                                         onValueChange={(value) => field.onChange(value as FieldMask)}
                                     >
-                                        <SelectTrigger className="w-full">
+                                        <SelectTrigger id="field-mask" className="w-full">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -732,14 +888,14 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                     </>
                 )}
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={onCancel}>
                     Cancel
                 </Button>
                 <Button type="button" onClick={handleSubmit(onSave)} disabled={!isValid}>
                     {isNew ? 'Add field' : 'Save field'}
                 </Button>
-            </DialogFooter>
-        </>
+            </div>
+        </div>
     );
 }

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { FieldEditor } from './field-editor';
-import { FIELD_TYPES, FIELD_TYPE_GROUPS, type FieldDefinition } from '@/types/schema';
+import { FIELD_TYPES, FIELD_TYPE_GROUPS, FieldMask, SensitivityLevel, type FieldDefinition } from '@/types/schema';
 
 // Radix Select drives itself with pointer capture and scrolls the active item into view. jsdom has
 // neither, so the picker cannot be opened without these.
@@ -282,5 +283,86 @@ describe('the members a field type adds', () => {
 
         expect(await screen.findByText(/already exists, ignoring case/)).toBeInTheDocument();
         await waitFor(() => expect(addButton()).toBeDisabled());
+    });
+});
+
+describe('the field rows', () => {
+    const SALARY: FieldDefinition = {
+        name: 'Salary',
+        displayName: 'Salary',
+        type: 'money',
+        isRequired: true,
+        sensitivity: SensitivityLevel.Sensitive,
+        mask: FieldMask.Redact,
+        visibleToRoles: ['HR'],
+    };
+    const NAME: FieldDefinition = { name: 'Name', displayName: 'Name', type: 'string', isRequired: false };
+
+    /** Keeps the list, the way the page does, so a move shows up in the next render. */
+    function Harness({ initial, saved }: { initial: FieldDefinition[]; saved?: FieldDefinition[][] }) {
+        const [fields, setFields] = useState(initial);
+        return (
+            <FieldEditor
+                fields={fields}
+                onChange={(next) => {
+                    saved?.push(next);
+                    setFields(next);
+                }}
+            />
+        );
+    }
+
+    function rows() {
+        return within(screen.getByRole('list', { name: 'Fields' })).getAllByRole('listitem');
+    }
+
+    it('show each field sensitivity and mask without opening anything', () => {
+        render(<Harness initial={[NAME, SALARY]} />);
+
+        expect(rows()).toHaveLength(2);
+        expect(rows()[0]).toHaveTextContent('Public');
+        expect(rows()[1]).toHaveTextContent('Sensitive');
+        expect(rows()[1]).toHaveTextContent('Mask: Redact to ***');
+        expect(rows()[1]).toHaveTextContent('Visible to HR');
+        expect(screen.queryByRole('group', { name: /Edit/ })).toBeNull();
+    });
+
+    it('open a field in its own row, not in a dialog', () => {
+        render(<Harness initial={[NAME, SALARY]} />);
+
+        const edit = screen.getByRole('button', { name: 'Edit Salary' });
+        expect(edit).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(edit);
+
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(edit).toHaveAttribute('aria-expanded', 'true');
+        const form = within(rows()[1]).getByRole('group', { name: 'Edit Salary' });
+        expect(within(form).getByLabelText('Display name')).toHaveValue('Salary');
+    });
+
+    it('move with the keyboard buttons, say where the field went, and keep the focus on it', async () => {
+        const saved: FieldDefinition[][] = [];
+        render(<Harness initial={[NAME, SALARY]} saved={saved} />);
+
+        const up = screen.getByRole('button', { name: 'Move Salary up' });
+        up.focus();
+        fireEvent.click(up);
+
+        expect(saved).toHaveLength(1);
+        expect(saved[0].map((f) => f.name)).toEqual(['Salary', 'Name']);
+        expect(rows()[0]).toHaveTextContent('Salary');
+        expect(screen.getByText('Salary moved to position 1 of 2')).toBeInTheDocument();
+        // Up is disabled at the top, so the focus lands on the way back down.
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Move Salary down' })).toHaveFocus());
+    });
+
+    it('keep an open row on its field when the field moves', () => {
+        render(<Harness initial={[NAME, SALARY]} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Edit Salary' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Move Salary up' }));
+
+        expect(within(rows()[0]).getByRole('group', { name: 'Edit Salary' })).toBeInTheDocument();
+        expect(within(rows()[1]).queryByRole('group')).toBeNull();
     });
 });

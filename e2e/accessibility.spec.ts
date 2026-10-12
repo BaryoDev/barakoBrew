@@ -397,6 +397,23 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
+    test('the content type builder, with two field rows and one open for editing', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [SCHEMA]);
+
+        await page.goto('/schemas/new');
+        for (const name of ['Headline', 'Salary']) {
+            await page.getByRole('button', { name: 'Add field' }).first().click();
+            const form = page.getByRole('group', { name: 'New field' });
+            await form.getByLabel('Display name').fill(name);
+            await form.getByRole('button', { name: 'Add field' }).click();
+        }
+        await page.getByRole('button', { name: 'Edit Salary' }).click();
+        await expect(page.getByRole('group', { name: 'Edit Salary' })).toBeVisible();
+        await scan(page);
+    });
+
     test('the workflow runs screen, with a run open and every badge tone on screen', async ({ page }) => {
         await authed(page);
         await stubShell(page);

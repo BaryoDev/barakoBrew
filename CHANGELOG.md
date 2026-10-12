@@ -9,6 +9,16 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **The content type builder edits fields in their rows, and the rows can be dragged.** Every row
+  shows the field's sensitivity, and its mask and the roles that see it when it is not Public, so
+  none of that is behind a dialog any more. Edit opens the field's form inside its row, and Add field
+  opens one below the list. Drag a row by its handle to reorder it, or use its move buttons from the
+  keyboard; each move is announced to screen readers, and the focus stays on the field that moved.
+  Enter inside an open field no longer submits the whole type. The Sensitivity and Mask pickers are
+  now named by their labels. (#12)
+
 ### Changed
 
 - **The entry history and the workflow runs are checked as they arrive.** A body in a shape the
