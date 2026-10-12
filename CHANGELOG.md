@@ -18,6 +18,9 @@ moved. Which API a console works against is stated per release instead.
   "No earlier versions recorded." for a failed read; it has one now. (#40)
 - **The field editor in the content type designer is built on react-hook-form and zod**, as the
   pattern for the console's forms. Nothing about what it accepts or saves changed. (#40)
+- **The entries list renders through TanStack Table**, keeping the existing table styling, and
+  paging, search and the filters stay on the server and in the URL. Nothing on the screen changed;
+  it is the base the search, status and version work on that list builds on. (#41)
 
 ## [1.8.0] - 2026-10-09
 
