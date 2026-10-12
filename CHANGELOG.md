@@ -16,8 +16,9 @@ moved. Which API a console works against is stated per release instead.
   none of that is behind a dialog any more. Edit opens the field's form inside its row, and Add field
   opens one below the list. Drag a row by its handle to reorder it, or use its move buttons from the
   keyboard; each move is announced to screen readers, and the focus stays on the field that moved.
-  Enter inside an open field no longer submits the whole type. The Sensitivity and Mask pickers are
-  now named by their labels. (#12)
+  Enter inside an open field no longer submits the whole type, and Create content type waits while a
+  field is open, so edits that were never saved are not sent without them. The Sensitivity and Mask
+  pickers are now named by their labels. (#12)
 - **`docs/` is published to the GitHub wiki on every push to master that changes it**, by the same
   sync barakoCMS uses. The wiki needs its first page saved on GitHub before the first run can
   succeed. (BaryoDev/barakoCMS#995)

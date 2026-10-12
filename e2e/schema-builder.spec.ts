@@ -93,3 +93,27 @@ test('Enter in an open field does not create the type around it', async ({ page 
     await page.waitForTimeout(500);
     expect(bodies).toHaveLength(0);
 });
+
+test('an open field holds back the create until it is saved, so its edits are not lost', async ({ page }) => {
+    const bodies = await recordCreates(page);
+    await startType(page, ['Salary']);
+    const create = page.getByRole('button', { name: 'Create content type' });
+    await expect(create).toBeEnabled();
+
+    await page.getByRole('button', { name: 'Edit Salary' }).click();
+    const form = page.getByRole('group', { name: 'Edit Salary' });
+    await form.getByLabel('Sensitivity').click();
+    await page.getByRole('option', { name: /Hidden/ }).click();
+
+    await expect(create).toBeDisabled();
+    await expect(page.getByText('Save or cancel the open field before creating the type.')).toBeVisible();
+    await create.click({ force: true });
+    await page.waitForTimeout(500);
+    expect(bodies).toHaveLength(0);
+
+    await form.getByRole('button', { name: 'Save field' }).click();
+    await expect(form).toHaveCount(0);
+    await create.click();
+    await expect.poll(() => bodies.length).toBe(1);
+    expect((bodies[0].fields[0] as { sensitivity?: unknown }).sensitivity).toBe('Hidden');
+});

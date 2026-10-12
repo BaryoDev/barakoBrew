@@ -53,6 +53,11 @@ interface FieldEditorProps {
      * target is typed by its API name.
      */
     contentTypes?: { name: string; displayName: string }[];
+    /**
+     * Told whether a field form is open. An open form holds edits `fields` does not have yet, so a
+     * page that sends `fields` should not send them while one is open.
+     */
+    onEditingChange?: (editing: boolean) => void;
 }
 
 /** A Select item cannot carry an empty value, so "none" is spelled with this. */
@@ -134,13 +139,18 @@ const EMPTY_FIELD: FieldDefinition = {
     mask: FieldMask.Default,
 };
 
-export function FieldEditor({ fields, onChange, contentTypes }: FieldEditorProps) {
+export function FieldEditor({ fields, onChange, contentTypes, onEditingChange }: FieldEditorProps) {
     // One field open at a time: an index into `fields`, NEW for the form that adds one, or nothing.
     const [open, setOpen] = useState<number | typeof NEW | null>(null);
     const [announcement, setAnnouncement] = useState('');
     const [focus, setFocus] = useState<{ name: string; action: 'up' | 'down' } | null>(null);
     const listId = useId();
     const listRef = useRef<HTMLUListElement>(null);
+
+    const editing = open !== null;
+    useEffect(() => {
+        onEditingChange?.(editing);
+    }, [editing, onEditingChange]);
 
     // A row that moves is put back into the DOM, which takes the focus off the button that moved
     // it. Put it back on that button, or on the other one once the row reaches an end.
@@ -892,7 +902,7 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                 <Button type="button" variant="outline" onClick={onCancel}>
                     Cancel
                 </Button>
-                <Button type="button" onClick={handleSubmit(onSave)} disabled={!isValid}>
+                <Button type="button" onClick={handleSubmit(onSave)} disabled={!isValid || Object.keys(errors).length > 0}>
                     {isNew ? 'Add field' : 'Save field'}
                 </Button>
             </div>
