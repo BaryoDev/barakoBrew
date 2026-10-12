@@ -73,13 +73,15 @@ async function stubTemplates(page: Page) {
 
 test('a template is reworded, saved and previewed against an entry', async ({ page }) => {
     await stubTemplates(page);
-    let saved: unknown = null;
+    let saved: { data: typeof TEMPLATE.data } | null = null;
+    let stored = TEMPLATE;
     await page.route(new RegExp(`/api/contents/${ID}$`), (r) => {
         if (r.request().method() === 'PUT') {
             saved = r.request().postDataJSON();
+            stored = { ...TEMPLATE, version: 3, data: saved!.data };
             return r.fulfill({ json: { id: ID, version: 3 } });
         }
-        return r.fulfill({ json: TEMPLATE });
+        return r.fulfill({ json: stored });
     });
     let previewed: unknown = null;
     await page.route(new RegExp(`/api/email-templates/${ID}/preview$`), (r) => {
@@ -93,6 +95,8 @@ test('a template is reworded, saved and previewed against an entry', async ({ pa
 
     await page.getByRole('combobox', { name: 'Sent for entries of type' }).click();
     await page.getByRole('option', { name: 'Booking' }).click();
+    await page.getByRole('combobox', { name: 'Against the entry' }).click();
+    await page.getByRole('option', { name: 'Ana' }).click();
     const subject = page.getByLabel('Subject', { exact: true });
     await subject.fill('Hello ');
     await page.getByRole('radio', { name: 'Subject' }).click();
@@ -106,9 +110,10 @@ test('a template is reworded, saved and previewed against an entry', async ({ pa
         status: 'Published',
         version: 2,
     });
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await expect(page.getByText('Save to see your changes in it')).toBeHidden();
 
-    await page.getByRole('combobox', { name: 'Against the entry' }).click();
-    await page.getByRole('option', { name: 'Ana' }).click();
+    await expect(page.getByRole('combobox', { name: 'Against the entry' })).toHaveText('Ana');
     await page.getByRole('button', { name: 'Preview' }).click();
     await expect.poll(() => previewed).toEqual({ entryId: ANA });
     await expect(page.getByText('Hello Ana')).toBeVisible();

@@ -2,7 +2,8 @@
 
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FILES_PAGE_SIZE, isForbidden, uploadFile, useFiles, type StoredFile } from '@/hooks/use-files';
+import { toast } from 'sonner';
+import { FILES_PAGE_SIZE, isForbidden, uploadFile, useFiles, type StoredFile, type UploadedFile } from '@/hooks/use-files';
 import { api, apiErrorMessage, isNotFound } from '@/lib/api';
 import { contentProblem, formatBytes, UPLOAD_RULES, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
@@ -365,16 +366,28 @@ function UploadDialog({
         if (!file) return;
         setSending(true);
         setProblem(null);
+        let uploaded: UploadedFile;
         try {
-            const uploaded = await uploadFile(file, isPublic);
-            const words = alt.trim();
-            if (words) await saveAlt(uploaded.id, words);
-            queryClient.invalidateQueries({ queryKey: ['files'] });
-            onUploaded({ ...uploaded, alt: words || null });
+            uploaded = await uploadFile(file, isPublic);
         } catch (err) {
             setProblem(apiErrorMessage(err, 'The file could not be uploaded.'));
             setSending(false);
+            return;
         }
+        queryClient.invalidateQueries({ queryKey: ['files'] });
+        // The file is stored by now, so it goes in the field whatever happens to the alt text. A
+        // retry from this dialog would store a second copy; the field asks for the words again.
+        const words = alt.trim();
+        let saved: string | null = null;
+        if (words) {
+            try {
+                await saveAlt(uploaded.id, words);
+                saved = words;
+            } catch (err) {
+                toast.error(apiErrorMessage(err, 'The file was uploaded, but its alt text could not be saved.'));
+            }
+        }
+        onUploaded({ ...uploaded, alt: saved });
     };
 
     return (

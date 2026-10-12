@@ -8,7 +8,10 @@ vi.mock('@/lib/api', async () => {
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() } };
 });
 
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 const { api } = await import('@/lib/api');
+const { toast } = await import('sonner');
 const { DynamicForm } = await import('./dynamic-form');
 
 const COVER_ID = '6f9619ff-8b86-d011-b42d-00cf4fc964ff';
@@ -122,6 +125,24 @@ describe('a file field', () => {
             const form = vi.mocked(api.post).mock.calls[0][1] as FormData;
             expect(form.get('isPublic')).toBe('false');
             expect(vi.mocked(api.patch).mock.calls).toEqual([[`/api/files/${COVER_ID}`, { alt: 'Boats at dawn' }]]);
+        });
+
+        it('keeps an uploaded image in the field when its alt text cannot be saved, so a retry stores no second copy', async () => {
+            vi.mocked(api.post).mockResolvedValue({
+                data: { id: COVER_ID, fileName: 'harbour.png', contentType: 'image/png', size: 12, isPublic: false, publicUrl: null },
+            });
+            vi.mocked(api.patch).mockRejectedValue(new Error('Network Error'));
+            const onChange = renderForm({ editor: 'image' }, {});
+
+            const dialog = await chooseUpload(PNG);
+            fireEvent.change(await within(dialog).findByLabelText('Alt text'), { target: { value: 'Boats at dawn' } });
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Upload' }));
+
+            await waitFor(() => expect(onChange).toHaveBeenCalledWith({ Cover: COVER_ID }));
+            await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+            expect(api.post).toHaveBeenCalledTimes(1);
+            expect(api.patch).toHaveBeenCalledTimes(1);
+            expect(vi.mocked(toast.error).mock.calls[0][0]).toMatch(/uploaded, but its alt text could not be saved/);
         });
 
         it('refuses a PDF in an image field before any request', async () => {

@@ -75,7 +75,7 @@ export default function NewWorkflowPage() {
     actions: actions.map((a) => ({
       ...a,
       parameters: withoutBlankOptional(
-        a.parameters,
+        withoutTemplateCovered(a),
         actionTypes?.find((m) => m.type === a.type)
       ),
     })),
@@ -89,16 +89,14 @@ export default function NewWorkflowPage() {
     setActions((prev) => [...prev, { type, parameters }]);
   };
 
-  // Subject and Body beside a Template are refused with 400, so choosing a template drops them and
-  // choosing none brings them back empty.
+  // Subject and Body stay in state while a template is chosen, so choosing none brings back what was
+  // typed. definition() leaves them out, since the API refuses them with 400 beside a Template.
   const setActionTemplate = (index: number, template: string) => {
     setActions((prev) =>
       prev.map((a, i) => {
         if (i !== index) return a;
         const parameters = { ...a.parameters };
         if (template) {
-          delete parameters.Subject;
-          delete parameters.Body;
           parameters[TEMPLATE_PARAMETER] = template;
         } else {
           delete parameters[TEMPLATE_PARAMETER];
@@ -486,6 +484,14 @@ export default function NewWorkflowPage() {
  */
 function isRequestPicker(actionType: string, parameter: string) {
   return actionType === 'Request' && parameter === 'Request';
+}
+
+function withoutTemplateCovered(action: WorkflowAction): Record<string, string> {
+  if (action.type !== 'Email' || !action.parameters[TEMPLATE_PARAMETER]) return action.parameters;
+  const rest = { ...action.parameters };
+  delete rest.Subject;
+  delete rest.Body;
+  return rest;
 }
 
 /** The fields an Email action's template picker stands in for: Template itself, and Subject and Body once one is chosen. */

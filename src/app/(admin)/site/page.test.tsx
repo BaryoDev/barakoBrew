@@ -37,6 +37,7 @@ const ARRANGED = [
     { name: 'Motto', displayName: 'Motto', type: 'string', isRequired: false, section: 'Identity' },
     { name: 'NavLinks', displayName: 'Navigation', type: 'json', isRequired: false, editor: 'links', section: 'Header' },
     { name: 'Colors', displayName: 'Colours', type: 'json', isRequired: false, section: 'Look' },
+    { name: 'StyleRecipes', displayName: 'Recipes', type: 'json', isRequired: false, section: 'Recipes' },
 ];
 
 const BLUEPRINT = [
@@ -97,6 +98,7 @@ describe('the Site screen', () => {
 
         // Colours belong to the Theme screen, and the hard-coded layout is not drawn.
         expect(screen.queryByText('Look', { selector: 'legend' })).toBeNull();
+        expect(screen.queryByText('Recipes', { selector: 'legend' })).toBeNull();
         expect(screen.queryByLabelText('Site name (required)')).toBeNull();
     });
 

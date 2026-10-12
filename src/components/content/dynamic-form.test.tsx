@@ -127,6 +127,7 @@ describe('the editor hint', () => {
         expect(screen.getByDisplayValue('/join')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Edit as JSON' })).toBeInTheDocument();
         expect(document.getElementById('Items')).toBeNull();
+        expect(screen.getByRole('group', { name: 'Items' })).toContainElement(screen.getByDisplayValue('/join'));
     });
 });
 

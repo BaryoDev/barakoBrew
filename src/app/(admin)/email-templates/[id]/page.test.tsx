@@ -162,4 +162,42 @@ describe('the email template editor', () => {
         expect(screen.getByTitle('Email preview')).toHaveAttribute('srcdoc', '<!DOCTYPE html><p>Thanks Ana</p>');
         expect(screen.getByTitle('Email preview')).toHaveAttribute('sandbox', '');
     });
+
+    it('keeps the preview entry and the last preview through a save that brings back a new version', async () => {
+        vi.mocked(api.post).mockResolvedValue({
+            data: { subject: 'Hello Ana', html: '<p>Thanks Ana</p>', status: 'Draft', sendable: false, problem: null, warnings: [], notes: [] },
+        });
+        let stored = TEMPLATE;
+        const get = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation((async (url: string, config?: { params?: Record<string, unknown> }) => {
+            if (url === `/api/contents/${ID}`) return { data: stored, headers: { etag: `"${stored.version}"` } };
+            return get(url, config);
+        }) as typeof api.get);
+        vi.mocked(api.put).mockImplementation((async (_url: string, body: { data: typeof TEMPLATE.data }) => {
+            stored = { ...TEMPLATE, version: 5, data: body.data };
+            return { data: { id: ID, version: 5 }, headers: {} };
+        }) as unknown as typeof api.put);
+
+        renderEditor();
+        const subject = (await screen.findByLabelText('Subject')) as HTMLInputElement;
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/content-types'));
+        await choose('Sent for entries of type', 'Booking');
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/contents', expect.objectContaining({ params: expect.objectContaining({ contentType: 'booking' }) })));
+        await choose('Against the entry', 'Ana');
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+        expect(await screen.findByText('Hello Ana')).toBeInTheDocument();
+
+        fireEvent.change(subject, { target: { value: 'Hi' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(screen.getByLabelText('Subject')).toHaveValue('Hi'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled());
+
+        expect(screen.getByRole('combobox', { name: 'Sent for entries of type' })).toHaveTextContent('Booking');
+        expect(screen.getByRole('combobox', { name: 'Against the entry' })).toHaveTextContent('Ana');
+        expect(screen.getByText('Hello Ana')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(api.post).mock.calls[1]).toEqual([`/api/email-templates/${ID}/preview`, { entryId: BOOKING_ID }]);
+    });
 });

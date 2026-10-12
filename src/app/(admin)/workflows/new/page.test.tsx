@@ -439,6 +439,7 @@ describe('the Email action template', () => {
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/content-types'));
         await choose('When an entry of type…', 'Post');
         fireEvent.change(await addEmail(), { target: { value: '{{createdBy.email}}' } });
+        fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: 'Typed before the template' } });
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/contents', expect.anything()));
         await choose('Template (optional)', 'Welcome');
 
@@ -475,6 +476,22 @@ describe('the Email action template', () => {
                 data: { Name: 'Booked', Slug: 'booked', Subject: 'Booked', Body: 'See you {{data.Date}}' },
             },
         ]);
+    });
+
+    it('brings back the typed subject and body when the template is set back to none', async () => {
+        serve(EMAIL_META);
+        renderPage();
+        await addEmail();
+        fireEvent.change(screen.getByLabelText(/^Subject/), { target: { value: 'Booked' } });
+        fireEvent.change(screen.getByLabelText(/^Body/), { target: { value: 'See you {{data.Date}}' } });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/contents', expect.anything()));
+
+        await choose('Template (optional)', 'Welcome');
+        expect(screen.queryByLabelText(/^Subject/)).not.toBeInTheDocument();
+        await choose('Template (optional)', 'None, write the subject and body here');
+
+        expect(screen.getByLabelText(/^Subject/)).toHaveValue('Booked');
+        expect(screen.getByLabelText(/^Body/)).toHaveValue('See you {{data.Date}}');
     });
 
     it('offers no template picker to an API whose Email action takes no Template', async () => {

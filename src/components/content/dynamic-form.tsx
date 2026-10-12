@@ -161,9 +161,11 @@ export function DynamicForm({
 
         // By the `links` hint only: a list of label and address pairs, as the site's header links are.
         if (editor === 'links') {
+            // No single control takes the label, so the group carries the field's name instead.
+            const labelId = `${field.name}-links-label`;
             return (
-                <div className="space-y-2">
-                    {label}
+                <div role="group" aria-labelledby={labelId} className="space-y-2">
+                    <div id={labelId}>{label}</div>
                     <Structured field={field.name} label={field.displayName} value={value} read={readLinks} onChange={set}>
                         {(links) => <LinkList links={links} onChange={set} />}
                     </Structured>

@@ -45,6 +45,14 @@ type PreviewWidth = keyof typeof PREVIEW_WIDTHS;
 export default function EmailTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: entry, isLoading } = useContent(id);
+  // Held above the keyed editor, so a save that remounts it keeps what the preview was set up against.
+  const [entryType, setEntryType] = useState('');
+  const [previewEntry, setPreviewEntry] = useState('');
+  const preview = usePreviewEmailTemplate();
+  const chooseType = (type: string) => {
+    setEntryType(type);
+    setPreviewEntry('');
+  };
 
   if (isLoading) return <TableSkeleton />;
 
@@ -64,14 +72,40 @@ export default function EmailTemplatePage({ params }: { params: Promise<{ id: st
   }
 
   // Keyed on the version, so a save that the refetch brings back starts the form from what was stored.
-  return <TemplateEditor key={`${entry.id}:${entry.version}`} entry={entry} />;
+  return (
+    <TemplateEditor
+      key={`${entry.id}:${entry.version}`}
+      entry={entry}
+      entryType={entryType}
+      onEntryType={chooseType}
+      previewEntry={previewEntry}
+      onPreviewEntry={setPreviewEntry}
+      preview={preview}
+    />
+  );
 }
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function TemplateEditor({ entry }: { entry: ContentDetailRead }) {
+type PreviewMutation = ReturnType<typeof usePreviewEmailTemplate>;
+
+function TemplateEditor({
+  entry,
+  entryType,
+  onEntryType,
+  previewEntry,
+  onPreviewEntry,
+  preview,
+}: {
+  entry: ContentDetailRead;
+  entryType: string;
+  onEntryType: (type: string) => void;
+  previewEntry: string;
+  onPreviewEntry: (id: string) => void;
+  preview: PreviewMutation;
+}) {
   const update = useUpdateContent();
   const { data: layouts } = useEmailLayouts();
   const [name, setName] = useState(text(entry.data.Name));
@@ -79,7 +113,6 @@ function TemplateEditor({ entry }: { entry: ContentDetailRead }) {
   const [body, setBody] = useState(text(entry.data.Body));
   const [layout, setLayout] = useState(text(entry.data.Layout));
   const [target, setTarget] = useState<InsertTarget>(BODY_ID);
-  const [entryType, setEntryType] = useState('');
 
   const dirty =
     name !== text(entry.data.Name) ||
@@ -204,14 +237,21 @@ function TemplateEditor({ entry }: { entry: ContentDetailRead }) {
         </div>
 
         <div className="min-w-0 space-y-5">
-          <EntryTypePicker value={entryType} onChange={setEntryType} />
+          <EntryTypePicker value={entryType} onChange={onEntryType} />
           <PlaceholderPicker
             contentType={entryType}
             target={target}
             onTarget={setTarget}
             onInsert={insert}
           />
-          <PreviewPanel template={entry.id} contentType={entryType} dirty={dirty} />
+          <PreviewPanel
+            template={entry.id}
+            contentType={entryType}
+            dirty={dirty}
+            entryId={previewEntry}
+            onEntryId={onPreviewEntry}
+            preview={preview}
+          />
         </div>
       </div>
     </>
@@ -314,14 +354,18 @@ function PreviewPanel({
   template,
   contentType,
   dirty,
+  entryId,
+  onEntryId,
+  preview,
 }: {
   template: string;
   contentType: string;
   dirty: boolean;
+  entryId: string;
+  onEntryId: (id: string) => void;
+  preview: PreviewMutation;
 }) {
   const { data: entries } = useContents({ contentType, pageSize: 50 }, !!contentType);
-  const preview = usePreviewEmailTemplate();
-  const [entryId, setEntryId] = useState('');
   const [width, setWidth] = useState<PreviewWidth>('desktop');
   const result = preview.data;
 
@@ -342,7 +386,7 @@ function PreviewPanel({
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-48 flex-1 space-y-2">
           <Label htmlFor="et-preview-entry">Against the entry</Label>
-          <Select value={entryId} onValueChange={setEntryId} disabled={!contentType}>
+          <Select value={entryId} onValueChange={onEntryId} disabled={!contentType}>
             <SelectTrigger id="et-preview-entry" className="w-full">
               <SelectValue
                 placeholder={contentType ? 'Choose an entry' : 'Choose a content type first'}

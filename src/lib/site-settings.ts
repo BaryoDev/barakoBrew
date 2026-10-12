@@ -200,8 +200,9 @@ export function siteProblem(values: Record<string, unknown>): string | null {
 }
 
 /**
- * The site fields the Theme screen edits. Its editors read and write their own value shapes
- * (colour slots, token maps, contrast checks), so the Site screen leaves these to it in either layout.
+ * The site fields the Theme and Recipes screens edit. Their editors read and write their own value
+ * shapes (colour slots, token maps, contrast checks, recipe rules), so the Site screen leaves these
+ * to them in either layout.
  */
 export const THEME_FIELDS: ReadonlySet<string> = new Set([
     'Colors',
@@ -212,6 +213,7 @@ export const THEME_FIELDS: ReadonlySet<string> = new Set([
     'Variants',
     'Tokens',
     'Tones',
+    'StyleRecipes',
 ]);
 
 /**
