@@ -40,6 +40,8 @@ export interface WorkflowActionMetadata {
     type: string;
     description: string;
     requiredParameters: string[];
+    /** The parameters it accepts but does not require, such as Email's Template. Absent from an older API. */
+    optionalParameters?: string[];
     exampleConfiguration: string;
     /**
      * Content, Delivery, Comms, Data or Flow. Null for an action that declares none, and absent from

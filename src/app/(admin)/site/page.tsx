@@ -1,6 +1,9 @@
 'use client';
 
 import { SiteForm } from '@/components/site/site-form';
+import { DynamicForm } from '@/components/content/dynamic-form';
+import { useAccess } from '@/hooks/use-access';
+import type { ContentTypeDefinition } from '@/types/schema';
 import { ShareLinksPanel } from '@/components/site/share-links-panel';
 import { SiteModeSection } from '@/components/site/site-mode-section';
 import { SiteProfileSection } from '@/components/site/profile-section';
@@ -16,6 +19,8 @@ import {
     readSocialLinks,
     readTopBar,
     siteProblem,
+    siteSchemaArranged,
+    THEME_FIELDS,
     type FooterColumn,
 } from '@/lib/site-settings';
 
@@ -28,145 +33,181 @@ export default function SitePage() {
             description="This tenant's name, mode, profile, images, header, footer and social links, read by the site on each request."
             problem={siteProblem}
         >
-            {({ values, set, entry, schema }) => (
-                <>
-                    <Section title="Identity">
-                        <TextField id="site-name" label="Site name (required)" value={values.Name} onChange={(v) => set('Name', v)} />
-                        <TextField id="site-tagline" label="Tagline" value={values.Tagline} onChange={(v) => set('Tagline', v)} />
-                        <TextField
-                            id="site-url"
-                            label="Site address"
-                            type="url"
-                            placeholder="https://example.com"
-                            hint="The site's canonical origin. Absolute links are built from it."
-                            problem={
-                                text(values.Url).trim() !== '' && !isAbsoluteHttpUrl(text(values.Url))
-                                    ? 'Use a full http or https address.'
-                                    : null
-                            }
-                            value={values.Url}
-                            onChange={(v) => set('Url', v)}
-                        />
-                        <TextField
-                            id="site-locale"
-                            label="Locale"
-                            placeholder="en-PH"
-                            hint="For dates and the page language."
-                            value={values.Locale}
-                            onChange={(v) => set('Locale', v)}
-                        />
-                        <TextField
-                            id="site-copyright"
-                            label="Copyright line"
-                            value={values.Copyright}
-                            onChange={(v) => set('Copyright', v)}
-                        />
-                    </Section>
+            {({ values, set, entry, schema }) =>
+                siteSchemaArranged(schema) ? (
+                    <>
+                        <ArrangedSite values={values} set={set} schema={schema} />
+                        <ShareLinksPanel scope={siteShareScope(entry?.data?.Url)} />
+                    </>
+                ) : (
+                    <>
+                        <Section title="Identity">
+                            <TextField id="site-name" label="Site name (required)" value={values.Name} onChange={(v) => set('Name', v)} />
+                            <TextField id="site-tagline" label="Tagline" value={values.Tagline} onChange={(v) => set('Tagline', v)} />
+                            <TextField
+                                id="site-url"
+                                label="Site address"
+                                type="url"
+                                placeholder="https://example.com"
+                                hint="The site's canonical origin. Absolute links are built from it."
+                                problem={
+                                    text(values.Url).trim() !== '' && !isAbsoluteHttpUrl(text(values.Url))
+                                        ? 'Use a full http or https address.'
+                                        : null
+                                }
+                                value={values.Url}
+                                onChange={(v) => set('Url', v)}
+                            />
+                            <TextField
+                                id="site-locale"
+                                label="Locale"
+                                placeholder="en-PH"
+                                hint="For dates and the page language."
+                                value={values.Locale}
+                                onChange={(v) => set('Locale', v)}
+                            />
+                            <TextField
+                                id="site-copyright"
+                                label="Copyright line"
+                                value={values.Copyright}
+                                onChange={(v) => set('Copyright', v)}
+                            />
+                        </Section>
 
-                    <SiteModeSection values={values} set={set} schema={schema} />
+                        <SiteModeSection values={values} set={set} schema={schema} />
 
-                    <SiteProfileSection values={values} set={set} schema={schema} />
+                        <SiteProfileSection values={values} set={set} schema={schema} />
 
-                    <Section title="Images" description="Uploaded files or any absolute address.">
-                        <ImageUrlField id="site-logo" label="Logo" value={values.Logo} onChange={(v) => set('Logo', v)} />
-                        <TextField
-                            id="site-logo-alt"
-                            label="Logo alt text"
-                            hint="What a screen reader says for the logo."
-                            value={values.LogoAlt}
-                            onChange={(v) => set('LogoAlt', v)}
-                        />
-                        <ImageUrlField
-                            id="site-footer-logo"
-                            label="Footer logo"
-                            value={values.FooterLogo}
-                            onChange={(v) => set('FooterLogo', v)}
-                        />
-                        <ImageUrlField id="site-favicon" label="Favicon" value={values.Favicon} onChange={(v) => set('Favicon', v)} />
-                        <ImageUrlField
-                            id="site-share-image"
-                            label="Default share image"
-                            value={values.ShareImage}
-                            onChange={(v) => set('ShareImage', v)}
-                        />
-                    </Section>
+                        <Section title="Images" description="Uploaded files or any absolute address.">
+                            <ImageUrlField id="site-logo" label="Logo" value={values.Logo} onChange={(v) => set('Logo', v)} />
+                            <TextField
+                                id="site-logo-alt"
+                                label="Logo alt text"
+                                hint="What a screen reader says for the logo."
+                                value={values.LogoAlt}
+                                onChange={(v) => set('LogoAlt', v)}
+                            />
+                            <ImageUrlField
+                                id="site-footer-logo"
+                                label="Footer logo"
+                                value={values.FooterLogo}
+                                onChange={(v) => set('FooterLogo', v)}
+                            />
+                            <ImageUrlField id="site-favicon" label="Favicon" value={values.Favicon} onChange={(v) => set('Favicon', v)} />
+                            <ImageUrlField
+                                id="site-share-image"
+                                label="Default share image"
+                                value={values.ShareImage}
+                                onChange={(v) => set('ShareImage', v)}
+                            />
+                        </Section>
 
-                    <Section title="Top bar" description="The strip above the header. Leave it empty for none.">
-                        <Structured
-                            field="TopBar"
-                            label="Top bar"
-                            value={values.TopBar}
-                            read={readTopBar}
-                            onChange={(v) => set('TopBar', v)}
-                        >
-                            {(top) => (
-                                <div className="space-y-3">
-                                    <TextField
-                                        id="site-topbar-text"
-                                        label="Top bar text"
-                                        value={top.text}
-                                        onChange={(v) => set('TopBar', { ...top, text: v })}
+                        <Section title="Top bar" description="The strip above the header. Leave it empty for none.">
+                            <Structured
+                                field="TopBar"
+                                label="Top bar"
+                                value={values.TopBar}
+                                read={readTopBar}
+                                onChange={(v) => set('TopBar', v)}
+                            >
+                                {(top) => (
+                                    <div className="space-y-3">
+                                        <TextField
+                                            id="site-topbar-text"
+                                            label="Top bar text"
+                                            value={top.text}
+                                            onChange={(v) => set('TopBar', { ...top, text: v })}
+                                        />
+                                        <LinkList links={top.links} onChange={(links) => set('TopBar', { ...top, links })} />
+                                    </div>
+                                )}
+                            </Structured>
+                        </Section>
+
+                        <Section title="Header links" description="Links in the header beyond the page tree.">
+                            <Structured
+                                field="HeaderLinks"
+                                label="Header links"
+                                value={values.HeaderLinks}
+                                read={readLinks}
+                                onChange={(v) => set('HeaderLinks', v)}
+                            >
+                                {(links) => <LinkList links={links} onChange={(next) => set('HeaderLinks', next)} />}
+                            </Structured>
+                        </Section>
+
+                        <Section title="Footer columns">
+                            <Structured
+                                field="FooterColumns"
+                                label="Footer columns"
+                                value={values.FooterColumns}
+                                read={readFooterColumns}
+                                onChange={(v) => set('FooterColumns', v)}
+                            >
+                                {(columns) => (
+                                    <FooterColumns columns={columns} onChange={(next) => set('FooterColumns', next)} />
+                                )}
+                            </Structured>
+                        </Section>
+
+                        <Section title="Social links">
+                            <Structured
+                                field="SocialLinks"
+                                label="Social links"
+                                value={values.SocialLinks}
+                                read={readSocialLinks}
+                                onChange={(v) => set('SocialLinks', v)}
+                            >
+                                {(social) => (
+                                    <PairList
+                                        items={social}
+                                        onChange={(next) => set('SocialLinks', next)}
+                                        noun="profile"
+                                        hrefKey="href"
+                                        blank={{ network: '', href: '' }}
+                                        columns={[
+                                            { key: 'network', label: 'Network', placeholder: 'facebook' },
+                                            { key: 'href', label: 'Profile link', placeholder: 'https://facebook.com/…' },
+                                        ]}
                                     />
-                                    <LinkList links={top.links} onChange={(links) => set('TopBar', { ...top, links })} />
-                                </div>
-                            )}
-                        </Structured>
-                    </Section>
+                                )}
+                            </Structured>
+                        </Section>
 
-                    <Section title="Header links" description="Links in the header beyond the page tree.">
-                        <Structured
-                            field="HeaderLinks"
-                            label="Header links"
-                            value={values.HeaderLinks}
-                            read={readLinks}
-                            onChange={(v) => set('HeaderLinks', v)}
-                        >
-                            {(links) => <LinkList links={links} onChange={(next) => set('HeaderLinks', next)} />}
-                        </Structured>
-                    </Section>
-
-                    <Section title="Footer columns">
-                        <Structured
-                            field="FooterColumns"
-                            label="Footer columns"
-                            value={values.FooterColumns}
-                            read={readFooterColumns}
-                            onChange={(v) => set('FooterColumns', v)}
-                        >
-                            {(columns) => (
-                                <FooterColumns columns={columns} onChange={(next) => set('FooterColumns', next)} />
-                            )}
-                        </Structured>
-                    </Section>
-
-                    <Section title="Social links">
-                        <Structured
-                            field="SocialLinks"
-                            label="Social links"
-                            value={values.SocialLinks}
-                            read={readSocialLinks}
-                            onChange={(v) => set('SocialLinks', v)}
-                        >
-                            {(social) => (
-                                <PairList
-                                    items={social}
-                                    onChange={(next) => set('SocialLinks', next)}
-                                    noun="profile"
-                                    hrefKey="href"
-                                    blank={{ network: '', href: '' }}
-                                    columns={[
-                                        { key: 'network', label: 'Network', placeholder: 'facebook' },
-                                        { key: 'href', label: 'Profile link', placeholder: 'https://facebook.com/…' },
-                                    ]}
-                                />
-                            )}
-                        </Structured>
-                    </Section>
-
-                    <ShareLinksPanel scope={siteShareScope(entry?.data?.Url)} />
-                </>
-            )}
+                        <ShareLinksPanel scope={siteShareScope(entry?.data?.Url)} />
+                    </>
+                )
+            }
         </SiteForm>
+    );
+}
+
+/** The site type's own arrangement: its fields in its sections, each with its type's editor and its hint. */
+function ArrangedSite({
+    values,
+    set,
+    schema,
+}: {
+    values: Record<string, unknown>;
+    set: (field: string, value: unknown) => void;
+    schema: ContentTypeDefinition;
+}) {
+    const access = useAccess();
+    const fields = schema.fields.filter((field) => !THEME_FIELDS.has(field.name));
+    return (
+        <section className="space-y-5 rounded-xl border p-5">
+            <DynamicForm
+                fields={fields}
+                values={values}
+                contentType={schema.name}
+                viewer={access.viewer}
+                onChange={(next) => {
+                    for (const field of fields) {
+                        if (next[field.name] !== values[field.name]) set(field.name, next[field.name]);
+                    }
+                }}
+            />
+        </section>
     );
 }
 

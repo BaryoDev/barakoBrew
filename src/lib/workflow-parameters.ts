@@ -17,13 +17,19 @@ export function isSecretParameter(name: string): boolean {
 }
 
 /**
- * Parameters an action accepts but does not require.
- *
- * The action metadata lists required parameters only, so these are read from the example
- * configuration the API publishes with it. That is where WebhookAction names its Secret.
+ * Parameters an action accepts but does not require: the metadata's own `optionalParameters`, and
+ * the parameters its example configuration names beyond the required ones. An older API lists no
+ * optional parameters, and the example is where WebhookAction names its Secret.
  */
 export function optionalParameters(meta: WorkflowActionMetadata | undefined): string[] {
-    if (!meta?.exampleConfiguration) return [];
+    if (!meta) return [];
+    const required = new Set(meta.requiredParameters);
+    const listed = (meta.optionalParameters ?? []).filter((name) => !required.has(name));
+    return [...new Set([...listed, ...fromExample(meta)])];
+}
+
+function fromExample(meta: WorkflowActionMetadata): string[] {
+    if (!meta.exampleConfiguration) return [];
     let example: unknown;
     try {
         example = JSON.parse(meta.exampleConfiguration);

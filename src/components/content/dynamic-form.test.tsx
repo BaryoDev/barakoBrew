@@ -111,13 +111,23 @@ describe('the editor hint', () => {
         expect(document.querySelector('textarea')).toBeNull();
     });
 
-    it('wins over the name, so a menu Items field with another hint is plain JSON', () => {
+    it('wins over the name, so a menu Items field with the links hint gets the link list, not the tree', () => {
         const fields = [
             { name: 'Items', displayName: 'Items', type: 'json', isRequired: false, editor: 'links' },
         ] as FieldDefinition[];
-        render(<DynamicForm contentType="menu" fields={fields} values={{ Items: [] }} onChange={() => {}} />);
+        render(
+            <DynamicForm
+                contentType="menu"
+                fields={fields}
+                values={{ Items: [{ label: 'Join', href: '/join' }] }}
+                onChange={() => {}}
+            />
+        );
 
-        expect(document.getElementById('Items')?.tagName).toBe('TEXTAREA');
+        expect(screen.getByDisplayValue('/join')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Edit as JSON' })).toBeInTheDocument();
+        expect(document.getElementById('Items')).toBeNull();
+        expect(screen.getByRole('group', { name: 'Items' })).toContainElement(screen.getByDisplayValue('/join'));
     });
 });
 

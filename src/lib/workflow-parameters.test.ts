@@ -33,6 +33,11 @@ describe('optionalParameters', () => {
         expect(optionalParameters(EMAIL)).toEqual([]);
     });
 
+    it('takes the optional parameters the metadata lists, beside those the example names', () => {
+        expect(optionalParameters({ ...EMAIL, optionalParameters: ['Attachments', 'Template'] })).toEqual(['Attachments', 'Template']);
+        expect(optionalParameters({ ...WEBHOOK, optionalParameters: ['Secret'] })).toEqual(['Secret']);
+    });
+
     it('finds none, rather than throwing, when the example is not JSON', () => {
         expect(optionalParameters({ ...WEBHOOK, exampleConfiguration: 'not json' })).toEqual([]);
         expect(optionalParameters({ ...WEBHOOK, exampleConfiguration: '{"Parameters":[1]}' })).toEqual([]);

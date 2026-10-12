@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { FieldDefinition } from '@/types/schema';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
-    return { ...actual, api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
+    return { ...actual, api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() } };
 });
 
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 const { api } = await import('@/lib/api');
+const { toast } = await import('sonner');
 const { DynamicForm } = await import('./dynamic-form');
 
 const COVER_ID = '6f9619ff-8b86-d011-b42d-00cf4fc964ff';
@@ -88,5 +91,85 @@ describe('a file field', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Clear Cover' }));
 
         expect(onChange).toHaveBeenCalledWith({ Cover: null });
+    });
+
+    describe('uploading from the field', () => {
+        // The first bytes of a PNG, so the content check the API also runs passes.
+        const PNG = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], 'harbour.png', { type: 'image/png' });
+        const PDF = new File([new TextEncoder().encode('%PDF-1.7 hello')], 'terms.pdf', { type: 'application/pdf' });
+
+        async function chooseUpload(file: File) {
+            fireEvent.click(screen.getByRole('button', { name: /^Upload (an image|a file) for Cover$/ }));
+            const dialog = await screen.findByRole('dialog');
+            fireEvent.change(within(dialog).getByLabelText('Choose a file'), { target: { files: [file] } });
+            return dialog;
+        }
+
+        it('uploads an image with its alt text and fills the field with the returned id', async () => {
+            vi.mocked(api.post).mockResolvedValue({
+                data: { id: COVER_ID, fileName: 'harbour.png', contentType: 'image/png', size: 12, isPublic: false, publicUrl: null },
+            });
+            vi.mocked(api.patch).mockResolvedValue({ data: {} });
+            const onChange = renderForm({ editor: 'image' }, {});
+
+            const dialog = await chooseUpload(PNG);
+            const upload = within(dialog).getByRole('button', { name: 'Upload' });
+            const alt = await within(dialog).findByLabelText('Alt text');
+            expect(upload).toBeDisabled();
+            fireEvent.change(alt, { target: { value: 'Boats at dawn' } });
+            expect(upload).toBeEnabled();
+            fireEvent.click(upload);
+
+            await waitFor(() => expect(onChange).toHaveBeenCalledWith({ Cover: COVER_ID }));
+            expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/api/files');
+            const form = vi.mocked(api.post).mock.calls[0][1] as FormData;
+            expect(form.get('isPublic')).toBe('false');
+            expect(vi.mocked(api.patch).mock.calls).toEqual([[`/api/files/${COVER_ID}`, { alt: 'Boats at dawn' }]]);
+        });
+
+        it('keeps an uploaded image in the field when its alt text cannot be saved, so a retry stores no second copy', async () => {
+            vi.mocked(api.post).mockResolvedValue({
+                data: { id: COVER_ID, fileName: 'harbour.png', contentType: 'image/png', size: 12, isPublic: false, publicUrl: null },
+            });
+            vi.mocked(api.patch).mockRejectedValue(new Error('Network Error'));
+            const onChange = renderForm({ editor: 'image' }, {});
+
+            const dialog = await chooseUpload(PNG);
+            fireEvent.change(await within(dialog).findByLabelText('Alt text'), { target: { value: 'Boats at dawn' } });
+            fireEvent.click(within(dialog).getByRole('button', { name: 'Upload' }));
+
+            await waitFor(() => expect(onChange).toHaveBeenCalledWith({ Cover: COVER_ID }));
+            await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+            expect(api.post).toHaveBeenCalledTimes(1);
+            expect(api.patch).toHaveBeenCalledTimes(1);
+            expect(vi.mocked(toast.error).mock.calls[0][0]).toMatch(/uploaded, but its alt text could not be saved/);
+        });
+
+        it('refuses a PDF in an image field before any request', async () => {
+            const onChange = renderForm({ editor: 'image' }, {});
+
+            const dialog = await chooseUpload(PDF);
+
+            expect(await within(dialog).findByText('Only an image can go in this field.')).toBeInTheDocument();
+            expect(within(dialog).getByRole('button', { name: 'Upload' })).toBeDisabled();
+            expect(api.post).not.toHaveBeenCalled();
+            expect(onChange).not.toHaveBeenCalled();
+        });
+
+        it('asks for alt text on an image already in the field that has none, and saves it on the file', async () => {
+            vi.mocked(api.patch).mockResolvedValue({ data: {} });
+            renderForm({ editor: 'image' }, { Cover: COVER_ID }, {
+                Cover: { id: COVER_ID, url: '/api/public/files/x', fileName: 'harbour.png', contentType: 'image/png', size: 1, alt: null, caption: null },
+            });
+
+            const alt = screen.getByLabelText('Alt text for Cover');
+            expect(alt).toBeRequired();
+            fireEvent.change(alt, { target: { value: 'Boats at dawn' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Save alt text' }));
+
+            await waitFor(() => expect(screen.queryByLabelText('Alt text for Cover')).toBeNull());
+            expect(vi.mocked(api.patch).mock.calls).toEqual([[`/api/files/${COVER_ID}`, { alt: 'Boats at dawn' }]]);
+            expect(screen.getByText(/alt: Boats at dawn/)).toBeInTheDocument();
+        });
     });
 });

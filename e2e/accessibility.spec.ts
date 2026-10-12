@@ -100,8 +100,13 @@ function row(id: string, contentType: string, status: string, title: string, ver
     };
 }
 
-/** Serious and critical only. Minor and moderate are reported in the failure message, not failed on. */
-async function scan(page: import('@playwright/test').Page) {
+/**
+ * Serious and critical only. Minor and moderate are reported in the failure message, not failed on.
+ *
+ * `exclude` is for a frame axe cannot enter, such as the email preview: a sandbox with no scripts,
+ * holding HTML the API rendered rather than markup of the console's.
+ */
+async function scan(page: import('@playwright/test').Page, exclude?: string) {
     // Refuse to audit a page that is still moving, rather than trusting every caller to remember.
     // The first check fails a scan run outside the reduced-motion context below, which is how a case
     // copied into another file would lose it. The second covers the frame between an animation
@@ -112,9 +117,8 @@ async function scan(page: import('@playwright/test').Page) {
     ).toBe(true);
     await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
 
-    const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze();
+    const builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
+    const results = await (exclude ? builder.exclude(exclude) : builder).analyze();
 
     const blocking = results.violations.filter(
         (v) => v.impact === 'serious' || v.impact === 'critical'
@@ -428,6 +432,132 @@ test.describe('accessibility', () => {
         // The question a permanent failure asks before it retries.
         await page.getByRole('button', { name: /Retry action 2/ }).click();
         await expect(page.getByRole('alertdialog')).toBeVisible();
+        await scan(page);
+    });
+
+    test('the workflow builder, with a Request action open and the library beside it', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [SCHEMA]);
+        await page.route('**/api/workflows/actions', (r) =>
+            r.fulfill({
+                json: [
+                    {
+                        type: 'Request',
+                        description: 'Send a configured request through a configured connector',
+                        requiredParameters: ['Request'],
+                        exampleConfiguration: '{"Type":"Request","Parameters":{"Request":"ping"}}',
+                        group: 'Delivery',
+                    },
+                    { type: 'Email', description: 'Send an email', requiredParameters: ['To'], exampleConfiguration: '{}', group: 'Comms' },
+                ],
+            })
+        );
+        await page.route('**/api/workflows/variables**', (r) =>
+            r.fulfill({ json: { systemVariables: [], dataFields: [] } })
+        );
+        await page.route(/\/api\/requests(\?|$)/, (r) =>
+            r.fulfill({
+                json: pageOf([
+                    {
+                        id: 'r1', name: 'Ping', slug: 'ping', connectorSlug: 'slack', method: 'POST',
+                        pathTemplate: '/hooks/abc', headerTemplates: { 'X-Trace': '{{id}}' }, bodyTemplate: '{}',
+                        bodyContentType: 'application/json', querySlug: null, success: 'TwoHundredRange',
+                        successJsonPath: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+                    },
+                ]),
+            })
+        );
+
+        await page.goto('/workflows/new');
+        await page.getByRole('button', { name: 'Add Request' }).click();
+        await page.getByRole('combobox', { name: 'Request', exact: true }).click();
+        await page.getByRole('option', { name: 'Ping (ping)' }).click();
+        await expect(page.getByLabel('What this request sends')).toBeVisible();
+        await scan(page);
+    });
+
+    test('the email template editor, with placeholders offered and a preview rendered', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [SCHEMA]);
+        const id = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+        await page.route(new RegExp(`/api/contents/${id}$`), (r) =>
+            r.fulfill({
+                json: {
+                    id, contentType: 'email-template', status: 'Draft', sensitivity: 'Public', version: 1,
+                    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+                    data: { Name: 'Welcome', Slug: 'welcome', Subject: 'Hello', Body: 'Thanks for writing.' },
+                },
+            })
+        );
+        await page.route(/\/api\/contents(\?|$)/, (r) =>
+            r.fulfill({ json: pageOf([{ id: 'a1', contentType: 'article', status: 'Published', data: { Title: 'Spring menu' } }]) })
+        );
+        await page.route('**/api/workflows/variables**', (r) =>
+            r.fulfill({ json: { systemVariables: [], dataFields: [{ name: '{{data.Title}}', description: 'Title', example: '', type: 'string' }] } })
+        );
+        await page.route(new RegExp(`/api/email-templates/${id}/preview$`), (r) =>
+            r.fulfill({
+                json: {
+                    subject: 'Hello', html: '<!DOCTYPE html><html><body><p>Thanks for writing.</p></body></html>',
+                    status: 'Draft', sendable: false, problem: 'The template is Draft. Only a published template is sent.',
+                    warnings: [{ field: 'Body', message: 'A placeholder is sent as written.' }], notes: [],
+                },
+            })
+        );
+
+        await page.goto(`/email-templates/${id}`);
+        await page.getByRole('combobox', { name: 'Sent for entries of type' }).click();
+        await page.getByRole('option', { name: 'Article' }).click();
+        await page.getByRole('combobox', { name: 'Against the entry' }).click();
+        await page.getByRole('option', { name: 'Spring menu' }).click();
+        await page.getByRole('button', { name: 'Preview' }).click();
+        await expect(page.getByTitle('Email preview')).toBeVisible();
+        await scan(page, 'iframe[title="Email preview"]');
+    });
+
+    test('the image fields: an upload dialog, the picker over Files, and an inline image', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [
+            {
+                id: 's9',
+                name: 'story',
+                displayName: 'Story',
+                fields: [
+                    { name: 'Title', displayName: 'Title', type: 'string', isRequired: true },
+                    { name: 'Cover', displayName: 'Cover', type: 'file', editor: 'image', isRequired: false },
+                    { name: 'Badge', displayName: 'Badge', type: 'inlineimage', isRequired: false },
+                ],
+            },
+        ]);
+        await page.route(/\/api\/files(\?|$)/, (r) =>
+            r.fulfill({
+                json: pageOf(
+                    [
+                        { id: 'f1', fileName: 'jetty.png', contentType: 'image/png', size: 68, isPublic: true, publicUrl: null, alt: 'A jetty', caption: null, uploadedBy: 'u', createdAt: new Date().toISOString() },
+                    ],
+                    20
+                ),
+            })
+        );
+        await page.route(/\/api\/public\/files\/.*/, (r) => r.fulfill({ body: PNG, contentType: 'image/png' }));
+
+        await page.goto('/content/new?type=story');
+        await expect(page.locator('#Title')).toBeVisible({ timeout: 15000 });
+        await page.locator('#Badge').setInputFiles({ name: 'star.png', mimeType: 'image/png', buffer: PNG });
+        await expect(page.getByLabel('Alt text', { exact: true })).toBeVisible();
+        await scan(page);
+
+        await page.getByRole('button', { name: 'Upload an image for Cover' }).click();
+        await page.getByRole('dialog').getByLabel('Choose a file').setInputFiles({ name: 'harbour.png', mimeType: 'image/png', buffer: PNG });
+        await expect(page.getByRole('dialog').getByLabel('Alt text')).toBeVisible();
+        await scan(page);
+        await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+
+        await page.getByRole('button', { name: 'Choose image for Cover' }).click();
+        await expect(page.getByRole('dialog').getByRole('button', { name: /A jetty/ })).toBeVisible();
         await scan(page);
     });
 
