@@ -306,3 +306,96 @@ describe('the placeholder help', () => {
         expect(screen.getByText(/For example: 8 hours 30 minutes/)).toBeInTheDocument();
     });
 });
+
+describe('the builder timeline', () => {
+    it('lays the form out as When, Only when and Then do, in that order', async () => {
+        renderPage();
+        await screen.findByRole('heading', { name: 'Action library' });
+
+        const steps = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+        expect(steps).toEqual(['When', 'Only when', 'Then do', 'Action library']);
+    });
+
+    it('adds an action from the library beside the builder', async () => {
+        renderPage();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Add Webhook' }));
+
+        expect(await screen.findByLabelText(/^Url/)).toBeInTheDocument();
+    });
+});
+
+describe('the Request action', () => {
+    // As GET /api/workflows/actions returns RequestAction on barakoCMS 5.0.
+    const REQUEST_META: WorkflowActionMetadata = {
+        type: 'Request',
+        description: 'Send a configured request through a configured connector',
+        requiredParameters: ['Request'],
+        exampleConfiguration: '{"Type":"Request","Parameters":{"Request":"post-to-facebook"}}',
+        group: 'Delivery',
+    };
+
+    // Two definitions as GET /api/requests returns them, so choosing the second cannot pass by default.
+    const REQUESTS = [
+        {
+            id: 'r1', name: 'Ping Slack', slug: 'ping-slack', connectorSlug: 'slack', method: 'POST',
+            pathTemplate: '/hooks/abc', headerTemplates: {}, bodyTemplate: '{"text":"{{data.Title}}"}',
+            bodyContentType: 'application/json', querySlug: null, success: 'TwoHundredRange', successJsonPath: null,
+            createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
+        },
+        {
+            id: 'r2', name: 'Post to Facebook', slug: 'post-to-facebook', connectorSlug: 'facebook', method: 'PUT',
+            pathTemplate: '/v19.0/{{data.PageId}}/feed', headerTemplates: { 'X-Trace': '{{id}}' }, bodyTemplate: null,
+            bodyContentType: 'application/json', querySlug: null, success: 'TwoHundredRange', successJsonPath: null,
+            createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
+        },
+    ];
+
+    function serve(requests: () => unknown) {
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation((async (url: string, ...rest: unknown[]) => {
+            if (url === '/api/workflows/actions') return { data: [REQUEST_META] };
+            if (url === '/api/requests') return requests();
+            return (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest);
+        }) as typeof api.get);
+    }
+
+    it('picks a configured request, shows what it sends, and saves its slug', async () => {
+        serve(() => ({ data: page(REQUESTS) }));
+        renderPage();
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Share on publish' } });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/content-types'));
+        await choose('When an entry of type…', 'Post');
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/actions'));
+        await choose('Add an action', 'Request');
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/requests'));
+        await choose('Request', 'Post to Facebook (post-to-facebook)');
+
+        const sends = screen.getByLabelText('What this request sends');
+        expect(within(sends).getAllByRole('definition', { hidden: true }).map((d) => d.textContent)).toEqual([
+            'PUT',
+            'facebook',
+            '/v19.0/{{data.PageId}}/feed',
+            'X-Trace',
+        ]);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Create workflow' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        const body = vi.mocked(api.post).mock.calls[0][1] as { actions: unknown[] };
+        expect(body.actions).toEqual([{ type: 'Request', parameters: { Request: 'post-to-facebook' } }]);
+    });
+
+    it('takes a typed slug when the requests cannot be listed', async () => {
+        serve(() => Promise.reject(Object.assign(new Error('Forbidden'), { response: { status: 403 } })));
+        renderPage();
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/actions'));
+        await choose('Add an action', 'Request');
+
+        const input = await screen.findByRole('textbox', { name: 'Request' });
+        fireEvent.change(input, { target: { value: 'ping-slack' } });
+
+        expect(input).toHaveValue('ping-slack');
+        expect(screen.getByText(/could not be listed/)).toBeInTheDocument();
+    });
+});

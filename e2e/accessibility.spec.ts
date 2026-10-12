@@ -431,6 +431,48 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
+    test('the workflow builder, with a Request action open and the library beside it', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, [SCHEMA]);
+        await page.route('**/api/workflows/actions', (r) =>
+            r.fulfill({
+                json: [
+                    {
+                        type: 'Request',
+                        description: 'Send a configured request through a configured connector',
+                        requiredParameters: ['Request'],
+                        exampleConfiguration: '{"Type":"Request","Parameters":{"Request":"ping"}}',
+                        group: 'Delivery',
+                    },
+                    { type: 'Email', description: 'Send an email', requiredParameters: ['To'], exampleConfiguration: '{}', group: 'Comms' },
+                ],
+            })
+        );
+        await page.route('**/api/workflows/variables**', (r) =>
+            r.fulfill({ json: { systemVariables: [], dataFields: [] } })
+        );
+        await page.route(/\/api\/requests(\?|$)/, (r) =>
+            r.fulfill({
+                json: pageOf([
+                    {
+                        id: 'r1', name: 'Ping', slug: 'ping', connectorSlug: 'slack', method: 'POST',
+                        pathTemplate: '/hooks/abc', headerTemplates: { 'X-Trace': '{{id}}' }, bodyTemplate: '{}',
+                        bodyContentType: 'application/json', querySlug: null, success: 'TwoHundredRange',
+                        successJsonPath: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+                    },
+                ]),
+            })
+        );
+
+        await page.goto('/workflows/new');
+        await page.getByRole('button', { name: 'Add Request' }).click();
+        await page.getByRole('combobox', { name: 'Request', exact: true }).click();
+        await page.getByRole('option', { name: 'Ping (ping)' }).click();
+        await expect(page.getByLabel('What this request sends')).toBeVisible();
+        await scan(page);
+    });
+
     test('the queries screen, with the builder open and a preview rendered', async ({ page }) => {
         await authed(page);
         await stubShell(page);

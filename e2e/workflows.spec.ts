@@ -110,3 +110,95 @@ test('the action picker lists kinds under the group the API reports, ungrouped o
     await listbox.getByRole('option', { name: 'Custom' }).click();
     await expect(page.getByLabel(/^Thing/)).toBeVisible();
 });
+
+// As GET /api/workflows/actions returns RequestAction on barakoCMS 5.0, and GET /api/requests a definition.
+const REQUEST_META = {
+    type: 'Request',
+    description: 'Send a configured request through a configured connector',
+    requiredParameters: ['Request'],
+    exampleConfiguration: '{"Type":"Request","Parameters":{"Request":"post-to-facebook"}}',
+    group: 'Delivery',
+};
+
+const FACEBOOK_REQUEST = {
+    id: 'r2',
+    name: 'Post to Facebook',
+    slug: 'post-to-facebook',
+    connectorSlug: 'facebook',
+    method: 'POST',
+    pathTemplate: '/v19.0/{{data.PageId}}/feed',
+    headerTemplates: {},
+    bodyTemplate: '{"message":"{{data.Title}}"}',
+    bodyContentType: 'application/json',
+    querySlug: null,
+    success: 'TwoHundredRange',
+    successJsonPath: null,
+    createdAt: '2026-10-01T00:00:00Z',
+    updatedAt: '2026-10-01T00:00:00Z',
+};
+
+test('a Request action is created by picking a configured request, not by typing its slug', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubContentTypes(page, [{ id: 's1', name: 'post', displayName: 'Post', fields: [] }]);
+    await page.route('**/api/workflows/actions', (r) => r.fulfill({ json: [REQUEST_META] }));
+    await page.route('**/api/workflows/variables**', (r) =>
+        r.fulfill({ json: { systemVariables: [], dataFields: [] } })
+    );
+    await page.route(/\/api\/requests(\?|$)/, (r) => r.fulfill({ json: pageOf([FACEBOOK_REQUEST]) }));
+
+    let created: unknown = null;
+    await page.route(/\/api\/workflows(\?|$)/, (r) => {
+        if (r.request().method() === 'POST') {
+            created = r.request().postDataJSON();
+            return r.fulfill({ json: { ...(created as object), id: 'wf-share' } });
+        }
+        return r.fulfill({ json: pageOf([]) });
+    });
+
+    await page.goto('/workflows/new');
+    await page.getByLabel('Name').fill('Share on publish');
+    await page.getByRole('combobox', { name: /When an entry of type/ }).click();
+    await page.getByRole('option', { name: 'Post' }).click();
+
+    await page.getByRole('button', { name: 'Add Request' }).click();
+    await page.getByRole('combobox', { name: 'Request', exact: true }).click();
+    await page.getByRole('option', { name: 'Post to Facebook (post-to-facebook)' }).click();
+    const sends = page.getByLabel('What this request sends');
+    await expect(sends).toContainText('POST');
+    await expect(sends).toContainText('/v19.0/{{data.PageId}}/feed');
+
+    await page.getByRole('button', { name: 'Create workflow' }).click();
+    await expect(page).toHaveURL(/\/workflows$/);
+
+    expect(created).toEqual({
+        name: 'Share on publish',
+        triggerContentType: 'post',
+        triggerEvent: 'Created',
+        conditions: {},
+        actions: [{ type: 'Request', parameters: { Request: 'post-to-facebook' } }],
+    });
+});
+
+test('switching a workflow off writes enabled false to the API', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await page.route('**/api/workflow-runs**', (r) => r.fulfill({ json: pageOf([]) }));
+
+    let workflow = { ...SAVED, enabled: true };
+    let written: unknown = null;
+    await page.route(/\/api\/workflows\/wf-press\/enabled$/, (r) => {
+        written = r.request().postDataJSON();
+        workflow = { ...workflow, enabled: (written as { enabled: boolean }).enabled };
+        return r.fulfill({ json: workflow });
+    });
+    await page.route(/\/api\/workflows(\?|$)/, (r) => r.fulfill({ json: pageOf([workflow]) }));
+
+    await page.goto('/workflows');
+    const toggle = page.getByRole('switch', { name: 'Invalidate the site cache is on' });
+    await expect(toggle).toBeChecked({ timeout: 15000 });
+    await toggle.click();
+
+    await expect.poll(() => written).toEqual({ enabled: false });
+    await expect(toggle).not.toBeChecked();
+});
