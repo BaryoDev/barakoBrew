@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useRole, useUpdateRole } from '@/hooks/use-rbac';
+import { useAccess } from '@/hooks/use-access';
+import { PLATFORM_ROLE_LOCKED, mayChangeRole } from '@/types/rbac';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
@@ -18,6 +20,7 @@ export default function EditRolePage({ params }: { params: Promise<{ id: string 
   const router = useRouter();
   const { data: role, isLoading } = useRole(id);
   const updateRole = useUpdateRole();
+  const canManagePlatformRoles = useAccess().can('manage_platform_roles', ['SuperAdmin']);
 
   if (isLoading) return <TableSkeleton />;
 
@@ -50,6 +53,7 @@ export default function EditRolePage({ params }: { params: Promise<{ id: string 
           systemCapabilities: role.systemCapabilities ?? [],
         }}
         submitLabel="Save role"
+        locked={mayChangeRole(role, canManagePlatformRoles) ? null : PLATFORM_ROLE_LOCKED}
         isPending={updateRole.isPending}
         onCancel={() => router.push('/roles')}
         onSubmit={(data) =>

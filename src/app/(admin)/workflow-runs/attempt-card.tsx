@@ -89,6 +89,17 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
     facts.push({ label: 'Skipped because', value: `action ${attempt.haltedBy} failed` });
   }
 
+  if (attempt.compensation) {
+    facts.push({
+      label: 'Undo',
+      value: attempt.compensation.actionType
+        ? `${attempt.compensation.actionType}, ${attempt.compensation.status}`
+        : attempt.compensation.status,
+    });
+  }
+  const outputs = Object.keys(attempt.outputs ?? {});
+  if (outputs.length > 0) facts.push({ label: 'Kept outputs', value: outputs.join(', ') });
+
   const kind = failureKind(attempt);
 
   // One retry for each time the question is asked. "Retry anyway" stays on screen and pressable

@@ -15,8 +15,8 @@ describe('the screen shown when the API does not fit', () => {
 
     // Literal versions, not the ends of SUPPORTED_CONTRACT. Derived from the constant this passes
     // whatever the range holds, including the range that sent the console blank against contract 2.
-    it('renders the console against contract 1 to 7', () => {
-        for (const version of [1, 2, 3, 4, 5, 6, 7]) {
+    it('renders the console against contract 1 to 8', () => {
+        for (const version of [1, 2, 3, 4, 5, 6, 7, 8]) {
             __resetContractForTests();
             recordContractVersion(String(version));
 
@@ -31,8 +31,8 @@ describe('the screen shown when the API does not fit', () => {
         }
     });
 
-    it('still stops the console against contract 8', () => {
-        recordContractVersion('8');
+    it('still stops the console against contract 9', () => {
+        recordContractVersion('9');
 
         render(
             <ContractGate>

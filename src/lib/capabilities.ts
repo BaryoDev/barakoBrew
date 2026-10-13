@@ -14,6 +14,11 @@ export interface CapabilityInfo {
 
 export const KNOWN_CAPABILITIES: readonly CapabilityInfo[] = [
     { name: 'manage_roles', label: 'Manage roles' },
+    {
+        name: 'manage_platform_roles',
+        label: 'Manage platform roles',
+        hint: 'Change the roles every tenant shares, such as Admin. Read from barakoCMS 5.0.',
+    },
     { name: 'manage_tenants', label: 'Manage tenants' },
     { name: 'manage_tenant_members', label: 'Manage tenant members' },
     { name: 'manage_users', label: 'Manage user accounts' },
@@ -64,6 +69,7 @@ export const KNOWN_CAPABILITIES: readonly CapabilityInfo[] = [
 export const PLATFORM_CAPABILITIES: ReadonlySet<string> = new Set([
     '*',
     'manage_roles',
+    'manage_platform_roles',
     'manage_tenants',
     'manage_users',
     'manage_email_settings',

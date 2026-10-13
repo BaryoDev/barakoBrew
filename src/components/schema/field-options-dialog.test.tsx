@@ -37,6 +37,15 @@ function heldByEntries() {
     });
 }
 
+/** The 409 contract 8 sends while a field change runs on the type: the error names the route's `name`. */
+function fieldChangeRunning() {
+    const reason = "'registration' has a field change running (3f2c). Try again when it completes.";
+    return Object.assign(new Error('Request failed with status code 409'), {
+        isAxiosError: true,
+        response: { status: 409, data: { status: 409, errors: [{ name: 'name', reason }] } },
+    });
+}
+
 function renderDialog(onOpenChange = vi.fn()) {
     const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     render(
@@ -87,6 +96,22 @@ describe('changing the options of a choice field', () => {
 
         await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
         expect(vi.mocked(toast.success).mock.calls[0][0]).toMatch(/3 entries hold a removed value/);
+    });
+
+    it('shows a running field change as a refusal it does not offer to force', async () => {
+        vi.mocked(api.put).mockRejectedValueOnce(fieldChangeRunning());
+        renderDialog();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove option 3' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save options' }));
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith(
+                "'registration' has a field change running (3f2c). Try again when it completes.",
+            ),
+        );
+        expect(screen.queryByRole('button', { name: 'Remove anyway' })).not.toBeInTheDocument();
+        expect(api.put).toHaveBeenCalledTimes(1);
     });
 
     it('drops the confirmation when the list changes after the 409', async () => {

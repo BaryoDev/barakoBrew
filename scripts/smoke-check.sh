@@ -28,6 +28,10 @@
 # It cost half an hour to learn that once: the pack failed here and passed on CI, and the difference
 # was the tag. BARAKO_API_TAG=master runs what the nightly runs.
 #
+# BARAKO_API_IMAGE names a whole image instead, for an API that is not published yet: one built from
+# a barakoCMS release branch with its Dockerfile.suite, which is what ghcr.io/baryodev/barako-cms is
+# built from. An image already on this machine is used as it is, not pulled.
+#
 # Usage: scripts/smoke-check.sh
 
 set -euo pipefail
@@ -40,7 +44,7 @@ if [ -z "${BARAKO_API_TAG:-}" ]; then
     BARAKO_API_TAG=$(tr -d '[:space:]' < "$PINNED_TAG_FILE" 2>/dev/null || true)
     [ -n "$BARAKO_API_TAG" ] || { printf 'FAILED: %s holds no API tag\n' "$PINNED_TAG_FILE" >&2; exit 1; }
 fi
-API_IMAGE="ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG}"
+API_IMAGE="${BARAKO_API_IMAGE:-ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG}}"
 API_PORT="${API_PORT:-5099}"
 ADMIN_PORT="${ADMIN_PORT:-3200}"
 ADMIN_USERNAME='admin'
@@ -103,7 +107,11 @@ for _ in $(seq 1 60); do docker exec "$PG" pg_isready -h 127.0.0.1 -U postgres >
 docker exec "$PG" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1 || fail "postgres never became ready"
 
 step "starting the API from $API_IMAGE"
-docker pull -q "$API_IMAGE" >/dev/null || fail "could not pull $API_IMAGE"
+if [ -n "${BARAKO_API_IMAGE:-}" ] && docker image inspect "$API_IMAGE" >/dev/null 2>&1; then
+    echo "using $API_IMAGE as it is on this machine"
+else
+    docker pull -q "$API_IMAGE" >/dev/null || fail "could not pull $API_IMAGE"
+fi
 # Development, not Production, and this is a real trade worth stating. The refresh cookie is marked
 # Secure everywhere except a Development host, so over plain http a Production host sets a cookie
 # the browser refuses to store and the console bounces back to the login page. That is correct

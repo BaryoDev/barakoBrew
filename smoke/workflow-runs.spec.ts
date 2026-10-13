@@ -12,7 +12,8 @@ import { smokeApiUrl } from './api-url';
  * appearing. This reads the real responses and fails on the name or the type.
  *
  * Both arrived in barakoCMS 4.2.0, so this needs an API at least that new. The release pull requests
- * pin and the nightly's master both are.
+ * pin and the nightly's master both are. From contract 8 a run and each action also carry their
+ * rollback, which decides whether the screen offers a retry at all.
  *
  * What it leaves behind: the workflow. The API has no endpoint to delete one, so it is created with
  * a condition only this run's entry meets and never fires again. The entry itself is erased.
@@ -108,6 +109,24 @@ test('a run carries retryable on every action, and an execution log carries reda
 
         const failed = (await runOf(request, workflow.id))!.actions[0];
         expect(failed.retryable, 'a refused address is a failure a retry cannot fix').toBe(false);
+
+        // Contract 8 adds the rollback to a run and to each action. The screen offers a retry only
+        // on a run nobody rolled back, so the keys have to be there, and null, on one that was not.
+        const detail = await request.get(`${API}/api/workflow-runs/${queued.id}`, { headers });
+        expect(detail.status(), 'GET /api/workflow-runs/{id}').toBe(200);
+        const contract = Number(detail.headers()['x-api-contract-version']);
+        const run: Record<string, unknown> & { actions: Record<string, unknown>[] } = await detail.json();
+        expect(run.actions).toHaveLength(1);
+        if (contract >= 8) {
+            for (const key of ['compensation', 'abandonedAt', 'executor']) {
+                expect(run, `a run carries ${key}`).toHaveProperty(key, null);
+            }
+            for (const key of ['compensation', 'outputs']) {
+                expect(run.actions[0], `an action carries ${key}`).toHaveProperty(key, null);
+            }
+        } else {
+            expect(run).not.toHaveProperty('compensation');
+        }
 
         // A dry run stores an execution log under the workflow's id, which is the cheapest way to
         // have one: nothing is sent.

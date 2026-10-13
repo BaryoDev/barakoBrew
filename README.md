@@ -91,7 +91,8 @@ consumer.
 | 4.2.0, 4.2.1, 4.3.0, 4.4.0, 4.4.1 | 4 |
 | 4.5.0 | 5 |
 | 4.6.0 | 6 |
-| 4.7.0, 4.8.0 | 7 |
+| 4.7.0, 4.8.0, 4.9.0 | 7 |
+| 5.0.0 | 8 |
 
 No release sent contract 2: 4.1.0 moved from 1 to 3. barakoCMS 4.0.0 sends the header without
 letting a browser read it, so a console served from another origin cannot see it and stops; use
@@ -186,7 +187,8 @@ means the console changed. The nightly runs `ghcr.io/baryodev/barako-cms:master`
 barakoCMS master push, so an API change surfaces here without anyone pushing; when it fails, CI
 opens or comments on the issue "Nightly: console against barako-cms:master failed". Moving the pin
 is a pull request that edits that file. Locally the script runs the pinned release; set
-`BARAKO_API_TAG=master` to run what the nightly runs.
+`BARAKO_API_TAG=master` to run what the nightly runs, or `BARAKO_API_IMAGE` to a whole image name,
+such as one built locally from a barakoCMS release branch before it is published.
 
 ## Layout
 

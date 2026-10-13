@@ -13,7 +13,7 @@ import {
 import { useUserGroups } from '@/hooks/use-user-groups';
 import { apiErrorMessage } from '@/lib/api';
 import { roleChangeErrorMessage } from '@/lib/global-roles';
-import type { User } from '@/types/rbac';
+import { isGlobalRoleCandidate, type User } from '@/types/rbac';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -89,7 +89,9 @@ export default function UsersPage() {
                         user={user}
                         assigned={user.roleIds}
                         nameOf={roleName}
-                        options={roles?.items.map((r) => ({ id: r.id, name: r.name })) ?? []}
+                        options={
+                          roles?.items.filter(isGlobalRoleCandidate).map((r) => ({ id: r.id, name: r.name })) ?? []
+                        }
                         kind="role"
                       />
                     </TableCell>

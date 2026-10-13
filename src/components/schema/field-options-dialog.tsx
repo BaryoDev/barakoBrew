@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import axios from 'axios';
 import { toast } from 'sonner';
 import { useSetFieldOptions } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
+import { isForceableConflict } from '@/lib/field-change';
 import { hasOptionIssues, optionIssues } from '@/lib/choice';
 import { OptionsEditor } from '@/components/schema/options-editor';
 import { Button } from '@/components/ui/button';
@@ -56,7 +56,7 @@ export function FieldOptionsDialog({
                 },
                 onError: (error) => {
                     const message = apiErrorMessage(error, 'The options could not be saved.');
-                    if (axios.isAxiosError(error) && error.response?.status === 409) setRefusal(message);
+                    if (isForceableConflict(error)) setRefusal(message);
                     else toast.error(message);
                 },
             },

@@ -36,6 +36,17 @@ export interface Role {
     createdAt?: string;
     /** Whether the server refuses to delete this role. Derived server side from the seeded ids. */
     isSystem?: boolean;
+    /**
+     * The tenant that owns this role, or null for a platform role. From contract 8 a role belongs to
+     * one tenant or to the whole deployment; an API before that leaves both owner fields out.
+     */
+    tenantSlug?: string | null;
+    /**
+     * A role every tenant shares, such as SuperAdmin, Admin and User. Changing or deleting one needs
+     * `manage_platform_roles` (403 without it), and it is the only kind `POST /api/users/{id}/roles`
+     * takes as a global role.
+     */
+    isPlatform?: boolean;
 }
 
 export interface RoleRequest {
@@ -83,4 +94,33 @@ export function emptyPermission(slug: string): ContentTypePermission {
         update: emptyRule(),
         delete: emptyRule(),
     };
+}
+
+/**
+ * Whether a role can be given as a global role, through `POST /api/users/{id}/roles`.
+ *
+ * A global role grants in every tenant, so from contract 8 the API takes only a platform role there
+ * and answers 400 naming a tenant's role. An API before 8 reports no owner, and every role it lists
+ * is a deployment role, so every one stays on offer.
+ */
+export function isGlobalRoleCandidate(role: Pick<Role, 'isPlatform' | 'tenantSlug'>): boolean {
+    return role.isPlatform === true || !role.tenantSlug;
+}
+
+/** Who owns a role, for the Roles list: the platform, a tenant, or nothing an older API reports. */
+export function roleOwner(role: Pick<Role, 'isPlatform' | 'tenantSlug'>): string | null {
+    if (role.isPlatform === true) return 'Platform';
+    return role.tenantSlug ? role.tenantSlug : null;
+}
+
+export const PLATFORM_ROLE_LOCKED =
+    'This is a platform role, shared by every tenant. Changing or deleting it needs the manage_platform_roles capability.';
+
+/**
+ * Whether this caller may change or delete the role. The API answers 403 to a platform role edited
+ * without `manage_platform_roles`, so the console does not offer it. A role an older API reports no
+ * owner for is decided by the API, as before.
+ */
+export function mayChangeRole(role: Pick<Role, 'isPlatform'>, canManagePlatformRoles: boolean): boolean {
+    return role.isPlatform !== true || canManagePlatformRoles;
 }

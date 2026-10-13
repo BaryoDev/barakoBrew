@@ -197,3 +197,29 @@ describe('conditions and field limits', () => {
         expect(screen.queryByRole('button', { name: 'Conditions and field limits for Record' })).toBeNull();
     });
 });
+
+describe('a role this caller may not change', () => {
+    it('says why and offers no save, since the API would answer 403', async () => {
+        const onSubmit = vi.fn();
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor
+                    initial={ROLE}
+                    submitLabel="Save role"
+                    locked="This is a platform role."
+                    isPending={false}
+                    onSubmit={onSubmit}
+                    onCancel={() => {}}
+                />
+            </QueryClientProvider>,
+        );
+        await waitFor(() => expect(screen.getByText('Record')).toBeInTheDocument());
+
+        expect(screen.getByRole('note')).toHaveTextContent('This is a platform role.');
+        const save = screen.getByRole('button', { name: 'Save role' });
+        expect(save).toBeDisabled();
+        fireEvent.submit(save.closest('form')!);
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+});

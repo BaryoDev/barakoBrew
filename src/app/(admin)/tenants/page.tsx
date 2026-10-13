@@ -6,6 +6,7 @@ import {
   domainClash,
   domainProblems,
   useCreateTenant,
+  tenantStatusLabel,
   useTenants,
   useUpdateTenantDomains,
   type Tenant,
@@ -310,9 +311,7 @@ export default function TenantsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={t.isActive ? 'default' : 'secondary'}>
-                      {t.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
+                    <Badge variant={t.isActive ? 'default' : 'secondary'}>{tenantStatusLabel(t)}</Badge>
                   </TableCell>
                 </TableRow>
               ))}

@@ -13,6 +13,20 @@ export interface WorkflowAction {
      * them anyway. Absent reads as `Continue`. An API before 4.6 ignores the field.
      */
     onFailure?: WorkflowFailurePolicy | null;
+    /**
+     * The outputs of this action a run keeps. From contract 8 a save refuses a name that is not
+     * letters, digits and underscores, a repeat, or more than 20. Absent from an older API.
+     */
+    capture?: string[];
+    /** What undoes this action when its run is rolled back, its secret left out. Absent from an older API. */
+    compensate?: WorkflowCompensation | null;
+}
+
+export interface WorkflowCompensation {
+    type: string;
+    parameters: Record<string, string>;
+    /** Read only, as on an action. */
+    secretSet?: boolean;
 }
 
 export type WorkflowFailurePolicy = 'Continue' | 'Halt';
@@ -29,6 +43,11 @@ export interface WorkflowDefinition {
      * absent from a definition stored before the field; both read as on.
      */
     enabled?: boolean;
+    /**
+     * What runs the workflow. Null for the built-in runner, the only one a contract 8 save accepts.
+     * Absent from an older API.
+     */
+    executor?: string | null;
 }
 
 // "transition:Approve" names a transition on the triggering type's own lifecycle. Prefixed so a

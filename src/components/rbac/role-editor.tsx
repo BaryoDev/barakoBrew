@@ -42,12 +42,14 @@ function splitKey(key: string): [string, PermissionAction] {
 interface RoleEditorProps {
   initial?: RoleRequest;
   submitLabel: string;
+  /** Why this caller cannot save the role. Set, the form says so and offers no save. */
+  locked?: string | null;
   isPending: boolean;
   onSubmit: (role: RoleRequest) => void;
   onCancel: () => void;
 }
 
-export function RoleEditor({ initial, submitLabel, isPending, onSubmit, onCancel }: RoleEditorProps) {
+export function RoleEditor({ initial, submitLabel, locked, isPending, onSubmit, onCancel }: RoleEditorProps) {
   const { data: schemas } = useSchemas();
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -113,7 +115,7 @@ export function RoleEditor({ initial, submitLabel, isPending, onSubmit, onCancel
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || conditionsBlocked) return;
+    if (locked || !name.trim() || conditionsBlocked) return;
     onSubmit({
       name: name.trim(),
       description: description.trim() || undefined,
@@ -324,8 +326,13 @@ export function RoleEditor({ initial, submitLabel, isPending, onSubmit, onCancel
         )}
       </div>
 
+      {locked && (
+        <p role="note" className="text-muted-foreground text-sm">
+          {locked}
+        </p>
+      )}
       <div className="flex items-center gap-2">
-        <Button type="submit" disabled={!name.trim() || isPending || conditionsBlocked}>
+        <Button type="submit" disabled={!!locked || !name.trim() || isPending || conditionsBlocked}>
           {isPending ? 'Saving…' : submitLabel}
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>

@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { useRoles, useDeleteRole } from '@/hooks/use-rbac';
 import { apiErrorMessage } from '@/lib/api';
 import { roleReach } from '@/lib/access';
+import { useAccess } from '@/hooks/use-access';
+import { mayChangeRole, roleOwner } from '@/types/rbac';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -30,6 +32,7 @@ export default function RolesPage() {
   const [page, setPage] = useState(1);
   const { data: roles, isLoading, isError, refetch } = useRoles({ page });
   const deleteRole = useDeleteRole();
+  const canManagePlatformRoles = useAccess().can('manage_platform_roles', ['SuperAdmin']);
 
   return (
     <>
@@ -71,6 +74,8 @@ export default function RolesPage() {
               <TableBody>
                 {roles.items.map((role) => {
                   const isSystem = role.isSystem === true;
+                  const owner = roleOwner(role);
+                  const deletable = !isSystem && mayChangeRole(role, canManagePlatformRoles);
                   return (
                     <TableRow
                       key={role.id}
@@ -84,6 +89,11 @@ export default function RolesPage() {
                             System
                           </Badge>
                         )}
+                        {owner && (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {owner}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground hidden max-w-xs truncate text-sm sm:table-cell">
                         {role.description || '—'}
@@ -92,7 +102,7 @@ export default function RolesPage() {
                         {roleReach(role)}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {!isSystem && (
+                        {deletable && (
                           <ConfirmDialog
                             trigger={
                               <Button
