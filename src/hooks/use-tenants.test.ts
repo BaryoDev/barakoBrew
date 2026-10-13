@@ -6,6 +6,7 @@ import {
     MAX_TENANT_DOMAINS,
     switchTenantBody,
     tenantDomainsBody,
+    tenantStatusLabel,
     type Tenant,
 } from './use-tenants';
 
@@ -57,6 +58,23 @@ describe('tenantDomainsBody', () => {
             IsActive: true,
             Domains: ['rckoronadal.org'],
         });
+    });
+
+    it('sends the status of a contract 8 tenant back as read, in place of the obsolete flag', () => {
+        // Contract 8 refuses a flag that disagrees with the status, so the two never go together.
+        const archived: Tenant = { ...TENANT, isActive: false, status: 'Archived' };
+
+        const body = tenantDomainsBody(archived, ['rckoronadal.org']);
+
+        expect(body.Status).toBe('Archived');
+        expect(body).not.toHaveProperty('IsActive');
+    });
+
+    it('sends the flag, not a status, to an API before contract 8, which reports none', () => {
+        const body = tenantDomainsBody({ ...TENANT, isActive: false }, ['rckoronadal.org']);
+
+        expect(body.IsActive).toBe(false);
+        expect(body).not.toHaveProperty('Status');
     });
 
     it('sends an empty list to clear the domains, not null, which the API reads as keep', () => {
@@ -132,5 +150,18 @@ describe('domainClash', () => {
     it('is null for any other failure', () => {
         expect(domainClash(httpError(400, { message: 'bad' }))).toBeNull();
         expect(domainClash(new Error('network'))).toBeNull();
+    });
+});
+
+describe('tenantStatusLabel', () => {
+    it('names the status a contract 8 API reports, so Suspended and Archived read apart', () => {
+        expect(tenantStatusLabel({ isActive: false, status: 'Suspended' })).toBe('Suspended');
+        expect(tenantStatusLabel({ isActive: false, status: 'Archived' })).toBe('Archived');
+        expect(tenantStatusLabel({ isActive: true, status: 'Active' })).toBe('Active');
+    });
+
+    it('falls back to the flag against an API before contract 8', () => {
+        expect(tenantStatusLabel({ isActive: true })).toBe('Active');
+        expect(tenantStatusLabel({ isActive: false })).toBe('Inactive');
     });
 });

@@ -6,8 +6,10 @@ import {
   isCancellable,
   isRetryable,
   isStopped,
+  runAllowsRetry,
   runFailureKind,
   runListParams,
+  workflowRunSchema,
   toneForAttemptStatus,
   toneForRunStatus,
 } from './use-workflow-runs';
@@ -227,5 +229,71 @@ describe('isStopped', () => {
   it('is false for a run nobody stopped', () => {
     expect(isStopped({ status: 'Failed', cancelledAt: null })).toBe(false);
     expect(isStopped({ status: 'Failed' })).toBe(false);
+  });
+});
+
+describe('runAllowsRetry', () => {
+  it('allows a retry on a failed run nobody stopped or rolled back', () => {
+    expect(runAllowsRetry({ status: 'Failed', cancelledAt: null, compensation: null, abandonedAt: null })).toBe(true);
+    expect(runAllowsRetry({ status: 'Failed' })).toBe(true);
+  });
+
+  it('refuses a run being rolled back or rolled back, which contract 8 answers 409', () => {
+    for (const compensation of ['Compensating', 'Compensated', 'Incomplete']) {
+      expect(runAllowsRetry({ status: 'PartiallyFailed', cancelledAt: null, compensation })).toBe(false);
+    }
+    expect(runAllowsRetry({ status: 'Failed', abandonedAt: '2026-10-13T10:00:00Z' })).toBe(false);
+  });
+
+  it('refuses a stopped run, as before', () => {
+    expect(runAllowsRetry({ status: 'Cancelled' })).toBe(false);
+  });
+});
+
+describe('workflowRunSchema', () => {
+  const run = {
+    id: 'r1',
+    workflowDefinitionId: 'w1',
+    workflowName: 'Notify',
+    contentId: 'c1',
+    contentType: 'post',
+    triggerEvent: 'Created',
+    status: 'PartiallyFailed',
+    createdAt: '2026-10-13T10:00:00Z',
+    actions: [{ ordinal: 1, actionType: 'Webhook', status: 'Succeeded', attempts: 1 }],
+  };
+
+  it('reads a run as contract 8 sends it, with its rollback and each action undone', () => {
+    const parsed = workflowRunSchema.parse({
+      ...run,
+      executor: null,
+      abandonedAt: '2026-10-13T11:00:00Z',
+      compensation: 'Incomplete',
+      actions: [
+        {
+          ...run.actions[0],
+          outputs: { orderId: '42' },
+          compensation: { actionType: 'Webhook', status: 'NotDeclared', attempts: 0 },
+        },
+      ],
+    });
+
+    expect(parsed.compensation).toBe('Incomplete');
+    expect(parsed.actions).toHaveLength(1);
+    expect(parsed.actions[0].outputs).toEqual({ orderId: '42' });
+    expect(parsed.actions[0].compensation?.status).toBe('NotDeclared');
+  });
+
+  it('still reads a run from an API before contract 8, which sends none of it', () => {
+    const parsed = workflowRunSchema.parse(run);
+
+    expect(parsed.compensation).toBeUndefined();
+    expect(parsed.actions).toHaveLength(1);
+  });
+
+  it('refuses an action compensation without a status, rather than showing an empty one', () => {
+    expect(() =>
+      workflowRunSchema.parse({ ...run, actions: [{ ...run.actions[0], compensation: { attempts: 0 } }] }),
+    ).toThrow();
   });
 });

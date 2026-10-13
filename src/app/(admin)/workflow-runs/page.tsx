@@ -32,7 +32,7 @@ import {
   FAILURE_KINDS,
   RUN_STATUSES,
   isCancellable,
-  isStopped,
+  runAllowsRetry,
   runFailureKind,
   toneForRunStatus,
   useCancelRun,
@@ -61,6 +61,11 @@ function RunFacts({ run }: { run: WorkflowRun }) {
 
   const completed = formatMoment(run.completedAt);
   if (completed) facts.push({ label: 'Finished', value: completed });
+
+  const abandoned = formatMoment(run.abandonedAt);
+  if (abandoned) facts.push({ label: 'Abandoned', value: abandoned });
+  if (run.compensation) facts.push({ label: 'Rollback', value: run.compensation });
+  if (run.executor) facts.push({ label: 'Runs on', value: run.executor });
 
   return (
     <dl className="mt-4 grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
@@ -297,7 +302,7 @@ export default function WorkflowRunsPage() {
                       key={attempt.ordinal}
                       attempt={attempt}
                       retrying={retry.isPending}
-                      canRetry={!isStopped(run.data!)}
+                      canRetry={runAllowsRetry(run.data!)}
                       onRetry={(ordinal) => void onRetry(ordinal)}
                     />
                   ))}

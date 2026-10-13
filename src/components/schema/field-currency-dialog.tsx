@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import axios from 'axios';
 import { toast } from 'sonner';
 import { useSetFieldCurrency } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
+import { isForceableConflict } from '@/lib/field-change';
 import { currencyProblem } from '@/lib/field-presentation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,7 +58,7 @@ export function FieldCurrencyDialog({
                 },
                 onError: (error) => {
                     const message = apiErrorMessage(error, 'The currency could not be saved.');
-                    if (axios.isAxiosError(error) && error.response?.status === 409) setRefusal(message);
+                    if (isForceableConflict(error)) setRefusal(message);
                     else toast.error(message);
                 },
             },

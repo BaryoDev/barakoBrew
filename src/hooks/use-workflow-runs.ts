@@ -42,6 +42,24 @@ export interface WorkflowActionAttempt {
   onFailure?: string | null;
   /** Set on a Skipped action: the ordinal of the halting action whose failure skipped it. */
   haltedBy?: number | null;
+  /**
+   * The outputs the workflow keeps from this action, once it has succeeded. Null otherwise, and
+   * absent from an API before contract 8.
+   */
+  outputs?: Record<string, string> | null;
+  /** The undoing of this action once its run is rolled back. Absent from an API before contract 8. */
+  compensation?: ActionCompensation | null;
+}
+
+/** One action's compensation. `status` is a CompensationStatus name; NotDeclared is nothing to undo it. */
+export interface ActionCompensation {
+  actionType?: string | null;
+  status: string;
+  attempts: number;
+  nextAttemptAt?: string | null;
+  error?: string | null;
+  completedAt?: string | null;
+  durationMs?: number | null;
 }
 
 export interface WorkflowRun {
@@ -57,6 +75,15 @@ export interface WorkflowRun {
   /** Set once someone stopped the run. Absent from an API before 4.6, which cannot cancel. */
   cancelledAt?: string | null;
   actions: WorkflowActionAttempt[];
+  /** What runs it. Null for the built-in runner, absent from an API before contract 8. */
+  executor?: string | null;
+  /** When an operator abandoned the run. Absent from an API before contract 8. */
+  abandonedAt?: string | null;
+  /**
+   * Compensating, Compensated or Incomplete once the run is rolled back, null for a run that never
+   * was. Absent from an API before contract 8.
+   */
+  compensation?: string | null;
 }
 
 /**
@@ -77,6 +104,18 @@ const attemptSchema = z.looseObject({
   durationMs: z.number().nullish(),
   onFailure: z.string().nullish(),
   haltedBy: z.number().nullish(),
+  outputs: z.record(z.string(), z.string()).nullish(),
+  compensation: z
+    .looseObject({
+      actionType: z.string().nullish(),
+      status: z.string(),
+      attempts: z.number(),
+      nextAttemptAt: z.string().nullish(),
+      error: z.string().nullish(),
+      completedAt: z.string().nullish(),
+      durationMs: z.number().nullish(),
+    })
+    .nullish(),
 }) satisfies z.ZodType<WorkflowActionAttempt>;
 
 export const workflowRunSchema = z.looseObject({
@@ -91,6 +130,9 @@ export const workflowRunSchema = z.looseObject({
   completedAt: z.string().nullish(),
   cancelledAt: z.string().nullish(),
   actions: z.array(attemptSchema),
+  executor: z.string().nullish(),
+  abandonedAt: z.string().nullish(),
+  compensation: z.string().nullish(),
 }) satisfies z.ZodType<WorkflowRun>;
 
 export interface WorkflowRunsQuery {
@@ -154,6 +196,19 @@ export function isCancellable(run: Pick<WorkflowRun, 'status' | 'cancelledAt'>):
 /** A stopped run starts nothing again, and the API answers 409 to a retry on one. */
 export function isStopped(run: Pick<WorkflowRun, 'status' | 'cancelledAt'>): boolean {
   return run.status === 'Cancelled' || !!run.cancelledAt;
+}
+
+/**
+ * Whether the run is being rolled back, or was. From contract 8 the API answers 409 to a retry on
+ * one, since going forward again would redo what the rollback undoes.
+ */
+export function isRolledBack(run: Pick<WorkflowRun, 'compensation' | 'abandonedAt'>): boolean {
+  return !!run.compensation || !!run.abandonedAt;
+}
+
+/** Whether any action of the run may be retried from here, before asking about the action itself. */
+export function runAllowsRetry(run: Pick<WorkflowRun, 'status' | 'cancelledAt' | 'compensation' | 'abandonedAt'>): boolean {
+  return !isStopped(run) && !isRolledBack(run);
 }
 
 export type FailureKind = 'temporary' | 'permanent';

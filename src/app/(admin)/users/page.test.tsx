@@ -137,3 +137,54 @@ describe('when the API refuses a role change', () => {
         expect(message).toMatch(/members on the Tenants screen/i);
     });
 });
+
+/**
+ * A global role reaches every tenant, so from contract 8 the API takes only a platform role on
+ * `POST /api/users/{id}/roles` and answers 400 to a tenant's role. The menu offers what it takes.
+ */
+describe('the roles offered as global roles', () => {
+    beforeEach(() => {
+        session.user.roles = ['SuperAdmin'];
+    });
+
+    function rolesAre(roles: object[]) {
+        const users = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation(async (url: string, ...rest: unknown[]) =>
+            url === '/api/roles' ? page(roles) : users(url, ...(rest as [])),
+        );
+    }
+
+    async function offered(): Promise<string[]> {
+        fireEvent.keyDown(screen.getByRole('button', { name: 'Add role to ana' }), { key: 'Enter' });
+        const items = await screen.findAllByRole('menuitem');
+        return items.map((item) => item.textContent ?? '');
+    }
+
+    it('leaves out a tenant role against contract 8, and keeps the platform roles', async () => {
+        rolesAre([
+            { ...EDITOR, isPlatform: true, tenantSlug: null },
+            { ...AUTHOR, isPlatform: false, tenantSlug: 'default' },
+            { id: 'r-user', name: 'User', permissions: [], systemCapabilities: [], isPlatform: true, tenantSlug: null },
+        ]);
+        await renderPage();
+
+        expect(await offered()).toEqual(['User']);
+    });
+
+    it('offers no Add control when every role left is a tenant role', async () => {
+        rolesAre([
+            { ...EDITOR, isPlatform: true, tenantSlug: null },
+            { ...AUTHOR, isPlatform: false, tenantSlug: 'default' },
+        ]);
+        await renderPage();
+
+        expect(screen.getByRole('button', { name: 'Remove role Editor from ana' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Add role to ana' })).not.toBeInTheDocument();
+    });
+
+    it('offers every role against an API before contract 8, which reports no owner', async () => {
+        await renderPage();
+
+        expect(await offered()).toEqual(['Author']);
+    });
+});

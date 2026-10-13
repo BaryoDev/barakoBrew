@@ -11,6 +11,7 @@ import {
   formatDuration,
   isRetryable,
   toneForAttemptStatus,
+  type ActionCompensation,
   type WorkflowActionAttempt,
 } from '@/hooks/use-workflow-runs';
 
@@ -89,6 +90,10 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
     facts.push({ label: 'Skipped because', value: `action ${attempt.haltedBy} failed` });
   }
 
+  if (attempt.compensation) facts.push({ label: 'Undo', value: undoText(attempt.compensation) });
+  const outputs = Object.keys(attempt.outputs ?? {});
+  if (outputs.length > 0) facts.push({ label: 'Kept outputs', value: outputs.join(', ') });
+
   const kind = failureKind(attempt);
 
   // One retry for each time the question is asked. "Retry anyway" stays on screen and pressable
@@ -151,4 +156,15 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
       )}
     </li>
   );
+}
+
+/** How this action's undoing went: what undid it and how, or that nothing undoes it, with any error. */
+export function undoText(compensation: ActionCompensation): string {
+  const outcome =
+    compensation.status === 'NotDeclared'
+      ? 'Nothing undoes it'
+      : compensation.actionType
+        ? `${compensation.actionType}, ${compensation.status}`
+        : compensation.status;
+  return compensation.error ? `${outcome}: ${compensation.error}` : outcome;
 }

@@ -4,12 +4,23 @@ import { useSyncExternalStore } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { api, apiErrorMessage, tokenStore, subscribeToAuth, tenantOfToken, type Paginated } from '@/lib/api';
+import { tenantDomainsBody, type Tenant } from '@/types/tenant';
+
+export {
+  TENANT_STATUSES,
+  tenantDomainsBody,
+  tenantStatusLabel,
+  type Tenant,
+  type TenantStatus,
+} from '@/types/tenant';
 
 export interface TenantSummary {
   slug: string;
   name: string;
   logoUrl?: string | null;
   branding: Record<string, string>;
+  /** The caller's roles in that tenant. Absent from an API before contract 8. */
+  roles?: { id: string; name: string }[];
 }
 
 interface SwitchResponse {
@@ -17,16 +28,6 @@ interface SwitchResponse {
   expiry: string;
   refreshToken: string;
   refreshTokenExpiry: string;
-}
-
-/** A full tenant record from the platform-admin tenants API (SuperAdmin only). */
-export interface Tenant {
-  id: string;
-  slug: string;
-  name: string;
-  /** Bare hosts the tenant answers on. Absent from an API older than custom domains. */
-  domains?: string[];
-  isActive: boolean;
 }
 
 export interface CreateTenantInput {
@@ -164,39 +165,6 @@ export function domainProblems(domains: readonly string[]): string[] {
   }
   if (seen.size > MAX_TENANT_DOMAINS) problems.push(`A tenant can have at most ${MAX_TENANT_DOMAINS} domains.`);
   return problems;
-}
-
-/**
- * The profile fields an API before 4.6 kept on the tenant record, as it answered them and as its
- * update takes them. barakoCMS 4.6 moved them to the tenant's site entry (BaryoDev/barakoCMS#885).
- */
-const LEGACY_PROFILE = [
-  ['logoUrl', 'LogoUrl'],
-  ['about', 'About'],
-  ['location', 'Location'],
-  ['locationUrl', 'LocationUrl'],
-  ['socialHandle', 'SocialHandle'],
-  ['email', 'Email'],
-  ['contactUrl', 'ContactUrl'],
-] as const;
-
-/**
- * The body of `PUT /api/tenants/{handle}` that changes only the domains.
- *
- * The name and the active flag go back as they were read. A profile field goes back only when the
- * tenant answer carried it: an API before 4.6 overwrites every profile field with what it is sent,
- * so leaving one out there would blank it, and API 4.6 answers with none of them and keeps what the
- * record holds when they are left out.
- */
-export function tenantDomainsBody(tenant: Tenant, domains: readonly string[]): Record<string, unknown> {
-  const read = tenant as Tenant & Record<string, unknown>;
-  const body: Record<string, unknown> = { Handle: tenant.slug, Name: tenant.name };
-  for (const [answered, sent] of LEGACY_PROFILE) {
-    if (answered in read) body[sent] = read[answered] ?? null;
-  }
-  body.IsActive = tenant.isActive;
-  body.Domains = domains.map((d) => d.trim());
-  return body;
 }
 
 export function useUpdateTenantDomains() {

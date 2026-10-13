@@ -256,3 +256,52 @@ describe('cancelling a run', () => {
     expect(screen.queryByRole('button', { name: /Retry action/ })).toBeNull();
   });
 });
+
+describe('a run rolled back, as contract 8 reports it', () => {
+  const ROLLED_BACK = {
+    ...run('run-rolled', 'Charge the card', 'Failed', [
+      action(1, 'Succeeded', { compensation: { actionType: 'Webhook', status: 'Failed', attempts: 3, error: 'refund refused' } }),
+      action(2, 'Failed', { retryable: true }),
+    ]),
+    cancelledAt: null,
+    compensation: 'Incomplete',
+  };
+  const FAILED = { ...run('run-failed', 'Charge again', 'Failed', [action(1, 'Failed', { retryable: true })]), cancelledAt: null, compensation: null };
+  const ALL = [ROLLED_BACK, FAILED];
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') {
+        return {
+          data: { items: ALL, page: 1, pageSize: 25, totalItems: ALL.length, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+        };
+      }
+      return { data: ALL.find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+  });
+
+  it('offers no retry, which the API refuses on a run being undone, and says how the undoing went', async () => {
+    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+
+    const list = await screen.findByRole('list', { name: 'Actions' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Retry action/ })).toBeNull();
+    expect(screen.getByText('Incomplete')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Webhook, Failed: refund refused')).toBeInTheDocument();
+  });
+
+  it('still offers the retry on a failed run nobody rolled back', async () => {
+    fireEvent.click(await screen.findByRole('radio', { name: /Charge again/ }));
+
+    await screen.findByRole('list', { name: 'Actions' });
+    expect(screen.getByRole('button', { name: /Retry action 1/ })).toBeInTheDocument();
+  });
+});

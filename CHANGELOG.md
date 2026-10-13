@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+**Speaks API contracts 1 to 8, which covers barakoCMS 4.0.1 to 5.0.0.** barakoCMS 5.0.0 moves the
+contract to 8. A console that stops at 7 refuses that API outright, so deploy this console before or
+with barakoCMS 5.0.0. Every change below keys on the field the API sends, not on the number, so
+against 4.x the screens behave as they did. (#224)
+
 ### Added
 
 - **The content type builder edits fields in their rows, and the rows can be dragged.** Every row
@@ -25,6 +30,28 @@ moved. Which API a console works against is stated per release instead.
 
 ### Changed
 
+- **Speaks API contracts 1 to 8.** barakoCMS 5.0.0 moves the contract to 8. (#224)
+- **The Roles screen names who owns each role.** From contract 8 a role belongs to one tenant or is
+  a platform role every tenant shares. The list shows Platform or the tenant's handle, and a platform
+  role is neither deletable nor saveable for a caller without `manage_platform_roles`, which the API
+  answers 403 to; the editor says why. `manage_platform_roles` is in the capability list. For such a
+  caller the editor also does not let a platform capability be added to a role, which contract 8
+  refuses, and keeps one the role already holds. (#224)
+- **The Users screen offers only platform roles as global roles against contract 8**, which answers
+  400 to a tenant's role there. A tenant's role is given under Members on the Tenants screen. Against
+  an older API every role stays on offer. (#224)
+- **The Tenants list shows a tenant's status, Active, Suspended or Archived**, when the API reports
+  one, and saving a tenant's domains sends that status back in place of the obsolete `isActive`.
+  (#224)
+- **A refusal because a field change is running on the type reads as that.** The option, currency
+  and uniqueness dialogs offered to resend any 409 with `force`; contract 8 also answers 409 while a
+  field change runs, which `force` does not get past, so that one is shown as a message with nothing
+  to press. (#224)
+- **The workflow runs screen reads a run's rollback.** Against contract 8 it shows when a run was
+  abandoned, how its rollback went, what undid each action and which outputs it kept, and offers no
+  retry on a run being rolled back, which the API refuses. (#224)
+- **`scripts/smoke-check.sh` takes `BARAKO_API_IMAGE`**, a whole image name, so the unmocked pack can
+  run against an API built locally before it is published. (#224)
 - **The entry history and the workflow runs are checked as they arrive.** A body in a shape the
   console does not read (the history under `versions` instead of `items`, a run status the filter
   does not offer, a status sent as a number) now shows an error saying so, instead of an empty
