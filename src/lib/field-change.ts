@@ -15,7 +15,16 @@ export function isFieldChangeRunning(error: unknown): boolean {
     return Array.isArray(errors) && errors.some((e) => (e as { name?: unknown } | null)?.name === 'name');
 }
 
-/** A 409 a dialog may offer to resend with `force`: any 409 but a field change running. */
+/**
+ * A 409 a dialog may offer to resend with `force`: any 409 but a field change running.
+ *
+ * A deny-list on purpose. The overridable refusals are the ones these routes have always sent, as
+ * general errors with nothing to recognise them by, and an allow-list matching their wording would
+ * drop the force button the day the API rewords one. The refusal it denies is the one that is new
+ * and has a mark of its own. A 409 added later that force cannot override shows the button once,
+ * and the resend shows the API's message again; that costs a press, where the other way round costs
+ * the feature.
+ */
 export function isForceableConflict(error: unknown): boolean {
     return axios.isAxiosError(error) && error.response?.status === 409 && !isFieldChangeRunning(error);
 }

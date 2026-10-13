@@ -223,3 +223,59 @@ describe('a role this caller may not change', () => {
         expect(onSubmit).not.toHaveBeenCalled();
     });
 });
+
+describe('platform capabilities for a caller without manage_platform_roles, against contract 8', () => {
+    async function renderWith(canAddPlatformCapabilities: boolean, systemCapabilities: string[]) {
+        const onSubmit = vi.fn();
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor
+                    initial={{ ...ROLE, systemCapabilities }}
+                    submitLabel="Save role"
+                    canAddPlatformCapabilities={canAddPlatformCapabilities}
+                    isPending={false}
+                    onSubmit={onSubmit}
+                    onCancel={() => {}}
+                />
+            </QueryClientProvider>,
+        );
+        await waitFor(() => expect(screen.getByText('Record')).toBeInTheDocument());
+        return onSubmit;
+    }
+
+    it('cannot tick one the role does not hold, since the API refuses adding it', async () => {
+        await renderWith(false, []);
+
+        expect(screen.getByRole('checkbox', { name: 'Manage tenants' })).toBeDisabled();
+        expect(screen.getByRole('checkbox', { name: 'Manage platform roles' })).toBeDisabled();
+        expect(screen.getByRole('checkbox', { name: 'Manage settings' })).toBeEnabled();
+    });
+
+    it('keeps one the role already holds, and can untick it, since only additions are refused', async () => {
+        const onSubmit = await renderWith(false, ['manage_roles']);
+
+        const held = screen.getByRole('checkbox', { name: 'Manage roles' });
+        expect(held).toBeEnabled();
+        expect(held).toBeChecked();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+        expect(submitted(onSubmit).systemCapabilities).toEqual(['manage_roles']);
+    });
+
+    it('does not add one typed into Other capabilities', async () => {
+        const onSubmit = await renderWith(false, []);
+
+        fireEvent.change(screen.getByLabelText('Other capabilities'), { target: { value: '*' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).systemCapabilities).toEqual([]);
+    });
+
+    it('offers every one when the caller may add them, or the API reports no owners', async () => {
+        await renderWith(true, []);
+
+        expect(screen.getByRole('checkbox', { name: 'Manage tenants' })).toBeEnabled();
+    });
+});

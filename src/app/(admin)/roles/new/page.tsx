@@ -2,7 +2,9 @@
 
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useCreateRole } from '@/hooks/use-rbac';
+import { useCreateRole, useRoles } from '@/hooks/use-rbac';
+import { useAccess } from '@/hooks/use-access';
+import { reportsRoleOwners } from '@/types/rbac';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RoleEditor } from '@/components/rbac/role-editor';
@@ -10,6 +12,8 @@ import { RoleEditor } from '@/components/rbac/role-editor';
 export default function NewRolePage() {
   const router = useRouter();
   const createRole = useCreateRole();
+  const canManagePlatformRoles = useAccess().can('manage_platform_roles', ['SuperAdmin']);
+  const { data: roles } = useRoles();
 
   return (
     <>
@@ -19,6 +23,7 @@ export default function NewRolePage() {
       />
       <RoleEditor
         submitLabel="Create role"
+        canAddPlatformCapabilities={canManagePlatformRoles || !reportsRoleOwners(roles?.items)}
         isPending={createRole.isPending}
         onCancel={() => router.push('/roles')}
         onSubmit={(role) =>

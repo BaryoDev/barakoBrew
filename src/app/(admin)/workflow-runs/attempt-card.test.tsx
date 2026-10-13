@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { AttemptCard } from './attempt-card';
+import { AttemptCard, undoText } from './attempt-card';
 import type { WorkflowActionAttempt } from '@/hooks/use-workflow-runs';
 
 // Radix sizes its dialog with one, and jsdom ships no implementation.
@@ -220,5 +220,21 @@ describe('AttemptCard on a halting run', () => {
     renderCard(attempt({ onFailure: 'Halt' }));
 
     expect(screen.getByText('Stops the run')).toBeInTheDocument();
+  });
+});
+
+describe('undoText', () => {
+  it('says nothing undoes an action that declares no compensation, rather than printing NotDeclared', () => {
+    expect(undoText({ actionType: null, status: 'NotDeclared', attempts: 0 })).toBe('Nothing undoes it');
+  });
+
+  it('names what undid the action and how it went', () => {
+    expect(undoText({ actionType: 'Webhook', status: 'Succeeded', attempts: 1 })).toBe('Webhook, Succeeded');
+  });
+
+  it('carries the error of an undoing that failed', () => {
+    expect(undoText({ actionType: 'Webhook', status: 'Failed', attempts: 3, error: 'refund refused' })).toBe(
+      'Webhook, Failed: refund refused',
+    );
   });
 });

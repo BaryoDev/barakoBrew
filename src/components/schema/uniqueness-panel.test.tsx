@@ -19,6 +19,7 @@ beforeAll(() => {
 });
 
 const { api } = await import('@/lib/api');
+const { toast } = await import('sonner');
 const { UniquenessDialog, UniquenessPanel } = await import('./uniqueness-panel');
 
 const TYPE: ContentTypeDefinition = {
@@ -123,6 +124,30 @@ describe('the uniqueness rules dialog', () => {
         expect(vi.mocked(api.put).mock.calls[0][1]).toEqual({ uniqueness: rules, force: false });
         expect(vi.mocked(api.put).mock.calls[1][1]).toEqual({ uniqueness: rules, force: true });
         await waitFor(() => expect(onSaved).toHaveBeenCalledWith([{ rule: 'OneOpenEntryPerTeacher', entries: 2 }]));
+    });
+
+    it('shows a running field change as a refusal it does not offer to force', async () => {
+        const reason = "'timeentry' has a field change running (3f2c). Try again when it completes.";
+        vi.mocked(api.put).mockRejectedValueOnce(
+            Object.assign(new Error('Request failed with status code 409'), {
+                isAxiosError: true,
+                response: { status: 409, data: { status: 409, errors: [{ name: 'name', reason }] } },
+            }),
+        );
+        wrap(
+            <UniquenessDialog
+                schema={{ ...TYPE, uniqueness: [{ name: 'OnePerEmail', fields: ['Email'] }] }}
+                open
+                onOpenChange={() => {}}
+            />,
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove rule OnePerEmail' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save rules' }));
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith(reason));
+        expect(screen.queryByRole('button', { name: 'Save anyway' })).not.toBeInTheDocument();
+        expect(api.put).toHaveBeenCalledTimes(1);
     });
 
     it('sends an empty list when every rule is removed', async () => {

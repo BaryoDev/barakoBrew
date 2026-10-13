@@ -295,7 +295,7 @@ describe('a run rolled back, as contract 8 reports it', () => {
     expect(rows).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /Retry action/ })).toBeNull();
     expect(screen.getByText('Incomplete')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('Webhook, Failed')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Webhook, Failed: refund refused')).toBeInTheDocument();
   });
 
   it('still offers the retry on a failed run nobody rolled back', async () => {

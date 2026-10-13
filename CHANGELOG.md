@@ -34,7 +34,9 @@ against 4.x the screens behave as they did. (#224)
 - **The Roles screen names who owns each role.** From contract 8 a role belongs to one tenant or is
   a platform role every tenant shares. The list shows Platform or the tenant's handle, and a platform
   role is neither deletable nor saveable for a caller without `manage_platform_roles`, which the API
-  answers 403 to; the editor says why. `manage_platform_roles` is in the capability list. (#224)
+  answers 403 to; the editor says why. `manage_platform_roles` is in the capability list. For such a
+  caller the editor also does not let a platform capability be added to a role, which contract 8
+  refuses, and keeps one the role already holds. (#224)
 - **The Users screen offers only platform roles as global roles against contract 8**, which answers
   400 to a tenant's role there. A tenant's role is given under Members on the Tenants screen. Against
   an older API every role stays on offer. (#224)

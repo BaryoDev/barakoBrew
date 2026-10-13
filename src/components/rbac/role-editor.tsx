@@ -44,12 +44,25 @@ interface RoleEditorProps {
   submitLabel: string;
   /** Why this caller cannot save the role. Set, the form says so and offers no save. */
   locked?: string | null;
+  /**
+   * Whether a platform capability the role does not already hold may be added. From contract 8 the
+   * API refuses one added without `manage_platform_roles`, and keeps one the role already holds.
+   */
+  canAddPlatformCapabilities?: boolean;
   isPending: boolean;
   onSubmit: (role: RoleRequest) => void;
   onCancel: () => void;
 }
 
-export function RoleEditor({ initial, submitLabel, locked, isPending, onSubmit, onCancel }: RoleEditorProps) {
+export function RoleEditor({
+  initial,
+  submitLabel,
+  locked,
+  canAddPlatformCapabilities = true,
+  isPending,
+  onSubmit,
+  onCancel,
+}: RoleEditorProps) {
   const { data: schemas } = useSchemas();
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -105,9 +118,12 @@ export function RoleEditor({ initial, submitLabel, locked, isPending, onSubmit, 
       return next;
     });
 
+  const mayAdd = (name: string) =>
+    canAddPlatformCapabilities || !isPlatformCapability(name) || holdsCapability(initial?.systemCapabilities ?? [], name);
+
   const addCapability = () => {
     const value = capabilityDraft.trim();
-    if (value && !holdsCapability(capabilities, value)) {
+    if (value && !holdsCapability(capabilities, value) && mayAdd(value)) {
       setCapabilities((prev) => [...prev, value]);
     }
     setCapabilityDraft('');
@@ -248,7 +264,8 @@ export function RoleEditor({ initial, submitLabel, locked, isPending, onSubmit, 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">System capabilities</legend>
         <p className="text-muted-foreground text-xs">
-          A platform capability reaches past one tenant, so only a SuperAdmin can give a user a role that holds one.
+          A platform capability reaches past one tenant. Only a SuperAdmin can give a user a role that holds one, and
+          from barakoCMS 5.0 only a holder of manage_platform_roles can add one to a role.
         </p>
         <div className="grid grid-cols-1 gap-x-4 gap-y-2 pt-1 sm:grid-cols-2">
           {KNOWN_CAPABILITIES.map((capability) => {
@@ -260,6 +277,7 @@ export function RoleEditor({ initial, submitLabel, locked, isPending, onSubmit, 
                   id={id}
                   className="mt-0.5"
                   checked={holdsCapability(capabilities, capability.name)}
+                  disabled={!mayAdd(capability.name)}
                   onCheckedChange={(checked) => toggleCapability(capability.name, checked === true)}
                   aria-describedby={capability.hint || platform ? `${id}-hint` : undefined}
                 />
@@ -273,7 +291,11 @@ export function RoleEditor({ initial, submitLabel, locked, isPending, onSubmit, 
                   )}
                   {(capability.hint || platform) && (
                     <p id={`${id}-hint`} className="text-muted-foreground text-xs">
-                      {[capability.hint, platform ? 'Only a SuperAdmin can give a role holding this to a user.' : null]
+                      {[
+                        capability.hint,
+                        platform ? 'Only a SuperAdmin can give a role holding this to a user.' : null,
+                        mayAdd(capability.name) ? null : 'Adding it needs manage_platform_roles.',
+                      ]
                         .filter(Boolean)
                         .join(' ')}
                     </p>

@@ -124,3 +124,8 @@ export const PLATFORM_ROLE_LOCKED =
 export function mayChangeRole(role: Pick<Role, 'isPlatform'>, canManagePlatformRoles: boolean): boolean {
     return role.isPlatform !== true || canManagePlatformRoles;
 }
+
+/** Whether this API reports who owns a role, which it does from contract 8. */
+export function reportsRoleOwners(roles: readonly Pick<Role, 'isPlatform'>[] | undefined): boolean {
+    return (roles ?? []).some((role) => typeof role.isPlatform === 'boolean');
+}
