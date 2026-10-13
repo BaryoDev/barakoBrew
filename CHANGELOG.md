@@ -9,6 +9,8 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-13
+
 **Speaks API contracts 1 to 8, which covers barakoCMS 4.0.1 to 5.0.0.** barakoCMS 5.0.0 moves the
 contract to 8. A console that stops at 7 refuses that API outright, so deploy this console before or
 with barakoCMS 5.0.0. Every change below keys on the field the API sends, not on the number, so
@@ -24,6 +26,16 @@ against 4.x the screens behave as they did. (#224)
   Enter inside an open field no longer submits the whole type, and Create content type waits while a
   field is open, so edits that were never saved are not sent without them. The Sensitivity and Mask
   pickers are now named by their labels. (#12)
+- **The workflow builder is laid out as a timeline: When, Only when, Then do.** A Request action
+  picks its request from the ones already configured instead of taking a typed name, and the Email
+  action offers the optional parameters its metadata lists. (#13)
+- **An Email templates screen** lists, creates and edits templates with placeholders and a preview
+  against a chosen content type and entry. The Email action in a workflow can pick a template;
+  choosing none brings back the typed subject and body. (#13)
+- **A file field uploads an image from inside the entry form** and asks for its alt text. If saving
+  the alt text fails, the field keeps the uploaded file and asks for the words again. (#13)
+- **The Site screen is drawn from the site type when that type names its sections**, and the links
+  setting has its own editor. Style recipes stay on the Recipes screen. (#13)
 - **`docs/` is published to the GitHub wiki on every push to master that changes it**, by the same
   sync barakoCMS uses. The wiki needs its first page saved on GitHub before the first run can
   succeed. (BaryoDev/barakoCMS#995)
@@ -779,7 +791,10 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.9.0
+[1.8.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.8.0
+[1.7.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.7.0
 [1.6.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.6.0
 [1.5.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.5.0
 [1.4.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.4.0
