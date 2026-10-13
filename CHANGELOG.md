@@ -9,6 +9,8 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-13
+
 **Speaks API contracts 1 to 8, which covers barakoCMS 4.0.1 to 5.0.0.** barakoCMS 5.0.0 moves the
 contract to 8. A console that stops at 7 refuses that API outright, so deploy this console before or
 with barakoCMS 5.0.0. Every change below keys on the field the API sends, not on the number, so
