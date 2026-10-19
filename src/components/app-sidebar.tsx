@@ -116,9 +116,11 @@ function NavList({
               className={cn(
                 'gap-2.5 rounded-[10px] px-2.5 font-medium transition-colors',
                 primary ? 'h-9 text-[13.5px] [&>svg]:size-[18px]' : 'h-[34px] text-[13px] [&>svg]:size-[17px]',
-                'text-secondary-foreground hover:bg-secondary hover:text-foreground',
-                // The active item takes the sunken tint, as in the round 2 handoff.
-                'data-[active=true]:bg-secondary data-[active=true]:text-foreground data-[active=true]:font-semibold',
+                'text-secondary-foreground hover:text-foreground',
+                // Hover is half the sunken tint. The active item takes all of it, a hairline and the
+                // accent icon, as in the round 2 handoff, so the two never look alike.
+                'hover:bg-secondary/50',
+                'data-[active=true]:bg-secondary data-[active=true]:hover:bg-secondary data-[active=true]:text-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_0_0_0_1px_var(--border)]',
                 active ? '[&>svg]:text-primary' : '[&>svg]:text-(--faint)'
               )}
             >

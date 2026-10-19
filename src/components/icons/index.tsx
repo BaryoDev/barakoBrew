@@ -305,7 +305,3 @@ export function IconMobile(props: IconProps) {
   return <svg {...base(props)}><path d="M 10 2 C 8.355 2 7 3.355 7 5 L 7 27 C 7 28.645 8.355 30 10 30 L 22 30 C 23.645 30 25 28.645 25 27 L 25 5 C 25 3.355 23.645 2 22 2 Z M 10 4 L 22 4 C 22.565 4 23 4.435 23 5 L 23 27 C 23 27.565 22.565 28 22 28 L 10 28 C 9.435 28 9 27.565 9 27 L 9 5 C 9 4.435 9.435 4 10 4 Z M 14 25 L 18 25 L 18 27 L 14 27 Z"/></svg>;
 }
 
-export function IconAiMark(props: IconProps) {
-  return <svg {...base(props)}><circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="8" r="1.5"/><circle cx="24" cy="8" r="2.6"/><circle cx="8" cy="16" r="1.5"/><circle cx="16" cy="16" r="3.6"/><circle cx="24" cy="16" r="1.5"/><circle cx="8" cy="24" r="2.6"/><circle cx="16" cy="24" r="1.5"/><circle cx="24" cy="24" r="1.5"/></svg>;
-}
-

@@ -10,6 +10,7 @@ import {
   IconEnvelope,
   IconFieldEdit,
   IconFilter,
+  IconEye,
   IconFlag,
   IconSun,
   IconPen,
@@ -18,6 +19,7 @@ import {
   IconHealth,
   IconHistory,
   IconKey,
+  IconLock,
   IconMobile,
   IconRoles,
   IconServer,
@@ -196,7 +198,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'System',
     items: [
-      { title: 'Audit log', href: '/audit', icon: IconHistory, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Audit log', href: '/audit', icon: IconEye, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Errors', href: '/errors', icon: IconBug, metric: 'unresolvedErrors', tone: 'danger', capability: 'manage_client_errors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Workflow runs', href: '/workflow-runs', icon: IconHistory, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Health', href: '/ops/health', icon: IconHealth },
@@ -205,7 +207,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Email', href: '/settings/email', icon: IconEnvelope, capability: 'manage_settings', roles: ['SuperAdmin'] },
       // The caller's own second factor. With capabilities known it is offered to every signed-in
       // caller, as the API serves it; the roles are what an older API's console offered.
-      { title: 'Security', href: '/settings/security', icon: IconShield , roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Security', href: '/settings/security', icon: IconLock, roles: ['SuperAdmin', 'Admin'] },
       // Every seeded role, because GET /api/devices is scoped to the caller and lists their own
       // devices: an ordinary User has as much right to it as an Admin. Named rather than left
       // ungated, since an item with no roles is offered to a signed-out caller too, and Overview
