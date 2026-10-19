@@ -5,7 +5,7 @@
 
 @theme inline {
   /* Where the sidebar stops being a rail and becomes a drawer. use-mobile.ts holds the same number. */
-  --breakpoint-rail: 62.5rem;
+  --breakpoint-rail: 1000px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-manrope);

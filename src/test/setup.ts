@@ -20,6 +20,8 @@ const mediaQueries = new Set<{ query: string; listeners: Set<Listener>; matches:
 let viewportWidth = 1280;
 
 function widthMatches(query: string, width: number): boolean {
+    const negated = /^not all and\s*/.exec(query);
+    if (negated) return !widthMatches(query.slice(negated[0].length), width);
     const max = /\(max-width:\s*(\d+(?:\.\d+)?)px\)/.exec(query);
     const min = /\(min-width:\s*(\d+(?:\.\d+)?)px\)/.exec(query);
     if (max && width > Number(max[1])) return false;

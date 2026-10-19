@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Sidebar, SidebarContent, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import userEvent from '@testing-library/user-event';
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarProvider,
+    SidebarTrigger,
+} from '@/components/ui/sidebar';
 import { setViewportWidth } from '@/test/setup';
 
 function renderShell() {
@@ -35,25 +44,26 @@ describe('the sidebar below 1000px', () => {
         expect(screen.getAllByRole('link')).toHaveLength(3);
     });
 
-    it('keeps Tab inside the sheet, wrapping at both ends', () => {
+    it('keeps Tab inside the sheet, wrapping at both ends', async () => {
+        const user = userEvent.setup();
         setViewportWidth(900);
         renderShell();
-        fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+        await user.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
 
         const dialog = screen.getByRole('dialog');
-        const links = screen.getAllByRole('link');
-        expect(links).toHaveLength(3);
-        const inside = (el: Element | null) => el !== null && dialog.contains(el);
+        const tabbable = Array.from(dialog.querySelectorAll<HTMLElement>('a[href], button'));
+        // Three links and the sheet's own Close button, which is the real last stop.
+        expect(tabbable).toHaveLength(4);
+        const first = tabbable[0];
+        const last = tabbable[tabbable.length - 1];
 
-        links[2].focus();
-        fireEvent.keyDown(links[2], { key: 'Tab' });
-        expect(inside(document.activeElement)).toBe(true);
-        expect(document.activeElement).not.toBe(document.body);
+        last.focus();
+        expect(document.activeElement).toBe(last);
+        await user.tab();
+        expect(document.activeElement).toBe(first);
 
-        const first = document.activeElement as HTMLElement;
-        fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
-        expect(inside(document.activeElement)).toBe(true);
-        expect(document.activeElement).not.toBe(first);
+        await user.tab({ shift: true });
+        expect(document.activeElement).toBe(last);
     });
 
     it('closes on Escape', () => {
@@ -76,6 +86,47 @@ describe('the sidebar below 1000px', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
 
         expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+});
+
+describe('the drawer state', () => {
+    it('does not reopen by itself after widening to the rail and narrowing again', () => {
+        setViewportWidth(900);
+        renderShell();
+        fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+        act(() => setViewportWidth(1100));
+        expect(screen.queryByRole('dialog')).toBeNull();
+
+        act(() => setViewportWidth(900));
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('closes when a nav link is clicked', () => {
+        setViewportWidth(900);
+        render(
+            <SidebarProvider>
+                <Sidebar>
+                    <SidebarContent>
+                        <SidebarMenu>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton asChild>
+                                    <a href="#two">Two</a>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        </SidebarMenu>
+                    </SidebarContent>
+                </Sidebar>
+                <SidebarTrigger />
+            </SidebarProvider>,
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('link', { name: 'Two' }));
+
+        expect(screen.queryByRole('dialog')).toBeNull();
     });
 });
 

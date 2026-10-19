@@ -69,6 +69,12 @@ function SidebarProvider({
   const isMobile = useIsSidebarDrawer()
   const [openMobile, setOpenMobile] = React.useState(false)
 
+  // The drawer is only open while the viewport is below the rail breakpoint. Without this, widening
+  // the window leaves the flag set and narrowing it again opens the drawer by itself.
+  if (!isMobile && openMobile) {
+    setOpenMobile(false)
+  }
+
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen)
@@ -509,8 +515,9 @@ function SidebarMenuButton({
   tooltip?: string | React.ComponentProps<typeof TooltipContent>
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
-  const { isMobile, state } = useSidebar()
+  const { isMobile, state, setOpenMobile } = useSidebar()
 
+  const { onClick, ...rest } = props
   const button = (
     <Comp
       data-slot="sidebar-menu-button"
@@ -518,7 +525,12 @@ function SidebarMenuButton({
       data-size={size}
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
-      {...props}
+      onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+        onClick?.(event)
+        // A drawer that stays open over the page it just navigated to is in the way.
+        if (isMobile && !event.defaultPrevented) setOpenMobile(false)
+      }}
+      {...rest}
     />
   )
 
