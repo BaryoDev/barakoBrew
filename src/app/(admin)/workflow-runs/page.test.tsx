@@ -688,6 +688,22 @@ describe('a link to a run', () => {
     expect(vi.mocked(api.get).mock.calls.filter(([url]) => String(url).startsWith('/api/workflow-runs/'))).toEqual([]);
   });
 
+  it('keeps the chosen run open when the address follows the pick, whatever shape its id has', async () => {
+    const follow = vi.spyOn(window.history, 'replaceState').mockImplementation((_state, _unused, url) => {
+      searchParams = new URLSearchParams(String(url).split('?')[1]?.split('#')[0] ?? '');
+    });
+    try {
+      renderRuns([run('run-plain', 'Plain', 'Failed', [action(1, 'Failed')])]);
+      fireEvent.click(await screen.findByRole('radio', { name: /Plain/ }));
+
+      await screen.findByRole('list', { name: 'Actions' });
+      expect(screen.getByRole('radio', { name: /Plain/ })).toBeChecked();
+      expect(screen.queryByText('Run not found')).toBeNull();
+    } finally {
+      follow.mockRestore();
+    }
+  });
+
   it('writes the chosen run into the address', async () => {
     renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);
     fireEvent.click(await screen.findByRole('radio', { name: /One/ }));

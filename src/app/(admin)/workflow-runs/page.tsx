@@ -176,8 +176,12 @@ export default function WorkflowRunsPage() {
   const [seenLink, setSeenLink] = useState(linked);
   if (seenLink !== linked) {
     setSeenLink(linked);
-    setBadLink(!!linked && parseRunId(linked) === null);
-    setSelectedId(linked ? parseRunId(linked) : null);
+    // The address catching up with a pick made here is not a new link. The list gave that id, so it
+    // is not checked for shape, and the radio stays on the run that was chosen.
+    if (!linked || linked !== selectedId) {
+      setBadLink(!!linked && parseRunId(linked) === null);
+      setSelectedId(linked ? parseRunId(linked) : null);
+    }
   }
 
   // Put the canonical id in the address when the link spelled it another way.
