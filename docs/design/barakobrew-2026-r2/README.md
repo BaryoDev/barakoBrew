@@ -14,7 +14,7 @@ These screens are what barakocms.com demos on its home page. If they change, the
 ## About the design files
 `barakoBrew - Admin.dc.html` is a **design reference built in HTML**. It is a working prototype, not production code. Rebuild it in **BaryoDev/barakoBrew**: Next.js app router, TanStack Query, zod schemas, shadcn/ui primitives, and the `StatusBadge`, `EmptyState`, `ErrorState`, `ConfirmDialog` and `PageHeader` patterns. Use the components already there; restyle them to these tokens.
 
-Per **DECISIONS.md D20**: barakoBrew owns none of the rules. Every action here is a call to the barakoCMS API. Module screens are first-party and **detected by presence**, so one release runs against an API with or without each module. There is no plugin model.
+Per **D20 in the barakoCMS repo's DECISIONS.md**: barakoBrew owns none of the rules. Every action here is a call to the barakoCMS API. Module screens are first-party and **detected by presence**, so one release runs against an API with or without each module. There is no plugin model.
 
 ## Fidelity
 **High fidelity** for layout, colour, type, copy and states. Sample data (runs, module rows, sparklines) is illustrative.
