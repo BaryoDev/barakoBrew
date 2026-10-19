@@ -39,7 +39,7 @@ function ReportSummary({ report }: { report: BulkCreateReport }) {
                     <ul className="mt-2 space-y-1 text-[13px]">
                         {report.errors.map((error) => (
                             <li key={error.row} className="flex gap-2">
-                                <span className="font-mono tabular-nums font-bold">Row {error.row}</span>
+                                <span className="font-mono tabular-nums font-medium">Row {error.row}</span>
                                 <span className="text-muted-foreground">{error.messages.join('; ')}</span>
                             </li>
                         ))}

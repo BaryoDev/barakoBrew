@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ESLint } from 'eslint';
 
@@ -20,9 +20,9 @@ const LAYOUT = 'src/app/layout.tsx';
 const PROBE_PATHS = ['src/app/font-probe.tsx', 'src/components/font-probe.tsx', 'packages/content-form/src/font-probe.ts'];
 
 const GOOGLE_IMPORT =
-    'import { Sora } from "next/font/google";\nexport const sora = Sora({ subsets: ["latin"], weight: ["600"] });\n';
+    'import { Instrument_Sans } from "next/font/google";\nexport const sans = Instrument_Sans({ subsets: ["latin"], weight: ["400"] });\n';
 const LOCAL_IMPORT =
-    'import localFont from "next/font/local";\nexport const sora = localFont({ src: "./fonts/sora-latin-600.woff2" });\n';
+    'import localFont from "next/font/local";\nexport const sans = localFont({ src: "./fonts/instrument-sans-latin-wght.woff2" });\n';
 
 const eslint = new ESLint({ cwd: process.cwd() });
 
@@ -53,6 +53,11 @@ describe('fonts are vendored, not fetched during the build', () => {
         const paths = [...new Set([...source.matchAll(/path:\s*"(\.\/fonts\/[^"]+)"/g)].map((m) => m[1]))];
 
         expect(paths).toHaveLength(3);
+        expect(paths.map((p) => p.replace('./fonts/', '').split('-latin-')[0]).sort()).toEqual([
+            'bricolage-grotesque',
+            'instrument-sans',
+            'jetbrains-mono',
+        ]);
         for (const path of paths) {
             const file = join(dirname(LAYOUT), path);
             expect(existsSync(file), `${file} is named in ${LAYOUT} and is not in the repository`).toBe(true);
@@ -61,5 +66,65 @@ describe('fonts are vendored, not fetched during the build', () => {
             const licence = join(dirname(LAYOUT), 'fonts', `OFL-${family}.txt`);
             expect(existsSync(licence), `${file} has no licence file at ${licence}`).toBe(true);
         }
+    });
+});
+
+describe('the console typefaces', () => {
+    const layout = readFileSync(LAYOUT, 'utf8');
+
+    it('the layout sets up Bricolage Grotesque, Instrument Sans and JetBrains Mono', () => {
+        const variables = [...layout.matchAll(/variable:\s*"(--[a-z-]+)"/g)].map((m) => m[1]);
+        expect(variables.sort()).toEqual(['--font-bricolage-grotesque', '--font-instrument-sans', '--font-jetbrains-mono']);
+    });
+
+    it('the weight ranges are 500 to 700, 400 to 700 and 400 to 500', () => {
+        const weights = [...layout.matchAll(/weight:\s*"([^"]+)"/g)].map((m) => m[1]);
+        expect(weights).toEqual(['500 700', '400 700', '400 500']);
+    });
+
+    it('the theme tokens point at those variables', () => {
+        const css = readFileSync('src/app/globals.css', 'utf8');
+        expect(css).toContain('--font-sans: var(--font-instrument-sans);');
+        expect(css).toContain('--font-display: var(--font-bricolage-grotesque);');
+        expect(css).toContain('--font-mono: var(--font-jetbrains-mono);');
+    });
+
+    it('no mono text asks for a weight above 500', () => {
+        const offenders: string[] = [];
+        const visit = (dir: string) => {
+            for (const name of readdirSync(dir)) {
+                const path = join(dir, name);
+                if (statSync(path).isDirectory()) visit(path);
+                else if (/\.tsx$/.test(name) && !/\.test\./.test(name)) {
+                    readFileSync(path, 'utf8')
+                        .split('\n')
+                        .forEach((line, i) => {
+                            if (/\bfont-mono\b/.test(line) && /\bfont-(semibold|bold|extrabold|black)\b/.test(line)) {
+                                offenders.push(`${path}:${i + 1}`);
+                            }
+                        });
+                }
+            }
+        };
+        visit('src');
+        expect(offenders).toEqual([]);
+    });
+
+    it('no reference to Sora or Manrope remains in src, outside this test', () => {
+        const hits: string[] = [];
+        let scanned = 0;
+        const visit = (dir: string) => {
+            for (const name of readdirSync(dir)) {
+                const path = join(dir, name);
+                if (statSync(path).isDirectory()) visit(path);
+                else if (/\.(tsx?|css|md|txt)$/.test(name) && !path.endsWith('font-imports.test.ts')) {
+                    scanned++;
+                    if (/\b(sora|manrope)\b/i.test(readFileSync(path, 'utf8'))) hits.push(path);
+                }
+            }
+        };
+        visit('src');
+        expect(scanned).toBeGreaterThan(100);
+        expect(hits).toEqual([]);
     });
 });

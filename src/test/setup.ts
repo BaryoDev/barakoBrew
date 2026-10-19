@@ -34,28 +34,31 @@ export function setViewportWidth(width: number) {
     for (const mq of mediaQueries) for (const listener of mq.listeners) listener();
 }
 
-Object.defineProperty(window, 'matchMedia', {
-    configurable: true,
-    writable: true,
-    value: (query: string) => {
-        const entry = { query, listeners: new Set<Listener>(), matches: () => widthMatches(query, viewportWidth) };
-        mediaQueries.add(entry);
-        return {
-            get matches() {
-                return entry.matches();
-            },
-            media: query,
-            onchange: null,
-            addEventListener: (_: string, listener: Listener) => entry.listeners.add(listener),
-            removeEventListener: (_: string, listener: Listener) => entry.listeners.delete(listener),
-            addListener: (listener: Listener) => entry.listeners.add(listener),
-            removeListener: (listener: Listener) => entry.listeners.delete(listener),
-            dispatchEvent: () => false,
-        };
-    },
-});
+// Files that opt into the node environment have no window to stub.
+if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        writable: true,
+        value: (query: string) => {
+            const entry = { query, listeners: new Set<Listener>(), matches: () => widthMatches(query, viewportWidth) };
+            mediaQueries.add(entry);
+            return {
+                get matches() {
+                    return entry.matches();
+                },
+                media: query,
+                onchange: null,
+                addEventListener: (_: string, listener: Listener) => entry.listeners.add(listener),
+                removeEventListener: (_: string, listener: Listener) => entry.listeners.delete(listener),
+                addListener: (listener: Listener) => entry.listeners.add(listener),
+                removeListener: (listener: Listener) => entry.listeners.delete(listener),
+                dispatchEvent: () => false,
+            };
+        },
+    });
 
-afterEach(() => {
-    viewportWidth = 1280;
-    mediaQueries.clear();
-});
+    afterEach(() => {
+        viewportWidth = 1280;
+        mediaQueries.clear();
+    });
+}

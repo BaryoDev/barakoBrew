@@ -15,8 +15,10 @@ copies them into the image under `.next/static/media/`. All three are under the 
 License 1.1. It permits bundling and redistributing a font with software, and asks that a modified
 font stays under the same licence. These files are not modified.
 
-- Sora, Copyright 2019 The Sora Project Authors (https://github.com/sora-xor/sora-font)
-- Manrope, Copyright 2018 The Manrope Project Authors (https://github.com/googlefonts/manrope)
+- Bricolage Grotesque, Copyright 2022 The Bricolage Grotesque Project Authors
+  (https://github.com/ateliertriay/bricolage)
+- Instrument Sans, Copyright 2022 The Instrument Sans Project Authors
+  (https://github.com/Instrument/instrument-sans)
 - JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
   (https://github.com/JetBrains/JetBrainsMono)
 

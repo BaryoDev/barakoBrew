@@ -9,6 +9,16 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- **The console's fonts are Bricolage Grotesque, Instrument Sans and JetBrains Mono.** Bricolage
+  Grotesque (500 to 700, with its optical size axis) sets headings, the wordmark and the big
+  numbers on stat cards. Instrument Sans (400 to 700) is the body text. JetBrains Mono is limited to
+  400 to 500, so mono text that asked for bold now renders medium. Sora and Manrope are gone, files
+  and licence texts included, and the vendored files keep Latin-1, ñ included. On Site, Theme,
+  typing `Sora` or `Manrope` in a font field no longer previews in the console's own copy, and
+  `Bricolage Grotesque` or `Instrument Sans` only preview on a machine that has them installed.
+
 ## [1.9.0] - 2026-10-13
 
 **Speaks API contracts 1 to 8, which covers barakoCMS 4.0.1 to 5.0.0.** barakoCMS 5.0.0 moves the

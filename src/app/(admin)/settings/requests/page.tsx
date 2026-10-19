@@ -125,7 +125,7 @@ function DryRunResultPanel({
               <dl className="mt-2 grid gap-1.5 text-[12.5px]">
                 {headers.map(([name, value]) => (
                   <div key={name} className="flex flex-wrap gap-x-2">
-                    <dt className="font-mono font-bold">{name}:</dt>
+                    <dt className="font-mono font-medium">{name}:</dt>
                     <dd className="font-mono break-all">{value}</dd>
                   </div>
                 ))}

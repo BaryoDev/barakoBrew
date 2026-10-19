@@ -155,7 +155,7 @@ function StatCard({ label, value, s }: { label: string; value: string; s?: StatV
         <CardTitle className="text-muted-foreground text-xs font-medium">{label}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="font-mono text-2xl font-semibold">{value}</p>
+        <p className="font-display text-2xl font-semibold tabular-nums">{value}</p>
         {d && (
           <p className={`mt-1 text-xs ${d.up ? 'text-emerald-600' : 'text-rose-600'}`}>
             {d.up ? '▲' : '▼'} {Math.abs(d.pct)}% vs previous

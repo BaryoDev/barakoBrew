@@ -90,7 +90,7 @@ export default function PwaPage() {
                 <Card key={s.label}>
                   <CardContent className="py-4">
                     <div className="text-muted-foreground text-xs">{s.label}</div>
-                    <div className="mt-1 text-2xl font-semibold tabular-nums">{s.value}</div>
+                    <div className="mt-1 font-display text-2xl font-semibold tabular-nums">{s.value}</div>
                   </CardContent>
                 </Card>
               ))}

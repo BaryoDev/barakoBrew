@@ -78,7 +78,7 @@ function NavMetricLabel({ item, metrics }: { item: NavItem; metrics: NavMetrics 
   return (
     <span
       className={cn(
-        'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 font-mono text-[10.5px] font-bold tabular-nums',
+        'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 font-mono text-[10.5px] font-medium tabular-nums',
         item.tone === 'danger'
           ? 'bg-(--danger-soft) text-destructive'
           : 'bg-(--warning-soft) text-warning'
@@ -223,7 +223,7 @@ export function AppSidebar() {
                   tooltip="Account"
                   className="h-auto rounded-[11px] border border-border bg-card p-2.5 shadow-[var(--shadow-card)] hover:bg-card data-[state=open]:bg-card"
                 >
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground font-mono text-[11px] font-bold text-background">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground font-mono text-[11px] font-medium text-background">
                     {initialsOf(user?.username)}
                   </div>
                   <div className="grid flex-1 text-left leading-tight">

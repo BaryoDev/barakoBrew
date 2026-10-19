@@ -8,23 +8,25 @@ Each file is the one Google Fonts served to `next/font/google` for the import th
 to make, byte for byte. That is on purpose: the same file is the only way to be sure the same
 glyphs, hinting and metrics reach the browser.
 
-| File | Family | Covers | Size | Google Fonts version |
-| --- | --- | --- | --- | --- |
-| `sora-latin-600.woff2` | Sora 2.000 | weight 600, static | 15,048 bytes | v17 |
-| `manrope-latin-wght.woff2` | Manrope 4.504 | weights 200 to 800, variable | 24,576 bytes | v20 |
-| `jetbrains-mono-latin-wght.woff2` | JetBrains Mono 2.211 | weights 400 to 800, variable | 31,340 bytes | v24 |
+| File | Family | Covers | Size |
+| --- | --- | --- | --- |
+| `bricolage-grotesque-latin-wght.woff2` | Bricolage Grotesque | weights 200 to 800 and the `opsz` axis (12 to 96), variable; the layout declares 500 to 700 | 76,868 bytes |
+| `instrument-sans-latin-wght.woff2` | Instrument Sans | weights 400 to 700, variable | 29,904 bytes |
+| `jetbrains-mono-latin-wght.woff2` | JetBrains Mono 2.211 | weights 100 to 800, variable; the layout declares 400 to 500 | 31,340 bytes |
 
-All three are the `latin` subset, normal style. 70,964 bytes in total.
+All three are the `latin` subset (U+0000-00FF and a few more, so ñ and the rest of Latin-1), normal
+style. 138,112 bytes in total.
 
 ## Where they came from
 
-Fetched on 2026-10-01. The stylesheet request names the weights, and Google answers with a file cut
-to that range, which is why Sora is static and JetBrains Mono starts at 400.
+Bricolage Grotesque and Instrument Sans were fetched on 2026-10-19; JetBrains Mono on 2026-10-01.
+The weight a stylesheet names decides how wide a file Google answers with, so the two new requests
+asked for the whole axis and the layout narrows it.
 
 | File | Stylesheet | Font URL | SHA-256 |
 | --- | --- | --- | --- |
-| `sora-latin-600.woff2` | `https://fonts.googleapis.com/css2?family=Sora:wght@600&display=swap` | `https://fonts.gstatic.com/s/sora/v17/xMQOuFFYT72X5wkB_18qmnndmSeMmU-NKQJDA8i1P4w.woff2` | `931ddd0959495d5f051282976e2256861836f22d23c695768fade16da2cbed46` |
-| `manrope-latin-wght.woff2` | `https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap` | `https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSvfedN4.woff2` | `e310b55a7fd9677f5e3555e6c6c4d064fa1f1d24393f0ddbe217cea12a8c432f` |
+| `bricolage-grotesque-latin-wght.woff2` | `https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap` | `https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9K6as8bTXq_nANBjzKo3IeZx8z6up5BeSl9D4dj_x9PpZBMlGIInHWVyNJ.woff2` | `85f55a58a31e61a2e19e8bb25fed503181bf2a6b4cab76c589992cfaac377447` |
+| `instrument-sans-latin-wght.woff2` | `https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&display=swap` | `https://fonts.gstatic.com/s/instrumentsans/v4/pxiTypc9vsFDm051Uf6KVwgkfoSxQ0GsQv8ToedPibnr0SZe1ZuWi3g.woff2` | `6219bc4bfdfc5d9b2201dcdf046218b122a758f932e25ed5f168f929b7ca2311` |
 | `jetbrains-mono-latin-wght.woff2` | `https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap` | `https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2` | `2c32b9b3ee358c119e210f6f5195f9bd34894d78a785ff2e95d60e718e400af4` |
 
 The stylesheet lists one `@font-face` per subset, and the font URL is the one in the block marked
@@ -35,8 +37,7 @@ the one `next/font/google` sends:
 Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36
 ```
 
-A current Chrome is given a different Sora file (15,000 bytes, with a `prep` table), and a client
-with no browser `User-Agent` is given TTF. The font URLs above answer with the recorded checksums
+A client with no browser `User-Agent` is given TTF. The font URLs above answer with the recorded checksums
 whatever the client.
 
 ## Licences
@@ -47,8 +48,8 @@ family in [google/fonts](https://github.com/google/fonts) at commit
 
 | Licence file | From |
 | --- | --- |
-| `OFL-sora.txt` | `ofl/sora/OFL.txt` |
-| `OFL-manrope.txt` | `ofl/manrope/OFL.txt` |
+| `OFL-bricolage-grotesque.txt` | `ofl/bricolagegrotesque/OFL.txt` |
+| `OFL-instrument-sans.txt` | `ofl/instrumentsans/OFL.txt` |
 | `OFL-jetbrains-mono.txt` | `ofl/jetbrainsmono/OFL.txt` |
 
 Each woff2 also carries its copyright line and the licence URL in its `name` table. The Dockerfile

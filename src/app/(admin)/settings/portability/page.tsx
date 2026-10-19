@@ -46,7 +46,7 @@ function ReportSummary({ report }: { report: ImportReport }) {
         {rows.map((row) => (
           <div key={row.label} className="flex justify-between gap-4">
             <dt className="text-muted-foreground">{row.label}</dt>
-            <dd className="font-mono tabular-nums font-bold">{row.value}</dd>
+            <dd className="font-mono tabular-nums font-medium">{row.value}</dd>
           </div>
         ))}
       </dl>

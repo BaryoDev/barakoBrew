@@ -216,8 +216,16 @@ describe('the drawer state', () => {
 
         await user.click(screen.getByRole('button', { name: 'Account' }));
 
-        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        // The modal menu hides everything else from the accessibility tree, the sheet included, so
+        // ask for it with hidden: true. A closed sheet is unmounted, so this fails if the click closed it.
         expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
+        const hiddenSheet = screen.getByRole('dialog', { hidden: true });
+        expect(hiddenSheet.getAttribute('data-state')).toBe('open');
+
+        await user.keyboard('{Escape}');
+
+        expect(screen.queryByRole('menuitem', { name: 'Sign out' })).toBeNull();
+        expect(screen.getByRole('dialog').getAttribute('data-state')).toBe('open');
     });
 });
 

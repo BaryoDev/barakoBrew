@@ -8,9 +8,9 @@
   --breakpoint-rail: 1000px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-manrope);
+  --font-sans: var(--font-instrument-sans);
   --font-mono: var(--font-jetbrains-mono);
-  --font-display: var(--font-sora);
+  --font-display: var(--font-bricolage-grotesque);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
@@ -61,11 +61,11 @@
  *
  * Replaces Bootswatch Yeti wholesale. Yeti was square (radius 0), Open Sans with 300-weight
  * headings, and #008cba blue on white. Signal is indigo #5A46D6 on a #FAFAFC page with white
- * panels, rounded (14px cards, 11px controls), Sora for display and Manrope for body.
+ * panels, rounded (14px cards, 11px controls), Bricolage Grotesque for display and Instrument Sans for body.
  *
  * The rule that does most of the work: every machine-produced value is monospace with
  * tabular-nums. Counts, versions, slugs, timestamps, durations, ids, event names, API paths.
- * Human prose is Manrope. That single distinction is what makes the admin read as a developer
+ * Human prose is Instrument Sans. That single distinction is what makes the admin read as a developer
  * tool rather than a dashboard template.
  *
  * Light only. Dark mode was deferred deliberately, so next-themes is pinned to light and the
@@ -217,7 +217,7 @@
   body {
     @apply bg-background text-foreground;
   }
-  /* Signal: Sora at 600, tightened. Yeti's 300-weight headings were the single biggest reason the
+  /* Signal: Bricolage Grotesque at 600, tightened. Yeti's 300-weight headings were the single biggest reason the
      admin read as a template rather than a tool. */
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
