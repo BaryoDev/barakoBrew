@@ -223,6 +223,40 @@ describe('AttemptCard on a halting run', () => {
   });
 });
 
+describe('AttemptCard tries', () => {
+  const history = [
+    { number: 1, outcome: 'Failed', responseStatus: 502, error: 'first' },
+    { number: 2, outcome: 'Failed', responseStatus: 503, error: 'second' },
+    { number: 3, outcome: 'Succeeded', responseStatus: 200 },
+  ];
+
+  it('lists the tries in order when there is more than one', () => {
+    renderCard(attempt({ attempts: 3, status: 'Succeeded', error: null, history }));
+
+    const tries = screen.getByRole('list', { name: 'Tries of action 2' });
+    const items = Array.from(tries.querySelectorAll('li')).map((li) => li.textContent ?? '');
+    expect(items).toHaveLength(3);
+    expect(items[0]).toContain('Try 1');
+    expect(items[1]).toContain('Try 2');
+    expect(items[2]).toContain('Try 3');
+  });
+
+  it('shows the count and last error alone when no history came', () => {
+    renderCard(attempt({ attempts: 3, error: 'Service Unavailable' }));
+
+    expect(screen.queryByRole('list', { name: /Tries of action/ })).toBeNull();
+    expect(screen.getByText('Service Unavailable')).toBeInTheDocument();
+  });
+
+  it('shows markup in a try as text', () => {
+    const markup = '<img src=x onerror="window.pwned=1">';
+    renderCard(attempt({ attempts: 2, history: [{ number: 1, outcome: 'Failed', error: markup }, { number: 2, outcome: 'Failed', error: 'x' }] }));
+
+    expect(screen.getByText(markup)).toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
+  });
+});
+
 describe('undoText', () => {
   it('says nothing undoes an action that declares no compensation, rather than printing NotDeclared', () => {
     expect(undoText({ actionType: null, status: 'NotDeclared', attempts: 0 })).toBe('Nothing undoes it');

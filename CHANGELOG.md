@@ -9,6 +9,10 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- **Workflow runs update while you watch.** The list polls every 2 seconds, using the API's cursor when it sends one and reading the page again when it does not. It stops in a hidden tab, backs off up to 60 seconds on errors, and stops on a 401 or 403. Status filters are chips with the API's own counts. A run's panel lists every try of an action when the API sends them, and `?run=<id>` opens a run. Abandon is a button on the run, and Retry, Cancel and Abandon show only to callers who hold the capability. Needs barakoCMS#1167 for the cursor, counts and tries; against older APIs the screen reads the page again each time. (#231)
+
 ## [1.9.0] - 2026-10-13
 
 **Speaks API contracts 1 to 8, which covers barakoCMS 4.0.1 to 5.0.0.** barakoCMS 5.0.0 moves the

@@ -9,6 +9,19 @@ vi.mock('@/lib/api', async () => {
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+let searchParams = new URLSearchParams();
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => searchParams,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+// Who the caller is, so a test can hand the screen a caller who holds some capabilities and not
+// others. The default holds everything, which is what the older tests in this file were written for.
+const { accessFrom } = await vi.importActual<typeof import('@/lib/access')>('@/lib/access');
+type AccessResult = ReturnType<typeof accessFrom>;
+let access: AccessResult = accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: [], capabilities: ['*'] }, []);
+vi.mock('@/hooks/use-access', () => ({ useAccess: () => access }));
+
 // Radix sizes its dialog with one, and jsdom ships no implementation.
 globalThis.ResizeObserver ??= class {
   observe() {}
@@ -17,7 +30,18 @@ globalThis.ResizeObserver ??= class {
 };
 
 const { api } = await import('@/lib/api');
+const { toast } = await import('sonner');
+const { AxiosError, AxiosHeaders } = await import('axios');
 const { default: WorkflowRunsPage } = await import('./page');
+
+const EVERYTHING = accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: [], capabilities: ['*'] }, []);
+
+beforeEach(() => {
+  access = EVERYTHING;
+  searchParams = new URLSearchParams();
+  vi.mocked(toast.error).mockReset();
+  vi.mocked(toast.success).mockReset();
+});
 
 const QUESTION = 'This failure will not fix itself by retrying. Retry anyway?';
 
@@ -303,5 +327,330 @@ describe('a run rolled back, as contract 8 reports it', () => {
 
     await screen.findByRole('list', { name: 'Actions' });
     expect(screen.getByRole('button', { name: /Retry action 1/ })).toBeInTheDocument();
+  });
+});
+
+function httpError(status: number, message?: string) {
+  return new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+    status,
+    statusText: '',
+    data: message ? { message } : {},
+    headers: {},
+    config: { headers: new AxiosHeaders() },
+  });
+}
+
+function listOf(items: unknown[], extra: Record<string, unknown> = {}) {
+  return {
+    items,
+    page: 1,
+    pageSize: 25,
+    totalItems: items.length,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+    ...extra,
+  };
+}
+
+function renderRuns(runs: Record<string, unknown>[], extra: Record<string, unknown> = {}) {
+  vi.mocked(api.get).mockImplementation((async (url: string) => {
+    if (url === '/api/workflow-runs') return { data: listOf(runs, extra) };
+    const found = runs.find((r) => url.endsWith(`/${r.id}`));
+    if (!found) throw httpError(404);
+    return { data: found };
+  }) as typeof api.get);
+  vi.mocked(api.post).mockResolvedValue({ data: {} });
+
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <WorkflowRunsPage />
+    </QueryClientProvider>,
+  );
+}
+
+const detailReads = (id: string) =>
+  vi.mocked(api.get).mock.calls.filter(([url]) => String(url).endsWith(`/api/workflow-runs/${id}`)).length;
+
+describe('the status chips', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  const COUNTS = { Pending: 1, Running: 2, Succeeded: 30, Failed: 4, PartiallyFailed: 6, Cancelled: 5 };
+
+  it('shows a chip for every status with the count the API sent, not the count of the loaded page', async () => {
+    renderRuns([run('r1', 'One', 'Failed', []), run('r2', 'Two', 'Succeeded', [])], { statusCounts: COUNTS, totalItems: 48 });
+    await screen.findByRole('radio', { name: /One/ });
+
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    for (const [status, count] of Object.entries(COUNTS)) {
+      expect(within(group).getByTestId(`count-${status}`)).toHaveTextContent(String(count));
+    }
+    expect(within(group).getByTestId('count-all')).toHaveTextContent('48');
+    // Two rows are loaded and Succeeded says 30, so the number cannot have been counted here.
+    expect(screen.getAllByRole('row')).toHaveLength(3);
+  });
+
+  it('is a plain filter, with no counts, against an API that sends none', async () => {
+    renderRuns([run('r1', 'One', 'Failed', [])]);
+    await screen.findByRole('radio', { name: /One/ });
+
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    expect(within(group).getAllByRole('button')).toHaveLength(7);
+    expect(within(group).queryByTestId('count-Failed')).toBeNull();
+  });
+
+  it('asks the API for the status that was pressed, from page 1', async () => {
+    renderRuns([run('r1', 'One', 'Failed', [])], { statusCounts: COUNTS });
+    await screen.findByRole('radio', { name: /One/ });
+
+    fireEvent.click(within(screen.getByRole('group', { name: 'Filter runs by status' })).getByRole('button', { name: /^Failed/ }));
+
+    await waitFor(() => {
+      const asked = vi.mocked(api.get).mock.calls.map(([, config]) => (config as { params?: Record<string, unknown> })?.params);
+      expect(asked.some((params) => params?.status === 'Failed' && params?.page === 1)).toBe(true);
+    });
+  });
+});
+
+describe('the attempt history in the panel', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('lists three tries of an action in the order the API sent them', async () => {
+    const history = [
+      { number: 1, outcome: 'Failed', responseStatus: 502, error: 'first try failed' },
+      { number: 2, outcome: 'Failed', responseStatus: 503, error: 'second try failed' },
+      { number: 3, outcome: 'Succeeded', responseStatus: 200 },
+    ];
+    renderRuns([run('r1', 'Announce', 'Succeeded', [action(1, 'Succeeded', { attempts: 3, history, droppedAttempts: 0 })])]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+
+    const tries = await screen.findByRole('list', { name: 'Tries of action 1' });
+    const items = within(tries).getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveTextContent('Try 1');
+    expect(items[0]).toHaveTextContent('first try failed');
+    expect(items[1]).toHaveTextContent('Try 2');
+    expect(items[1]).toHaveTextContent('second try failed');
+    expect(items[2]).toHaveTextContent('Try 3');
+    expect(items[2]).toHaveTextContent('Succeeded');
+  });
+
+  it('says how many older tries were dropped', async () => {
+    const history = [
+      { number: 21, outcome: 'Failed', error: 'late' },
+      { number: 22, outcome: 'Failed', error: 'later' },
+    ];
+    renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { attempts: 22, history, droppedAttempts: 20 })])]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+
+    expect(await screen.findByText(/20 earlier tries are no longer kept/)).toBeInTheDocument();
+  });
+
+  it('shows the count and the last error for a run from an API without a history', async () => {
+    renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { attempts: 3, error: 'Service Unavailable' })])]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+
+    const list = await screen.findByRole('list', { name: 'Actions' });
+    expect(within(list).getByText('Service Unavailable')).toBeInTheDocument();
+    expect(within(list).getByText('Attempts')).toBeInTheDocument();
+    expect(within(list).getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('Tries')).toBeNull();
+  });
+});
+
+describe('who sees the buttons on a run', () => {
+  // Something went out (action 1), one action failed, and the run is still going: every button applies.
+  const LIVE = {
+    ...run('r1', 'Charge the card', 'Running', [action(1, 'Succeeded'), action(2, 'Failed', { retryable: true })]),
+    cancelledAt: null,
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  async function open() {
+    renderRuns([LIVE]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+    await screen.findByRole('list', { name: 'Actions' });
+  }
+
+  function seen() {
+    return {
+      retry: screen.queryByRole('button', { name: /Retry action/ }) !== null,
+      cancel: screen.queryByRole('button', { name: 'Cancel run' }) !== null,
+      abandon: screen.queryByRole('button', { name: 'Abandon run' }) !== null,
+    };
+  }
+
+  const me = (capabilities: string[]) =>
+    accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: [{ id: 'r', name: 'Editor' }], capabilities }, ['Editor']);
+
+  it('shows all three to a caller who holds everything', async () => {
+    await open();
+    expect(seen()).toEqual({ retry: true, cancel: true, abandon: true });
+  });
+
+  it('shows none with the capabilities known and none of them held', async () => {
+    access = me(['view_workflow_runs']);
+    expect(access.known).toBe(true);
+    await open();
+    expect(seen()).toEqual({ retry: false, cancel: false, abandon: false });
+  });
+
+  it('gives retry and abandon to retry_workflow_actions and cancel to manage_workflows', async () => {
+    access = me(['retry_workflow_actions']);
+    await open();
+    expect(seen()).toEqual({ retry: true, cancel: false, abandon: true });
+  });
+
+  it('gives cancel to manage_workflows alone', async () => {
+    access = me(['manage_workflows']);
+    await open();
+    expect(seen()).toEqual({ retry: false, cancel: true, abandon: false });
+  });
+
+  it('shows none when the capabilities are unknown and the token holds no admin role', async () => {
+    access = accessFrom(null, ['Editor']);
+    expect(access.known).toBe(false);
+    await open();
+    expect(seen()).toEqual({ retry: false, cancel: false, abandon: false });
+  });
+
+  it('falls back to the Admin role name when the capabilities are unknown', async () => {
+    access = accessFrom(null, ['Admin']);
+    expect(access.known).toBe(false);
+    await open();
+    expect(seen()).toEqual({ retry: true, cancel: true, abandon: true });
+  });
+});
+
+describe('abandoning a run', () => {
+  const PARTLY = run('r1', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Failed')]);
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  async function openAndAbandon() {
+    renderRuns([PARTLY]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon run' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(api.post).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, abandon the run' }));
+  }
+
+  it('posts to the abandon route once the question is confirmed', async () => {
+    await openAndAbandon();
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/workflow-runs/r1/abandon', {}));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+  });
+
+  it.each([403, 409])('shows the reason from a %i and reads the run again', async (status) => {
+    const reason = 'An action of that run is running now.';
+    vi.mocked(api.get).mockReset();
+    renderRuns([PARTLY]);
+    vi.mocked(api.post).mockRejectedValue(httpError(status, reason));
+    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+    await screen.findByRole('list', { name: 'Actions' });
+    const before = detailReads('r1');
+    expect(before).toBeGreaterThan(0);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon run' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Yes, abandon the run' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(reason));
+    await waitFor(() => expect(detailReads('r1')).toBeGreaterThan(before));
+  });
+
+  it('offers no abandon on a run nothing succeeded in', async () => {
+    renderRuns([run('r2', 'Nothing went out', 'Failed', [action(1, 'Failed')])]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Nothing went out/ }));
+
+    await screen.findByRole('list', { name: 'Actions' });
+    expect(screen.queryByRole('button', { name: 'Abandon run' })).toBeNull();
+  });
+});
+
+describe('text from the API stays text', () => {
+  const MARKUP = '<img src=x onerror="window.pwned=1">';
+
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('shows markup in an error as text in the error row', async () => {
+    renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { error: MARKUP })])]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+
+    const list = await screen.findByRole('list', { name: 'Actions' });
+    expect(within(list).getByText(MARKUP)).toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('shows markup in an error in each try, as text', async () => {
+    const history = [
+      { number: 1, outcome: 'Failed', error: MARKUP },
+      { number: 2, outcome: 'Failed', error: 'plain' },
+    ];
+    renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { attempts: 2, history })])]);
+    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+
+    expect(await screen.findByText(MARKUP)).toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('hands a refusal that carries markup to the toast as a string, which it renders as text', async () => {
+    renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { retryable: true })])]);
+    vi.mocked(api.post).mockRejectedValue(httpError(409, MARKUP));
+    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Retry action 1/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MARKUP));
+    expect(typeof vi.mocked(toast.error).mock.calls[0][0]).toBe('string');
+  });
+});
+
+describe('a link to a run', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('opens the run named by ?run= without a click', async () => {
+    searchParams = new URLSearchParams('run=r2');
+    renderRuns([run('r1', 'One', 'Failed', [action(1, 'Failed')]), run('r2', 'Two', 'Failed', [action(1, 'Failed'), action(2, 'Failed')])]);
+
+    const list = await screen.findByRole('list', { name: 'Actions' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'Two' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Two/ })).toBeChecked();
+  });
+
+  it('says so when the id is not a run', async () => {
+    searchParams = new URLSearchParams('run=nope');
+    renderRuns([run('r1', 'One', 'Failed', [action(1, 'Failed')])]);
+
+    expect(await screen.findByText('Run not found')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Actions' })).toBeNull();
+  });
+
+  it('writes the chosen run into the address', async () => {
+    renderRuns([run('r1', 'One', 'Failed', [action(1, 'Failed')])]);
+    fireEvent.click(await screen.findByRole('radio', { name: /One/ }));
+
+    await screen.findByRole('list', { name: 'Actions' });
+    expect(new URLSearchParams(window.location.search).get('run')).toBe('r1');
   });
 });

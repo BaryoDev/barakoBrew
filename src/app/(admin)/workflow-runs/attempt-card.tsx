@@ -12,6 +12,7 @@ import {
   isRetryable,
   toneForAttemptStatus,
   type ActionCompensation,
+  type AttemptEntry,
   type WorkflowActionAttempt,
 } from '@/hooks/use-workflow-runs';
 
@@ -149,10 +150,14 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
         ))}
       </dl>
 
-      {attempt.error && (
+      {showsHistory(attempt) ? (
+        <TryList attempt={attempt} />
+      ) : (
+        attempt.error && (
         <pre className="bg-muted mt-3 max-h-40 overflow-auto rounded-md p-3 text-[12px] whitespace-pre-wrap">
           {attempt.error}
         </pre>
+        )
       )}
     </li>
   );
@@ -167,4 +172,57 @@ export function undoText(compensation: ActionCompensation): string {
         ? `${compensation.actionType}, ${compensation.status}`
         : compensation.status;
   return compensation.error ? `${outcome}: ${compensation.error}` : outcome;
+}
+
+/**
+ * Whether the card lists every try. A single try is what the fields above already say, and the API
+ * builds one for a run stored before it kept history, so listing it would only say it twice. More
+ * than one try, or tries dropped to stay within the cap, is what the list is for.
+ */
+export function showsHistory(attempt: Pick<WorkflowActionAttempt, 'history' | 'droppedAttempts'>): boolean {
+  return (attempt.history?.length ?? 0) > 1 || (attempt.droppedAttempts ?? 0) > 0;
+}
+
+function tryFacts(entry: AttemptEntry): string {
+  const parts: string[] = [];
+  if (entry.responseStatus !== null && entry.responseStatus !== undefined) parts.push(String(entry.responseStatus));
+  if (entry.durationMs !== null && entry.durationMs !== undefined) parts.push(formatDuration(entry.durationMs));
+  const started = formatMoment(entry.startedAt);
+  if (started) parts.push(started);
+  return parts.join(', ');
+}
+
+/**
+ * Every try of the action, oldest first as the API sends them. The error is text: it came from a
+ * remote system, so it is never given to anything that reads markup.
+ */
+function TryList({ attempt }: { attempt: WorkflowActionAttempt }) {
+  const dropped = attempt.droppedAttempts ?? 0;
+
+  return (
+    <div className="mt-3">
+      <h4 className="text-[12px] font-bold">Tries</h4>
+      {dropped > 0 && (
+        <p className="text-muted-foreground mt-1 text-[12px]">
+          {dropped === 1 ? '1 earlier try is' : `${dropped} earlier tries are`} no longer kept.
+        </p>
+      )}
+      <ol aria-label={`Tries of action ${attempt.ordinal}`} className="mt-1 space-y-2">
+        {(attempt.history ?? []).map((entry) => (
+          <li key={entry.number} className="rounded-md border p-2 text-[12px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono font-bold tabular-nums">Try {entry.number}</span>
+              <StatusBadge tone={toneForAttemptStatus(entry.outcome)}>{entry.outcome}</StatusBadge>
+              <span className="text-muted-foreground font-mono tabular-nums">{tryFacts(entry)}</span>
+            </div>
+            {entry.error && (
+              <pre className="bg-muted mt-2 max-h-32 overflow-auto rounded-md p-2 whitespace-pre-wrap">
+                {entry.error}
+              </pre>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }

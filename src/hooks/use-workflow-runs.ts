@@ -1,8 +1,11 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { z } from 'zod';
 import { api, paginatedSchema, parseResponse } from '@/lib/api';
+import { isAsNew, mergeRunPage } from '@/lib/run-merge';
 import type { Tone } from '@/components/patterns/status-badge';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 
@@ -49,6 +52,25 @@ export interface WorkflowActionAttempt {
   outputs?: Record<string, string> | null;
   /** The undoing of this action once its run is rolled back. Absent from an API before contract 8. */
   compensation?: ActionCompensation | null;
+  /**
+   * Every try of this action, oldest first, up to 20. Absent from an API before barakoCMS#1164,
+   * which sends only the latest try in the fields above.
+   */
+  history?: AttemptEntry[] | null;
+  /** How many older tries were dropped to stay within the cap. Absent before barakoCMS#1164. */
+  droppedAttempts?: number | null;
+}
+
+/** One try of an action. `outcome` is an AttemptStatus name and `error` is the redacted text. */
+export interface AttemptEntry {
+  number: number;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  outcome: string;
+  responseStatus?: number | null;
+  error?: string | null;
+  retryable?: boolean | null;
+  durationMs?: number | null;
 }
 
 /** One action's compensation. `status` is a CompensationStatus name; NotDeclared is nothing to undo it. */
@@ -84,6 +106,8 @@ export interface WorkflowRun {
    * was. Absent from an API before contract 8.
    */
   compensation?: string | null;
+  /** When the run last changed. Absent from an API before barakoCMS#1164. */
+  updatedAt?: string | null;
 }
 
 /**
@@ -91,6 +115,17 @@ export interface WorkflowRun {
  * reaches the screen. An action's status stays a string: the screen only compares it, and it is a
  * different enum from the run's.
  */
+const attemptEntrySchema = z.looseObject({
+  number: z.number(),
+  startedAt: z.string().nullish(),
+  finishedAt: z.string().nullish(),
+  outcome: z.string(),
+  responseStatus: z.number().nullish(),
+  error: z.string().nullish(),
+  retryable: z.boolean().nullish(),
+  durationMs: z.number().nullish(),
+}) satisfies z.ZodType<AttemptEntry>;
+
 const attemptSchema = z.looseObject({
   ordinal: z.number(),
   actionType: z.string(),
@@ -116,6 +151,8 @@ const attemptSchema = z.looseObject({
       durationMs: z.number().nullish(),
     })
     .nullish(),
+  history: z.array(attemptEntrySchema).nullish(),
+  droppedAttempts: z.number().nullish(),
 }) satisfies z.ZodType<WorkflowActionAttempt>;
 
 export const workflowRunSchema = z.looseObject({
@@ -133,7 +170,34 @@ export const workflowRunSchema = z.looseObject({
   executor: z.string().nullish(),
   abandonedAt: z.string().nullish(),
   compensation: z.string().nullish(),
+  updatedAt: z.string().nullish(),
 }) satisfies z.ZodType<WorkflowRun>;
+
+/**
+ * The list response. The fields after the page arrive with barakoCMS#1164 and are all optional, so
+ * an older API still parses and the screen falls back to what it did before.
+ */
+function buildListSchema() {
+  return paginatedSchema(workflowRunSchema).extend({
+    /** Runs per status for the `contentId` filter, whatever the status filter and the page. */
+    statusCounts: z.record(z.string(), z.number()).nullish(),
+    /** Pass back as `changedSince`. Present only on a response to a `changedSince` request. */
+    cursor: z.string().nullish(),
+    /** Succeeded runs that finished before this are removed by the retention sweep. */
+    succeededRetainedFrom: z.string().nullish(),
+    /** The same for failed, partially failed and cancelled runs. */
+    failedRetainedFrom: z.string().nullish(),
+  });
+}
+
+let listSchema: ReturnType<typeof buildListSchema> | undefined;
+
+/** Built on first use, so importing this module does not need the client's schema helper. */
+export function workflowRunListSchema() {
+  return (listSchema ??= buildListSchema());
+}
+
+export type WorkflowRunList = z.infer<ReturnType<typeof buildListSchema>>;
 
 export interface WorkflowRunsQuery {
   page?: number;
@@ -192,6 +256,29 @@ export function isCancellable(run: Pick<WorkflowRun, 'status' | 'cancelledAt'>):
   if (!('cancelledAt' in run) || run.cancelledAt) return false;
   return run.status === 'Pending' || run.status === 'Running';
 }
+
+/**
+ * Whether the run can be abandoned from here: nobody stopped or rolled it back, it did not finish
+ * with everything succeeded, and something in it went out and can be undone. The API decides, and
+ * answers 409 with its reason, for what this cannot see, such as an action running right now.
+ */
+export function isAbandonable(
+  run: Pick<WorkflowRun, 'status' | 'cancelledAt' | 'compensation' | 'abandonedAt' | 'actions'>,
+): boolean {
+  if (isStopped(run) || isRolledBack(run)) return false;
+  if (run.status === 'Succeeded') return false;
+  return run.actions.some((action) => action.status === 'Succeeded');
+}
+
+/** What each button on a run needs, as barakoCMS gates the endpoint behind it. */
+export const RUN_CAPABILITIES = {
+  retry: 'retry_workflow_actions',
+  abandon: 'retry_workflow_actions',
+  cancel: 'manage_workflows',
+} as const;
+
+/** The roles that passed these gates before capabilities existed, for an API older than 4.7. */
+export const RUN_LEGACY_ROLES = ['Admin'] as const;
 
 /** A stopped run starts nothing again, and the API answers 409 to a retry on one. */
 export function isStopped(run: Pick<WorkflowRun, 'status' | 'cancelledAt'>): boolean {
@@ -306,24 +393,274 @@ export function toneForAttemptStatus(status: string): Tone {
   }
 }
 
+/** How often a visible list asks what changed. */
+export const POLL_INTERVAL_MS = 2000;
+
+/** Backing off after an error never waits longer than this. */
+export const POLL_MAX_BACKOFF_MS = 60_000;
+
 /**
- * The tenant is the last part of both keys. Switching tenant invalidates every query, and an
+ * How far behind now the API holds its cursor. A poll can therefore return a run it returned
+ * before, which the merge by id absorbs. It does not make polling any faster useful: a change is
+ * seen by the next poll after it commits whatever the lag, so the interval above is the floor.
+ */
+export const API_CURSOR_LAG_MS = 5000;
+
+/** After a page with more behind it, ask again soon instead of waiting a whole interval. */
+const CATCH_UP_MS = 250;
+
+/**
+ * Without a server clock to read, start this far back from the browser's. A start that is too early
+ * costs a few repeats the merge absorbs, and one that is too late skips a change, so skew is
+ * covered by being generous.
+ */
+const CLIENT_CLOCK_MARGIN_MS = 60_000;
+
+const POLL_PAGE_SIZE = 100;
+
+/** Every mutation of a run carries this key, so a poll can tell one is in flight. */
+export const RUN_MUTATION_KEY = ['workflow-run-action'] as const;
+
+function statusOf(error: unknown): number | undefined {
+  return axios.isAxiosError(error) ? error.response?.status : undefined;
+}
+
+/** A 401 or a 403 will not get better by asking again, so polling stops on either. */
+function isAuthRefusal(error: unknown): boolean {
+  const status = statusOf(error);
+  return status === 401 || status === 403;
+}
+
+/** The wait after the n-th error in a row: the interval doubled each time, up to a minute. */
+export function backoffDelay(failures: number): number {
+  return Math.min(POLL_INTERVAL_MS * 2 ** failures, POLL_MAX_BACKOFF_MS);
+}
+
+type RunListCache = WorkflowRunList;
+
+/**
+ * What one list remembers between reads. A class, so the hook that owns it only calls methods on it
+ * and never assigns to it, and a new key gets a new one, which is what drops the cursor on a tenant
+ * switch.
+ */
+class ListState {
+  /** Where polling starts, taken from the list read it follows. */
+  since: string | null = null;
+  /** The newest copy of every run a poll returned, for a refetch that was already in flight. */
+  readonly polled = new Map<string, WorkflowRun>();
+
+  startAt(moment: Date) {
+    this.since ??= moment.toISOString();
+  }
+
+  /** Keeps the copy of a run unless one that is newer is held. */
+  remember(run: WorkflowRun) {
+    const held = this.polled.get(run.id);
+    if (held && !isAsNew(run, held)) return;
+    this.polled.delete(run.id);
+    this.polled.set(run.id, run);
+    while (this.polled.size > POLLED_CAP) this.polled.delete(this.polled.keys().next().value as string);
+  }
+}
+
+const POLLED_CAP = 300;
+
+/**
+ * The runs list, polled while it is open.
+ *
+ * With `live`, a visible list asks `changedSince` every two seconds and merges what changed into the
+ * page by id. The poll leaves the status filter out on purpose: a run that stops matching it is
+ * reported only if the poll can see it, and the merge then removes it. When the API sends no cursor
+ * (before barakoCMS#1164) the poll reads the current page again instead.
+ *
+ * The tenant is the last part of the key. Switching tenant invalidates every query, and an
  * invalidated query keeps its rows on screen while the refetch runs, so without it the first
  * tenant's runs would sit in the list until the second tenant's arrived. Under a key the new
  * tenant has never used there is nothing to keep. It goes last so the prefixes the retry hook
  * invalidates on still find it.
  */
-export function useWorkflowRuns(query: WorkflowRunsQuery) {
+export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: boolean } = {}) {
   const params = runListParams(query);
   const tenant = useCurrentTenant();
+  const queryClient = useQueryClient();
+  const queryKey = ['workflow-runs', params, tenant] as const;
+  const keyText = JSON.stringify(queryKey);
+  const live = options.live ?? false;
 
-  return useQuery({
-    queryKey: ['workflow-runs', params, tenant],
+  // Per key, so a tenant switch or a new filter drops the cursor and the polled copies with it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is the point of the dependency
+  const list = useMemo(() => new ListState(), [keyText]);
+
+  const result = useQuery({
+    queryKey,
     queryFn: async () => {
+      const started = Date.now();
       const response = await api.get<unknown>('/api/workflow-runs', { params });
-      return parseResponse(paginatedSchema(workflowRunSchema), response.data, 'GET /api/workflow-runs');
+      const page = parseResponse(workflowRunListSchema(), response.data, 'GET /api/workflow-runs');
+
+      const header = response.headers?.date;
+      const served = typeof header === 'string' ? Date.parse(header) : NaN;
+      list.startAt(new Date(Number.isNaN(served) ? started - CLIENT_CLOCK_MARGIN_MS : served - API_CURSOR_LAG_MS));
+
+      // A refetch can start before a poll and land after it. The polled copy of a run wins when it
+      // is newer, so an invalidation after a retry does not put back what the poll just showed.
+      if (list.polled.size === 0) return page;
+      return mergeRunPage(page, [...list.polled.values()], { status: params.status as string | undefined }).page;
     },
   });
+
+  const ready = result.dataUpdatedAt > 0;
+
+  useEffect(() => {
+    if (!live || !ready) return;
+    return startPolling({
+      queryClient,
+      listKey: queryKey,
+      list,
+      status: (params.status as string | undefined) ?? null,
+      contentId: (params.contentId as string | undefined) ?? null,
+      tenant,
+    });
+    // The key text stands for every part of the key, and `ready` flips once per key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, ready, keyText]);
+
+  return result;
+}
+
+interface PollingInput {
+  queryClient: QueryClient;
+  listKey: readonly unknown[];
+  list: ListState;
+  status: string | null;
+  contentId: string | null;
+  tenant: string | null;
+}
+
+/**
+ * Runs the poll loop for one list until the returned function is called. A loop of its own, not a
+ * `refetchInterval`, because the interval has to change with errors, wait out a mutation, and
+ * restart the moment a hidden tab is shown.
+ */
+function startPolling(input: PollingInput): () => void {
+  const { queryClient, listKey, list, status, contentId, tenant } = input;
+
+  let stopped = false;
+  let busy = false;
+  let failures = 0;
+  let cursor = list.since;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Set the first time a response comes back with no cursor: this API cannot say what changed.
+  let rereading = false;
+
+  const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+  function schedule(delay: number) {
+    clearTimeout(timer);
+    if (stopped || hidden()) return;
+    timer = setTimeout(() => void tick(), delay);
+  }
+
+  function reread() {
+    return Promise.all([
+      queryClient.refetchQueries({ queryKey: listKey, exact: true }),
+      queryClient.refetchQueries({ queryKey: ['workflow-run'], type: 'active' }),
+    ]);
+  }
+
+  async function tick() {
+    if (stopped || busy || hidden()) return;
+    if (queryClient.isMutating({ mutationKey: RUN_MUTATION_KEY }) > 0) {
+      schedule(POLL_INTERVAL_MS);
+      return;
+    }
+
+    cursor ??= list.since;
+    busy = true;
+    let next = POLL_INTERVAL_MS;
+    try {
+      if (rereading || cursor === null) {
+        await reread();
+      } else {
+        const params: Record<string, string | number> = {
+          page: 1,
+          pageSize: POLL_PAGE_SIZE,
+          changedSince: cursor,
+        };
+        if (contentId) params.contentId = contentId;
+
+        const response = await api.get<unknown>('/api/workflow-runs', { params });
+        if (stopped) return;
+        const polled = parseResponse(workflowRunListSchema(), response.data, 'GET /api/workflow-runs?changedSince');
+
+        if (!polled.cursor) {
+          rereading = true;
+          await reread();
+        } else {
+          cursor = polled.cursor;
+          if (applyPoll(polled)) next = CATCH_UP_MS;
+        }
+      }
+      failures = 0;
+    } catch (error) {
+      if (stopped) return;
+      if (isAuthRefusal(error)) {
+        stopped = true;
+        return;
+      }
+      failures += 1;
+      next = backoffDelay(failures);
+    } finally {
+      busy = false;
+    }
+    schedule(next);
+  }
+
+  /** Merges one poll into the page and the open run. Returns whether another page is waiting. */
+  function applyPoll(polled: RunListCache): boolean {
+    for (const run of polled.items) {
+      list.remember(run);
+      const detailKey = ['workflow-run', run.id, tenant];
+      const open = queryClient.getQueryData<WorkflowRun>(detailKey);
+      if (open && isAsNew(run, open)) queryClient.setQueryData(detailKey, run);
+    }
+
+    let hole = false;
+    queryClient.setQueryData<RunListCache>(listKey, (current) => {
+      if (!current) return current;
+      const merged = mergeRunPage(current, polled.items, { status, statusCounts: polled.statusCounts });
+      hole = merged.removed > 0 && current.hasNextPage;
+      return {
+        ...merged.page,
+        succeededRetainedFrom: polled.succeededRetainedFrom ?? current.succeededRetainedFrom,
+        failedRetainedFrom: polled.failedRetainedFrom ?? current.failedRetainedFrom,
+      };
+    });
+
+    // A run left the filter and more runs follow this page, so the page now ends short. Read it again.
+    if (hole) void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
+    return polled.hasNextPage;
+  }
+
+  function onVisibility() {
+    if (hidden()) {
+      clearTimeout(timer);
+      return;
+    }
+    // Back in view: do not wait out the interval, and forget the errors of the time away.
+    failures = 0;
+    clearTimeout(timer);
+    void tick();
+  }
+
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
+  schedule(POLL_INTERVAL_MS);
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility);
+  };
 }
 
 export function useWorkflowRun(id: string | null) {
@@ -332,11 +669,22 @@ export function useWorkflowRun(id: string | null) {
   return useQuery({
     queryKey: ['workflow-run', id, tenant],
     queryFn: async () => {
-      const response = await api.get<unknown>(`/api/workflow-runs/${id}`);
+      const response = await api.get<unknown>(`/api/workflow-runs/${encodeURIComponent(id as string)}`);
       return parseResponse(workflowRunSchema, response.data, 'GET /api/workflow-runs/{id}');
     },
     enabled: !!id,
   });
+}
+
+/**
+ * Refetches the run and the list. After a success so the screen shows a fresh read, and after a
+ * refusal (403 or 409) because the refusal means the screen was wrong about the run. Any other
+ * failure leaves what the server holds alone.
+ */
+function refreshAfter(queryClient: QueryClient, runId: string, error?: unknown) {
+  if (error !== undefined && statusOf(error) !== 403 && statusOf(error) !== 409) return;
+  void queryClient.invalidateQueries({ queryKey: ['workflow-run', runId] });
+  void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
 }
 
 /**
@@ -351,13 +699,12 @@ export function useRetryAttempt() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: RUN_MUTATION_KEY,
     mutationFn: async (input: { runId: string; ordinal: number }) => {
       await api.post(`/api/workflow-runs/${input.runId}/actions/${input.ordinal}/retry`, {});
     },
-    onSuccess: (_result, input) => {
-      void queryClient.invalidateQueries({ queryKey: ['workflow-run', input.runId] });
-      void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
-    },
+    onSuccess: (_result, input) => refreshAfter(queryClient, input.runId),
+    onError: (error, input) => refreshAfter(queryClient, input.runId, error),
   });
 }
 
@@ -370,12 +717,29 @@ export function useCancelRun() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: RUN_MUTATION_KEY,
     mutationFn: async (runId: string) => {
       await api.post(`/api/workflow-runs/${encodeURIComponent(runId)}/cancel`, {});
     },
-    onSuccess: (_result, runId) => {
-      void queryClient.invalidateQueries({ queryKey: ['workflow-run', runId] });
-      void queryClient.invalidateQueries({ queryKey: ['workflow-runs'] });
+    onSuccess: (_result, runId) => refreshAfter(queryClient, runId),
+    onError: (error, runId) => refreshAfter(queryClient, runId, error),
+  });
+}
+
+/**
+ * Abandons a run: the API rolls back what already went out by running the compensations its
+ * actions declare, and refuses with a 409 and a reason when the run is not in a state to be
+ * abandoned. The response body is thrown away for the same reason the retry's is.
+ */
+export function useAbandonRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: RUN_MUTATION_KEY,
+    mutationFn: async (runId: string) => {
+      await api.post(`/api/workflow-runs/${encodeURIComponent(runId)}/abandon`, {});
     },
+    onSuccess: (_result, runId) => refreshAfter(queryClient, runId),
+    onError: (error, runId) => refreshAfter(queryClient, runId, error),
   });
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -9,13 +10,6 @@ import { PaginationControls } from '@/components/patterns/pagination-controls';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -26,20 +20,26 @@ import {
 } from '@/components/ui/table';
 import { IconRefresh, IconWorkflows } from '@/components/icons';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
-import { apiErrorMessage } from '@/lib/api';
+import { apiErrorMessage, isNotFound } from '@/lib/api';
+import { useAccess } from '@/hooks/use-access';
 import {
   ANY_STATUS,
   FAILURE_KINDS,
+  RUN_CAPABILITIES,
+  RUN_LEGACY_ROLES,
   RUN_STATUSES,
+  isAbandonable,
   isCancellable,
   runAllowsRetry,
   runFailureKind,
   toneForRunStatus,
+  useAbandonRun,
   useCancelRun,
   useRetryAttempt,
   useWorkflowRun,
   useWorkflowRuns,
   type WorkflowRun,
+  type WorkflowRunList,
 } from '@/hooks/use-workflow-runs';
 import { AttemptCard } from './attempt-card';
 
@@ -79,6 +79,63 @@ function RunFacts({ run }: { run: WorkflowRun }) {
   );
 }
 
+/**
+ * One chip for each status the API knows, with the count the API gives for it. The count is the
+ * server's, taken over every page, so it is right on page 3 and under a filter. An API before
+ * barakoCMS#1164 sends none, and then the chips are only filters.
+ */
+function StatusChips({
+  value,
+  counts,
+  onChange,
+}: {
+  value: string;
+  counts: WorkflowRunList['statusCounts'];
+  onChange: (status: string) => void;
+}) {
+  const total = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : null;
+  const chips: { status: string; label: string; count: number | null }[] = [
+    { status: ANY_STATUS, label: 'Every status', count: total },
+    ...RUN_STATUSES.map((status) => ({ status, label: status, count: counts ? (counts[status] ?? 0) : null })),
+  ];
+
+  return (
+    <div role="group" aria-label="Filter runs by status" className="flex flex-wrap gap-1.5">
+      {chips.map((chip) => (
+        <Button
+          key={chip.status}
+          size="sm"
+          variant={chip.status === value ? 'default' : 'outline'}
+          aria-pressed={chip.status === value}
+          onClick={() => onChange(chip.status)}
+        >
+          {chip.label}
+          {chip.count !== null && (
+            <span className="font-mono tabular-nums opacity-80" data-testid={`count-${chip.status}`}>
+              {chip.count}
+            </span>
+          )}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+/** What the retention sweep keeps, when the API says. Silent about a window it does not know. */
+function RetentionNote({ list }: { list: WorkflowRunList }) {
+  const succeeded = formatMoment(list.succeededRetainedFrom);
+  const failed = formatMoment(list.failedRetainedFrom);
+  if (!succeeded && !failed) return null;
+
+  return (
+    <p className="text-muted-foreground mt-3 text-[12px]">
+      Older runs are removed.
+      {succeeded && ` Succeeded runs that finished before ${succeeded} are gone.`}
+      {failed && ` Failed, partly failed and cancelled runs before ${failed} are gone.`}
+    </p>
+  );
+}
+
 function RunFailureKind({ run }: { run: WorkflowRun }) {
   const kind = runFailureKind(run);
   if (!kind) return null;
@@ -93,12 +150,36 @@ function RunFailureKind({ run }: { run: WorkflowRun }) {
 export default function WorkflowRunsPage() {
   const [status, setStatus] = useState<string>(ANY_STATUS);
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const linked = searchParams.get('run');
+  const [selectedId, setSelectedId] = useState<string | null>(linked || null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const runs = useWorkflowRuns({ page, pageSize: 25, status });
+  // A link from another page, or the address bar, picks the run. Picking one here writes it back,
+  // so the address can be shared.
+  const [seenLink, setSeenLink] = useState(linked);
+  if (seenLink !== linked) {
+    setSeenLink(linked);
+    setSelectedId(linked || null);
+  }
+
+  function select(id: string) {
+    setSelectedId(id);
+    const next = new URLSearchParams(window.location.search);
+    next.set('run', id);
+    window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}`);
+  }
+
+  const access = useAccess();
+  const canRetry = access.can(RUN_CAPABILITIES.retry, RUN_LEGACY_ROLES);
+  const canAbandon = access.can(RUN_CAPABILITIES.abandon, RUN_LEGACY_ROLES);
+  const canCancel = access.can(RUN_CAPABILITIES.cancel, RUN_LEGACY_ROLES);
+
+  const runs = useWorkflowRuns({ page, pageSize: 25, status }, { live: true });
   const run = useWorkflowRun(selectedId);
   const retry = useRetryAttempt();
   const cancel = useCancelRun();
+  const abandon = useAbandonRun();
 
   const rows = runs.data?.items ?? [];
 
@@ -133,6 +214,16 @@ export default function WorkflowRunsPage() {
     }
   }
 
+  async function onAbandon(runId: string) {
+    try {
+      await abandon.mutateAsync(runId);
+      toast.success('Run abandoned. What went out is being undone.');
+    } catch (error) {
+      // 409 carries the reason: an action running now, nothing that succeeded, already rolled back.
+      toast.error(apiErrorMessage(error, 'The run could not be abandoned.'));
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -140,34 +231,15 @@ export default function WorkflowRunsPage() {
         description="Every firing of a workflow, newest first. Open one to see what each of its actions did."
         actions={
           <div className="flex items-center gap-2">
-            <Select
-              value={status}
-              onValueChange={(value) => {
-                setStatus(value);
-                // Page 3 of "everything" is rarely page 3 of one status, and staying there shows an
-                // empty list for a filter that has matches.
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-44" size="sm" aria-label="Filter runs by status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY_STATUS}>Every status</SelectItem>
-                {RUN_STATUSES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Button
               variant="outline"
               size="sm"
-              disabled={runs.isFetching}
+              disabled={refreshing}
               onClick={() => {
-                void runs.refetch();
-                if (selectedId) void run.refetch();
+                setRefreshing(true);
+                void Promise.all([runs.refetch(), selectedId ? run.refetch() : null]).finally(() =>
+                  setRefreshing(false),
+                );
               }}
             >
               <IconRefresh />
@@ -180,6 +252,18 @@ export default function WorkflowRunsPage() {
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <section className={CARD}>
           <h2 className="text-[15px] font-bold">Runs</h2>
+          <div className="mt-3">
+            <StatusChips
+              value={status}
+              counts={runs.data?.statusCounts}
+              onChange={(next) => {
+                setStatus(next);
+                // Page 3 of "everything" is rarely page 3 of one status, and staying there shows an
+                // empty list for a filter that has matches.
+                setPage(1);
+              }}
+            />
+          </div>
 
           {runs.isLoading ? (
             <div className="mt-4">
@@ -229,7 +313,7 @@ export default function WorkflowRunsPage() {
                           name="run"
                           aria-label={`Open the ${row.workflowName} run started ${formatMoment(row.createdAt)}`}
                           checked={row.id === selectedId}
-                          onChange={() => setSelectedId(row.id)}
+                          onChange={() => select(row.id)}
                         />
                       </TableCell>
                       <TableCell>
@@ -252,6 +336,7 @@ export default function WorkflowRunsPage() {
                 </TableBody>
               </Table>
               {runs.data && <PaginationControls page={runs.data} onPageChange={setPage} />}
+              {runs.data && <RetentionNote list={runs.data} />}
             </>
           )}
         </section>
@@ -265,6 +350,12 @@ export default function WorkflowRunsPage() {
             />
           ) : run.isLoading ? (
             <TableSkeleton rows={4} />
+ ) : run.isError && isNotFound(run.error) ? (
+            <EmptyState
+              icon={IconWorkflows}
+              title="Run not found"
+              description="No run has that id. It may have been removed by the retention sweep, or the link is wrong."
+            />
           ) : run.isError ? (
             <ErrorState entity="that run" error={run.error} onRetry={() => void run.refetch()} />
           ) : run.data ? (
@@ -272,7 +363,7 @@ export default function WorkflowRunsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[15px] font-bold">{run.data.workflowName}</h2>
                 <StatusBadge tone={toneForRunStatus(run.data.status)}>{run.data.status}</StatusBadge>
-                {isCancellable(run.data) && (
+                {canCancel && isCancellable(run.data) && (
                   <ConfirmDialog
                     trigger={
                       <Button className="ml-auto" size="sm" variant="outline" disabled={cancel.isPending}>
@@ -284,6 +375,25 @@ export default function WorkflowRunsPage() {
                     confirmLabel="Yes, cancel the run"
                     destructive
                     onConfirm={() => void onCancel(run.data!.id)}
+                  />
+                )}
+                {canAbandon && isAbandonable(run.data) && (
+                  <ConfirmDialog
+                    trigger={
+                      <Button
+                        className={isCancellable(run.data) && canCancel ? undefined : 'ml-auto'}
+                        size="sm"
+                        variant="outline"
+                        disabled={abandon.isPending}
+                      >
+                        {abandon.isPending ? 'Abandoning...' : 'Abandon run'}
+                      </Button>
+                    }
+                    title={`Abandon this ${run.data.workflowName} run?`}
+                    description="Nothing in it runs again. What already went out is undone by the compensation each action declares, and an action that declares none is reported as not undone."
+                    confirmLabel="Yes, abandon the run"
+                    destructive
+                    onConfirm={() => void onAbandon(run.data!.id)}
                   />
                 )}
               </div>
@@ -302,7 +412,7 @@ export default function WorkflowRunsPage() {
                       key={attempt.ordinal}
                       attempt={attempt}
                       retrying={retry.isPending}
-                      canRetry={runAllowsRetry(run.data!)}
+                      canRetry={canRetry && runAllowsRetry(run.data!)}
                       onRetry={(ordinal) => void onRetry(ordinal)}
                     />
                   ))}
