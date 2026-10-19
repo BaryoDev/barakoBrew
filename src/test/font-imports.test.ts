@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ESLint } from 'eslint';
 
@@ -60,11 +60,12 @@ describe('fonts are vendored, not fetched during the build', () => {
         ]);
         for (const path of paths) {
             const file = join(dirname(LAYOUT), path);
-            expect(existsSync(file), `${file} is named in ${LAYOUT} and is not in the repository`).toBe(true);
+            // A missing file makes readFileSync throw, which fails the test and names the path.
+            expect(readFileSync(file).length, `${file} is named in ${LAYOUT}`).toBeGreaterThan(0);
 
             const family = path.replace('./fonts/', '').split('-latin-')[0];
             const licence = join(dirname(LAYOUT), 'fonts', `OFL-${family}.txt`);
-            expect(existsSync(licence), `${file} has no licence file at ${licence}`).toBe(true);
+            expect(readFileSync(licence, 'utf8'), `${file} has no licence file at ${licence}`).toContain('SIL OPEN FONT LICENSE');
         }
     });
 });
@@ -92,9 +93,10 @@ describe('the console typefaces', () => {
     it('no mono text asks for a weight above 500', () => {
         const offenders: string[] = [];
         const visit = (dir: string) => {
-            for (const name of readdirSync(dir)) {
+            for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                const name = entry.name;
                 const path = join(dir, name);
-                if (statSync(path).isDirectory()) visit(path);
+                if (entry.isDirectory()) visit(path);
                 else if (/\.tsx$/.test(name) && !/\.test\./.test(name)) {
                     readFileSync(path, 'utf8')
                         .split('\n')
@@ -114,9 +116,10 @@ describe('the console typefaces', () => {
         const hits: string[] = [];
         let scanned = 0;
         const visit = (dir: string) => {
-            for (const name of readdirSync(dir)) {
+            for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                const name = entry.name;
                 const path = join(dir, name);
-                if (statSync(path).isDirectory()) visit(path);
+                if (entry.isDirectory()) visit(path);
                 else if (/\.(tsx?|css|md|txt)$/.test(name) && !path.endsWith('font-imports.test.ts')) {
                     scanned++;
                     if (/\b(sora|manrope)\b/i.test(readFileSync(path, 'utf8'))) hits.push(path);
