@@ -211,7 +211,7 @@ function TryList({ attempt }: { attempt: WorkflowActionAttempt }) {
         {(attempt.history ?? []).map((entry) => (
           <li key={entry.number} className="rounded-md border p-2 text-[12px]">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono font-bold tabular-nums">Try {entry.number}</span>
+              <span className="font-mono font-medium tabular-nums">Try {entry.number}</span>
               <StatusBadge tone={toneForAttemptStatus(entry.outcome)}>{entry.outcome}</StatusBadge>
               <span className="text-muted-foreground font-mono tabular-nums">{tryFacts(entry)}</span>
             </div>
