@@ -94,9 +94,13 @@ function mount(query: { page?: number; status?: string } = {}) {
 const ids = (result: { current: { runs: { data?: { items: { id: string }[] } } } }) =>
   (result.current.runs.data?.items ?? []).map((r) => r.id);
 
+// TanStack Query hands its notifications to the system setTimeout, which the fake clock does not
+// own, so a cache write is only on screen after a real macrotask has passed.
+const realSetTimeout = globalThis.setTimeout;
 const settle = (ms = 0) =>
   act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
+    await new Promise<void>((resolve) => realSetTimeout(resolve, 0));
     await vi.advanceTimersByTimeAsync(0);
   });
 
