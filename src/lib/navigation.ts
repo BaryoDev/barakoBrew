@@ -7,8 +7,8 @@ import {
   IconContent,
   IconContentTypes,
   IconDashboard,
-  IconDisk,
   IconEnvelope,
+  IconFieldEdit,
   IconFilter,
   IconFlag,
   IconSun,
@@ -18,7 +18,6 @@ import {
   IconHealth,
   IconHistory,
   IconKey,
-  IconList,
   IconMobile,
   IconRoles,
   IconServer,
@@ -152,7 +151,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Content types', href: '/schemas', icon: IconContentTypes, metric: 'contentTypes', capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       // Signed in is enough for GET /api/pages/tree, but the screen lists the types through
       // GET /api/content-types before it can move anything.
-      { title: 'Pages', href: '/pages', icon: IconList, module: MODULE.pages, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Pages', href: '/pages', icon: IconContent, module: MODULE.pages, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Workflows', href: '/workflows', icon: IconWorkflows, metric: 'workflows', capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
       // manage_workflows, which the preview asks for; the templates themselves are entries.
       { title: 'Email templates', href: '/email-templates', icon: IconEnvelope, capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
@@ -190,7 +189,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Feature flags', href: '/feature-flags', icon: IconFlag , module: MODULE.featureFlags, capability: 'manage_feature_flags', roles: ['SuperAdmin', 'Admin'] },
       // upload_files, which BarakoCMS.Files seeds to Admin. The roles are the fallback for an API
       // that does not report capabilities, where a custom role granted it is not offered Files.
-      { title: 'Files', href: '/files', icon: IconDisk, module: MODULE.files, capability: 'upload_files', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Files', href: '/files', icon: IconArchive, module: MODULE.files, capability: 'upload_files', roles: ['SuperAdmin', 'Admin'] },
       { title: 'PWA installs', href: '/pwa', icon: IconMobile , module: MODULE.pwa, capability: 'view_pwa_installs', roles: ['SuperAdmin', 'Admin'] },
     ],
   },
@@ -199,7 +198,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: 'Audit log', href: '/audit', icon: IconHistory, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Errors', href: '/errors', icon: IconBug, metric: 'unresolvedErrors', tone: 'danger', capability: 'manage_client_errors', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Workflow runs', href: '/workflow-runs', icon: IconTasks, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Workflow runs', href: '/workflow-runs', icon: IconHistory, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Health', href: '/ops/health', icon: IconHealth },
       // Reading takes manage_settings; saving and the test send take manage_email_settings, which the
       // screen checks for its buttons.
@@ -211,14 +210,14 @@ export const NAV_GROUPS: NavGroup[] = [
       // devices: an ordinary User has as much right to it as an Admin. Named rather than left
       // ungated, since an item with no roles is offered to a signed-out caller too, and Overview
       // and Health are the only two that should be.
-      { title: 'Devices', href: '/settings/devices', icon: IconMobile , module: MODULE.deviceTrust, roles: ['SuperAdmin', 'Admin', 'User'] },
-      { title: 'Export and import', href: '/settings/portability', icon: IconArchive , module: MODULE.portability, capability: 'export_content', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Devices', href: '/settings/devices', icon: IconShield , module: MODULE.deviceTrust, roles: ['SuperAdmin', 'Admin', 'User'] },
+      { title: 'Export and import', href: '/settings/portability', icon: IconCube , module: MODULE.portability, capability: 'export_content', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , module: MODULE.import, capability: 'analyze_spreadsheets', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Connectors', href: '/settings/connectors', icon: IconWebhook, capability: 'view_connectors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Outbound requests', href: '/settings/requests', icon: IconWebhook, capability: 'manage_requests', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Deliveries', href: '/settings/deliveries', icon: IconTasks, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
       // manage_forms, which BarakoCMS.Forms seeds to Admin; SuperAdmin passes every gate.
-      { title: 'Forms', href: '/settings/forms', icon: IconList, module: MODULE.forms, capability: 'manage_forms', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Forms', href: '/settings/forms', icon: IconFieldEdit, module: MODULE.forms, capability: 'manage_forms', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Settings', href: '/settings', icon: IconSettings, capability: 'manage_settings', roles: ['SuperAdmin', 'Admin'] },
     ],
   },

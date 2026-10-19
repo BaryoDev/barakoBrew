@@ -12,6 +12,14 @@ import {
 import { MODULE } from '@/types/modules';
 import { SUPER_ADMIN_ROLE_ID } from 'barako-content-form';
 import { accessFrom } from './access';
+import {
+    IconArchive,
+    IconContent,
+    IconCube,
+    IconFieldEdit,
+    IconHistory,
+    IconShield,
+} from '@/components/icons';
 
 const count = (roles: string[] | undefined) =>
     visibleGroups(NAV_GROUPS, roles).reduce((n, g) => n + g.items.length, 0);
@@ -395,5 +403,25 @@ describe('the rail against an API that reports capabilities', () => {
     it('offers Email to a role that may read the settings, which is manage_settings', () => {
         expect(seen(['manage_settings'])).toContain('Email');
         expect(seen(['manage_email_settings'])).not.toContain('Email');
+    });
+});
+
+describe('nav glyphs', () => {
+    const iconOf = (href: string) => NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === href)?.icon;
+
+    it('use the round 2 glyph for each entry the handoff names', () => {
+        const expected = [
+            ['/workflow-runs', IconHistory],
+            ['/pages', IconContent],
+            ['/settings/forms', IconFieldEdit],
+            ['/files', IconArchive],
+            ['/settings/portability', IconCube],
+            ['/settings/devices', IconShield],
+        ] as const;
+        expect(expected).toHaveLength(6);
+
+        for (const [href, icon] of expected) {
+            expect(iconOf(href), href).toBe(icon);
+        }
     });
 });
