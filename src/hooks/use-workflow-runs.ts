@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { z } from 'zod';
@@ -11,14 +11,21 @@ import { useCurrentTenant } from '@/hooks/use-tenants';
 
 // Mirrors barakoCMS/Features/WorkflowRuns/Endpoints.cs (camelCase over the wire).
 
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Whether text is shaped like a run id. The API answers 400 to anything else, so it is not sent. */
+export function isRunId(value: string): boolean {
+  return GUID.test(value);
+}
+
 /** The value the status filter uses for "do not filter". Not a status the API knows. */
 export const ANY_STATUS = 'all';
 
 /**
- * RunStatus on the server. The status filter offers exactly these, and every run read is parsed
- * against them, so a member the server adds or drops fails the read loudly instead of leaving the
- * filter unable to ask for it. smoke/enums.spec.ts cannot hold this one to the server: the API
- * publishes the field as a bare string.
+ * RunStatus on the server. The status chips offer exactly these. A run read is not parsed against
+ * them: a status this console does not know is shown as its own text on a neutral badge, so one
+ * new member on the server does not blank the whole list. smoke/enums.spec.ts cannot hold this one
+ * to the server: the API publishes the field as a bare string.
  */
 export const RUN_STATUSES = ['Pending', 'Running', 'Succeeded', 'Failed', 'PartiallyFailed', 'Cancelled'] as const;
 
@@ -162,7 +169,7 @@ export const workflowRunSchema = z.looseObject({
   contentId: z.string(),
   contentType: z.string(),
   triggerEvent: z.string(),
-  status: z.enum(RUN_STATUSES),
+  status: z.string(),
   createdAt: z.string(),
   completedAt: z.string().nullish(),
   cancelledAt: z.string().nullish(),
@@ -177,10 +184,24 @@ export const workflowRunSchema = z.looseObject({
  * The list response. The fields after the page arrive with barakoCMS#1164 and are all optional, so
  * an older API still parses and the screen falls back to what it did before.
  */
+/**
+ * The API names a status in a count the way it names the status itself, and the tests for the API
+ * read the keys that way. A key that arrives in another case is read as the status it spells, so a
+ * serializer that changed the case of dictionary keys would not zero every chip.
+ */
+function canonicalCounts(counts: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(counts)) {
+    const known = RUN_STATUSES.find((status) => status.toLowerCase() === key.toLowerCase());
+    out[known ?? key] = value;
+  }
+  return out;
+}
+
 function buildListSchema() {
   return paginatedSchema(workflowRunSchema).extend({
     /** Runs per status for the `contentId` filter, whatever the status filter and the page. */
-    statusCounts: z.record(z.string(), z.number()).nullish(),
+    statusCounts: z.record(z.string(), z.number()).transform(canonicalCounts).nullish(),
     /** Pass back as `changedSince`. Present only on a response to a `changedSince` request. */
     cursor: z.string().nullish(),
     /** Succeeded runs that finished before this are removed by the retention sweep. */
@@ -446,6 +467,37 @@ type RunListCache = WorkflowRunList;
 class ListState {
   /** Where polling starts, taken from the list read it follows. */
   since: string | null = null;
+  /** The newest counts held, and when the read that carried them was made. */
+  counts: Record<string, number> | null = null;
+  countsAt = -Infinity;
+  /** Why polling is not at its normal pace, or null when it is. Read through `useSyncExternalStore`. */
+  private pause: LivePause | null = null;
+  private readonly listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => void this.listeners.delete(listener);
+  };
+
+  getPause = () => this.pause;
+
+  setPause(next: LivePause | null) {
+    if (this.pause?.reason === next?.reason) return;
+    this.pause = next;
+    for (const listener of this.listeners) listener();
+  }
+
+  /**
+   * Keeps the counts of the read that was made last. A read that began before the held counts were
+   * read does not replace them, so a refetch landing after a poll cannot roll the chips back.
+   */
+  offerCounts(counts: Record<string, number> | null | undefined, readAt: number): Record<string, number> | null {
+    if (counts && readAt >= this.countsAt) {
+      this.counts = counts;
+      this.countsAt = readAt;
+    }
+    return this.counts;
+  }
   /** The newest copy of every run a poll returned, for a refetch that was already in flight. */
   readonly polled = new Map<string, WorkflowRun>();
 
@@ -464,6 +516,12 @@ class ListState {
 }
 
 const POLLED_CAP = 300;
+
+/** Polling that is not running at its usual pace. A hidden tab is not one: it resumes by itself. */
+export interface LivePause {
+  /** `stopped` after a 401 or 403, which asking again will not fix. `backoff` while errors repeat. */
+  reason: 'stopped' | 'backoff';
+}
 
 /**
  * The runs list, polled while it is open.
@@ -502,10 +560,19 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
       const served = typeof header === 'string' ? Date.parse(header) : NaN;
       list.startAt(new Date(Number.isNaN(served) ? started - CLIENT_CLOCK_MARGIN_MS : served - API_CURSOR_LAG_MS));
 
-      // A refetch can start before a poll and land after it. The polled copy of a run wins when it
-      // is newer, so an invalidation after a retry does not put back what the poll just showed.
-      if (list.polled.size === 0) return page;
-      return mergeRunPage(page, [...list.polled.values()], { status: params.status as string | undefined }).page;
+      // The fresh page decides which runs are on it. A polled copy only replaces a row the page
+      // already has, when it is newer, so an invalidation after a retry does not put back what the
+      // poll just showed, and a run that has since left the page is not brought back.
+      const onPage = new Set(page.items.map((item) => item.id));
+      const overlay = [...list.polled.values()].filter((item) => onPage.has(item.id));
+      let result = overlay.length === 0 ? page : mergeRunPage(page, overlay, { status: params.status as string | undefined }).page;
+
+      // The counts of the newest read win, whichever read lands last.
+      const counts = list.offerCounts(page.statusCounts, started);
+      if (counts && counts !== page.statusCounts) {
+        result = mergeRunPage(result, [] as WorkflowRun[], { status: params.status as string | undefined, statusCounts: counts }).page;
+      }
+      return result;
     },
   });
 
@@ -525,7 +592,9 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, ready, keyText]);
 
-  return result;
+  const pause = useSyncExternalStore(list.subscribe, list.getPause, () => null);
+
+  return { ...result, pause };
 }
 
 interface PollingInput {
@@ -561,11 +630,21 @@ function startPolling(input: PollingInput): () => void {
     timer = setTimeout(() => void tick(), delay);
   }
 
-  function reread() {
-    return Promise.all([
-      queryClient.refetchQueries({ queryKey: listKey, exact: true }),
-      queryClient.refetchQueries({ queryKey: ['workflow-run'], type: 'active' }),
-    ]);
+  /**
+   * Reads the page and the open run again. The page's failure is thrown, so a 500 backs polling off
+   * and a 403 stops it as they do on the cursor path. The open run's is thrown only when it is a
+   * refusal: a run that is gone (a 404) is that screen's to show, not a reason to slow the list.
+   */
+  async function reread() {
+    const [, detail] = await Promise.allSettled([
+      queryClient.refetchQueries({ queryKey: listKey, exact: true }, { throwOnError: true }),
+      queryClient.refetchQueries({ queryKey: ['workflow-run'], type: 'active' }, { throwOnError: true }),
+    ]).then((outcomes) => {
+      const [listed, opened] = outcomes;
+      if (listed.status === 'rejected') throw listed.reason;
+      return [listed, opened] as const;
+    });
+    if (detail.status === 'rejected' && isAuthRefusal(detail.reason)) throw detail.reason;
   }
 
   async function tick() {
@@ -589,6 +668,7 @@ function startPolling(input: PollingInput): () => void {
         };
         if (contentId) params.contentId = contentId;
 
+        const readAt = Date.now();
         const response = await api.get<unknown>('/api/workflow-runs', { params });
         if (stopped) return;
         const polled = parseResponse(workflowRunListSchema(), response.data, 'GET /api/workflow-runs?changedSince');
@@ -598,17 +678,20 @@ function startPolling(input: PollingInput): () => void {
           await reread();
         } else {
           cursor = polled.cursor;
-          if (applyPoll(polled)) next = CATCH_UP_MS;
+          if (applyPoll(polled, readAt)) next = CATCH_UP_MS;
         }
       }
       failures = 0;
+      list.setPause(null);
     } catch (error) {
       if (stopped) return;
       if (isAuthRefusal(error)) {
         stopped = true;
+        list.setPause({ reason: 'stopped' });
         return;
       }
       failures += 1;
+      list.setPause({ reason: 'backoff' });
       next = backoffDelay(failures);
     } finally {
       busy = false;
@@ -617,7 +700,8 @@ function startPolling(input: PollingInput): () => void {
   }
 
   /** Merges one poll into the page and the open run. Returns whether another page is waiting. */
-  function applyPoll(polled: RunListCache): boolean {
+  function applyPoll(polled: RunListCache, readAt: number): boolean {
+    const counts = list.offerCounts(polled.statusCounts, readAt);
     for (const run of polled.items) {
       list.remember(run);
       const detailKey = ['workflow-run', run.id, tenant];
@@ -628,7 +712,7 @@ function startPolling(input: PollingInput): () => void {
     let hole = false;
     queryClient.setQueryData<RunListCache>(listKey, (current) => {
       if (!current) return current;
-      const merged = mergeRunPage(current, polled.items, { status, statusCounts: polled.statusCounts });
+      const merged = mergeRunPage(current, polled.items, { status, statusCounts: counts });
       hole = merged.removed > 0 && current.hasNextPage;
       return {
         ...merged.page,
@@ -701,7 +785,7 @@ export function useRetryAttempt() {
   return useMutation({
     mutationKey: RUN_MUTATION_KEY,
     mutationFn: async (input: { runId: string; ordinal: number }) => {
-      await api.post(`/api/workflow-runs/${input.runId}/actions/${input.ordinal}/retry`, {});
+      await api.post(`/api/workflow-runs/${encodeURIComponent(input.runId)}/actions/${input.ordinal}/retry`, {});
     },
     onSuccess: (_result, input) => refreshAfter(queryClient, input.runId),
     onError: (error, input) => refreshAfter(queryClient, input.runId, error),

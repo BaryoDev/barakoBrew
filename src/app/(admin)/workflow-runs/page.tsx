@@ -28,6 +28,8 @@ import {
   RUN_CAPABILITIES,
   RUN_LEGACY_ROLES,
   RUN_STATUSES,
+  isRunId,
+  type LivePause,
   isAbandonable,
   isCancellable,
   runAllowsRetry,
@@ -136,6 +138,17 @@ function RetentionNote({ list }: { list: WorkflowRunList }) {
   );
 }
 
+/** Said when the list is not updating by itself, with when it last did. Text only. */
+function PauseNote({ pause, updatedAt }: { pause: LivePause; updatedAt: number }) {
+  const when = updatedAt > 0 ? new Date(updatedAt).toLocaleTimeString() : null;
+  return (
+    <p role="status" className="text-muted-foreground mt-3 text-[12px]">
+      Live updates paused{pause.reason === 'stopped' ? ' (sign in again or ask for access to resume)' : ' (retrying)'}.
+      {when && ` Last updated ${when}.`}
+    </p>
+  );
+}
+
 function RunFailureKind({ run }: { run: WorkflowRun }) {
   const kind = runFailureKind(run);
   if (!kind) return null;
@@ -152,7 +165,10 @@ export default function WorkflowRunsPage() {
   const [page, setPage] = useState(1);
   const searchParams = useSearchParams();
   const linked = searchParams.get('run');
-  const [selectedId, setSelectedId] = useState<string | null>(linked || null);
+  // An id in the address that is not shaped like a run id is answered with "not found" here. The
+  // API would answer 400 to it, and there is nothing to ask.
+  const [selectedId, setSelectedId] = useState<string | null>(linked && isRunId(linked) ? linked : null);
+  const [badLink, setBadLink] = useState(!!linked && !isRunId(linked));
   const [refreshing, setRefreshing] = useState(false);
 
   // A link from another page, or the address bar, picks the run. Picking one here writes it back,
@@ -160,11 +176,13 @@ export default function WorkflowRunsPage() {
   const [seenLink, setSeenLink] = useState(linked);
   if (seenLink !== linked) {
     setSeenLink(linked);
-    setSelectedId(linked || null);
+    setBadLink(!!linked && !isRunId(linked));
+    setSelectedId(linked && isRunId(linked) ? linked : null);
   }
 
   function select(id: string) {
     setSelectedId(id);
+    setBadLink(false);
     const next = new URLSearchParams(window.location.search);
     next.set('run', id);
     window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}`);
@@ -265,6 +283,8 @@ export default function WorkflowRunsPage() {
             />
           </div>
 
+          {runs.pause && <PauseNote pause={runs.pause} updatedAt={runs.dataUpdatedAt} />}
+
           {runs.isLoading ? (
             <div className="mt-4">
               <TableSkeleton rows={6} />
@@ -342,7 +362,13 @@ export default function WorkflowRunsPage() {
         </section>
 
         <section className={CARD}>
-          {!selectedId ? (
+          {badLink ? (
+            <EmptyState
+              icon={IconWorkflows}
+              title="Run not found"
+              description="That is not a run id. Check the link."
+            />
+          ) : !selectedId ? (
             <EmptyState
               icon={IconWorkflows}
               title="Choose a run"

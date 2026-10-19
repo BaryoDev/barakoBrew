@@ -527,11 +527,24 @@ test.describe('workflow runs live', () => {
     await expect(page.getByRole('row', { name: /Notify the desk/ }).getByText('Succeeded', { exact: true })).toBeVisible();
   });
 
+  const LINKED_ID = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+
+  /** The detail of one run under a real-looking id, which is the only kind a link is sent for. */
+  async function stubLinked(page: Page, source: ReturnType<typeof run>) {
+    const reads: string[] = [];
+    await page.route(new RegExp(`/api/workflow-runs/${LINKED_ID}$`), (route) => {
+      reads.push(LINKED_ID);
+      return route.fulfill({ json: { ...source, id: LINKED_ID } });
+    });
+    return reads;
+  }
+
   test('opens the run named in the address', async ({ page }) => {
     await authed(page);
     await stubShell(page);
     await stubRuns(page);
-    await page.goto('/workflow-runs?run=run-bad');
+    await stubLinked(page, RUNS[2]);
+    await page.goto(`/workflow-runs?run=${LINKED_ID}`);
 
     await expect(page.getByRole('heading', { name: 'Push to the CDN' })).toBeVisible({ timeout: 15000 });
     await expect(actions(page)).toHaveCount(1);
@@ -541,21 +554,32 @@ test.describe('workflow runs live', () => {
     await authed(page);
     await stubShell(page);
     await stubRuns(page);
-    await page.goto('/workflow-runs?run=nope');
+    await page.goto('/workflow-runs?run=4f2504e0-4f89-11d3-9a0c-0305e82c3309');
 
     await expect(page.getByText('Run not found')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('says not found for an id that is not a GUID without asking the API', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    const { detailReads } = await stubRuns(page);
+    await page.goto('/workflow-runs?run=abc');
+
+    await expect(page.getByText('Run not found')).toBeVisible({ timeout: 15000 });
+    expect(detailReads).toEqual([]);
   });
 
   test('abandons a run after asking, then reads it again', async ({ page }) => {
     await authed(page);
     await stubShell(page);
-    const { detailReads } = await stubRuns(page);
+    await stubRuns(page);
     const abandons: string[] = [];
+    const detailReads = await stubLinked(page, PARTLY_FAILED);
     await page.route('**/api/workflow-runs/*/abandon', (route) => {
       abandons.push(new URL(route.request().url()).pathname);
       return route.fulfill({ json: { ...PARTLY_FAILED, status: 'Abandoned' } });
     });
-    await page.goto('/workflow-runs?run=run-partly');
+    await page.goto(`/workflow-runs?run=${LINKED_ID}`);
     await expect(actions(page)).toHaveCount(5, { timeout: 15000 });
     const before = detailReads.length;
 
@@ -563,7 +587,7 @@ test.describe('workflow runs live', () => {
     expect(abandons).toEqual([]);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Yes, abandon the run' }).click();
 
-    await expect.poll(() => abandons).toEqual(['/api/workflow-runs/run-partly/abandon']);
+    await expect.poll(() => abandons).toEqual([`/api/workflow-runs/${LINKED_ID}/abandon`]);
     await expect.poll(() => detailReads.length).toBeGreaterThan(before);
   });
 });

@@ -5,6 +5,7 @@ import {
   formatDuration,
   isAbandonable,
   isCancellable,
+  isRunId,
   isRetryable,
   isStopped,
   runAllowsRetry,
@@ -369,5 +370,33 @@ describe('a run read with the attempt history', () => {
 
     expect(parsed.actions[0].history).toBeUndefined();
     expect(parsed.updatedAt).toBeUndefined();
+  });
+});
+
+describe('isRunId', () => {
+  it('accepts a GUID in either case and nothing else', () => {
+    expect(isRunId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')).toBe(true);
+    expect(isRunId('3F2504E0-4F89-11D3-9A0C-0305E82C3301')).toBe(true);
+    for (const text of ['abc', '..', '', 'run-1', '3f2504e0-4f89-11d3-9a0c-0305e82c33010', '../3f2504e0-4f89-11d3-9a0c-0305e82c3301']) {
+      expect(isRunId(text), text).toBe(false);
+    }
+  });
+});
+
+describe('a run with a status this console does not know', () => {
+  it('parses, and keeps the status as it came', () => {
+    const parsed = workflowRunSchema.parse({
+      id: 'r1',
+      workflowDefinitionId: 'w',
+      workflowName: 'W',
+      contentId: 'c',
+      contentType: 't',
+      triggerEvent: 'Created',
+      status: 'Abandoned',
+      createdAt: '2026-10-19T10:00:00Z',
+      actions: [],
+    });
+
+    expect(parsed.status).toBe('Abandoned');
   });
 });

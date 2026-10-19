@@ -58,6 +58,16 @@ describe('useRetryAttempt', () => {
     });
   });
 
+  it('encodes the run id in the route, as cancel and abandon do', async () => {
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useRetryAttempt(), { wrapper });
+
+    post.mockResolvedValueOnce({ data: {} });
+    await result.current.mutateAsync({ runId: '../x?y', ordinal: 2 });
+
+    expect(post).toHaveBeenCalledWith('/api/workflow-runs/..%2Fx%3Fy/actions/2/retry', {});
+  });
+
   it('refetches nothing when the retry failed some other way, so the screen keeps what the server holds', async () => {
     const { wrapper, invalidated } = harness();
     const { result } = renderHook(() => useRetryAttempt(), { wrapper });

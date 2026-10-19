@@ -367,3 +367,147 @@ describe('polling the run list', () => {
     expect(lists().length).toBeGreaterThan(reads);
   });
 });
+
+describe('polling an API that sends no cursor', () => {
+  /** The first read answers, the poll answers without a cursor, and every read after fails. */
+  function brokenAfterFirst(status: number) {
+    let reads = 0;
+    serve(
+      () => {
+        reads += 1;
+        return reads === 1 ? page([run('a', '10:00')]) : failure(status);
+      },
+      () => page([run('a', '10:00')]),
+    );
+  }
+
+  it('backs off when the page read fails with a 500, and says so', async () => {
+    brokenAfterFirst(500);
+    const { result } = mount();
+    await settle();
+    expect(lists()).toHaveLength(1);
+    expect(result.current.runs.pause).toBeNull();
+
+    // The poll comes back without a cursor, so the page is read again, and that read fails.
+    await settle(POLL_INTERVAL_MS);
+    expect(lists()).toHaveLength(2);
+    expect(result.current.runs.pause).toEqual({ reason: 'backoff' });
+
+    // One error in a row waits twice the interval, two wait four times.
+    await settle(POLL_INTERVAL_MS * 2 - 1);
+    expect(lists()).toHaveLength(2);
+    await settle(1);
+    expect(lists()).toHaveLength(3);
+    await settle(POLL_INTERVAL_MS * 4 - 1);
+    expect(lists()).toHaveLength(3);
+    await settle(1);
+    expect(lists()).toHaveLength(4);
+    expect(ids(result)).toEqual(['a']);
+  });
+
+  it.each([401, 403])('stops for good when the page read fails with a %i, and says so', async (status) => {
+    brokenAfterFirst(status);
+    const { result } = mount();
+    await settle(POLL_INTERVAL_MS);
+    expect(lists()).toHaveLength(2);
+
+    await settle(POLL_MAX_BACKOFF_MS * 2);
+    expect(lists()).toHaveLength(2);
+    expect(result.current.runs.pause).toEqual({ reason: 'stopped' });
+  });
+
+  it('goes back to the interval and drops the note once a read answers', async () => {
+    let broken = false;
+    let reads = 0;
+    serve(
+      () => {
+        reads += 1;
+        return reads > 1 && broken ? failure(500) : page([run('a', '10:00')]);
+      },
+      () => page([run('a', '10:00')]),
+    );
+    const { result } = mount();
+    await settle(POLL_INTERVAL_MS);
+    broken = true;
+    await settle(POLL_INTERVAL_MS);
+    expect(result.current.runs.pause).toEqual({ reason: 'backoff' });
+
+    broken = false;
+    await settle(POLL_INTERVAL_MS * 2);
+    expect(result.current.runs.pause).toBeNull();
+  });
+});
+
+describe('a status the console does not know', () => {
+  it('shows the other runs, keeps the odd one as it is, and keeps polling', async () => {
+    const odd = run('odd', '11:00', { status: 'Abandoned' });
+    serve(
+      () => page([odd, run('a', '10:00')]),
+      () => page([run('b', '12:00', { status: 'Failed' })], { cursor: 'c' }),
+    );
+    const { result } = mount();
+    await settle();
+
+    expect(result.current.runs.isError).toBe(false);
+    expect(ids(result)).toEqual(['odd', 'a']);
+    expect(result.current.runs.data?.items[0].status).toBe('Abandoned');
+
+    await settle(POLL_INTERVAL_MS);
+    expect(ids(result)).toEqual(['b', 'odd', 'a']);
+    await settle(POLL_INTERVAL_MS);
+    expect(polls()).toHaveLength(2);
+  });
+});
+
+describe('what a fresh read decides', () => {
+  it('does not bring back a polled run that the fresh first page no longer holds', async () => {
+    const A = run('a', '10:00');
+    const GHOST = run('ghost', '11:00', { updatedAt: '2026-10-19T10:50:00Z' });
+    serve(() => page([A]), () => page([GHOST], { cursor: 'c' }));
+    const { result } = mount();
+    await settle(POLL_INTERVAL_MS);
+    expect(ids(result)).toEqual(['ghost', 'a']);
+
+    // The server has no such run on page 1 now (removed by the sweep, say).
+    act(() => void client.invalidateQueries({ queryKey: ['workflow-runs'] }));
+    await settle();
+
+    expect(ids(result)).toEqual(['a']);
+  });
+
+  it('keeps the newer counts when a read that began before the poll lands after it', async () => {
+    const lateRead: { release?: (body: unknown) => void } = {};
+    let reads = 0;
+    vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: Params }) => {
+      const params = config?.params ?? {};
+      if ('changedSince' in params) return { data: page([], { cursor: 'c', statusCounts: { Failed: 4, Succeeded: 1 } }) };
+      reads += 1;
+      if (reads === 1) return { data: page([run('a', '10:00')], { statusCounts: { Failed: 0, Succeeded: 1 } }) };
+      return new Promise<{ data: unknown }>((resolve) => {
+        lateRead.release = (body) => resolve({ data: body });
+      });
+    }) as unknown as typeof api.get);
+
+    const { result } = mount();
+    await settle();
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 0, Succeeded: 1 });
+
+    // A read begins, and before it answers a poll brings newer counts.
+    act(() => void client.invalidateQueries({ queryKey: ['workflow-runs'] }));
+    await settle(POLL_INTERVAL_MS);
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 4, Succeeded: 1 });
+
+    await act(async () => lateRead.release?.(page([run('a', '10:00')], { statusCounts: { Failed: 0, Succeeded: 1 } })));
+    await settle();
+
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 4, Succeeded: 1 });
+  });
+
+  it('reads the counts of the API whatever case their keys arrive in', async () => {
+    serve(() => page([run('a', '10:00')], { statusCounts: { failed: 2, PENDING: 1, Succeeded: 3 } }), () => page([], { cursor: 'c' }));
+    const { result } = mount();
+    await settle();
+
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 2, Pending: 1, Succeeded: 3 });
+  });
+});

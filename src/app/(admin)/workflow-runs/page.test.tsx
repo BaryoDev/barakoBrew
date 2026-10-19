@@ -622,6 +622,9 @@ describe('text from the API stays text', () => {
   });
 });
 
+const GUID_ONE = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+const GUID_TWO = '3f2504e0-4f89-11d3-9a0c-0305e82c3302';
+
 describe('a link to a run', () => {
   beforeEach(() => {
     vi.mocked(api.get).mockReset();
@@ -629,8 +632,8 @@ describe('a link to a run', () => {
   });
 
   it('opens the run named by ?run= without a click', async () => {
-    searchParams = new URLSearchParams('run=r2');
-    renderRuns([run('r1', 'One', 'Failed', [action(1, 'Failed')]), run('r2', 'Two', 'Failed', [action(1, 'Failed'), action(2, 'Failed')])]);
+    searchParams = new URLSearchParams(`run=${GUID_TWO}`);
+    renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')]), run(GUID_TWO, 'Two', 'Failed', [action(1, 'Failed'), action(2, 'Failed')])]);
 
     const list = await screen.findByRole('list', { name: 'Actions' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
@@ -639,18 +642,44 @@ describe('a link to a run', () => {
   });
 
   it('says so when the id is not a run', async () => {
-    searchParams = new URLSearchParams('run=nope');
-    renderRuns([run('r1', 'One', 'Failed', [action(1, 'Failed')])]);
+    searchParams = new URLSearchParams(`run=${GUID_TWO}`);
+    renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);
 
     expect(await screen.findByText('Run not found')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Actions' })).toBeNull();
   });
 
+  it.each(['abc', '..', '../x'])('says not found for %s without asking the API', async (link) => {
+    searchParams = new URLSearchParams({ run: link });
+    renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);
+
+    expect(await screen.findByText('Run not found')).toBeInTheDocument();
+    await screen.findByRole('radio', { name: /One/ });
+    expect(vi.mocked(api.get).mock.calls.filter(([url]) => String(url).startsWith('/api/workflow-runs/'))).toEqual([]);
+  });
+
   it('writes the chosen run into the address', async () => {
-    renderRuns([run('r1', 'One', 'Failed', [action(1, 'Failed')])]);
+    renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);
     fireEvent.click(await screen.findByRole('radio', { name: /One/ }));
 
     await screen.findByRole('list', { name: 'Actions' });
-    expect(new URLSearchParams(window.location.search).get('run')).toBe('r1');
+    expect(new URLSearchParams(window.location.search).get('run')).toBe(GUID_ONE);
+  });
+});
+
+describe('a run with a status the console does not know', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('shows it as its own text beside the others, and leaves it out of the chips', async () => {
+    renderRuns([run('r1', 'Odd one', 'Abandoned', []), run('r2', 'Usual', 'Failed', [])]);
+
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Abandoned')).toBeInTheDocument();
+    expect(within(table).getByText('Failed')).toBeInTheDocument();
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    expect(within(group).queryByRole('button', { name: /Abandoned/ })).toBeNull();
   });
 });
