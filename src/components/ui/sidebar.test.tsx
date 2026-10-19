@@ -116,7 +116,7 @@ describe('the drawer state', () => {
                     <SidebarContent>
                         <SidebarMenu>
                             <SidebarMenuItem>
-                                <SidebarMenuButton asChild closesDrawer>
+                                <SidebarMenuButton asChild closesDrawer tooltip="Two">
                                     {link}
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -143,6 +143,20 @@ describe('the drawer state', () => {
         fireEvent.click(screen.getByRole('link', { name: 'Two' }));
 
         expect(onClick).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('closes on Escape while a nav link has focus, not only the sheet itself', async () => {
+        const user = userEvent.setup();
+        setViewportWidth(900);
+        renderMenu(<a href="#two">Two</a>);
+
+        const link = screen.getByRole('link', { name: 'Two' });
+        for (let i = 0; i < 4 && document.activeElement !== link; i++) await user.tab();
+        expect(document.activeElement).toBe(link);
+
+        await user.keyboard('{Escape}');
+
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 

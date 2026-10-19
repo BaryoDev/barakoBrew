@@ -543,7 +543,9 @@ function SidebarMenuButton({
     />
   )
 
-  if (!tooltip) {
+  // The tooltip is hidden in the drawer anyway, but a focused link would still own a dismiss layer,
+  // and Escape would close that invisible tooltip before it reached the sheet.
+  if (!tooltip || isMobile) {
     return button
   }
 
