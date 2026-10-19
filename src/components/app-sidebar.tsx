@@ -115,11 +115,10 @@ function NavList({
               tooltip={item.title}
               className={cn(
                 'gap-2.5 rounded-[10px] px-2.5 font-medium transition-colors',
-                primary ? 'h-[38px] text-[13.5px]' : 'h-[34px] text-[13px]',
+                primary ? 'h-9 text-[13.5px] [&>svg]:size-[18px]' : 'h-[34px] text-[13px] [&>svg]:size-[17px]',
                 'text-secondary-foreground hover:bg-secondary hover:text-foreground',
-                // The active item is a white card lifted off the page background, not a tint.
-                'data-[active=true]:bg-card data-[active=true]:text-foreground data-[active=true]:font-semibold',
-                'data-[active=true]:shadow-[var(--shadow-raised)]',
+                // The active item takes the sunken tint, as in the round 2 handoff.
+                'data-[active=true]:bg-secondary data-[active=true]:text-foreground data-[active=true]:font-semibold',
                 active ? '[&>svg]:text-primary' : '[&>svg]:text-(--faint)'
               )}
             >

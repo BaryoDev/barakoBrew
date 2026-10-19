@@ -33,9 +33,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <CrumbTitleProvider>
         <UploadsProvider>
           <AppSidebar />
-          <SidebarInset className="md:my-4 md:mr-4 md:ml-0 md:h-[calc(100svh-2rem)] md:overflow-hidden md:rounded-xl md:border md:bg-card md:shadow-[var(--shadow-card)]">
+          <SidebarInset className="rail:my-4 rail:mr-4 rail:ml-0 rail:h-[calc(100svh-2rem)] rail:overflow-hidden rail:rounded-xl rail:border rail:bg-card rail:shadow-[var(--shadow-card)]">
             <AppHeader />
-            <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:overflow-auto md:p-6">{children}</main>
+            <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-6 rail:overflow-auto">{children}</main>
           </SidebarInset>
           {/* Outside the inset, so an upload keeps its row on screen on every route. */}
           <UploadTray />
