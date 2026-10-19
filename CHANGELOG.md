@@ -15,7 +15,10 @@ moved. Which API a console works against is stated per release instead.
   Grotesque (500 to 700, with its optical size axis) sets headings, the wordmark and the big
   numbers on stat cards. Instrument Sans (400 to 700) is the body text. JetBrains Mono is limited to
   400 to 500, so mono text that asked for bold now renders medium. Sora and Manrope are gone, files
-  and licence texts included, and the vendored files keep Latin-1, ñ included. On Site, Theme,
+  and licence texts included. The vendored files are Google's `latin` subset, so ñ and most of Latin-1
+  render in the console fonts. Instrument Sans lacks ¤ ¦ ¬ ± ² ³ µ ¹ ¼ ½ ¾ and Bricolage Grotesque lacks
+  ¤ and the soft hyphen; those come from the system font. `font-extrabold` (800) now renders at 700,
+  since Instrument Sans stops there (devices, content, schemas and files pages, the sidebar). On Site, Theme,
   typing `Sora` or `Manrope` in a font field no longer previews in the console's own copy, and
   `Bricolage Grotesque` or `Instrument Sans` only preview on a machine that has them installed.
 

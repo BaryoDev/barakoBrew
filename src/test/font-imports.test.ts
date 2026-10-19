@@ -90,21 +90,28 @@ describe('the console typefaces', () => {
         expect(css).toContain('--font-mono: var(--font-jetbrains-mono);');
     });
 
-    it('no mono text asks for a weight above 500', () => {
+    it('no mono text asks for a weight above 500, on its own line or in an element nested inside it', () => {
         const offenders: string[] = [];
+        const heavy = /\bfont-(semibold|bold|extrabold|black)\b/;
+        const indentOf = (line: string) => line.length - line.trimStart().length;
         const visit = (dir: string) => {
             for (const entry of readdirSync(dir, { withFileTypes: true })) {
                 const name = entry.name;
                 const path = join(dir, name);
                 if (entry.isDirectory()) visit(path);
                 else if (/\.tsx$/.test(name) && !/\.test\./.test(name)) {
-                    readFileSync(path, 'utf8')
-                        .split('\n')
-                        .forEach((line, i) => {
-                            if (/\bfont-mono\b/.test(line) && /\bfont-(semibold|bold|extrabold|black)\b/.test(line)) {
-                                offenders.push(`${path}:${i + 1}`);
+                    const lines = readFileSync(path, 'utf8').split('\n');
+                    lines.forEach((line, i) => {
+                        if (!/\bfont-mono\b/.test(line)) return;
+                        // The element's own line, then every following line indented deeper than it.
+                        // A heuristic for JSX blocks, enough to see a bold span inside a mono paragraph.
+                        for (let j = i; j === i || (j < lines.length && indentOf(lines[j]) > indentOf(line)); j++) {
+                            if (heavy.test(lines[j])) {
+                                offenders.push(`${path}:${j + 1}`);
+                                break;
                             }
-                        });
+                        }
+                    });
                 }
             }
         };

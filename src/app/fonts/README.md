@@ -12,10 +12,14 @@ glyphs, hinting and metrics reach the browser.
 | --- | --- | --- | --- |
 | `bricolage-grotesque-latin-wght.woff2` | Bricolage Grotesque | weights 200 to 800 and the `opsz` axis (12 to 96), variable; the layout declares 500 to 700 | 76,868 bytes |
 | `instrument-sans-latin-wght.woff2` | Instrument Sans | weights 400 to 700, variable | 29,904 bytes |
-| `jetbrains-mono-latin-wght.woff2` | JetBrains Mono 2.211 | weights 100 to 800, variable; the layout declares 400 to 500 | 31,340 bytes |
+| `jetbrains-mono-latin-wght.woff2` | JetBrains Mono 2.211 | weights 400 to 800, variable; the layout declares 400 to 500 | 31,340 bytes |
 
-All three are the `latin` subset (U+0000-00FF and a few more, so ñ and the rest of Latin-1), normal
+All three are the `latin` subset (U+0000-00FF and a few more, so ñ is covered; see below for the gaps), normal
 style. 138,112 bytes in total.
+
+That is Google's `latin` subset, not all of Latin-1. Instrument Sans lacks U+00A4, U+00A6, U+00AC,
+U+00B1, U+00B2, U+00B3, U+00B5, U+00B9, U+00BC, U+00BD and U+00BE (¤ ¦ ¬ ± ² ³ µ ¹ ¼ ½ ¾), and
+Bricolage Grotesque lacks U+00A4 and U+00AD. Those fall back to the system font.
 
 ## Where they came from
 

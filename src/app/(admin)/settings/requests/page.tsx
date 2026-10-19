@@ -112,7 +112,7 @@ function DryRunResultPanel({
 
             <div className="mt-2 overflow-x-auto">
               <p className="font-mono text-[12.5px] whitespace-nowrap">
-                <span className="font-bold">{result.method}</span> {result.url}
+                <span className="font-medium">{result.method}</span> {result.url}
               </p>
             </div>
 
@@ -629,7 +629,7 @@ export default function RequestsPage() {
                     </span>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    <span className="font-bold">{request.method}</span> {request.pathTemplate}
+                    <span className="font-medium">{request.method}</span> {request.pathTemplate}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{request.connectorSlug}</TableCell>
                   <TableCell className="text-xs">

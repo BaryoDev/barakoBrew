@@ -228,6 +228,10 @@
   code, kbd, samp, pre {
     font-variant-numeric: tabular-nums;
   }
+  /* The mono face stops at 500. A bold child shows that weight, not a smeared fake bold. */
+  .font-mono, code, kbd, samp, pre {
+    font-synthesis-weight: none;
+  }
 }
 
 /* Honor the OS "reduce motion" setting: keep state changes instant rather than
