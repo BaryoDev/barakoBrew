@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
  * Orientation is left unset on purpose. Radix reads "horizontal" as left and right only, but the
  * WAI-ARIA radio group pattern moves the selection on all four arrows, and unset is what gives that.
  *
- * The track is --secondary (#F2F3F9, described in globals.css as the segmented-control tint) with
+ * The track is --secondary (#F1F2F8, described in globals.css as the segmented-control tint) with
  * 3px of padding, and the thumb is a --card surface carrying --shadow-thumb.
  */
 

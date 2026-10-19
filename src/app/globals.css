@@ -4,6 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Where the sidebar stops being a rail and becomes a drawer. use-mobile.ts holds the same number. */
+  --breakpoint-rail: 62.5rem;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-manrope);
@@ -76,7 +78,7 @@
 :root {
   --radius: 0.6875rem; /* 11px, the control radius; the scale above is stated, not derived */
 
-  --background: #fafafc;
+  --background: #f7f7fa;
   --foreground: #101223;
   --card: #ffffff;
   --card-foreground: #101223;
@@ -89,52 +91,53 @@
   --primary-foreground: #ffffff;
 
   /* The sunken tint: segmented-control tracks, chips, table heads. */
-  --secondary: #f2f3f9;
-  --secondary-foreground: #4a4e66;
-  --muted: #f2f3f9;
-  /* 5.52:1 on white, 5.29 on the page, 4.98 on the sunken tint. Do not lighten it: the draft this
+  --secondary: #f1f2f8;
+  --secondary-foreground: #2b2e45;
+  --muted: #f1f2f8;
+  /* 6.09:1 on white, 5.70 on the page, 5.45 on the sunken tint. Do not lighten it: the draft this
      came from used #8B8FA6 (3.19:1), which is lighter than the #888 the Yeti notes below already
      rejected for the same reason. */
-  --muted-foreground: #63687d;
+  --muted-foreground: #5d6178;
 
   /* The accent-soft tint and the ink that sits on it: tinted panels, active nav, badges. */
   --accent: #eeebfd;
   --accent-foreground: #4034a8;
 
-  --destructive: #a22c2c;
+  --destructive: #a3261f;
   --success: #0b7a6b;
   --success-foreground: #ffffff;
-  --warning: #8a5a10;
+  --warning: #8a5a00;
   --warning-foreground: #ffffff;
 
-  --border: #e7e8f1;
-  --input: #e7e8f1;
+  --border: #e5e6ef;
+  --input: #e5e6ef;
   --ring: #5a46d6;
 
   /* Chart 1 is the accent, so a series reads as the product's own colour. The rest are the status
      hues plus two supporting tints, all AA as text on white in case a legend renders them. */
   --chart-1: #5a46d6;
   --chart-2: #0b7a6b;
-  --chart-3: #8a5a10;
-  --chart-4: #a22c2c;
+  --chart-3: #8a5a00;
+  --chart-4: #a3261f;
   --chart-5: #4a4e66;
 
   /* The sidebar sits ON the page background rather than in a panel of its own: the content panel is
      inset with a margin, so the nav reads as a rail. That is why sidebar and background match. */
-  --sidebar: #fafafc;
+  --sidebar: #f7f7fa;
   --sidebar-foreground: #101223;
   --sidebar-primary: #5a46d6;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #eeebfd;
   --sidebar-accent-foreground: #4034a8;
-  --sidebar-border: #e7e8f1;
+  --sidebar-border: #e5e6ef;
   --sidebar-ring: #5a46d6;
 
   /* Signal tokens with no shadcn equivalent. Used through arbitrary values, e.g. text-[var(--faint)]. */
 
   /* Timestamps and table column heads. Four points darker in lightness than the handoff's #6E7387,
      same hue and saturation: that value is 4.25:1 on the #F2F3F9 sunken tint, and a table head is
-     exactly where it lands. 4.57 on sunken, 4.86 on the page, 5.06 on white. The third WCAG
+     exactly where it lands. 4.53 on sunken, 4.73 on the page, 5.06 on white. Round 2 darkened the sunken tint, which took
+     this from 4.57 to 4.53 on it; do not lighten the page or the tint further without lowering this. The third WCAG
      remediation in this file, and the third of the same shape. */
   --faint: #696e81;
 
@@ -147,10 +150,13 @@
   --accent-deep: #241c6b;  /* accent text on an accent-soft panel */
   --accent-border: #ded8fb;
   --success-soft: #e6f7f4;
-  --warning-soft: #fdf2e3;
+  --warning-soft: #fff4db;
   --danger-soft: #fdecec;
 
   /* Elevation. Flat and layered rather than shadcn's single shadow-sm. */
+  /* The overlay behind the sidebar drawer. */
+  --scrim: rgba(16, 18, 35, 0.3);
+
   --shadow-card: 0 1px 2px rgba(16, 18, 35, 0.04);
   /* The active thumb of a segmented control, sitting on the sunken --secondary track. Twice
      the card's opacity at the same offset: a card lifts off the page, a thumb lifts out of a
