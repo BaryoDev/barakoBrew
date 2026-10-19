@@ -111,6 +111,7 @@ function NavList({
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
               asChild
+              closesDrawer
               isActive={active}
               tooltip={item.title}
               className={cn(

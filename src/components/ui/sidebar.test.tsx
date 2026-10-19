@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     Sidebar,
     SidebarContent,
@@ -103,18 +109,18 @@ describe('the drawer state', () => {
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('closes when a nav link is clicked', () => {
-        setViewportWidth(900);
+    function renderMenu(link: React.ReactNode, extra?: React.ReactNode) {
         render(
             <SidebarProvider>
                 <Sidebar>
                     <SidebarContent>
                         <SidebarMenu>
                             <SidebarMenuItem>
-                                <SidebarMenuButton asChild>
-                                    <a href="#two">Two</a>
+                                <SidebarMenuButton asChild closesDrawer>
+                                    {link}
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
+                            {extra}
                         </SidebarMenu>
                     </SidebarContent>
                 </Sidebar>
@@ -123,10 +129,95 @@ describe('the drawer state', () => {
         );
         fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
         expect(screen.getByRole('dialog')).toBeInTheDocument();
+    }
+
+    it('closes when a nav link is clicked, after the caller onClick runs', () => {
+        setViewportWidth(900);
+        const onClick = vi.fn();
+        renderMenu(
+            <a href="#two" onClick={onClick}>
+                Two
+            </a>,
+        );
 
         fireEvent.click(screen.getByRole('link', { name: 'Two' }));
 
+        expect(onClick).toHaveBeenCalledTimes(1);
         expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('stays open when the caller onClick prevents default', () => {
+        setViewportWidth(900);
+        renderMenu(
+            <a href="#two" onClick={(e) => e.preventDefault()}>
+                Two
+            </a>,
+        );
+
+        fireEvent.click(screen.getByRole('link', { name: 'Two' }));
+
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it.each([
+        ['cmd', { metaKey: true }],
+        ['ctrl', { ctrlKey: true }],
+        ['shift', { shiftKey: true }],
+        ['alt', { altKey: true }],
+        ['middle button', { button: 1 }],
+    ])('stays open on a %s click', (_name, init) => {
+        setViewportWidth(900);
+        renderMenu(<a href="#two">Two</a>);
+
+        fireEvent.click(screen.getByRole('link', { name: 'Two' }), init);
+
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('stays open for a link that opens a new tab', () => {
+        setViewportWidth(900);
+        renderMenu(
+            <a href="#two" target="_blank" rel="noreferrer">
+                Two
+            </a>,
+        );
+
+        fireEvent.click(screen.getByRole('link', { name: 'Two' }));
+
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('keeps the sheet open when the account trigger opens its menu', async () => {
+        const user = userEvent.setup();
+        setViewportWidth(900);
+        render(
+            <SidebarProvider>
+                <Sidebar>
+                    <SidebarContent>
+                        <SidebarMenu>
+                            <SidebarMenuItem>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <SidebarMenuButton>Account</SidebarMenuButton>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem>Sign out</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </SidebarMenuItem>
+                        </SidebarMenu>
+                    </SidebarContent>
+                </Sidebar>
+                <SidebarTrigger />
+            </SidebarProvider>,
+        );
+        await user.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Account' }));
+
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
     });
 });
 

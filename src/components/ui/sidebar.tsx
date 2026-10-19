@@ -508,10 +508,13 @@ function SidebarMenuButton({
   size = "default",
   tooltip,
   className,
+  closesDrawer = false,
   ...props
 }: React.ComponentProps<"button"> & {
   asChild?: boolean
   isActive?: boolean
+  /** Close the mobile drawer on a plain click. For navigation links, not for triggers that open a menu. */
+  closesDrawer?: boolean
   tooltip?: string | React.ComponentProps<typeof TooltipContent>
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
@@ -527,8 +530,14 @@ function SidebarMenuButton({
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
       onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
         onClick?.(event)
-        // A drawer that stays open over the page it just navigated to is in the way.
-        if (isMobile && !event.defaultPrevented) setOpenMobile(false)
+        // A drawer that stays open over the page it just navigated to is in the way. A modified or
+        // non-primary click opens somewhere else, so the page under the drawer is still the one in use.
+        const modified =
+          event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0
+        const elsewhere = event.currentTarget.getAttribute?.("target") === "_blank"
+        if (closesDrawer && isMobile && !event.defaultPrevented && !modified && !elsewhere) {
+          setOpenMobile(false)
+        }
       }}
       {...rest}
     />

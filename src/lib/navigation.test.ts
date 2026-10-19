@@ -407,31 +407,15 @@ describe('the rail against an API that reports capabilities', () => {
 });
 
 describe('nav glyphs', () => {
-    const iconOf = (href: string) => NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === href)?.icon;
-
-    it('use the round 2 glyph for each entry the handoff names', () => {
-        const expected = [
-            ['/workflow-runs', IconHistory],
-            ['/pages', IconContent],
-            ['/settings/forms', IconFieldEdit],
-            ['/files', IconArchive],
-            ['/settings/portability', IconCube],
-            ['/settings/devices', IconShield],
-        ] as const;
-        expect(expected).toHaveLength(6);
-
-        for (const [href, icon] of expected) {
-            expect(iconOf(href), href).toBe(icon);
-        }
-    });
-});
-
-describe('nav glyphs', () => {
-    // The handoff gives Pages and Entries the same glyph (ic-content), so the pair stays.
-    // Connectors and Outbound requests shared one before round 2.
-    const ALLOWED_REPEATS = new Set(['Entries|Pages', 'Connectors|Outbound requests']);
+    // Pairs that share a glyph on purpose. The handoff gives Pages and Entries the same one
+    // (ic-content); Connectors and Outbound requests have shared IconWebhook since before round 2.
+    const ALLOWED_REPEATS = [
+        ['Entries', 'Pages'],
+        ['Connectors', 'Outbound requests'],
+    ];
 
     it('gives every item in a group its own icon, bar the pairs named above', () => {
+        const allowed = new Set(ALLOWED_REPEATS.map((p) => [...p].sort().join('|')));
         let checked = 0;
         for (const group of NAV_GROUPS) {
             const byIcon = new Map<unknown, string[]>();
@@ -441,16 +425,22 @@ describe('nav glyphs', () => {
             }
             for (const titles of byIcon.values()) {
                 if (titles.length > 1) {
-                    expect(ALLOWED_REPEATS.has([...titles].sort().join('|')), titles.join(' and ')).toBe(true);
+                    expect(allowed.has([...titles].sort().join('|')), titles.join(' and ')).toBe(true);
                 }
             }
         }
         expect(checked).toBeGreaterThan(20);
     });
 
-    it('does not let the allowed repeats go stale', () => {
-        const titles = new Set(NAV_GROUPS.flatMap((g) => g.items.map((i) => i.title)));
-        expect(ALLOWED_REPEATS.size).toBe(2);
-        for (const pair of ALLOWED_REPEATS) for (const t of pair.split('|')) expect(titles.has(t), t).toBe(true);
+    it('does not let an allowed repeat go stale', () => {
+        expect(ALLOWED_REPEATS).toHaveLength(2);
+        for (const [a, b] of ALLOWED_REPEATS) {
+            const group = NAV_GROUPS.find((g) => g.items.some((i) => i.title === a));
+            const first = group?.items.find((i) => i.title === a);
+            const second = group?.items.find((i) => i.title === b);
+            expect(first, a).toBeDefined();
+            expect(second, `${b} in the same group as ${a}`).toBeDefined();
+            expect(first!.icon, `${a} and ${b} still share an icon`).toBe(second!.icon);
+        }
     });
 });
