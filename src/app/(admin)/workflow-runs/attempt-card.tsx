@@ -114,10 +114,10 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
   return (
     <li className="rounded-lg border p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-muted-foreground font-mono text-[12px] font-bold tabular-nums">
+        <span className="text-muted-foreground font-mono text-[12px] font-medium tabular-nums">
           {attempt.ordinal}
         </span>
-        <span className="text-[13px] font-bold">{attempt.actionType}</span>
+        <span className="font-mono text-[13px] font-medium">{attempt.actionType}</span>
         <StatusBadge tone={toneForAttemptStatus(attempt.status)}>{attempt.status}</StatusBadge>
 
         {kind && (

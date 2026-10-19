@@ -21,7 +21,6 @@ vi.mock('@/hooks/use-auth', () => ({
     useAuth: () => ({ user: { userId: 'u1', username: 'r', roles: ['Registrar'] }, logout: vi.fn() }),
 }));
 
-vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => false }));
 vi.mock('@/components/command-menu', () => ({ CommandMenu: () => null }));
 
 const { api } = await import('@/lib/api');

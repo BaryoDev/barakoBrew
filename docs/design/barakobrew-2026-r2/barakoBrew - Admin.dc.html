@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="./icon-sprite.js"></script>
+<style>
+:root{--bg:#F7F7FA;--surface:#FFFFFF;--surface2:#F1F2F8;--line:#E5E6EF;--ink:#101223;--ink2:#2B2E45;--muted:#5D6178;--accent:#5A46D6;--accent-ink:#FFFFFF;--accent-soft:#EEEBFD;--accent-text:#4034A8;--code:#14162A;--code-ink:#E6E7F2;--ok:#0B7A6B;--ok-bg:#E6F7F4;--warn:#8A5A00;--warn-bg:#FFF4DB;--bad:#A3261F;--bad-bg:#FDECEC;--shadow:0 1px 2px rgba(16,18,35,.05),0 12px 32px -14px rgba(16,18,35,.18);--scrim:rgba(16,18,35,.3)}
+[data-theme="dark"]{--bg:#0B0C16;--surface:#14162A;--surface2:#1C1F36;--line:#272A45;--ink:#EEEFF8;--ink2:#D2D4E4;--muted:#A0A4BD;--accent:#8E7DF5;--accent-ink:#0B0C16;--accent-soft:#25214A;--accent-text:#B9AEFF;--code:#090A14;--code-ink:#E6E7F2;--ok:#4FD1B8;--ok-bg:#0F2C29;--warn:#F2C060;--warn-bg:#2E2410;--bad:#FF8A80;--bad-bg:#341716;--shadow:0 1px 2px rgba(0,0,0,.3),0 16px 36px -16px rgba(0,0,0,.7);--scrim:rgba(0,0,0,.55)}
+body{margin:0;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+*{box-sizing:border-box}
+a{color:var(--accent-text);text-decoration:none}
+a:hover{color:var(--accent);text-decoration:underline}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+::selection{background:var(--accent-soft)}
+@keyframes rise{from{transform:translateY(8px)}to{transform:none}}
+@keyframes pop{from{transform:translateY(-6px) scale(.98)}to{transform:none}}
+@keyframes toast{from{transform:translateY(12px)}to{transform:none}}
+@keyframes slidein{from{transform:translateX(24px)}to{transform:none}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes fadein{from{transform:none}to{transform:none}}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="min-height:100vh;background:var(--bg);color:var(--ink);font-family:'Instrument Sans',system-ui,sans-serif;font-size:14.5px">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="ic-ai-mark" viewBox="0 0 32 32"><circle cx="8" cy="8" r="1.5"></circle><circle cx="16" cy="8" r="1.5"></circle><circle cx="24" cy="8" r="2.6"></circle><circle cx="8" cy="16" r="1.5"></circle><circle cx="16" cy="16" r="3.6"></circle><circle cx="24" cy="16" r="1.5"></circle><circle cx="8" cy="24" r="2.6"></circle><circle cx="16" cy="24" r="1.5"></circle><circle cx="24" cy="24" r="1.5"></circle></symbol></defs></svg>
+
+<sc-if value="{{ isSignin }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Sign in" style="min-height:100vh;display:grid;place-items:center;padding:24px">
+    <form onSubmit="{{ signIn }}" style="width:min(400px,100%);display:grid;gap:18px;padding:32px;border-radius:22px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);animation:rise .45s cubic-bezier(.2,.8,.2,1)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="34" height="34" viewBox="0 0 128 128" aria-hidden="true"><g transform="rotate(-32 64 64)"><ellipse cx="64" cy="64" rx="33" ry="50" fill="#5A46D6"></ellipse><ellipse cx="52" cy="44" rx="9" ry="17" fill="#C9C1F5" opacity=".35"></ellipse><path d="M64 17 C 51 41, 77 55, 64 64 C 51 73, 77 87, 64 111" fill="none" stroke="#241C6B" stroke-width="7" stroke-linecap="round"></path></g></svg>
+        <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:21px;font-weight:600;letter-spacing:-.03em">barako<span style="color:var(--accent)">Brew</span></span>
+        <button type="button" onClick="{{ toggleTheme }}" style="margin-left:auto;height:32px;padding:0 10px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">{{ themeLabel }}</button>
+      </div>
+      <div style="display:grid;gap:6px">
+        <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:600;letter-spacing:-.03em">Sign in</h1>
+        <p style="margin:0;color:var(--muted);font-size:14.5px">to <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink2)">api.cafe.example</span></p>
+      </div>
+      <label style="display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink2)">Email<input type="email" value="ana@cafe.example" style="height:44px;padding:0 14px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:15px;outline:0;transition:box-shadow .2s" style-focus="border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)"></label>
+      <label style="display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink2)">Password<input type="password" value="hunter22hunter" style="height:44px;padding:0 14px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:15px;outline:0;transition:box-shadow .2s" style-focus="border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)"></label>
+      <button type="submit" style="height:46px;border-radius:12px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .2s" style-hover="transform:translateY(-1px);box-shadow:0 10px 22px -12px var(--accent)" style-active="transform:scale(.99)">{{ signLabel }}</button>
+      <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12.5px"><span style="flex:1;height:1px;background:var(--line)"></span>or<span style="flex:1;height:1px;background:var(--line)"></span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button type="button" onClick="{{ signIn }}" style="height:42px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:none" style-hover="border-color:var(--accent)">GitHub</button>
+        <button type="button" onClick="{{ signIn }}" style="height:42px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:none" style-hover="border-color:var(--accent)">Google</button>
+      </div>
+    </form>
+  </main>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:{{ gridCols }};min-height:100vh">
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closeNav }}" style="position:fixed;inset:0;z-index:44;background:var(--scrim)"></div></sc-if>
+  <aside style="width:236px;position:{{ asidePos }};left:0;top:0;z-index:45;transform:{{ asideX }};transition:transform .3s cubic-bezier(.2,.8,.2,1);box-shadow:{{ asideShadow }};height:100vh;padding:16px 14px;display:flex;flex-direction:column;gap:14px;border-right:1px solid var(--line);background:var(--surface)">
+    <div style="display:flex;align-items:center;gap:9px;padding:2px 6px">
+      <svg width="26" height="26" viewBox="0 0 128 128" aria-hidden="true"><g transform="rotate(-32 64 64)"><ellipse cx="64" cy="64" rx="33" ry="50" fill="#5A46D6"></ellipse><path d="M64 17 C 51 41, 77 55, 64 64 C 51 73, 77 87, 64 111" fill="none" stroke="#241C6B" stroke-width="7" stroke-linecap="round"></path></g></svg>
+      <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:600;letter-spacing:-.03em;flex:1">barako<span style="color:var(--accent)">Brew</span></span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted)">{{ brewVer }}</span>
+    </div>
+    <button onClick="{{ openPalette }}" style="height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font-family:inherit;font-size:13.5px;cursor:pointer;transition:none" style-hover="border-color:var(--accent)"><span style="flex:1;text-align:left">Search or jump to</span><kbd style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:2px 6px;border-radius:5px;background:var(--surface2)">⌘K</kbd></button>
+    <div style="position:relative">
+      <button onClick="{{ toggleTenant }}" style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;cursor:pointer;transition:none" style-hover="border-color:var(--accent)">
+        <span style="width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:11px">{{ tenant.ini }}</span>
+        <span style="flex:1;text-align:left;display:grid"><span style="font-size:13.5px;font-weight:600">{{ tenant.name }}</span><span style="font-size:11.5px;color:var(--muted)">{{ tenant.role }}</span></span>
+        <span style="color:var(--muted);font-size:12px">▾</span>
+      </button>
+      <sc-if value="{{ tenantOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:calc(100% + 6px);left:0;right:-40px;z-index:30;padding:6px;border-radius:14px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);animation:pop .18s ease-out;display:grid;gap:2px">
+          <sc-for list="{{ tenants }}" as="t" hint-placeholder-count="3">
+            <button onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:0;background:{{ t.bg }};color:var(--ink);font-family:inherit;cursor:pointer;text-align:left" style-hover="background:var(--surface2)">
+              <span style="width:26px;height:26px;border-radius:7px;background:var(--surface2);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10.5px">{{ t.ini }}</span>
+              <span style="flex:1;display:grid"><span style="font-size:13.5px;font-weight:600">{{ t.name }}</span><span style="font-size:11.5px;color:var(--muted)">{{ t.role }}</span></span>
+              <span style="color:var(--accent);font-size:13px">{{ t.mark }}</span>
+            </button>
+          </sc-for>
+          <div style="padding:8px 10px 4px;font-size:11.5px;line-height:1.5;color:var(--muted)">Switching re-issues your token. Your role can differ per tenant.</div>
+        </div>
+      </sc-if>
+    </div>
+    <nav style="display:grid;gap:2px;flex:1;align-content:start;overflow:auto;margin:0 -6px;padding:0 6px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="7">
+        <a href="#" onClick="{{ n.go }}" aria-current="{{ n.cur }}" style="height:36px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:9px;font-size:14px;font-weight:{{ n.weight }};color:{{ n.fg }};background:{{ n.bg }};text-decoration:none;transition:none" style-hover="background:var(--surface2);color:var(--ink);text-decoration:none"><svg viewBox="0 0 32 32" style="width:18px;height:18px;flex:none" aria-hidden="true"><use href="{{ n.icon }}" fill="{{ n.ifg }}"></use></svg><span style="flex:1">{{ n.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">{{ n.count }}</span></a>
+      </sc-for>
+      <button onClick="{{ toggleMods }}" aria-expanded="{{ modsOpen }}" style="margin-top:12px;height:30px;display:flex;align-items:center;gap:8px;padding:0 10px;border:0;background:transparent;color:var(--muted);font-family:inherit;font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer"><span style="flex:1;text-align:left">MODULES</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px">{{ modsInstalledCount }}</span><span style="transform:rotate({{ modsRot }});transition:transform .2s">▾</span></button>
+      <sc-if value="{{ modsOpen }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ modNav }}" as="m" hint-placeholder-count="8">
+          <a href="#" onClick="{{ m.go }}" aria-current="{{ m.cur }}" style="height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:9px;font-size:13.5px;font-weight:{{ m.weight }};color:{{ m.fg }};background:{{ m.bg }};text-decoration:none" style-hover="background:var(--surface2);color:var(--ink);text-decoration:none"><svg viewBox="0 0 32 32" style="width:17px;height:17px;flex:none" aria-hidden="true"><use href="{{ m.glyph }}" fill="{{ m.ifg }}"></use></svg><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.name }}</span><sc-if value="{{ m.warn }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:50%;background:var(--warn)"></span></sc-if></a>
+        </sc-for>
+        <a href="#" onClick="{{ goSuite }}" style="height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--accent-text);background:{{ suiteBg }};text-decoration:none" style-hover="background:var(--surface2);text-decoration:none"><svg viewBox="0 0 32 32" style="width:17px;height:17px;flex:none" aria-hidden="true"><use href="#ic-cube" fill="currentColor"></use></svg>All modules</a>
+      </sc-if>
+    </nav>
+    <div style="display:grid;gap:6px;padding-top:12px;border-top:1px solid var(--line)">
+      <button onClick="{{ toggleTheme }}" style="height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:9px;border:0;background:transparent;color:var(--muted);font-family:inherit;font-size:13.5px;cursor:pointer" style-hover="background:var(--surface2);color:var(--ink)"><span style="width:12px;height:12px;border-radius:50%;border:2px solid currentColor;background:linear-gradient(90deg,currentColor 50%,transparent 50%)"></span>{{ themeLabel }} mode</button>
+      <button onClick="{{ signOut }}" style="height:34px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:9px;border:0;background:transparent;color:var(--muted);font-family:inherit;font-size:13.5px;cursor:pointer" style-hover="background:var(--surface2);color:var(--ink)"><span style="width:12px;height:12px;border-radius:50%;background:var(--accent-soft);border:2px solid var(--accent)"></span>Ana Reyes · Sign out</button>
+    </div>
+  </aside>
+
+  <div style="min-width:0;display:grid;align-content:start">
+<sc-if value="{{ isNarrow }}" hint-placeholder-val="{{ false }}">
+  <div style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)">
+    <button onClick="{{ openNav }}" aria-label="Open menu" style="width:44px;height:44px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:18px;cursor:pointer">☰</button>
+    <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:600;letter-spacing:-.03em">barako<span style="color:var(--accent)">Brew</span></span>
+    <span style="margin-left:auto;font-size:13.5px;color:var(--muted);display:flex;gap:6px;align-items:center;min-width:0"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tenant.name }}</span><span>/</span><b style="color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ screenTitle }}</b></span>
+    <button onClick="{{ openPalette }}" aria-label="Search" style="width:44px;height:44px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer">⌘K</button>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+<main data-screen-label="Overview" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:24px;max-width:1240px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:flex;flex-wrap:wrap;align-items:end;gap:14px">
+    <div style="flex:1;display:grid;gap:4px">
+      <span style="font-size:13.5px;color:var(--muted)">{{ tenant.name }}</span>
+      <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:34px;font-weight:600;letter-spacing:-.035em">Good morning, Ana</h1>
+    </div>
+    <div style="display:flex;gap:4px;padding:4px;border-radius:11px;background:var(--surface2)">
+      <sc-for list="{{ ranges }}" as="r" hint-placeholder-count="3">
+        <button onClick="{{ r.pick }}" style="height:32px;padding:0 12px;border-radius:8px;border:0;background:{{ r.bg }};color:{{ r.fg }};box-shadow:{{ r.shadow }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:none">{{ r.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+    <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+      <button onClick="{{ s.go }}" style="text-align:left;padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);color:var(--ink);font-family:inherit;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:end;transition:transform .2s,box-shadow .2s,border-color .2s" style-hover="transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--accent)">
+        <span style="grid-column:1 / -1;display:flex;justify-content:space-between;font-size:13px;color:var(--muted)">{{ s.label }}<span style="color:var(--muted)">→</span></span>
+        <span style="display:grid;gap:6px"><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.03em;line-height:1">{{ s.value }}</span><span style="font-size:12.5px;font-weight:600;color:{{ s.dfg }}">{{ s.delta }}</span></span>
+        <span style="display:flex;align-items:end;gap:2px;height:34px"><sc-for list="{{ s.spark }}" as="b" hint-placeholder-count="12"><span style="width:5px;height:{{ b.h }};border-radius:2px;background:{{ b.c }}"></span></sc-for></span>
+      </button>
+    </sc-for>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    <sc-for list="{{ quick }}" as="q" hint-placeholder-count="4">
+      <button onClick="{{ q.go }}" style="height:40px;display:flex;align-items:center;gap:8px;padding:0 14px 0 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:border-color .2s" style-hover="border-color:var(--accent)"><span style="width:24px;height:24px;border-radius:50%;background:var(--accent-soft);display:grid;place-items:center"><svg viewBox="0 0 32 32" style="width:14px;height:14px" aria-hidden="true"><sc-if value="{{ q.icon }}" hint-placeholder-val="{{ false }}"><use href="{{ q.icon }}" fill="var(--accent-text)"></use></sc-if></svg></span>{{ q.t }}</button>
+    </sc-for>
+    <span style="flex:1"></span>
+    <div style="display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;padding:6px 14px;border-radius:999px;background:var(--surface2)">
+      <sc-for list="{{ sys }}" as="y" hint-placeholder-count="4">
+        <button onClick="{{ y.go }}" style="display:flex;align-items:center;gap:6px;border:0;background:transparent;padding:4px 0;font-family:inherit;font-size:12.5px;color:var(--ink2);cursor:pointer" style-hover="color:var(--ink)"><span style="width:7px;height:7px;border-radius:50%;background:{{ y.c }}"></span><b style="font-weight:600">{{ y.l }}</b> {{ y.v }}</button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px;align-items:start">
+    <section style="padding:20px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em;flex:1">Needs you</h2><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">{{ needsCount }}</span></div>
+      <sc-for list="{{ needs }}" as="n" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--bg);border:1px solid var(--line);animation:rise .3s ease both">
+          <span style="width:8px;height:8px;border-radius:50%;background:{{ n.dot }}"></span>
+          <div style="flex:1;display:grid;gap:2px"><span style="font-size:14.5px;font-weight:600">{{ n.t }}</span><span style="font-size:12.5px;color:var(--muted)">{{ n.sub }}</span></div>
+          <button onClick="{{ n.act }}" style="height:32px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:none" style-hover="border-color:var(--accent)">{{ n.cta }}</button>
+          <button onClick="{{ n.done }}" aria-label="Resolve" style="width:32px;height:32px;border-radius:9px;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px" style-hover="background:var(--ok-bg);color:var(--ok)">✓</button>
+        </div>
+      </sc-for>
+      <sc-if value="{{ needsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:24px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px">All clear. Nothing is waiting on you.</div></sc-if>
+    </section>
+    <section style="padding:20px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em;flex:1">Live activity</h2><button onClick="{{ toggleLive }}" style="height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:{{ liveDot }};animation:{{ liveAnim }}"></span>{{ liveLabel }}</button></div>
+      <sc-for list="{{ activity }}" as="a" hint-placeholder-count="5">
+        <div style="display:flex;gap:12px;align-items:baseline;padding:8px 0;border-top:1px solid var(--line);animation:rise .35s ease both">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);width:52px;flex:none">{{ a.time }}</span>
+          <span style="flex:1;font-size:14px;line-height:1.45;color:var(--ink2)"><b style="color:var(--ink);font-weight:600">{{ a.who }}</b> {{ a.what }}</span>
+        </div>
+      </sc-for>
+    </section>
+  </div>
+  <section style="padding:20px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:12px">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px"><h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em;flex:1">Workflow health</h2><span style="font-size:13px;color:var(--muted)">Last 10 runs of each, newest on the right</span><a href="#" onClick="{{ goRuns }}" style="font-size:13px;font-weight:600">Open runs →</a></div>
+    <div style="display:grid;gap:2px">
+      <sc-for list="{{ health }}" as="w" hint-placeholder-count="4">
+        <button onClick="{{ w.open }}" style="display:grid;grid-template-columns:minmax(0,1.2fr) auto minmax(64px,auto) minmax(72px,auto);gap:16px;align-items:center;padding:12px 10px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;text-align:left;cursor:pointer" style-hover="background:var(--surface2)">
+          <span style="display:grid;gap:2px;min-width:0"><span style="font-size:14.5px;font-weight:600">{{ w.name }}</span><span style="font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.trigger }}</span></span>
+          <span style="display:flex;gap:3px;align-items:end;height:22px"><sc-for list="{{ w.bars }}" as="b" hint-placeholder-count="10"><span title="{{ b.t }}" style="width:7px;height:{{ b.h }};border-radius:2px;background:{{ b.c }}"></span></sc-for></span>
+          <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:600;letter-spacing:-.02em;color:{{ w.rateC }};text-align:right">{{ w.rate }}</span>
+          <span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ w.sBg }};color:{{ w.sFg }};text-align:center">{{ w.last }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </section>
+</main>
+</sc-if>
+
+<sc-if value="{{ isEntries }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Entries" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:18px;max-width:1240px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+    <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em;flex:1">Entries</h1>
+    <button onClick="{{ newEntry }}" style="height:40px;padding:0 16px;border-radius:11px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:transform .15s" style-hover="transform:translateY(-1px)">New entry</button>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <div style="display:flex;gap:4px;padding:4px;border-radius:11px;background:var(--surface2)">
+      <sc-for list="{{ typeTabs }}" as="t" hint-placeholder-count="4">
+        <button onClick="{{ t.pick }}" style="height:32px;padding:0 12px;border-radius:8px;border:0;background:{{ t.bg }};color:{{ t.fg }};box-shadow:{{ t.shadow }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:none">{{ t.label }}</button>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <sc-for list="{{ statusChips }}" as="c" hint-placeholder-count="5">
+        <button onClick="{{ c.pick }}" style="height:32px;padding:0 11px;border-radius:999px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:none">{{ c.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:.7">{{ c.count }}</span></button>
+      </sc-for>
+    </div>
+    <input value="{{ eq }}" onInput="{{ onEq }}" placeholder="Filter by title or author" style="flex:1 1 200px;height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:14px;outline:0" style-focus="border-color:var(--accent)">
+  </div>
+  <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--ink);color:var(--bg);animation:pop .2s ease-out">
+      <span style="flex:1;font-size:14px;font-weight:600">{{ selCount }} selected</span>
+      <button onClick="{{ bulkPublish }}" style="height:32px;padding:0 12px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Publish</button>
+      <button onClick="{{ bulkArchive }}" style="height:32px;padding:0 12px;border-radius:8px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Archive</button>
+      <button onClick="{{ clearSel }}" style="height:32px;padding:0 10px;border-radius:8px;border:0;background:transparent;color:inherit;font-family:inherit;font-size:13px;cursor:pointer;opacity:.75">Clear</button>
+    </div>
+  </sc-if>
+  <div style="border-radius:16px;border:1px solid var(--line);background:var(--surface);overflow:auto">
+    <div style="min-width:720px">
+      <div style="display:grid;grid-template-columns:44px minmax(0,2.4fr) 1fr 1fr 1fr 1fr;gap:12px;padding:11px 16px;font-size:12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line)"><span></span><span>Title</span><span>Type</span><span>Status</span><span>Updated</span><span>Author</span></div>
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+        <div style="display:grid;grid-template-columns:44px minmax(0,2.4fr) 1fr 1fr 1fr 1fr;gap:12px;align-items:center;padding:0 16px;min-height:52px;border-bottom:1px solid var(--line);background:{{ r.bg }};transition:none;cursor:pointer" style-hover="background:var(--surface2)">
+          <button onClick="{{ r.check }}" aria-pressed="{{ r.sel }}" aria-label="Select" style="width:20px;height:20px;border-radius:6px;border:1.5px solid {{ r.cb }};background:{{ r.cbg }};color:var(--accent-ink);font-size:11px;cursor:pointer;display:grid;place-items:center;padding:0;transition:none">{{ r.mark }}</button>
+          <a href="#" onClick="{{ r.open }}" style="font-size:14.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" style-hover="color:var(--accent-text);text-decoration:none">{{ r.title }}</a>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted)">{{ r.type }}</span>
+          <span><span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ r.sbg }};color:{{ r.sfg }};transition:none">{{ r.status }}</span></span>
+          <span style="font-size:13.5px;color:var(--muted)">{{ r.updated }}</span>
+          <span style="font-size:13.5px;color:var(--ink2)">{{ r.author }}</span>
+        </div>
+      </sc-for>
+      <sc-if value="{{ rowsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px;text-align:center;color:var(--muted)">No entries match these filters.</div></sc-if>
+    </div>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Entry editor" style="padding:24px clamp(20px,3vw,40px) 64px;display:grid;gap:20px;max-width:1240px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+    <a href="#" onClick="{{ goEntries }}" style="font-size:13.5px;font-weight:600;color:var(--muted)" style-hover="color:var(--ink)">← Entries</a>
+    <span style="color:var(--muted)">/</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted)">{{ ed.type }}</span>
+    <span style="font-size:12.5px;color:{{ dirtyFg }}">{{ dirtyLabel }}</span>
+    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+      <button onClick="{{ saveDraft }}" style="height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="border-color:var(--accent)">Save draft</button>
+      <button onClick="{{ schedule }}" style="height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer" style-hover="border-color:var(--accent)">Schedule</button>
+      <div style="position:relative;display:flex">
+        <button onClick="{{ publish }}" disabled="{{ cantPublish }}" title="{{ publishTitle }}" style="height:38px;padding:0 14px 0 16px;border-radius:10px 0 0 10px;border:0;background:var(--accent);color:var(--accent-ink);opacity:{{ pubOpacity }};font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Publish</button>
+        <button onClick="{{ togglePubMenu }}" disabled="{{ cantPublish }}" aria-label="More publish options" aria-expanded="{{ pubMenu }}" style="height:38px;width:34px;border-radius:0 10px 10px 0;border:0;border-left:1px solid rgba(255,255,255,.25);background:var(--accent);color:var(--accent-ink);opacity:{{ pubOpacity }};font-size:11px;cursor:pointer">▾</button>
+        <sc-if value="{{ pubMenu }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:calc(100% + 6px);right:0;z-index:30;width:280px;padding:6px;border-radius:14px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;gap:2px;animation:pop .18s ease-out">
+            <button onClick="{{ publish }}" style="text-align:left;padding:10px 12px;border-radius:9px;border:0;background:transparent;color:var(--ink);font-family:inherit;cursor:pointer;display:grid;gap:2px" style-hover="background:var(--surface2)"><span style="font-size:14px;font-weight:600">Publish now</span><span style="font-size:12.5px;color:var(--muted)">Runs the workflows listed under Publishing</span></button>
+            <button onClick="{{ publishQuiet }}" style="text-align:left;padding:10px 12px;border-radius:9px;border:0;background:transparent;color:var(--ink);font-family:inherit;cursor:pointer;display:grid;gap:2px" style-hover="background:var(--surface2)"><span style="font-size:14px;font-weight:600">Publish without notifying</span><span style="font-size:12.5px;color:var(--muted)">Skips Notify Slack for this change only</span></button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+  <div role="list" aria-label="Lifecycle" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+    <sc-for list="{{ lifecycle }}" as="l" hint-placeholder-count="4">
+      <button role="listitem" onClick="{{ l.pick }}" disabled="{{ l.disabled }}" title="{{ l.reason }}" aria-current="{{ l.cur }}" style="height:36px;padding:0 14px 0 10px;border-radius:999px;border:1px solid {{ l.border }};background:{{ l.bg }};color:{{ l.fg }};opacity:{{ l.op }};font-family:inherit;font-size:13px;font-weight:600;cursor:{{ l.cursor }};display:flex;align-items:center;gap:8px;transition:transform .15s" style-hover="transform:translateY(-1px)"><span style="width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;background:{{ l.dotBg }};color:{{ l.dotFg }}">{{ l.mark }}</span>{{ l.label }}</button>
+      <span style="color:var(--muted);font-size:12px;display:{{ l.arrow }}">→</span>
+    </sc-for>
+    <span style="font-size:12.5px;color:var(--muted);margin-left:6px">{{ roleNote }}</span>
+  </div>
+  <div style="display:grid;grid-template-columns:{{ edCols }};gap:20px;align-items:start">
+    <div style="min-width:0;display:grid;gap:16px;padding:24px;border-radius:18px;background:var(--surface);border:1px solid var(--line)">
+      <input value="{{ ed.title }}" onInput="{{ setTitle }}" placeholder="Untitled" style="border:0;outline:0;background:transparent;color:var(--ink);font-family:'Bricolage Grotesque',sans-serif;font-size:34px;font-weight:600;letter-spacing:-.03em;padding:0;width:100%">
+      <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted)">/{{ ed.type }}/<span style="color:var(--ink2)">{{ ed.slug }}</span></div>
+      <label style="display:grid;gap:6px"><span style="display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;color:var(--ink2)">Summary<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:var(--ok-bg);color:var(--ok)">Public</span></span><textarea value="{{ ed.summary }}" onInput="{{ setSummary }}" rows="2" style="padding:12px 14px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:15px;line-height:1.55;resize:vertical;outline:0;transition:none" style-focus="border-color:var(--accent)"></textarea></label>
+      <label style="display:grid;gap:6px"><span style="display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;color:var(--ink2)">Body<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:var(--ok-bg);color:var(--ok)">Public</span><span style="margin-left:auto;font-weight:500;color:var(--muted)">Markdown</span></span><textarea value="{{ ed.body }}" onInput="{{ setBody }}" rows="9" style="padding:14px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:13.5px;line-height:1.7;resize:vertical;outline:0;transition:none" style-focus="border-color:var(--accent)"></textarea></label>
+      <label style="display:grid;gap:6px"><span style="display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;color:var(--ink2)">Internal notes<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:var(--warn-bg);color:var(--warn)">Sensitive</span></span><input value="Owner asked to hide Sunday hours" style="height:42px;padding:0 14px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:14.5px;outline:0"></label>
+    </div>
+    <div style="display:grid;gap:14px">
+      <section style="padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);display:grid;gap:12px">
+        <h2 style="margin:0;font-size:14px;font-weight:600">Publishing</h2>
+        <label style="display:grid;gap:6px;font-size:12.5px;color:var(--muted)">Publish at<input type="datetime-local" value="{{ ed.at }}" onInput="{{ setAt }}" style="height:40px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:14px;outline:0"></label>
+        <label style="display:grid;gap:6px;font-size:12.5px;color:var(--muted)">Category<select style="height:40px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:14px"><option>Café news</option><option>Menu</option><option>Events</option></select></label>
+        <div style="font-size:12.5px;line-height:1.5;color:var(--muted);padding:10px 12px;border-radius:10px;background:var(--surface2)">Saves send <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px">If-Match "v{{ ed.v }}"</span>. If someone else saved first, you will see their change before yours is written.</div>
+        <div style="display:grid;gap:6px;padding-top:10px;border-top:1px solid var(--line)">
+          <span style="font-size:12.5px;font-weight:600;color:var(--ink2)">When you publish</span>
+          <sc-for list="{{ onPublish }}" as="w" hint-placeholder-count="2">
+            <a href="#" onClick="{{ w.go }}" style="display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);font-weight:500" style-hover="color:var(--accent-text);text-decoration:none"><span style="width:7px;height:7px;border-radius:50%;background:{{ w.dot }}"></span><span style="flex:1">{{ w.name }}</span><span style="font-size:12px;color:var(--muted)">{{ w.state }}</span></a>
+          </sc-for>
+        </div>
+      </section>
+      <section style="padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);display:grid;gap:4px">
+        <h2 style="margin:0 0 6px;font-size:14px;font-weight:600">History</h2>
+        <sc-for list="{{ history }}" as="h" hint-placeholder-count="3">
+          <div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;animation:rise .3s ease both"><span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);width:30px">v{{ h.v }}</span><span style="flex:1;color:var(--ink2)">{{ h.t }}</span><span style="color:var(--muted);font-size:12.5px">{{ h.when }}</span></div>
+        </sc-for>
+      </section>
+    </div>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isTypes }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Content types" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:18px;max-width:1240px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em">Content types</h1>
+  <div style="display:grid;grid-template-columns:{{ typesCols }};gap:16px;align-items:start">
+    <div style="display:grid;gap:4px;padding:8px;border-radius:16px;background:var(--surface);border:1px solid var(--line)">
+      <sc-for list="{{ typeList }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:0;background:{{ t.bg }};color:var(--ink);font-family:inherit;cursor:pointer;text-align:left;transition:none" style-hover="background:var(--surface2)"><span style="flex:1;display:grid"><span style="font-size:14.5px;font-weight:600">{{ t.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted)">{{ t.name }}</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">{{ t.count }}</span></button>
+      </sc-for>
+    </div>
+    <div style="display:grid;gap:14px;min-width:0">
+      <div style="padding:20px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:4px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em;flex:1">{{ typeNow.label }}</h2>
+          <button onClick="{{ togglePicker }}" style="height:36px;padding:0 14px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">{{ pickerLabel }}</button>
+        </div>
+        <sc-for list="{{ typeFields }}" as="f" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:minmax(0,1.4fr) 1fr auto auto 32px;gap:12px;align-items:center;padding:10px 4px;border-top:1px solid var(--line);animation:rise .3s ease both">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:500">{{ f.name }}</span>
+            <span style="font-size:13px;color:var(--muted)">{{ f.type }}</span>
+            <span style="font-size:11.5px;font-weight:600;color:var(--muted)">{{ f.req }}</span>
+            <button onClick="{{ f.sens }}" style="font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;border:0;background:{{ f.sbg }};color:{{ f.sfg }};font-family:inherit;cursor:pointer;transition:none">{{ f.sl }}</button>
+            <button onClick="{{ f.remove }}" aria-label="Remove field" style="width:28px;height:28px;border-radius:8px;border:0;background:transparent;color:var(--muted);cursor:pointer" style-hover="background:var(--bad-bg);color:var(--bad)">×</button>
+          </div>
+        </sc-for>
+      </div>
+      <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:20px;border-radius:18px;background:var(--surface);border:1px solid var(--accent);box-shadow:var(--shadow);display:grid;gap:16px;animation:pop .22s ease-out">
+          <div style="display:flex;align-items:baseline;gap:10px"><h3 style="margin:0;font-size:15px;font-weight:600;flex:1">Add a field</h3><span style="font-size:12.5px;color:var(--muted)">20 types · a new type is one registry entry</span></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px">
+            <sc-for list="{{ fieldGroups }}" as="g" hint-placeholder-count="5">
+              <div style="display:grid;gap:6px;align-content:start">
+                <span style="font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">{{ g.name }}</span>
+                <sc-for list="{{ g.types }}" as="ft" hint-placeholder-count="4">
+                  <button onClick="{{ ft.add }}" style="text-align:left;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:12.5px;cursor:pointer;transition:none" style-hover="border-color:var(--accent);background:var(--accent-soft)">{{ ft.t }}</button>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isWorkflows }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Workflows" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:18px;max-width:1240px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em">Workflows</h1>
+  <div style="display:grid;grid-template-columns:{{ wfCols }};gap:16px;align-items:start">
+    <div style="display:grid;gap:8px">
+      <sc-for list="{{ wfs }}" as="w" hint-placeholder-count="4">
+        <div onClick="{{ w.pick }}" style="padding:16px;border-radius:14px;border:1px solid {{ w.border }};background:var(--surface);display:flex;gap:12px;align-items:center;cursor:pointer;transition:box-shadow .2s;box-shadow:{{ w.shadow }}">
+          <div style="flex:1;display:grid;gap:3px"><span style="font-size:15px;font-weight:600">{{ w.name }}</span><span style="font-size:12.5px;color:var(--muted)">{{ w.trigger }}</span></div>
+          <span style="font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:999px;background:{{ w.lbg }};color:{{ w.lfg }}">{{ w.last }}</span>
+          <button onClick="{{ w.toggle }}" role="switch" aria-checked="{{ w.on }}" style="width:38px;height:22px;border-radius:999px;border:0;background:{{ w.track }};position:relative;cursor:pointer;padding:0;transition:none"><span style="position:absolute;top:3px;left:{{ w.knob }};width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .25s cubic-bezier(.2,.8,.2,1)"></span></button>
+        </div>
+      </sc-for>
+    </div>
+    <div style="min-width:0;padding:22px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:16px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em;flex:1">{{ wf.name }}</h2><button onClick="{{ runNow }}" style="height:36px;padding:0 14px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Run now</button></div>
+      <div style="display:grid;gap:0">
+        <div style="display:flex;gap:14px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--accent-soft)"><span style="font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text)">When</span><span style="font-size:14.5px;font-weight:600">{{ wf.trigger }}</span></div>
+        <sc-for list="{{ wf.steps }}" as="s" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:28px 1fr;gap:12px">
+            <div style="display:grid;justify-items:center"><span style="width:2px;height:14px;background:var(--line)"></span><span style="width:26px;height:26px;border-radius:8px;background:var(--surface2);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted)">{{ s.n }}</span><span style="width:2px;flex:1;min-height:14px;background:var(--line)"></span></div>
+            <div style="margin:10px 0;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);display:grid;gap:4px"><span style="display:flex;gap:8px;align-items:center"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-text)">{{ s.kind }}</span><span style="font-size:14.5px;font-weight:600">{{ s.label }}</span></span><span style="font-size:13px;color:var(--muted);font-family:'JetBrains Mono',monospace;overflow-wrap:anywhere">{{ s.detail }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <sc-for list="{{ wfHealth }}" as="hs" hint-placeholder-count="3">
+          <div style="padding:12px 14px;border-radius:12px;background:var(--bg);border:1px solid var(--line);display:grid;gap:2px"><span style="font-size:12px;color:var(--muted)">{{ hs.l }}</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em;color:{{ hs.c }}">{{ hs.v }}</span></div>
+        </sc-for>
+      </div>
+      <div style="display:grid;gap:4px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><h3 style="margin:0;font-size:14px;font-weight:600;flex:1">Recent runs</h3><a href="#" onClick="{{ goRuns }}" style="font-size:13px;font-weight:600">All runs →</a></div>
+        <sc-if value="{{ wfNoRuns }}" hint-placeholder-val="{{ false }}"><div style="padding:16px;border-radius:12px;border:1px dashed var(--line);font-size:13.5px;color:var(--muted);text-align:center">No runs yet. Press Run now to fire one.</div></sc-if>
+        <sc-for list="{{ wfRuns }}" as="r" hint-placeholder-count="3">
+          <button onClick="{{ r.open }}" style="display:flex;gap:12px;align-items:center;padding:10px 8px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;font-size:13.5px;text-align:left;cursor:pointer;border-radius:0;animation:rise .3s ease both" style-hover="background:var(--surface2)"><span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ r.sBg }};color:{{ r.sFg }};min-width:96px;text-align:center">{{ r.status }}</span><span style="flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.entry }}</span><span style="display:flex;gap:3px"><sc-for list="{{ r.dots }}" as="dt" hint-placeholder-count="2"><span style="width:16px;height:6px;border-radius:3px;background:{{ dt.c }}"></span></sc-for></span><span style="color:var(--muted);font-size:12.5px;min-width:96px;text-align:right">{{ r.started }}</span></button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isRuns }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Workflow runs" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:18px;max-width:1320px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:flex;flex-wrap:wrap;align-items:end;gap:12px 16px">
+    <div style="flex:1 1 320px;display:grid;gap:4px"><h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em">Workflow runs</h1><span style="font-size:14px;color:var(--muted)">Every firing of a workflow, newest first. Open one to see what each of its actions did.</span></div>
+    <button onClick="{{ rLiveToggle }}" role="switch" aria-checked="{{ rLive }}" style="height:38px;display:flex;align-items:center;gap:9px;padding:0 13px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer"><span style="width:8px;height:8px;border-radius:50%;background:{{ rLiveDot }};animation:{{ rLiveAnim }}"></span>{{ rLiveLabel }}</button>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+    <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;border-radius:11px;background:var(--surface2)">
+      <sc-for list="{{ rFilters }}" as="f" hint-placeholder-count="5">
+        <button onClick="{{ f.pick }}" aria-pressed="{{ f.on }}" style="height:32px;padding:0 11px;border-radius:8px;border:0;background:{{ f.bg }};color:{{ f.fg }};box-shadow:{{ f.shadow }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">{{ f.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:.7">{{ f.count }}</span></button>
+      </sc-for>
+    </div>
+    <span style="flex:1"></span>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:5px 6px 5px 12px;border-radius:12px;border:1px dashed var(--line)">
+      <span style="font-size:12px;font-weight:600;color:var(--muted)">Prototype</span>
+      <button onClick="{{ rFailToggle }}" role="switch" aria-checked="{{ rFail }}" style="height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Slack is down<span style="width:30px;height:18px;border-radius:999px;background:{{ rFailTrack }};position:relative;display:block"><span style="position:absolute;top:2px;left:{{ rFailKnob }};width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .25s cubic-bezier(.2,.8,.2,1)"></span></span></button>
+      <button onClick="{{ rTrigger }}" style="height:32px;padding:0 12px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-active="transform:scale(.97)">Fire a run</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:{{ rCols }};gap:16px;align-items:start">
+    <section style="min-width:0;padding:8px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:2px">
+      <sc-if value="{{ rEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:28px 16px;text-align:center;display:grid;gap:4px"><span style="font-weight:600">No runs to show</span><span style="font-size:13.5px;color:var(--muted)">No run is currently {{ rFilterName }}. Try another status.</span></div></sc-if>
+      <sc-for list="{{ rRows }}" as="r" hint-placeholder-count="4">
+        <button onClick="{{ r.pick }}" aria-pressed="{{ r.on }}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px 14px;border-radius:12px;border:1px solid {{ r.border }};background:{{ r.bg }};color:var(--ink);font-family:inherit;text-align:left;cursor:pointer;animation:rise .3s ease both" style-hover="background:var(--surface2)">
+          <span style="display:flex;flex-wrap:wrap;align-items:center;gap:6px"><span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ r.sBg }};color:{{ r.sFg }};display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:{{ r.anim }}"></span>{{ r.status }}</span><sc-if value="{{ r.kind }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid {{ r.kFg }};color:{{ r.kFg }}">{{ r.kind }}</span></sc-if></span>
+          <span style="font-size:12.5px;color:var(--muted);white-space:nowrap">{{ r.started }}</span>
+          <span style="display:grid;gap:2px;min-width:0"><span style="font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.wf }} <span style="font-weight:500;color:var(--muted)">· {{ r.entry }}</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.trigger }}</span></span>
+          <span style="display:flex;gap:3px;align-items:center;align-self:center"><sc-for list="{{ r.dots }}" as="dt" hint-placeholder-count="3"><span style="width:16px;height:6px;border-radius:3px;background:{{ dt.c }}"></span></sc-for></span>
+        </button>
+      </sc-for>
+    </section>
+    <section id="run-detail" style="min-width:0;padding:22px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:16px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+        <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em">{{ rSel.wf }}</h2>
+        <span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ rSel.sBg }};color:{{ rSel.sFg }}">{{ rSel.status }}</span>
+        <span style="flex:1"></span>
+        <sc-if value="{{ rSel.canCancel }}" hint-placeholder-val="{{ false }}"><button onClick="{{ rSel.askCancel }}" style="height:34px;padding:0 13px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--bad);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:var(--bad)">Cancel run</button></sc-if>
+      </div>
+      <dl style="margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 24px;font-size:13px">
+        <sc-for list="{{ rSel.facts }}" as="f" hint-placeholder-count="5">
+          <div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line)"><dt style="color:var(--muted)">{{ f.l }}</dt><dd style="margin:0;font-family:'JetBrains Mono',monospace;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.v }}</dd></div>
+        </sc-for>
+      </dl>
+      <div style="display:grid;gap:0">
+        <h3 style="margin:0 0 10px;font-size:14px;font-weight:600">Actions</h3>
+        <sc-for list="{{ rSel.actions }}" as="a" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:30px minmax(0,1fr);gap:12px">
+            <div style="display:flex;flex-direction:column;align-items:center"><span style="width:28px;height:28px;border-radius:50%;background:{{ a.cBg }};color:{{ a.cFg }};border:1.5px solid {{ a.cRing }};display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;animation:{{ a.anim }}">{{ a.mark }}</span><span style="flex:1;width:2px;min-height:12px;background:{{ a.line }}"></span></div>
+            <div style="margin-bottom:12px;padding:14px;border-radius:14px;border:1px solid {{ a.border }};background:var(--bg);display:grid;gap:10px">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-text)">{{ a.type }}</span>
+                <span style="font-size:14.5px;font-weight:600">{{ a.label }}</span>
+                <span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ a.sBg }};color:{{ a.sFg }}">{{ a.status }}</span>
+                <sc-if value="{{ a.kind }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid {{ a.kFg }};color:{{ a.kFg }}">{{ a.kind }}</span></sc-if>
+                <span style="flex:1"></span>
+                <sc-if value="{{ a.canRetry }}" hint-placeholder-val="{{ false }}"><button onClick="{{ a.retry }}" aria-label="{{ a.retryAria }}" style="height:32px;padding:0 12px;border-radius:9px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-text);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px"><svg viewBox="0 0 32 32" style="width:14px;height:14px" aria-hidden="true"><use href="#ic-refresh" fill="currentColor"></use></svg>Retry</button></sc-if>
+              </div>
+              <sc-if value="{{ a.hasFacts }}" hint-placeholder-val="{{ false }}">
+                <dl style="margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 20px;font-size:13px">
+                  <sc-for list="{{ a.facts }}" as="f" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:10px"><dt style="color:var(--muted)">{{ f.l }}</dt><dd style="margin:0;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:{{ f.c }}">{{ f.v }}</dd></div></sc-for>
+                </dl>
+              </sc-if>
+              <sc-if value="{{ a.err }}" hint-placeholder-val="{{ false }}"><pre style="margin:0;padding:10px 12px;border-radius:10px;background:var(--surface2);font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.55;white-space:pre-wrap;color:var(--ink2)">{{ a.err }}</pre></sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="padding:12px 14px;border-radius:12px;background:var(--surface2);font-size:13px;line-height:1.55;color:var(--ink2)">{{ rSel.note }}</div>
+    </section>
+  </div>
+  <sc-if value="{{ rAsk.open }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ rAsk.no }}" style="position:fixed;inset:0;z-index:60;background:var(--scrim);display:grid;place-items:center;padding:20px">
+      <div onClick="{{ rAsk.stop }}" role="dialog" aria-modal="true" style="width:min(440px,100%);padding:24px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;gap:12px;animation:pop .18s ease-out">
+        <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:21px;font-weight:600;letter-spacing:-.02em">{{ rAsk.title }}</h2>
+        <p style="margin:0;font-size:14.5px;line-height:1.55;color:var(--muted)">{{ rAsk.body }}</p>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px">
+          <button onClick="{{ rAsk.no }}" style="height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Keep it</button>
+          <button onClick="{{ rAsk.yes }}" style="height:38px;padding:0 14px;border-radius:10px;border:0;background:{{ rAsk.btnBg }};color:#fff;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">{{ rAsk.cta }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</main>
+</sc-if>
+
+<sc-if value="{{ isSuite }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Modules" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:20px;max-width:1320px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:flex;flex-wrap:wrap;align-items:end;gap:12px 16px">
+    <div style="flex:1 1 360px;display:grid;gap:4px"><h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em">Modules</h1><span style="font-size:14px;color:var(--muted)">barakoBrew finds modules by asking the API what it runs. A module that is installed gets its screen; one that is not shows how to add it.</span></div>
+    <code style="font-family:'JetBrains Mono',monospace;font-size:12.5px;padding:8px 12px;border-radius:10px;background:var(--surface2);color:var(--ink2)">GET /api/modules · {{ modsInstalledCount }} of {{ modsTotal }}</code>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px;border-radius:11px;background:var(--surface2);justify-self:start">
+    <sc-for list="{{ suiteCats }}" as="c" hint-placeholder-count="7">
+      <button onClick="{{ c.pick }}" aria-pressed="{{ c.on }}" style="height:32px;padding:0 11px;border-radius:8px;border:0;background:{{ c.bg }};color:{{ c.fg }};box-shadow:{{ c.shadow }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">{{ c.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:.7">{{ c.count }}</span></button>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px">
+    <sc-for list="{{ suiteCards }}" as="m" hint-placeholder-count="8">
+      <div style="padding:18px;border-radius:16px;border:1px solid var(--line);background:var(--surface);display:grid;gap:12px;align-content:start;opacity:{{ m.op }};transition:transform .2s,box-shadow .2s" style-hover="transform:translateY(-2px);box-shadow:var(--shadow)">
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg viewBox="0 0 128 128" style="width:44px;height:44px;flex:none" aria-hidden="true"><rect width="128" height="128" rx="30" fill="{{ m.tileBg }}"></rect><use href="{{ m.glyph }}" x="28" y="28" width="72" height="72" fill="{{ m.tileFg }}"></use></svg>
+          <div style="flex:1;display:grid;gap:2px;min-width:0"><span style="font-size:15px;font-weight:600">{{ m.name }}</span><span style="font-size:12.5px;color:var(--muted)">{{ m.cat }}</span></div>
+          <span style="font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ m.sBg }};color:{{ m.sFg }}">{{ m.state }}</span>
+        </div>
+        <p style="margin:0;font-size:13.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{{ m.desc }}</p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.meta }}</span>
+          <button onClick="{{ m.act }}" style="height:32px;padding:0 12px;border-radius:9px;border:1px solid {{ m.btnBorder }};background:{{ m.btnBg }};color:{{ m.btnFg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">{{ m.btn }}</button>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isMod }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Module" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:18px;max-width:1320px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px">
+    <svg viewBox="0 0 128 128" style="width:60px;height:60px;flex:none" aria-hidden="true"><rect width="128" height="128" rx="30" fill="var(--accent)"></rect><use href="{{ mNow.glyph }}" x="28" y="28" width="72" height="72" fill="var(--accent-ink)"></use></svg>
+    <div style="flex:1 1 280px;display:grid;gap:4px">
+      <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em">{{ mNow.name }}</h1>
+      <span style="font-size:14px;color:var(--muted);text-wrap:pretty">{{ mNow.desc }}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <span style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--ok-bg);color:var(--ok)">Detected</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:4px 10px;border-radius:999px;background:var(--surface2);color:var(--ink2)">{{ mNow.pkg }} {{ mNow.ver }}</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+    <sc-for list="{{ mNow.stats }}" as="s" hint-placeholder-count="3">
+      <div style="padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);display:grid;gap:8px"><span style="font-size:13px;color:var(--muted)">{{ s.l }}</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:600;letter-spacing:-.03em;line-height:1;overflow-wrap:anywhere">{{ s.v }}</span></div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:{{ mCols }};gap:16px;align-items:start">
+    <section style="min-width:0;padding:20px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:12px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
+        <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:600;letter-spacing:-.02em;flex:1 1 auto">{{ mNow.tableTitle }} <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:400;color:var(--muted)">{{ mNow.count }}</span></h2>
+        <input value="{{ mQ }}" onInput="{{ onMQ }}" placeholder="Filter" style="flex:0 1 200px;height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:13.5px;outline:0" style-focus="border-color:var(--accent)">
+        <sc-if value="{{ mNow.hasPrimary }}" hint-placeholder-val="{{ false }}"><button onClick="{{ mNow.primary }}" style="height:34px;padding:0 13px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" style-active="transform:scale(.97)">{{ mNow.primaryLabel }}</button></sc-if>
+      </div>
+      <div style="overflow-x:auto;margin:0 -6px">
+        <div style="min-width:540px;padding:0 6px">
+          <div style="display:grid;grid-template-columns:{{ mNow.grid }};border-bottom:1px solid var(--line)">
+            <sc-for list="{{ mNow.heads }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.sort }}" style="text-align:left;padding:8px 10px;border:0;background:transparent;font-family:inherit;font-size:12.5px;font-weight:600;color:{{ c.fg }};cursor:pointer;display:flex;gap:4px;align-items:center" style-hover="color:var(--ink)">{{ c.t }}<span style="font-size:10px">{{ c.arrow }}</span></button></sc-for>
+          </div>
+          <sc-if value="{{ mNow.empty }}" hint-placeholder-val="{{ false }}"><div style="padding:22px;text-align:center;font-size:13.5px;color:var(--muted)">Nothing matches “{{ mQ }}”.</div></sc-if>
+          <sc-for list="{{ mNow.rows }}" as="r" hint-placeholder-count="3">
+            <div onClick="{{ r.open }}" style="display:grid;grid-template-columns:{{ mNow.grid }};border-bottom:1px solid var(--line);background:{{ r.bg }};cursor:pointer;border-radius:8px;animation:rise .25s ease both" style-hover="background:var(--surface2)">
+              <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="4">
+                <span style="padding:11px 10px;font-size:13.5px;display:flex;align-items:center;min-width:0;font-weight:{{ c.w }};font-family:{{ c.ff }}">
+                  <sc-if value="{{ c.tog }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.flip }}" role="switch" aria-checked="{{ c.on }}" aria-label="Turn {{ c.t }}" style="width:36px;height:20px;border-radius:999px;border:0;padding:0;background:{{ c.track }};position:relative;cursor:pointer;margin-right:8px"><span style="position:absolute;top:2px;left:{{ c.knob }};width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .25s cubic-bezier(.2,.8,.2,1)"></span></button></sc-if>
+                  <span style="padding:{{ c.pad }};border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font-size:{{ c.fs }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.t }}</span>
+                </span>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <span style="font-size:12.5px;color:var(--muted)">Click a row to open it. Switches and actions write through the API.</span>
+    </section>
+    <div style="display:grid;gap:16px;min-width:0">
+      <section style="padding:18px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px"><h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:600;letter-spacing:-.02em;flex:1">Try it</h2><span style="font-size:12px;color:var(--muted)">against this tenant</span></div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+          <span style="font-size:13px;font-weight:600;color:var(--muted)">{{ demoM.ask }}</span>
+          <sc-for list="{{ demoM.opts }}" as="o" hint-placeholder-count="2"><button onClick="{{ o.pick }}" aria-pressed="{{ o.on }}" style="min-height:32px;padding:0 11px;border-radius:999px;border:1px solid {{ o.border }};background:{{ o.bg }};color:{{ o.fg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">{{ o.l }}</button></sc-for>
+          <button onClick="{{ demoM.run }}" disabled="{{ demoM.busy }}" style="margin-left:auto;height:34px;padding:0 14px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);opacity:{{ demoM.btnOp }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">{{ demoM.btn }}</button>
+        </div>
+        <div style="display:grid;gap:2px;min-height:140px;padding:12px 14px;border-radius:12px;background:var(--code);color:var(--code-ink);font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6">
+          <sc-if value="{{ demoM.idle }}" hint-placeholder-val="{{ true }}"><span style="color:#8D91B0">Pick a case and press {{ demoM.runLabel }}.</span></sc-if>
+          <sc-for list="{{ demoM.lines }}" as="ln" hint-placeholder-count="0"><div style="display:grid;grid-template-columns:16px 1fr;gap:8px;animation:rise .3s ease both"><span style="color:{{ ln.c }}">{{ ln.m }}</span><span style="overflow-wrap:anywhere">{{ ln.t }}</span></div></sc-for>
+        </div>
+        <sc-if value="{{ demoM.done }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:{{ demoM.rBg }};color:{{ demoM.rFg }};font-size:14px;font-weight:600;animation:rise .3s ease both"><span>{{ demoM.rMark }}</span>{{ demoM.rText }}</div></sc-if>
+      </section>
+      <section style="padding:18px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:10px">
+        <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:19px;font-weight:600;letter-spacing:-.02em">Configuration</h2>
+        <sc-for list="{{ mNow.settings }}" as="s" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:13px"><span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">{{ s.k }}</span><span style="font-family:'JetBrains Mono',monospace;text-align:right">{{ s.v }}</span></div></sc-for>
+        <span style="font-size:12.5px;line-height:1.5;color:var(--muted)">Read from the API's configuration. Set in appsettings or environment, not here: barakoBrew owns none of the rules.</span>
+      </section>
+    </div>
+  </div>
+  <sc-if value="{{ mDrawer.open }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ mDrawer.close }}" style="position:fixed;inset:0;z-index:55;background:var(--scrim)"></div>
+    <aside role="dialog" aria-modal="true" aria-label="{{ mDrawer.title }}" style="position:fixed;top:0;right:0;bottom:0;z-index:56;width:min(420px,100%);padding:24px;background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:16px;overflow:auto;animation:slidein .28s cubic-bezier(.2,.8,.2,1)">
+      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:12.5px;color:var(--muted);flex:1">{{ mNow.name }} · {{ mNow.tableTitle }}</span><button onClick="{{ mDrawer.close }}" aria-label="Close" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;font-size:15px">✕</button></div>
+      <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:600;letter-spacing:-.025em;overflow-wrap:anywhere">{{ mDrawer.title }}</h2>
+      <dl style="margin:0;display:grid;gap:0">
+        <sc-for list="{{ mDrawer.fields }}" as="f" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:14px"><dt style="color:var(--muted)">{{ f.l }}</dt><dd style="margin:0;text-align:right;font-weight:600;color:{{ f.fg }}">{{ f.v }}</dd></div></sc-for>
+      </dl>
+      <div style="display:grid;gap:8px">
+        <sc-for list="{{ mDrawer.actions }}" as="a" hint-placeholder-count="2"><button onClick="{{ a.go }}" style="height:40px;padding:0 14px;border-radius:10px;border:1px solid {{ a.border }};background:{{ a.bg }};color:{{ a.fg }};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;text-align:left" style-hover="border-color:var(--accent)">{{ a.label }}</button></sc-for>
+      </div>
+      <div style="margin-top:auto;padding:12px 14px;border-radius:12px;background:var(--surface2);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:var(--ink2);overflow-wrap:anywhere">{{ mDrawer.api }}</div>
+    </aside>
+  </sc-if>
+</main>
+</sc-if>
+
+<sc-if value="{{ isAnalytics }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Analytics" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:18px;max-width:1240px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px">
+    <div style="flex:1;display:grid;gap:2px"><h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em">Analytics</h1><span style="font-size:13px;color:var(--muted)">From Umami, proxied through barakoCMS</span></div>
+    <div style="display:flex;gap:4px;padding:4px;border-radius:11px;background:var(--surface2)">
+      <sc-for list="{{ ranges }}" as="r" hint-placeholder-count="3">
+        <button onClick="{{ r.pick }}" style="height:32px;padding:0 12px;border-radius:8px;border:0;background:{{ r.bg }};color:{{ r.fg }};box-shadow:{{ r.shadow }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:none">{{ r.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
+    <sc-for list="{{ aStats }}" as="s" hint-placeholder-count="4">
+      <div style="padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);display:grid;gap:8px"><span style="font-size:13px;color:var(--muted)">{{ s.label }}</span><span style="font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1">{{ s.value }}</span></div>
+    </sc-for>
+  </div>
+  <section style="padding:20px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:14px">
+    <div style="display:flex;align-items:baseline;gap:10px"><h2 style="margin:0;font-size:15px;font-weight:600;flex:1">Visitors</h2><span style="font-size:13px;color:var(--muted)">{{ hoverLabel }}</span></div>
+    <div onMouseLeave="{{ clearHover }}" style="height:220px;display:flex;align-items:flex-end;gap:{{ barGap }}">
+      <sc-for list="{{ bars }}" as="b" hint-placeholder-count="30">
+        <div onMouseEnter="{{ b.hover }}" style="flex:1;height:100%;display:flex;align-items:flex-end;cursor:crosshair"><div style="width:100%;height:{{ b.h }};border-radius:4px 4px 2px 2px;background:{{ b.bg }};transition:height .5s cubic-bezier(.2,.8,.2,1)"></div></div>
+      </sc-for>
+    </div>
+  </section>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px">
+    <sc-for list="{{ breakdowns }}" as="bd" hint-placeholder-count="3">
+      <section style="padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);display:grid;gap:10px;align-content:start">
+        <h2 style="margin:0;font-size:14px;font-weight:600">{{ bd.title }}</h2>
+        <sc-for list="{{ bd.rows }}" as="r" hint-placeholder-count="4">
+          <div style="position:relative;display:flex;justify-content:space-between;gap:10px;padding:7px 10px;font-size:13.5px;border-radius:8px;overflow:hidden"><span style="position:absolute;inset:0;width:{{ r.w }};background:var(--accent-soft);transition:width .6s cubic-bezier(.2,.8,.2,1)"></span><span style="position:relative">{{ r.k }}</span><span style="position:relative;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">{{ r.v }}</span></div>
+        </sc-for>
+      </section>
+    </sc-for>
+  </div>
+</main>
+</sc-if>
+
+<sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+<main data-screen-label="Site settings" style="padding:32px clamp(20px,3vw,40px) 64px;display:grid;gap:18px;max-width:1240px;animation:rise .35s cubic-bezier(.2,.8,.2,1)">
+  <div style="display:grid;gap:4px"><h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.035em">Site settings</h1><span style="font-size:13.5px;color:var(--muted)">barakoPress reads these on each request. Saving purges the site's cache.</span></div>
+  <div style="display:flex;gap:4px;padding:4px;border-radius:11px;background:var(--surface2);justify-self:start;flex-wrap:wrap">
+    <sc-for list="{{ setTabs }}" as="t" hint-placeholder-count="4">
+      <button onClick="{{ t.pick }}" style="height:34px;padding:0 14px;border-radius:8px;border:0;background:{{ t.bg }};color:{{ t.fg }};box-shadow:{{ t.shadow }};font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:none">{{ t.label }}</button>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px;align-items:start">
+    <div style="padding:22px;border-radius:18px;background:var(--surface);border:1px solid var(--line);display:grid;gap:16px;animation:fadein .25s ease">
+      <sc-if value="{{ tabSite }}" hint-placeholder-val="{{ false }}">
+        <label style="display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink2)">Site name<input value="{{ site.name }}" onInput="{{ setSiteName }}" style="height:42px;padding:0 14px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:15px;outline:0" style-focus="border-color:var(--accent)"></label>
+        <label style="display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--ink2)">Tagline<input value="{{ site.tagline }}" onInput="{{ setTagline }}" style="height:42px;padding:0 14px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:15px;outline:0" style-focus="border-color:var(--accent)"></label>
+      </sc-if>
+      <sc-if value="{{ tabTheme }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;gap:8px"><span style="font-size:13px;font-weight:600;color:var(--ink2)">Accent</span><div style="display:flex;gap:10px">
+          <sc-for list="{{ swatches }}" as="s" hint-placeholder-count="5">
+            <button onClick="{{ s.pick }}" aria-label="{{ s.c }}" style="width:36px;height:36px;border-radius:11px;border:0;background:{{ s.c }};cursor:pointer;box-shadow:{{ s.ring }};transition:box-shadow .2s,transform .15s" style-hover="transform:scale(1.08)"></button>
+          </sc-for>
+        </div></div>
+        <label style="display:grid;gap:8px;font-size:13px;font-weight:600;color:var(--ink2)"><span style="display:flex;justify-content:space-between">Corner radius<span style="font-family:'JetBrains Mono',monospace;color:var(--muted)">{{ site.radius }}px</span></span><input type="range" min="0" max="24" value="{{ site.radius }}" onInput="{{ setRadius }}" style="accent-color:var(--accent)"></label>
+        <div style="display:grid;gap:8px"><span style="font-size:13px;font-weight:600;color:var(--ink2)">Headings</span><div style="display:flex;gap:4px;padding:4px;border-radius:11px;background:var(--surface2);justify-self:start">
+          <sc-for list="{{ fonts }}" as="f" hint-placeholder-count="3">
+            <button onClick="{{ f.pick }}" style="height:32px;padding:0 12px;border-radius:8px;border:0;background:{{ f.bg }};color:{{ f.fg }};box-shadow:{{ f.shadow }};font-family:{{ f.fam }};font-size:13.5px;font-weight:600;cursor:pointer">{{ f.label }}</button>
+          </sc-for>
+        </div></div>
+      </sc-if>
+      <sc-if value="{{ tabDomains }}" hint-placeholder-val="{{ false }}">
+        <sc-for list="{{ domains }}" as="d" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);animation:rise .3s ease both"><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:13.5px">{{ d.host }}</span><span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{ d.bg }};color:{{ d.fg }}">{{ d.state }}</span></div>
+        </sc-for>
+        <form onSubmit="{{ addDomain }}" style="display:flex;gap:8px"><input value="{{ newDomain }}" onInput="{{ setNewDomain }}" placeholder="shop.cafe.example" style="flex:1;height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:13px;outline:0" style-focus="border-color:var(--accent)"><button type="submit" style="height:40px;padding:0 14px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Add</button></form>
+        <span style="font-size:12.5px;line-height:1.5;color:var(--muted)">Point the host's DNS at the renderer. The request host picks this tenant.</span>
+      </sc-if>
+      <sc-if value="{{ tabNav }}" hint-placeholder-val="{{ false }}">
+        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);transition:transform .2s"><span style="flex:1;font-size:14.5px;font-weight:600">{{ n.label }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)">{{ n.href }}</span><button onClick="{{ n.up }}" aria-label="Move up" style="width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer">↑</button><button onClick="{{ n.down }}" aria-label="Move down" style="width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer">↓</button></div>
+        </sc-for>
+      </sc-if>
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:6px;border-top:1px solid var(--line)"><button onClick="{{ saveSettings }}" style="height:40px;padding:0 16px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Save and purge</button></div>
+    </div>
+    <div style="display:grid;gap:8px">
+      <span style="font-size:12.5px;font-weight:600;color:var(--muted)">Live preview</span>
+      <div style="border-radius:18px;border:1px solid var(--line);background:#FFFDF8;color:#1E1A16;overflow:hidden;box-shadow:var(--shadow)">
+        <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #EEE7DA"><span style="font-family:{{ previewFont }};font-size:18px;font-weight:600;letter-spacing:-.02em;flex:1">{{ site.name }}</span><sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4"><span style="font-size:13px;color:#5B5146">{{ n.label }}</span></sc-for></div>
+        <div style="padding:28px 18px;display:grid;gap:14px">
+          <div style="font-family:{{ previewFont }};font-size:30px;line-height:1.05;font-weight:600;letter-spacing:-.03em">{{ site.tagline }}</div>
+          <div style="display:flex;gap:8px"><span style="padding:10px 16px;border-radius:{{ previewRadius }};background:{{ site.accent }};color:#fff;font-size:13.5px;font-weight:600;transition:none">See the menu</span><span style="padding:10px 16px;border-radius:{{ previewRadius }};border:1px solid #DCD3C3;font-size:13.5px;font-weight:600;transition:none">Find us</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div style="height:70px;border-radius:{{ previewRadius }};background:#F2EBDD;transition:border-radius .25s"></div><div style="height:70px;border-radius:{{ previewRadius }};background:#F2EBDD;transition:border-radius .25s"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</sc-if>
+
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ leaveOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:52;background:var(--scrim);display:grid;place-items:center;padding:16px">
+    <div role="alertdialog" aria-label="Unsaved changes" style="width:min(420px,100%);padding:24px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;gap:14px;animation:pop .18s ease-out">
+      <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.02em">Leave with unsaved changes?</h2>
+      <p style="margin:0;font-size:14.5px;line-height:1.55;color:var(--muted)">Your edits to "{{ ed.title }}" are kept on this device, but nobody else can see them until you save.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end">
+        <button onClick="{{ leaveDiscard }}" style="height:40px;padding:0 14px;border-radius:10px;border:0;background:transparent;color:var(--bad);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Discard</button>
+        <button onClick="{{ leaveStay }}" style="height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Keep editing</button>
+        <button onClick="{{ leaveSave }}" style="height:40px;padding:0 16px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Save draft and leave</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ conflictOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:52;background:var(--scrim);display:grid;place-items:center;padding:16px">
+    <div role="alertdialog" aria-label="Someone else saved" style="width:min(760px,100%);max-height:90vh;overflow:auto;padding:24px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;gap:16px;animation:pop .18s ease-out">
+      <div style="display:grid;gap:6px">
+        <span style="font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--warn-bg);color:var(--warn);justify-self:start">412 · version changed</span>
+        <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:600;letter-spacing:-.02em">Marco saved v15 while you were editing</h2>
+        <p style="margin:0;font-size:14.5px;line-height:1.55;color:var(--muted)">Nothing was overwritten. One field differs; choose which version to keep.</p>
+      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted)">summary</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px">
+        <div style="padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--bg);display:grid;gap:8px"><span style="font-size:12.5px;font-weight:600;color:var(--muted)">Theirs · Marco · v15</span><span style="font-size:14.5px;line-height:1.55">{{ theirs }}</span></div>
+        <div style="padding:14px 16px;border-radius:12px;border:1px solid var(--accent);background:var(--accent-soft);display:grid;gap:8px"><span style="font-size:12.5px;font-weight:600;color:var(--accent-text)">Yours · unsaved</span><span style="font-size:14.5px;line-height:1.55">{{ ed.summary }}</span></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end">
+        <button onClick="{{ conflictCancel }}" style="height:40px;padding:0 14px;border-radius:10px;border:0;background:transparent;color:var(--muted);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Cancel</button>
+        <button onClick="{{ conflictTheirs }}" style="height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Use theirs</button>
+        <button onClick="{{ conflictMine }}" style="height:40px;padding:0 16px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Keep mine on top of v15</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closePalette }}" style="position:fixed;inset:0;z-index:50;background:var(--scrim);animation:fadein .15s ease"></div>
+  <div style="position:fixed;top:14vh;left:50%;transform:translateX(-50%);z-index:51;width:min(560px,calc(100% - 32px));border-radius:16px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);overflow:hidden;animation:pop .18s ease-out">
+    <input ref="{{ palRef }}" value="{{ pq }}" onInput="{{ onPq }}" onKeyDown="{{ palKey }}" placeholder="Jump to a screen or entry" style="width:100%;height:54px;padding:0 18px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;font-size:16px;outline:0">
+    <div style="max-height:340px;overflow:auto;padding:6px;display:grid;gap:2px">
+      <sc-for list="{{ palItems }}" as="p" hint-placeholder-count="6">
+        <button onClick="{{ p.go }}" style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:9px;border:0;background:{{ p.bg }};color:var(--ink);font-family:inherit;font-size:14px;text-align:left;cursor:pointer" style-hover="background:var(--surface2)"><span style="flex:1">{{ p.label }}</span><span style="font-size:12px;color:var(--muted)">{{ p.kind }}</span></button>
+      </sc-for>
+    </div>
+  </div>
+</sc-if>
+
+<div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:60;display:grid;gap:8px;justify-items:center;pointer-events:none">
+  <sc-for list="{{ toasts }}" as="t" hint-placeholder-count="0">
+    <div style="pointer-events:auto;display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-size:14px;font-weight:500;box-shadow:var(--shadow);animation:toast .25s cubic-bezier(.2,.8,.2,1)">{{ t.msg }}<sc-if value="{{ t.hasUndo }}" hint-placeholder-val="{{ false }}"><button onClick="{{ t.undo }}" style="border:0;background:transparent;color:var(--accent-soft);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:0">Undo</button></sc-if></div>
+  </sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;suite&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Modules&quot;}, &quot;startScreen&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;signin&quot;, &quot;overview&quot;, &quot;entries&quot;, &quot;editor&quot;, &quot;types&quot;, &quot;workflows&quot;, &quot;runs&quot;, &quot;suite&quot;, &quot;mod&quot;, &quot;analytics&quot;, &quot;settings&quot;], &quot;default&quot;: &quot;overview&quot;, &quot;tsType&quot;: &quot;string&quot;}, &quot;showSyncFields&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = (() => {
+    let t = null;
+    try { t = localStorage.getItem('bk-brew-theme'); } catch (e) {}
+    if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    return {
+      theme: t, screen: this.props.startScreen || 'overview', tenant: 0, tenantOpen: false, range: 30, live: true, palette: false, pq: '', palIdx: 0, signing: false,
+      needs: [
+        { id: 1, k: 'sch', t: '3 entries publish on Friday', sub: 'Scheduled by Marco, not yet reviewed', cta: 'Review', to: 'entries' },
+        { id: 2, k: 'bad', t: 'A run partly failed', sub: 'Slack timed out on "Sunday hours". Only you can decide to retry.', cta: 'Open', to: 'runs' },
+        { id: 3, k: 'warn', t: '2 emails bounced', sub: 'Resend reported hard bounces on newsletter sign-ups', cta: 'Open', to: 'analytics' }
+      ],
+      activity: [['09:41', 'Marco', 'scheduled "Holiday hours" for Fri 09:00'], ['09:38', 'Workflow', 'Notify Slack failed, attempt 2 of 5'], ['09:20', 'Ana', 'published "New pastry menu"'], ['08:55', 'Lea', 'added the field allergens to article'], ['08:12', 'Import', 'brought in 48 menu items from CSV']],
+      entries: [
+        { id: 'e1', title: 'Holiday hours', type: 'article', status: 'Scheduled', updated: '2 min ago', author: 'Marco' },
+        { id: 'e2', title: 'New pastry menu', type: 'article', status: 'Published', updated: '21 min ago', author: 'Ana' },
+        { id: 'e3', title: 'Find us', type: 'page', status: 'Published', updated: 'Yesterday', author: 'Ana' },
+        { id: 'e4', title: 'Latte art workshop', type: 'event', status: 'Draft', updated: 'Yesterday', author: 'Lea' },
+        { id: 'e5', title: 'Meet our roaster', type: 'article', status: 'In review', updated: '2 days ago', author: 'Lea' },
+        { id: 'e6', title: 'Menu', type: 'page', status: 'Published', updated: '3 days ago', author: 'Marco' },
+        { id: 'e7', title: 'Summer cold brew', type: 'article', status: 'Draft', updated: '5 days ago', author: 'Marco' },
+        { id: 'e8', title: 'Open mic night', type: 'event', status: 'Scheduled', updated: '1 week ago', author: 'Ana' },
+        { id: 'e9', title: 'Our 2025 beans', type: 'article', status: 'Archived', updated: 'Mar 2026', author: 'Ana' }
+      ],
+      etype: 'all', estatus: 'All', eq: '', sel: {},
+      ed: { id: 'e1', title: 'Holiday hours', type: 'article', slug: 'holiday-hours', summary: 'When the café is open over the holidays, and what changes.', body: '## Opening hours\n\nWe open at **7** on weekdays and **8** on weekends.\n\nOn the 24th we close at 14:00.', at: '2026-10-23T09:00', status: 'Scheduled', v: 14 },
+      dirty: false,
+      history: [{ v: 14, t: 'Scheduled for Fri 09:00', when: '2 min' }, { v: 13, t: 'Edited body', when: '9 min' }, { v: 12, t: 'Created', when: '1 h' }],
+      types: {
+        article: { label: 'Article', fields: [['title', 'string', 1, 'Public'], ['slug', 'slug', 1, 'Public'], ['summary', 'text', 0, 'Public'], ['body', 'richtext', 0, 'Public'], ['allergens', 'array', 0, 'Public'], ['internalNotes', 'text', 0, 'Sensitive']] },
+        page: { label: 'Page', fields: [['title', 'string', 1, 'Public'], ['slug', 'slug', 1, 'Public'], ['blocks', 'json', 0, 'Public']] },
+        event: { label: 'Event', fields: [['title', 'string', 1, 'Public'], ['startsAt', 'datetime', 1, 'Public'], ['price', 'money', 0, 'Public'], ['contactEmail', 'email', 0, 'Sensitive']] }
+      },
+      typeSel: 'article', picker: false,
+      wfs: [
+        { id: 'w1', name: 'Notify Slack', trigger: 'Article → Published', on: true, last: 'Failed', steps: [['HttpRequest', 'Post to Slack', 'POST https://hooks.slack.com/… · retry 5, backoff'], ['Log', 'Record delivery', 'audit: slack.delivered']] },
+        { id: 'w2', name: 'Two-step approval', trigger: 'Article → In review', on: true, last: 'Succeeded', steps: [['RequireApproval', 'Editor approves', 'role: Editor · 1 of 2'], ['RequireApproval', 'Owner approves', 'role: Owner · 2 of 2'], ['Transition', 'Publish', 'In review → Published']] },
+        { id: 'w3', name: 'Welcome email', trigger: 'Form submission → newsletter', on: true, last: 'Succeeded', steps: [['SendEmail', 'Send welcome', 'template: welcome · via Resend']] },
+        { id: 'w5', name: 'Publish and announce', trigger: 'Article → In review', on: true, last: 'Partly failed', steps: [['RequireApproval', 'Editors approve', 'role: Editor · 2 of 2'], ['HttpRequest', 'Post to Slack', 'POST https://hooks.slack.com/… · retry 3, backoff'], ['Transition', 'Publish', 'In review → Published'], ['HttpRequest', 'Purge barakoPress', 'POST /api/revalidate · tag tenant:kape-ana']] },
+        { id: 'w4', name: 'Reindex for search', trigger: 'Any → Published', on: false, last: 'Off', steps: [['Embed', 'Embed Public fields', 'model: nomic-embed-text']] }
+      ],
+      wfSel: 'w1', runs: { w1: [['Failed', 2, '4 min'], ['Failed', 1, '9 min']], w2: [['Succeeded', 1, '1 h']], w3: [['Succeeded', 1, '3 h']], w4: [] },
+      hover: null, setTab: 'site',
+      site: { name: 'Kapé Ana', tagline: 'Slow coffee, early mornings.', accent: '#B4572E', radius: 10, font: 'Bricolage Grotesque' },
+      domains: [['cafe.example', 'Live'], ['www.cafe.example', 'Live']], newDomain: '',
+      navItems: [['Menu', '/menu'], ['Events', '/events'], ['Find us', '/find-us'], ['Journal', '/journal']],
+      rRuns: (() => {
+        const A = (type, label, k, status, o) => ({ type, label, k, status, attempts: 0, ms: null, resp: null, err: null, retryable: null, next: 0, haltedBy: null, ...(o || {}) });
+        return [
+          { id: 'run_5K1A', wf: 'Publish and announce', entry: 'Sunday hours', ctype: 'article', cid: 'c_41f2', trigger: 'Article → In review', status: 'PartiallyFailed', started: 'Yesterday 17:05', finished: 'Yesterday 17:06', actions: [
+            A('RequireApproval', 'Editors approve', 'approve', 'Succeeded', { attempts: 1, ms: 420 }),
+            A('HttpRequest', 'Post to Slack', 'slack', 'Unknown', { attempts: 1, ms: 30000, err: 'Timed out after 30 s. The request may have arrived; only the response was lost.' }),
+            A('Transition', 'Publish', 'publish', 'Skipped', { haltedBy: 2 }),
+            A('HttpRequest', 'Purge barakoPress', 'purge', 'Skipped', { haltedBy: 2 })] },
+          { id: 'run_8T3D', wf: 'Welcome email', entry: 'Newsletter sign-up', ctype: 'form-submission', cid: 'c_77a0', trigger: 'Form submission → newsletter', status: 'Failed', started: 'Today 08:51', finished: 'Today 08:51', actions: [
+            A('SendEmail', 'Send welcome', 'email', 'Failed', { attempts: 1, ms: 310, resp: 422, retryable: false, err: 'Resend rejected the address: "ana@cafe" is not a valid mailbox.' })] },
+          { id: 'run_6M9C', wf: 'Publish and announce', entry: 'New pastry menu', ctype: 'article', cid: 'c_3b19', trigger: 'Article → In review', status: 'Succeeded', started: 'Today 08:40', finished: 'Today 08:41', actions: [
+            A('RequireApproval', 'Editors approve', 'approve', 'Succeeded', { attempts: 1, ms: 380 }),
+            A('HttpRequest', 'Post to Slack', 'slack', 'Succeeded', { attempts: 2, ms: 240, resp: 200 }),
+            A('Transition', 'Publish', 'publish', 'Succeeded', { attempts: 1, ms: 22 }),
+            A('HttpRequest', 'Purge barakoPress', 'purge', 'Succeeded', { attempts: 1, ms: 38, resp: 204 })] },
+          { id: 'run_7Q2F', wf: 'Notify Slack', entry: 'Holiday hours', ctype: 'article', cid: 'c_0e8d', trigger: 'Article → Published', status: 'Succeeded', started: 'Today 07:12', finished: 'Today 07:12', actions: [
+            A('HttpRequest', 'Post to Slack', 'slack', 'Succeeded', { attempts: 1, ms: 212, resp: 200 }),
+            A('Log', 'Record delivery', 'log', 'Succeeded', { attempts: 1, ms: 4 })] }
+        ];
+      })(), modSel: 'Forms', modRows: {}, mQ: '', mSort: null, mRow: null, mAdded: 0, modsOpen: true, suiteCat: 'All', dCase: 0, dShown: -1, dBusy: false, rSel: 'run_5K1A', rFilter: 'All', rLive: true, rFail: false, rAsk: null, rN: 0,
+      toasts: [], vw: window.innerWidth, navOpen: false, pendingNav: null, conflict: null, conflictDone: false, pubMenu: false, localSaved: false
+    };
+  })();
+  palRef = React.createRef();
+  persist(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  toast(msg, undo) { const id = Math.random(); this.setState(s => ({ toasts: [...s.toasts, { id, msg, undo }] })); setTimeout(() => this.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) })), 3800); }
+  go = sc => e => { if (e && e.preventDefault) e.preventDefault(); if (this.state.screen === 'editor' && this.state.dirty && sc !== 'editor') { this.setState({ pendingNav: sc, palette: false, navOpen: false }); return; } this.nav(sc); };
+  nav(sc) { this.setState({ screen: sc, palette: false, tenantOpen: false, navOpen: false, pendingNav: null, pubMenu: false }); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  keepLocal() { clearTimeout(this.kt); this.kt = setTimeout(() => { try { localStorage.setItem('bk-brew-draft-' + this.state.ed.id, JSON.stringify(this.state.ed)); } catch (e) {} this.setState({ localSaved: true }); }, 700); }
+  componentDidMount() {
+    this.onKey = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.openPal(); }
+      if (e.key === 'Escape') this.setState({ palette: false, tenantOpen: false });
+    };
+    window.addEventListener('keydown', this.onKey);
+    this.onResize = () => this.setState({ vw: window.innerWidth });
+    window.addEventListener('resize', this.onResize);
+    this.rt = setInterval(this.rTick, 700);
+    this.tick = setInterval(() => {
+      if (!this.state.live || this.state.screen !== 'overview') return;
+      const evs = [['Ana', 'edited "Menu"'], ['Workflow', 'Welcome email sent to a new subscriber'], ['Lea', 'uploaded 3 photos to Files'], ['Forms', 'received a contact message'], ['Marco', 'moved "Summer cold brew" to In review']];
+      const ev = evs[Math.floor(Math.random() * evs.length)], d = new Date();
+      this.setState(s => ({ activity: [[String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'), ...ev], ...s.activity].slice(0, 6) }));
+    }, 6000);
+  }
+  componentDidUpdate() { if (this.wantRunScroll) { this.wantRunScroll = false; requestAnimationFrame(() => { const el = document.getElementById('run-detail'); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 80, behavior: 'auto' }); }); } }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); window.removeEventListener('resize', this.onResize); clearInterval(this.tick); clearInterval(this.rt); clearInterval(this.di); clearTimeout(this.kt); }
+  openPal = () => { this.setState({ palette: true, pq: '', palIdx: 0 }); setTimeout(() => this.palRef.current && this.palRef.current.focus(), 30); };
+  setEntryStatus(ids, status) { this.setState(s => ({ entries: s.entries.map(e => ids.includes(e.id) ? { ...e, status, updated: 'Just now' } : e) })); }
+  saveEd(status, msg, then) {
+    if (this.state.ed.id === 'e1' && !this.state.conflictDone) { this.setState({ conflict: { status, msg, then }, pubMenu: false }); return; }
+    clearTimeout(this.kt); try { localStorage.removeItem('bk-brew-draft-' + this.state.ed.id); } catch (e) {}
+    this.setState(s => {
+      const ed = { ...s.ed, status, v: s.ed.v + 1 };
+      const exists = s.entries.some(e => e.id === ed.id);
+      const row = { id: ed.id, title: ed.title || 'Untitled', type: ed.type, status, updated: 'Just now', author: 'Ana' };
+      return { ed, dirty: false, localSaved: false, pubMenu: false, history: [{ v: ed.v, t: msg, when: 'now' }, ...s.history].slice(0, 6), entries: exists ? s.entries.map(e => e.id === ed.id ? row : e) : [row, ...s.entries] };
+    });
+    this.toast(msg + ' · v' + (this.state.ed.v + 1));
+    if (then) setTimeout(then, 0);
+  }
+
+  rTick = () => {
+    const s = this.state; if (!s.rLive || !s.rRuns.some(r => r.status === 'Running' || r.status === 'Pending')) return;
+    const runs = JSON.parse(JSON.stringify(s.rRuns)), open = x => x.status !== 'Succeeded' && x.status !== 'Skipped';
+    runs.forEach(r => {
+      if (r.status !== 'Running' && r.status !== 'Pending') return;
+      r.status = 'Running';
+      const a = r.actions.find(open); if (!a) { r.status = 'Succeeded'; r.finished = 'Just now'; return; }
+      if (a.status === 'Pending') { a.status = 'Running'; return; }
+      if (a.status === 'Failed' && a.next > 0) { a.next = Math.max(0, a.next - .7); if (a.next <= 0) a.status = 'Running'; return; }
+      if (a.status !== 'Running') return;
+      a.attempts++; a.ms = 40 + Math.floor(Math.random() * 400);
+      if (a.k === 'slack' && s.rFail) {
+        a.resp = 503; a.err = 'HTTP 503 from hooks.slack.com: service unavailable'; a.retryable = true; a.status = 'Failed';
+        if (a.attempts >= 3) { a.next = 0; const idx = r.actions.indexOf(a); r.actions.forEach((x, i) => { if (i > idx) { x.status = 'Skipped'; x.haltedBy = idx + 1; } }); r.status = r.actions.slice(0, idx).some(x => x.status === 'Succeeded') ? 'PartiallyFailed' : 'Failed'; r.finished = 'Just now'; }
+        else a.next = a.attempts * 2;
+      } else {
+        a.status = 'Succeeded'; a.err = null; a.retryable = null; a.next = 0; a.resp = { slack: 200, purge: 204 }[a.k] || null;
+        if (!r.actions.some(open)) { r.status = 'Succeeded'; r.finished = 'Just now'; }
+      }
+    });
+    this.setState({ rRuns: runs });
+  };
+
+  demos = {
+    'Pages': ['Open', 'Render', [
+      ['/menu', ['→ GET /api/public/pages/menu', '· tree  Home › Menu', '· blocks  hero, menu-list, hours, map', '✓ barakoPress rendered 4 blocks · 31 ms'], ['ok', '/menu is live with 4 blocks']],
+      ['/drafts/new-menu', ['→ GET /api/public/pages/drafts/new-menu', '· status  Draft', '✗ 404 · drafts are never delivered'], ['bad', 'Not public until it is published']]]],
+    'Forms': ['Sender', 'Submit', [
+      ['Real visitor', ['→ POST /api/forms/contact', '· honeypot empty · 6.2 s to fill', '✓ entry created in Contact submissions', '· workflow  notify-owner queued'], ['ok', 'Submission arrived as an entry']],
+      ['Spam bot', ['→ POST /api/forms/contact', '· honeypot filled · 0.4 s to fill', '✗ 422 · spam check failed, nothing stored'], ['bad', 'Refused before it became data']]]],
+    'Files': ['Upload', 'Upload', [
+      ['latte.jpg · 2.4 MB', ['→ POST /api/files', '· stored  /data/files/kape-ana/latte.jpg', '· variants  thumb 320w · card 960w · full 1920w', '✓ 201 · file id f_8k21'], ['ok', 'Three variants ready to use']],
+      ['menu.exe', ['→ POST /api/files', '✗ 415 · type not in Files:AllowedTypes'], ['bad', 'Blocked by the allow-list']]]],
+    'Files · S3': ['Bucket', 'Store', [
+      ['Cloudflare R2', ['· Files:Provider = S3 · endpoint r2', '→ PUT kape-ana/latte.jpg', '✓ 200 · ETag "9f1c…"', '· served by signed URL · 15 min'], ['ok', 'Same Files API, durable bucket']],
+      ['MinIO', ['· Files:Provider = S3 · endpoint minio.local', '→ PUT kape-ana/latte.jpg', '✓ 200 · ETag "a07e…"'], ['ok', 'Any S3-compatible store works']]]],
+    'Import': ['File', 'Import', [
+      ['menu.csv · 24 rows', ['· map  name → title · price → price (money)', '· validate  24 of 24 rows', '✓ 24 entries created as Draft'], ['ok', '24 menu items ready for review']],
+      ['menu-bad.csv', ['· validate  23 of 24 rows', '✗ row 7 · price "abc" is not a number', '· 23 created · report has the 1 rejected row'], ['bad', 'Bad rows are reported, not guessed']]]],
+    'Portability': ['Action', 'Run', [
+      ['Export tenant', ['→ POST /api/portability/export', '· 6 content types · 214 entries · 88 files', '✓ tenant-kape-ana.zip · 41 MB'], ['ok', 'Whole tenant in one archive']],
+      ['Restore to staging', ['→ POST /api/portability/import', '· target tenant  kape-ana-staging', '· ids remapped · references kept', '✓ 214 entries restored'], ['ok', 'A copy to rehearse changes on']]]],
+    'Email · Resend': ['Recipient', 'Send', [
+      ['ana@cafe.example', ['→ Resend  POST /emails', '✓ 200 · id re_71c…', '· webhook  email.delivered'], ['ok', 'Delivered and recorded']],
+      ['old@gone.example', ['→ Resend  POST /emails', '· webhook  email.bounced · hard', '✗ address suppressed for future sends'], ['bad', 'Bounce recorded, address suppressed']]]],
+    'Email · Smtp': ['Relay', 'Send', [
+      ['Postfix', ['→ EHLO api.kape-ana.example', '· STARTTLS', '✓ 250 queued as 4Fq2'], ['ok', 'Sent through your own relay']],
+      ['Wrong password', ['→ EHLO api.kape-ana.example', '✗ 535 authentication failed', '· job retried with backoff · then dead-lettered'], ['bad', 'Fails loudly, retried by the queue']]]],
+    'External sign-in': ['Provider', 'Sign in', [
+      ['Google', ['→ OAuth callback · google', '· email_verified = true', '✓ matched account ana@cafe.example', '· session issued'], ['ok', 'Signed in as Ana']],
+      ['Facebook', ['→ OAuth callback · facebook', '✗ refused · Facebook needs an operator opt-in'], ['bad', 'Off unless an operator allows it']]]],
+    'Device trust': ['Device', 'Sign in', [
+      ['Known laptop', ['· trusted-device cookie valid · 12 days left', '✓ signed in, no second factor'], ['ok', 'Trusted device, straight in']],
+      ['New phone', ['· unknown device', '→ one-time code sent to ana@cafe.example', '✓ code accepted', '· device trusted for 30 days'], ['ok', 'Asked once, then remembered']]]],
+    'Feature flags': ['User', 'Evaluate', [
+      ['Editor · kape-ana', ['· flag  new-editor', '· rule  role Editor · 20% rollout', '· bucket 14 of 100', '✓ on'], ['ok', 'new-editor is on for this user']],
+      ['Viewer · kape-ana', ['· flag  new-editor', '· rule  role Editor · 20% rollout', '✗ off · role does not match'], ['bad', 'new-editor stays off']]]],
+    'Diagnostics': ['Check', 'Run', [
+      ['Full check', ['✓ database · 4 ms', '✓ migrations current', '✓ Erasure:Mode = Delete', '⚠ no mail transport configured', '· core ' + '4.5.0' + ' · 9 modules loaded'], ['bad', '1 warning: email will not send']],
+      ['Version only', ['→ GET /api/modules', '✓ core 4.5.0 · contract v1', '· every module in the supported range'], ['ok', 'Everything is on a supported version']]]],
+    'PWA': ['Visitor', 'Open', [
+      ['Install', ['→ GET /manifest.webmanifest', '· service worker cached 6 shell files', '✓ installed to home screen'], ['ok', 'Kapé Ana is an app icon now']],
+      ['Offline', ['· network unavailable', '→ /menu from cache', '✓ rendered from the offline shell'], ['ok', 'The menu still opens offline']]]],
+    'Analytics · Umami': ['Range', 'Load', [
+      ['Last 7 days', ['→ barakoBrew  GET /api/umami/stats', '· server-side proxy · key never reaches the browser', '✓ 1,284 visits · top page /menu'], ['ok', 'Traffic shown inside barakoBrew']],
+      ['Today', ['→ barakoBrew  GET /api/umami/stats', '✓ 96 visits · 41% from Maps'], ['ok', 'Traffic shown inside barakoBrew']]]],
+    'AI': ['Search', 'Ask', [
+      ['when are you open', ['· embed query · Ollama nomic-embed', '· holiday-hours 0.81 · find-us 0.64 · menu 0.31', '· dropped below 0.4  menu', '✓ 2 results · each re-checked as published'], ['ok', 'Found by meaning, not keywords']],
+      ['staff phone numbers', ['· embed query · Ollama nomic-embed', '· staff.phone is Sensitive · never embedded', '✗ 0 results'], ['bad', 'Sensitive fields cannot surface']]]],
+    'Accounting': ['Case', 'Post', [
+      ['Two invoices at once', ['→ 2 concurrent writes', '· number taken inside the write', '✓ INV-0041 · INV-0042', '· no gap, no duplicate'], ['ok', 'Gapless under concurrent saves']],
+      ['Unbalanced journal', ['· debit 500.00 · credit 450.00', '✗ 422 · entries must balance'], ['bad', 'The write is refused']]]]
+  };
+  runDemo = () => {
+    const cfg = this.demos[this.state.modSel]; if (!cfg) return;
+    const lines = cfg[2][this.state.dCase || 0][1];
+    clearInterval(this.di);
+    const reduced = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (reduced) { this.setState({ dShown: lines.length, dBusy: false }); return; }
+    this.setState({ dShown: 0, dBusy: true });
+    this.di = setInterval(() => this.setState(s => { const n = (s.dShown || 0) + 1; if (n >= lines.length) clearInterval(this.di); return { dShown: n, dBusy: n < lines.length }; }), 420);
+  };
+  flowDef = [
+    { k: 'approve', name: 'Require approvals', sub: 'Action · 2 of Editors', glyph: '#ic-users' },
+    { k: 'slack', name: 'Notify Slack', sub: 'Connector · chat.postMessage', glyph: '#ic-send' },
+    { k: 'publish', name: 'Publish', sub: 'Transition · In review → Published', glyph: '#ic-check-circle' },
+    { k: 'purge', name: 'Purge barakoPress', sub: 'Webhook · tenant:kape-ana', glyph: '#ic-webhook' }
+  ];
+  okLine = { approve: 'approved by Mara, Jun', slack: '200', publish: 'status → Published', purge: '204' };
+  mkRun = (id, entry, when, status, cur, steps) => ({ id, entry, when, status, cur, steps: steps.map(([st, att]) => ({ st, att: att || [], wait: 0 })) });
+  flowTick = () => {
+    const runs = this.state.runs; if (!runs.some(r => r.status === 'Running')) return;
+    const next = JSON.parse(JSON.stringify(runs)), fail = this.state.slackFail;
+    next.forEach(r => {
+      if (r.status !== 'Running') return;
+      const s = r.steps[r.cur], k = this.flowDef[r.cur].k, ms = 30 + Math.floor(Math.random() * 300);
+      if (s.st === 'pending') { s.st = 'running'; return; }
+      if (s.st === 'retry') { s.wait--; if (s.wait <= 0) s.st = 'running'; return; }
+      if (s.st === 'running') {
+        if (k === 'slack' && fail) { s.att.push({ r: '503 Service Unavailable', ms, bad: 1 }); if (s.att.length >= 3) { s.st = 'failed'; r.steps.forEach((x, j) => { if (j > r.cur) x.st = 'skipped'; }); r.status = 'PartiallyFailed'; } else { s.st = 'retry'; s.wait = s.att.length * 2; } }
+        else { s.att.push({ r: this.okLine[k], ms }); s.st = 'ok'; r.cur++; if (r.cur >= this.flowDef.length) { r.cur = this.flowDef.length - 1; r.status = 'Succeeded'; } }
+      }
+    });
+    this.setState({ runs: next });
+  };
+  flowEntries = ['Rainy-day menu', 'Barista workshop', 'New opening hours', 'Ube latte is back'];
+
+  MODS = [
+    ['Pages', '#ic-content', 'Content', 'Pages built from blocks, with a tree and slugs, for barakoPress to render.', '4.5.0', 'Pages', [['Pages', '14'], ['Blocks used', '62'], ['Drafts', '2']], ['Page', 'Path', 'Blocks', 'Status'], [['Home', '/', '7', 'Published'], ['Menu', '/menu', '4', 'Published'], ['Events', '/events', '3', 'Published'], ['New menu', '/drafts/new-menu', '5', 'Draft']], [['Pages:TreeDepth', '4'], ['Delivery', 'public']]],
+    ['Forms', '#ic-field-edit', 'Content', 'Public forms whose submissions arrive as entries, with spam checks.', '4.5.0', 'Forms', [['Forms', '3'], ['Submissions · 30 d', '128'], ['Blocked as spam', '41']], ['Form', 'Submissions', 'Last', 'Spam check'], [['Contact', '86', '12 min ago', 'Honeypot + timing'], ['Newsletter', '39', '1 h ago', 'Honeypot'], ['Catering request', '3', 'Yesterday', 'Honeypot + timing']], [['Forms:MinFillSeconds', '2'], ['Forms:Honeypot', 'on']]],
+    ['Files', '#ic-archive', 'Content', 'Uploads, image variants and a file library on local disk.', '4.3.0', 'Library', [['Files', '312'], ['Storage', '1.8 GB'], ['Variants', '3 per image']], ['File', 'Type', 'Size', 'Used in'], [['latte.jpg', 'image/jpeg', '2.4 MB', 'Menu'], ['menu-2026.pdf', 'application/pdf', '640 KB', 'Find us'], ['roaster.mp4', 'video/mp4', '48 MB', 'Meet our roaster']], [['Files:Provider', 'Local'], ['Files:AllowedTypes', 'image/*, pdf, mp4']]],
+    ['Files · S3', '#ic-database', 'Content', 'Keeps Files in any S3-compatible bucket.', '4.1.2', 'Bucket', [['Bucket', 'kape-ana'], ['Objects', '1,204'], ['Signed URLs', '15 min']], ['Prefix', 'Objects', 'Size', 'Class'], [['images/', '980', '1.6 GB', 'Standard'], ['docs/', '204', '210 MB', 'Standard'], ['video/', '20', '2.1 GB', 'Standard']], [['Files:Provider', 'S3'], ['S3:Endpoint', 'r2.cloudflarestorage.com']]],
+    ['Import', '#ic-table', 'Content', 'Brings entries in from CSV or JSON, mapped to a content type.', '4.2.0', 'Imports', [['Imports', '9'], ['Rows brought in', '1,482'], ['Rows rejected', '6']], ['File', 'Into', 'Rows', 'Result'], [['menu.csv', 'menu-item', '24 of 24', 'Succeeded'], ['events.xlsx', 'event', '11 of 12', 'Partly failed'], ['beans.json', 'article', '8 of 8', 'Succeeded']], [['Import:Status', 'Draft'], ['Import:MaxRows', '10,000']]],
+    ['Portability', '#ic-cube', 'Content', 'Exports and restores a whole tenant: types, entries and files.', '4.4.0', 'Archives', [['Exports', '4'], ['Last export', '41 MB'], ['Restores', '1']], ['Archive', 'Tenant', 'Size', 'When'], [['tenant-kape-ana.zip', 'kape-ana', '41 MB', 'Today 06:00'], ['tenant-kape-ana.zip', 'kape-ana-staging', '40 MB', 'Last week']], [['Portability:IncludeFiles', 'true']]],
+    ['Email · Resend', '#ic-send', 'Comms', 'Sends mail through Resend and records bounces and complaints.', '4.4.0', 'Deliveries', [['Sent · 30 d', '2,140'], ['Delivered', '99.1%'], ['Suppressed', '7']], ['To', 'Subject', 'Status', 'When'], [['ana@cafe.example', 'New contact message', 'Delivered', '12 min ago'], ['old@gone.example', 'Welcome to Kapé Ana', 'Bounced', '1 h ago'], ['lea@cafe.example', 'Entry needs review', 'Delivered', '2 h ago']], [['Email:Provider', 'Resend'], ['Resend:Webhook', '/api/email/resend/webhook']]],
+    ['Email · Smtp', '#ic-envelope', 'Comms', 'Sends mail through any SMTP relay.', '4.0.1', 'Deliveries', [['Relay', 'Postfix'], ['Queued', '0'], ['Failed · 30 d', '2']], ['To', 'Subject', 'Status', 'When'], [['ops@cafe.example', 'Nightly report', 'Sent', '06:00'], ['ana@cafe.example', 'Password reset', 'Sent', 'Yesterday']], [['Smtp:Host', 'mail.cafe.example'], ['Smtp:Port', '587 · STARTTLS']]],
+    ['External sign-in', '#ic-key', 'Access', 'Sign in with Google, GitHub, LinkedIn or Facebook.', '4.3.0', 'Providers', [['Providers on', '3'], ['Linked accounts', '6'], ['Refused · 30 d', '2']], ['Provider', 'Status', 'Accounts', 'Rule'], [['Google', 'On', '4', 'email_verified required'], ['GitHub', 'On', '2', 'verified primary only'], ['LinkedIn', 'On', '0', 'email_verified required'], ['Facebook', 'Off', '0', 'needs operator opt-in']], [['ExternalAuth:Facebook:Allow', 'false']]],
+    ['Device trust', '#ic-shield', 'Access', 'Remembers trusted devices and asks for a second factor on new ones.', '4.2.0', 'Trusted devices', [['Trusted devices', '11'], ['Codes sent · 30 d', '23'], ['Trust lasts', '30 days']], ['User', 'Device', 'Trusted until', 'Last seen'], [['Ana', 'MacBook · Safari', '12 Nov', 'Now'], ['Marco', 'Pixel 8 · Chrome', '3 Nov', 'Yesterday'], ['Lea', 'iPad · Safari', '29 Oct', '3 days ago']], [['DeviceTrust:Days', '30']]],
+    ['Feature flags', '#ic-flag', 'Platform', 'Turns features on per tenant, role or share of users.', '4.1.0', 'Flags', [['Flags', '4'], ['On', '3'], ['Rolling out', '1']], ['Flag', 'Rule', 'Rollout', 'State'], [['new-editor', 'role Editor', '20%', 'On'], ['semantic-search', 'everyone', '100%', 'On'], ['holiday-banner', 'tenant kape-ana', '100%', 'On'], ['beta-blocks', 'role Owner', '0%', 'Off']], [['FeatureFlags:Cache', '30 s']]],
+    ['Diagnostics', '#ic-bug', 'Platform', 'Health, version and configuration checks for operators.', '4.5.0', 'Checks', [['Checks', '4'], ['Warnings', '1'], ['Core', '4.5.0']], ['Check', 'Result', 'Detail', 'Took'], [['Database', 'Pass', 'Postgres 16', '4 ms'], ['Migrations', 'Pass', 'current', '12 ms'], ['Erasure:Mode', 'Pass', 'Delete', '1 ms'], ['Mail transport', 'Warn', 'none configured', '0 ms']], [['Diagnostics:ClientErrors', 'on']]],
+    ['PWA', '#ic-mobile', 'Platform', 'An installable manifest and offline shell for a site.', '4.0.3', 'Installs', [['Installs · 30 d', '58'], ['Offline opens', '140'], ['Shell files', '6']], ['Platform', 'Installs', 'Share', 'Trend'], [['Android', '34', '59%', 'Rising'], ['iOS', '19', '33%', 'Steady'], ['Desktop', '5', '8%', 'Rising']], [['Pwa:ThemeColor', '#B4572E']]],
+    ['Analytics · Umami', '#ic-analytics', 'Insight', 'Shows Umami traffic in barakoBrew through a server-side proxy.', '4.2.1', 'Top pages · 7 days', [['Visits · 7 d', '1,284'], ['Top page', '/menu'], ['From Maps', '41%']], ['Page', 'Views', 'Visitors', 'Share'], [['/menu', '2,210', '980', '38%'], ['/find-us', '1,140', '612', '20%'], ['/events', '720', '390', '12%']], [['Umami:Url', 'stats.cafe.example'], ['Umami:ApiKey', '•••• server only']]],
+    ['AI', '#ic-ai-mark', 'Insight', 'Embeddings, semantic search and Related links, on Ollama or a hosted model.', '4.5.0', 'Recent searches', [['Embedded entries', '214'], ['Searches · 7 d', '390'], ['Model', 'nomic-embed']], ['Query', 'Results', 'Top match', 'Score'], [['when are you open', '2', 'holiday-hours', '0.81'], ['vegan options', '3', 'menu', '0.74'], ['staff phone numbers', '0', 'none', '·']], [['AI:Provider', 'Ollama'], ['AI:MinScore', '0.4']]],
+    ['Accounting', '#ic-coins', 'Business', 'Ledgers and invoices with gapless numbering inside the write.', '4.4.0', 'Invoices', [['Invoices · Oct', '42'], ['Next number', 'INV-0043'], ['Open balance', '₱18,400']], ['Number', 'Customer', 'Amount', 'Status'], [['INV-0042', 'Roasters Co.', '₱6,200', 'Open'], ['INV-0041', 'Baryo Events', '₱12,200', 'Open'], ['INV-0040', 'Lea Santos', '₱850', 'Paid']], [['Accounting:Currency', 'PHP · 2 places']]]
+  ].map(([name, glyph, cat, desc, ver, tableTitle, stats, cols, rows, settings]) => ({ name, glyph, cat, desc, ver, tableTitle, stats, cols, rows, settings, pkg: 'BarakoCMS.' + ({ 'External sign-in': 'ExternalAuth', 'Device trust': 'DeviceTrust', 'Feature flags': 'FeatureFlags', 'PWA': 'Pwa' }[name] || name.replace(/ · /g, '.')) }));
+  MACT = {
+    'Pages': { primary: ['New page', ['Untitled', '/untitled', '0', 'Draft']], row: [['Publish', 'set:3:Published'], ['Move to draft', 'set:3:Draft'], ['Delete page', 'remove']] },
+    'Forms': { primary: ['New form', ['Untitled form', '0', 'Never', 'Honeypot']], row: [['Export submissions', 'toast:Exported submissions as CSV'], ['Delete form', 'remove']] },
+    'Files': { primary: ['Upload', ['photo.jpg', 'image/jpeg', '1.2 MB', 'Not used']], row: [['Regenerate variants', 'toast:Variants queued · thumb, card, full'], ['Delete file', 'remove']] },
+    'Files · S3': { primary: ['Test connection', null, 'toast:PUT and GET a test object · 200 · 84 ms'], row: [['Copy signed URL', 'toast:Signed URL copied · valid 15 min']] },
+    'Import': { primary: ['New import', ['new.csv', 'article', '18 of 18', 'Succeeded']], row: [['Download report', 'toast:Report downloaded'], ['Run again', 'set:3:Succeeded'], ['Remove from list', 'remove']] },
+    'Portability': { primary: ['Export now', ['tenant-kape-ana.zip', 'kape-ana', '41 MB', 'Just now']], row: [['Download', 'toast:Download started'], ['Restore to staging', 'toast:Restore queued into kape-ana-staging']] },
+    'Email · Resend': { primary: ['Send test', ['ana@cafe.example', 'Test message', 'Delivered', 'Just now']], row: [['Send again', 'set:2:Delivered'], ['Remove from suppression', 'toast:Address removed from the suppression list']] },
+    'Email · Smtp': { primary: ['Send test', ['ana@cafe.example', 'Test message', 'Sent', 'Just now']], row: [['Send again', 'set:2:Sent']] },
+    'External sign-in': { row: [['Turn on or off', 'toggle:1']] },
+    'Device trust': { row: [['Revoke trust', 'remove']] },
+    'Feature flags': { primary: ['New flag', ['new-flag', 'everyone', '0%', 'Off']], row: [['Turn on or off', 'toggle:3'], ['Roll out to 50%', 'set:2:50%'], ['Roll out to everyone', 'set:2:100%'], ['Delete flag', 'remove']] },
+    'Diagnostics': { primary: ['Run all checks', null, 'rerun'], row: [['Run this check', 'toast:Check passed · 3 ms']] },
+    'PWA': { row: [['Open install report', 'toast:Install report opened']] },
+    'Analytics · Umami': { row: [['Open in Umami', 'toast:Opened in Umami through the proxy']] },
+    'AI': { primary: ['Reindex', null, 'toast:Reindex queued · 214 Public entries'], row: [['Open top match', 'toast:Opened the matching entry']] },
+    'Accounting': { primary: ['New invoice', ['INV-{n}', 'Walk-in', '₱0', 'Open']], row: [['Mark paid', 'set:3:Paid'], ['Void invoice', 'set:3:Void']] }
+  };
+  modVals(st) {
+    const suite = this.props.suite ?? true, core = ['Pages', 'Forms', 'Files', 'Email · Resend', 'External sign-in', 'Diagnostics', 'Analytics · Umami', 'AI'];
+    const inst = m => suite || core.includes(m.name);
+    const installed = this.MODS.filter(inst), m = installed.find(x => x.name === st.modSel) || installed[0];
+    const tone = t => /^(Published|Succeeded|Delivered|Sent|On|Pass|Paid)$/.test(t) ? ['var(--ok-bg)', 'var(--ok)'] : /^(Bounced|Failed)$/.test(t) ? ['var(--bad-bg)', 'var(--bad)'] : /^(Partly failed|Warn|Open)$/.test(t) ? ['var(--warn-bg)', 'var(--warn)'] : /^(Draft|Off|Void|Never)$/.test(t) ? ['var(--surface2)', 'var(--muted)'] : null;
+    const cfg = this.demos[m.name], ci = st.dCase || 0, c = cfg[2][ci], shown = st.dShown ?? -1;
+    const col = { '→': '#B3A7FF', '✓': '#4FD1B8', '✗': '#FF8A8A', '⚠': '#F2C060', '·': '#8D91B0' };
+    const done = shown >= c[1].length && !st.dBusy, ok = c[2][0] === 'ok';
+    const cats = ['All', 'Content', 'Comms', 'Access', 'Platform', 'Insight', 'Business'];
+    const openMod = name => e => { if (e && e.preventDefault) e.preventDefault(); clearInterval(this.di); this.setState({ screen: 'mod', modSel: name, dCase: 0, dShown: -1, dBusy: false, navOpen: false, mQ: '', mSort: null, mRow: null }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    return {
+      modsOpen: st.modsOpen, modsRot: st.modsOpen ? '0deg' : '-90deg', toggleMods: () => this.setState(s => ({ modsOpen: !s.modsOpen })),
+      modsInstalledCount: installed.length, modsTotal: this.MODS.length,
+      modNav: installed.map(x => { const on = st.screen === 'mod' && x.name === m.name; return { name: x.name, glyph: x.glyph, go: openMod(x.name), cur: on ? 'page' : undefined, fg: on ? 'var(--ink)' : 'var(--muted)', bg: on ? 'var(--surface2)' : 'transparent', weight: on ? 600 : 500, ifg: on ? 'var(--accent)' : 'var(--muted)', warn: x.name === 'Diagnostics' || x.name === 'Email · Resend' }; }),
+      goSuite: e => { e.preventDefault(); this.nav('suite'); }, suiteBg: st.screen === 'suite' ? 'var(--surface2)' : 'transparent',
+      suiteCats: cats.map(k => { const on = st.suiteCat === k; return { label: k, on, count: k === 'All' ? this.MODS.length : this.MODS.filter(x => x.cat === k).length, bg: on ? 'var(--surface)' : 'transparent', fg: on ? 'var(--ink)' : 'var(--muted)', shadow: on ? '0 1px 2px rgba(16,18,35,.12)' : 'none', pick: () => this.setState({ suiteCat: k }) }; }),
+      suiteCards: this.MODS.filter(x => st.suiteCat === 'All' || x.cat === st.suiteCat).map(x => { const i = inst(x); return { name: x.name, glyph: x.glyph, cat: x.cat, desc: x.desc, op: i ? 1 : .78,
+        tileBg: i ? 'var(--accent-soft)' : 'var(--surface2)', tileFg: i ? 'var(--accent-text)' : 'var(--muted)', state: i ? 'Detected' : 'Not installed', sBg: i ? 'var(--ok-bg)' : 'var(--surface2)', sFg: i ? 'var(--ok)' : 'var(--muted)',
+        meta: i ? x.pkg + ' ' + x.ver : 'dotnet add package ' + x.pkg, btn: i ? 'Open' : 'Copy install', btnBg: i ? 'var(--accent)' : 'var(--surface)', btnFg: i ? 'var(--accent-ink)' : 'var(--ink)', btnBorder: i ? 'var(--accent)' : 'var(--line)',
+        act: i ? openMod(x.name) : () => { try { navigator.clipboard.writeText('dotnet add package ' + x.pkg); } catch (e) {} this.toast('Copied: dotnet add package ' + x.pkg + '. Restart the API and its screen appears.'); } }; }),
+      mCols: st.vw < 1180 ? 'minmax(0,1fr)' : 'minmax(0,1.5fr) minmax(320px,1fr)',
+      ...(() => {
+        const rowsAll = st.modRows[m.name] || m.rows, act = this.MACT[m.name] || {}, q = st.mQ.trim().toLowerCase();
+        const setRows = fn => this.setState(s => ({ modRows: { ...s.modRows, [m.name]: fn((s.modRows[m.name] || m.rows).map(r => r.slice())) } }));
+        let list = rowsAll.map((r, i) => ({ r, i })).filter(x => !q || x.r.join(' ').toLowerCase().includes(q));
+        if (st.mSort) { const { c, d } = st.mSort, num = v => parseFloat(String(v).replace(/[^0-9.\-]/g, '')); list = list.slice().sort((a, b) => { const x = a.r[c], y = b.r[c], nx = num(x), ny = num(y); const v = !isNaN(nx) && !isNaN(ny) ? nx - ny : String(x).localeCompare(String(y)); return d * v; }); }
+        const doEff = (eff, i) => { if (!eff) return; const [k, a, b] = eff.split(':');
+          if (k === 'set') { setRows(rs => { rs[i][+a] = b; return rs; }); this.toast(m.cols[+a] + ' → ' + b); }
+          else if (k === 'toggle') { setRows(rs => { rs[i][+a] = rs[i][+a] === 'On' ? 'Off' : 'On'; return rs; }); this.toast('Switched ' + rowsAll[i][0]); }
+          else if (k === 'remove') { const prev = rowsAll; setRows(rs => rs.filter((_, j) => j !== i)); this.setState({ mRow: null }); this.toast('Removed ' + rowsAll[i][0], () => this.setState(s => ({ modRows: { ...s.modRows, [m.name]: prev } }))); }
+          else if (k === 'rerun') { setRows(rs => rs.map(r => r[1] === 'Warn' ? r : [r[0], 'Pass', r[2], (2 + Math.floor(Math.random() * 12)) + ' ms'])); this.toast('All checks re-run · 1 warning remains'); }
+          else if (k === 'toast') this.toast(eff.slice(6)); };
+        const sr = st.mRow != null ? rowsAll[st.mRow] : null;
+        return {
+          mQ: st.mQ, onMQ: e => this.setState({ mQ: e.target.value }),
+          mNow: { ...m, stats: m.stats.map(([l, v]) => ({ l, v })), settings: m.settings.map(([k, v]) => ({ k, v })), grid: 'repeat(' + m.cols.length + ',minmax(0,1fr))', count: rowsAll.length, empty: list.length === 0,
+            hasPrimary: !!act.primary, primaryLabel: act.primary ? act.primary[0] : '',
+            primary: () => { const [lbl, row, eff] = act.primary; if (row) { const n = st.mAdded + 1, r = row.map(x => x.replace('{n}', String(42 + n).padStart(4, '0'))); this.setState(s => ({ mAdded: s.mAdded + 1, modRows: { ...s.modRows, [m.name]: [r, ...(s.modRows[m.name] || m.rows)] } })); this.toast(lbl + ': ' + r[0]); } else doEff(eff, 0); },
+            heads: m.cols.map((t, c) => { const on = st.mSort && st.mSort.c === c; return { t, fg: on ? 'var(--ink)' : 'var(--muted)', arrow: on ? (st.mSort.d > 0 ? '▲' : '▼') : '', sort: () => this.setState(s => ({ mSort: s.mSort && s.mSort.c === c ? (s.mSort.d > 0 ? { c, d: -1 } : null) : { c, d: 1 } })) }; }),
+            rows: list.map(({ r, i }) => ({ bg: st.mRow === i ? 'var(--accent-soft)' : 'transparent', open: () => this.setState({ mRow: i }),
+              cells: r.map((t, j) => { const tn = tone(t), tog = t === 'On' || t === 'Off'; return { t, tog, on: t === 'On', track: t === 'On' ? 'var(--ok)' : 'var(--line)', knob: t === 'On' ? '18px' : '2px', flip: e => { e.stopPropagation(); doEff('toggle:' + j, i); },
+                bg: tn && !tog ? tn[0] : 'transparent', fg: tog ? 'var(--ink2)' : tn ? tn[1] : 'var(--ink)', pad: tn && !tog ? '3px 9px' : '0', fs: tn && !tog ? '12px' : '13.5px', w: j === 0 || tn ? 600 : 400, ff: j === 0 && /[._@/-]/.test(t) ? "'JetBrains Mono',monospace" : 'inherit' }; }) })) },
+          mDrawer: sr ? { open: true, title: sr[0], close: () => this.setState({ mRow: null }),
+            fields: m.cols.map((l, j) => { const tn = tone(sr[j]); return { l, v: sr[j], fg: tn ? tn[1] : 'var(--ink)' }; }),
+            actions: (act.row || []).map(([label, eff], k) => ({ label, go: () => doEff(eff, st.mRow), border: k === 0 ? 'var(--accent)' : eff === 'remove' ? 'var(--bad)' : 'var(--line)', bg: k === 0 ? 'var(--accent-soft)' : 'var(--surface)', fg: k === 0 ? 'var(--accent-text)' : eff === 'remove' ? 'var(--bad)' : 'var(--ink)' })),
+            api: 'GET /api/' + m.pkg.replace('BarakoCMS.', '').toLowerCase().replace(/\./g, '-') + '/' + encodeURIComponent(String(sr[0]).toLowerCase().replace(/[^a-z0-9]+/g, '-')) } : { open: false }
+        }; })(),
+      demoM: { ask: cfg[0], runLabel: cfg[1], idle: shown < 0, busy: !!st.dBusy, btnOp: st.dBusy ? .5 : 1, btn: st.dBusy ? 'Running…' : done ? 'Run again' : cfg[1], run: this.runDemo,
+        lines: shown < 0 ? [] : c[1].slice(0, shown).map(x => ({ m: x[0], t: x.slice(2), c: col[x[0]] || '#8D91B0' })),
+        done, rText: c[2][1], rMark: ok ? '✓' : '✗', rBg: ok ? 'var(--ok-bg)' : 'var(--warn-bg)', rFg: ok ? 'var(--ok)' : 'var(--warn)',
+        opts: cfg[2].map((o, i) => { const on = i === ci; return { l: o[0], on, border: on ? 'var(--accent)' : 'var(--line)', bg: on ? 'var(--accent-soft)' : 'var(--surface)', fg: on ? 'var(--accent-text)' : 'var(--ink)', pick: () => { clearInterval(this.di); this.setState({ dCase: i, dShown: -1, dBusy: false }); } }; }) }
+    };
+  }
+  rFire(wf, entry) {
+    const ents = ['Rainy-day menu', 'Barista workshop', 'Ube latte is back', 'New opening hours'], id = 'run_' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const acts = wf.steps.map(([type, label]) => ({ type, label, k: label === 'Post to Slack' ? 'slack' : label === 'Purge barakoPress' ? 'purge' : 'x', status: 'Pending', attempts: 0, ms: null, resp: null, err: null, retryable: null, next: 0, haltedBy: null }));
+    this.setState(s => ({ rN: s.rN + 1, rSel: id, rFilter: 'All', rLive: true, rRuns: [{ id, wf: wf.name, entry: entry || ents[s.rN % ents.length], ctype: wf.trigger.split(' ')[0].toLowerCase(), cid: 'c_' + Math.random().toString(16).slice(2, 6), trigger: wf.trigger, status: 'Pending', started: 'Just now', finished: null, actions: acts }, ...s.rRuns].slice(0, 8) }));
+  }
+  rRetry(runId, i) {
+    this.setState(s => ({ rAsk: null, rRuns: s.rRuns.map(r => { if (r.id !== runId) return r; const c = JSON.parse(JSON.stringify(r)); c.actions[i].status = 'Pending'; c.actions[i].next = 0; c.actions.forEach((x, j) => { if (j > i && x.status === 'Skipped') { x.status = 'Pending'; x.haltedBy = null; } }); c.status = 'Running'; c.finished = null; return c; }) }));
+    this.toast('Queued that action to run again.');
+  }
+  rCancel(runId) {
+    this.setState(s => ({ rAsk: null, rRuns: s.rRuns.map(r => { if (r.id !== runId) return r; const c = JSON.parse(JSON.stringify(r)); c.actions.forEach(x => { if (x.status === 'Running') { x.status = 'Succeeded'; x.attempts++; x.ms = 120; } else if (x.status === 'Pending' || x.status === 'Failed') { x.status = 'Cancelled'; x.next = 0; } }); c.status = 'Cancelled'; c.finished = 'Just now'; return c; }) }));
+    this.toast('Run cancelled. An action already out finishes and is recorded.');
+  }
+  runVals(st) {
+    const RS = { Succeeded: ['var(--ok-bg)', 'var(--ok)'], Running: ['var(--accent-soft)', 'var(--accent-text)'], Pending: ['var(--surface2)', 'var(--muted)'], Failed: ['var(--bad-bg)', 'var(--bad)'], PartiallyFailed: ['var(--warn-bg)', 'var(--warn)'], Cancelled: ['var(--surface2)', 'var(--muted)'], Unknown: ['var(--warn-bg)', 'var(--warn)'], Skipped: ['var(--surface2)', 'var(--muted)'] };
+    const label = x => x === 'PartiallyFailed' ? 'Partly failed' : x;
+    const kindOf = a => a.status !== 'Failed' || a.next > 0 ? null : a.retryable === true ? 'temporary' : a.retryable === false ? 'permanent' : null;
+    const runKind = r => { const k = r.actions.map(a => a.status === 'Failed' ? (a.retryable === false ? 'permanent' : a.retryable ? 'temporary' : null) : null); return k.includes('permanent') ? 'permanent' : k.includes('temporary') ? 'temporary' : null; };
+    const KS = { temporary: ['Temporary', 'var(--warn)'], permanent: ['Permanent', 'var(--bad)'] };
+    const dur = ms => ms == null ? 'not recorded' : ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
+    const dotC = a => a.status === 'Succeeded' ? 'var(--ok)' : a.status === 'Failed' ? (a.next > 0 ? 'var(--warn)' : 'var(--bad)') : a.status === 'Unknown' ? 'var(--warn)' : a.status === 'Running' ? 'var(--accent)' : 'var(--line)';
+    const filters = ['All', 'Running', 'Failed', 'PartiallyFailed', 'Succeeded', 'Cancelled'];
+    const rows = st.rRuns.filter(r => st.rFilter === 'All' || r.status === st.rFilter || (st.rFilter === 'Running' && r.status === 'Pending'));
+    const sel = st.rRuns.find(r => r.id === st.rSel) || st.rRuns[0];
+    const stopped = sel.status === 'Cancelled', allows = !stopped;
+    const note = sel.status === 'Running' || sel.status === 'Pending' ? 'Live. This view follows the runner as it writes the run. An action that fails with a temporary error is attempted again on its own, with backoff, before anyone is asked.'
+      : sel.actions.some(a => a.status === 'Unknown') ? 'Slack timed out, so the message may already have posted. A retry sends the same idempotency key, so a receiver that honours it drops the duplicate. Accepting that risk is a decision only a person can make.'
+      : sel.status === 'PartiallyFailed' ? 'Some actions already went out, so this is not a plain failure. Retrying the failed action continues the run from there; the ones that succeeded are not sent again.'
+      : sel.status === 'Failed' && runKind(sel) === 'permanent' ? 'A permanent failure will not fix itself by retrying. Fix the cause first; a retry then asks you to confirm.'
+      : sel.status === 'Cancelled' ? 'Cancelled. Actions that had not started did not run. A cancelled run cannot be retried.'
+      : 'Every action succeeded. Nothing can be retried, because sending a succeeded action again is the duplicate the idempotency key exists to prevent.';
+    const rk = runKind(sel);
+    return {
+      rCols: st.vw < 1180 ? 'minmax(0,1fr)' : 'minmax(320px,420px) minmax(0,1fr)',
+      rLive: st.rLive, rLiveLabel: st.rLive ? 'Live' : 'Paused', rLiveDot: st.rLive ? 'var(--ok)' : 'var(--muted)', rLiveAnim: st.rLive ? 'pulse 1.4s ease-in-out infinite' : 'none',
+      rLiveToggle: () => this.setState(s => ({ rLive: !s.rLive })),
+      rFail: st.rFail, rFailTrack: st.rFail ? 'var(--bad)' : 'var(--line)', rFailKnob: st.rFail ? '14px' : '2px', rFailToggle: () => this.setState(s => ({ rFail: !s.rFail })),
+      ...(() => { const w = st.wfs.find(x => x.id === st.wfSel), rs = st.rRuns.filter(r => r.wf === w.name), done = rs.filter(r => !['Running', 'Pending'].includes(r.status)), ok = done.filter(r => r.status === 'Succeeded').length;
+        const durs = rs.flatMap(r => r.actions.map(a => a.ms || 0)).filter(Boolean), avg = durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : 0;
+        return { wfNoRuns: rs.length === 0,
+          wfHealth: [{ l: 'Runs here', v: String(rs.length), c: 'var(--ink)' }, { l: 'Succeeded', v: done.length ? Math.round(ok / done.length * 100) + '%' : '-', c: done.length && ok === done.length ? 'var(--ok)' : 'var(--warn)' }, { l: 'Avg. action', v: avg ? (avg < 1000 ? Math.round(avg) + ' ms' : (avg / 1000).toFixed(1) + ' s') : '-', c: 'var(--ink)' }],
+          wfRuns: rs.slice(0, 5).map(r => ({ entry: r.entry, started: r.started, status: label(r.status), sBg: RS[r.status][0], sFg: RS[r.status][1], dots: r.actions.map(a => ({ c: dotC(a) })), open: () => this.setState({ screen: 'runs', rSel: r.id, rFilter: 'All' }) })) }; })(),
+      goRuns: e => { if (e && e.preventDefault) e.preventDefault(); this.nav('runs'); },
+      health: st.wfs.filter(w => w.on).map(w => {
+        const hist = { 'Notify Slack': 'SSSSFSSSS', 'Two-step approval': 'SSSSSSSSS', 'Welcome email': 'SSSSSSSSS', 'Publish and announce': 'SSSFSSS' }[w.name] || '';
+        const live = st.rRuns.filter(r => r.wf === w.name).slice().reverse().map(r => r.status === 'Succeeded' ? 'S' : r.status === 'Failed' ? 'F' : r.status === 'PartiallyFailed' ? 'P' : r.status === 'Cancelled' ? 'C' : 'R');
+        const seq = (hist.split('').concat(live)).slice(-10), done = seq.filter(x => x !== 'R'), ok = done.filter(x => x === 'S').length;
+        const col = { S: 'var(--ok)', F: 'var(--bad)', P: 'var(--warn)', C: 'var(--line)', R: 'var(--accent)' }, tl = { S: 'Succeeded', F: 'Failed', P: 'Partly failed', C: 'Cancelled', R: 'Running' };
+        const latest = st.rRuns.find(r => r.wf === w.name), lastS = latest ? latest.status : 'Succeeded', rate = done.length ? Math.round(ok / done.length * 100) : 100;
+        return { name: w.name, trigger: w.trigger, bars: seq.map(x => ({ c: col[x], h: x === 'S' ? '22px' : x === 'R' ? '14px' : '18px', t: tl[x] })), rate: rate + '%', rateC: rate >= 90 ? 'var(--ok)' : rate >= 70 ? 'var(--warn)' : 'var(--bad)',
+          last: label(lastS), sBg: RS[lastS][0], sFg: RS[lastS][1], open: () => this.setState({ screen: 'runs', rSel: latest ? latest.id : st.rSel, rFilter: 'All' }) }; }),
+      rTrigger: () => { const id = 'run_' + Math.random().toString(36).slice(2, 6).toUpperCase(), ents = ['Rainy-day menu', 'Barista workshop', 'Ube latte is back', 'New opening hours'], entry = ents[st.rN % ents.length];
+        const A = (type, l, k) => ({ type, label: l, k, status: 'Pending', attempts: 0, ms: null, resp: null, err: null, retryable: null, next: 0, haltedBy: null });
+        this.setState(s => ({ rN: s.rN + 1, rSel: id, rFilter: 'All', rLive: true, rRuns: [{ id, wf: 'Publish and announce', entry, ctype: 'article', cid: 'c_' + Math.random().toString(16).slice(2, 6), trigger: 'Article → In review', status: 'Pending', started: 'Just now', finished: null, actions: [A('RequireApproval', 'Editors approve', 'approve'), A('HttpRequest', 'Post to Slack', 'slack'), A('Transition', 'Publish', 'publish'), A('HttpRequest', 'Purge barakoPress', 'purge')] }, ...s.rRuns].slice(0, 7) })); },
+      rFilters: filters.map(f => { const on = st.rFilter === f; return { label: f === 'All' ? 'Every status' : label(f), on, count: f === 'All' ? st.rRuns.length : st.rRuns.filter(r => r.status === f || (f === 'Running' && r.status === 'Pending')).length, bg: on ? 'var(--surface)' : 'transparent', fg: on ? 'var(--ink)' : 'var(--muted)', shadow: on ? '0 1px 2px rgba(16,18,35,.12)' : 'none', pick: () => this.setState({ rFilter: f }) }; }),
+      rEmpty: rows.length === 0, rFilterName: label(st.rFilter).toLowerCase(),
+      rRows: rows.map(r => { const on = r.id === sel.id, k = runKind(r); return { id: r.id, wf: r.wf, entry: r.entry, trigger: r.trigger, started: r.started, status: label(r.status), on, sBg: RS[r.status][0], sFg: RS[r.status][1], anim: r.status === 'Running' ? 'pulse 1s ease-in-out infinite' : 'none', kind: k ? KS[k][0] : '', kFg: k ? KS[k][1] : 'transparent', border: on ? 'var(--accent)' : 'transparent', bg: on ? 'var(--accent-soft)' : 'transparent', dots: r.actions.map(a => ({ c: dotC(a) })), pick: () => { this.wantRunScroll = st.vw < 1180; this.setState({ rSel: r.id }); } }; }),
+      rSel: { wf: sel.wf, status: label(sel.status) + (rk ? ' · ' + KS[rk][0] : ''), sBg: RS[sel.status][0], sFg: RS[sel.status][1], note,
+        canCancel: sel.status === 'Running' || sel.status === 'Pending',
+        askCancel: () => this.setState({ rAsk: { kind: 'cancel', run: sel.id } }),
+        facts: [['Trigger', sel.trigger], ['Content type', sel.ctype], ['Content', sel.entry + ' · ' + sel.cid], ['Started', sel.started], ...(sel.finished ? [['Finished', sel.finished]] : []), ['Runs on', 'built-in runner'], ['Run', sel.id]].map(([l, v]) => ({ l, v })),
+        actions: sel.actions.map((a, i) => { const k = kindOf(a), c = RS[a.status] || RS.Pending, last = i === sel.actions.length - 1;
+          const mark = { Succeeded: '✓', Failed: a.next > 0 ? '↻' : '✕', Unknown: '?', Skipped: '-', Cancelled: '-' }[a.status] || String(i + 1);
+          const circ = { Succeeded: ['var(--ok)', '#fff', 'var(--ok)'], Failed: a.next > 0 ? ['var(--warn-bg)', 'var(--warn)', 'var(--warn)'] : ['var(--bad)', '#fff', 'var(--bad)'], Unknown: ['var(--warn-bg)', 'var(--warn)', 'var(--warn)'], Running: ['var(--accent-soft)', 'var(--accent-text)', 'var(--accent)'] }[a.status] || ['var(--surface)', 'var(--muted)', 'var(--line)'];
+          const facts = [];
+          if (a.attempts) { facts.push(['Attempts', String(a.attempts)]); facts.push(['Took', dur(a.ms)]); }
+          if (a.resp != null) facts.push(['Response', String(a.resp), a.resp >= 400 ? 'var(--bad)' : '']);
+          if (a.next > 0) facts.push(['Next attempt', 'in ' + a.next.toFixed(1) + ' s', 'var(--warn)']);
+          if (['Pending', 'Running', 'Failed'].includes(a.status)) facts.push(['If it fails', 'Stops the run']);
+          if (a.haltedBy) facts.push(['Skipped because', 'action ' + a.haltedBy + ' failed']);
+          const canRetry = allows && sel.status !== 'Running' && sel.status !== 'Pending' && (a.status === 'Failed' || a.status === 'Unknown');
+          return { type: a.type, label: a.label, status: a.status === 'Failed' && a.next > 0 ? 'Failed · retrying' : a.status, sBg: c[0], sFg: c[1], kind: k ? KS[k][0] : '', kFg: k ? KS[k][1] : 'transparent',
+            mark, cBg: circ[0], cFg: circ[1], cRing: circ[2], anim: a.status === 'Running' ? 'pulse 1s ease-in-out infinite' : 'none', line: last ? 'transparent' : 'var(--line)', border: a.status === 'Running' ? 'var(--accent)' : 'var(--line)',
+            hasFacts: facts.length > 0, facts: facts.map(([l, v, col]) => ({ l, v, c: col || 'var(--ink2)' })), err: a.err || '',
+            canRetry, retryAria: 'Retry action ' + (i + 1) + ', ' + a.type,
+            retry: () => { if (k === 'permanent' || a.status === 'Unknown') this.setState({ rAsk: { kind: a.status === 'Unknown' ? 'unknown' : 'permanent', run: sel.id, i } }); else this.rRetry(sel.id, i); } }; }) },
+      rAsk: (() => { const q = st.rAsk; if (!q) return { open: false };
+        const t = q.kind === 'cancel' ? ['Cancel this ' + sel.wf + ' run?', 'Actions that have not started will not run. One already out finishes and its outcome is kept. A cancelled run cannot be retried.', 'Yes, cancel the run', 'var(--bad)']
+          : q.kind === 'unknown' ? ['Retry an action whose outcome is unknown?', 'The first request may have arrived. Retrying sends the same idempotency key; a receiver that ignores it could post twice.', 'Retry anyway', 'var(--accent)']
+          : ['Retry action ' + (q.i + 1) + ', ' + sel.actions[q.i].type + '?', 'This failure will not fix itself by retrying. Retry anyway?', 'Retry anyway', 'var(--accent)'];
+        return { open: true, title: t[0], body: t[1], cta: t[2], btnBg: t[3], no: () => this.setState({ rAsk: null }), stop: e => e.stopPropagation(), yes: () => q.kind === 'cancel' ? this.rCancel(q.run) : this.rRetry(q.run, q.i) }; })()
+    };
+  }
+
+  renderVals() {
+    const st = this.state;
+    const SC = { Published: ['var(--ok-bg)', 'var(--ok)'], Scheduled: ['var(--accent-soft)', 'var(--accent-text)'], Draft: ['var(--surface2)', 'var(--ink2)'], 'In review': ['var(--warn-bg)', 'var(--warn)'], Archived: ['var(--surface2)', 'var(--muted)'], Succeeded: ['var(--ok-bg)', 'var(--ok)'], Failed: ['var(--bad-bg)', 'var(--bad)'], Off: ['var(--surface2)', 'var(--muted)'], 'Partly failed': ['var(--warn-bg)', 'var(--warn)'], Running: ['var(--accent-soft)', 'var(--accent-text)'], Live: ['var(--ok-bg)', 'var(--ok)'], 'Checking DNS': ['var(--warn-bg)', 'var(--warn)'] };
+    const seg = (on) => ({ bg: on ? 'var(--surface)' : 'transparent', fg: on ? 'var(--ink)' : 'var(--muted)', shadow: on ? '0 1px 2px rgba(16,18,35,.12)' : 'none' });
+    const tenants = [{ name: 'Kapé Ana', ini: 'KA', role: 'Owner' }, { name: 'Baryo Dev', ini: 'BD', role: 'Editor' }, { name: 'RC Koronadal', ini: 'RK', role: 'Viewer' }];
+    const screens = [['overview', 'Overview'], ['entries', 'Entries'], ['types', 'Content types'], ['workflows', 'Workflows'], ['runs', 'Workflow runs'], ['analytics', 'Analytics'], ['settings', 'Site settings']];
+    const navScreen = st.screen === 'editor' ? 'entries' : st.screen;
+    const modV = this.modVals(st);
+    const mult = { 7: .26, 30: 1, 90: 2.9 }[st.range];
+    const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.round(n));
+
+    const eq = st.eq.trim().toLowerCase();
+    const byType = st.entries.filter(e => st.etype === 'all' || e.type === st.etype);
+    const rows = byType.filter(e => (st.estatus === 'All' || e.status === st.estatus) && (!eq || (e.title + e.author).toLowerCase().includes(eq)));
+    const selIds = Object.keys(st.sel).filter(k => st.sel[k]);
+
+    const tdef = st.types[st.typeSel];
+    const groups = [['Text', ['string', 'text', 'richtext', 'markdown', 'slug']], ['Numbers', ['integer', 'decimal', 'money', 'percentage']], ['Time', ['date', 'datetime', 'time']], ['Structured', ['json', 'array', 'reference', 'media', 'select']], ['Checked on write', ['email', 'url', 'phone']]];
+    const updType = fn => this.setState(s => ({ types: { ...s.types, [s.typeSel]: { ...s.types[s.typeSel], fields: fn(s.types[s.typeSel].fields) } } }));
+
+    const wf = st.wfs.find(w => w.id === st.wfSel);
+    const seed = (i) => { const x = Math.sin(i * 12.9898 + st.range) * 43758.5453; return x - Math.floor(x); };
+    const nBars = st.range === 7 ? 7 : st.range === 30 ? 30 : 45;
+    const vals = Array.from({ length: nBars }, (_, i) => Math.round((380 + 260 * Math.sin(i / 3.1) + 340 * seed(i)) * (st.range === 90 ? 2 : 1)));
+    const max = Math.max(...vals);
+    const ed = st.ed;
+    const role = tenants[st.tenant].role, narrow = st.vw < 1000;
+    const life = ['Draft', 'In review', 'Scheduled', 'Published'], curIdx = life.indexOf(ed.status);
+    const pal = [...screens.map(([k, l]) => ({ label: l, kind: 'Screen', go: this.go(k) })), ...st.entries.map(e => ({ label: e.title, kind: e.type, go: () => this.setState({ screen: 'editor', palette: false, ed: { ...st.ed, id: e.id, title: e.title, type: e.type, status: e.status, slug: e.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') } }) })), { label: 'Toggle dark mode', kind: 'Action', go: () => { this.toggleTheme(); this.setState({ palette: false }); } }]
+      .filter(p => !st.pq || p.label.toLowerCase().includes(st.pq.toLowerCase())).slice(0, 9);
+    this.toggleTheme = () => { const t = st.theme === 'dark' ? 'light' : 'dark'; this.persist('bk-brew-theme', t); this.setState({ theme: t }); };
+
+    return {
+      theme: st.theme, themeLabel: st.theme === 'dark' ? 'Light' : 'Dark', toggleTheme: this.toggleTheme,
+      brewVer: (this.props.showSyncFields ?? true) ? '{brew.Version}' : '1.6.0',
+      isSignin: st.screen === 'signin', isApp: st.screen !== 'signin',
+      signLabel: st.signing ? 'Signing in…' : 'Sign in',
+      signIn: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ signing: true }); setTimeout(() => { this.setState({ signing: false, screen: 'overview' }); this.toast('Signed in to Kapé Ana'); }, 650); },
+      signOut: () => this.setState({ screen: 'signin' }),
+      isOverview: st.screen === 'overview', isEntries: st.screen === 'entries', isEditor: st.screen === 'editor', isTypes: st.screen === 'types', isWorkflows: st.screen === 'workflows', isRuns: st.screen === 'runs', isSuite: st.screen === 'suite', isMod: st.screen === 'mod', isAnalytics: st.screen === 'analytics', isSettings: st.screen === 'settings',
+      tenant: tenants[st.tenant], tenantOpen: st.tenantOpen, toggleTenant: () => this.setState(s => ({ tenantOpen: !s.tenantOpen })),
+      tenants: tenants.map((t, i) => ({ ...t, bg: i === st.tenant ? 'var(--accent-soft)' : 'transparent', mark: i === st.tenant ? '✓' : '', pick: () => { this.setState({ tenant: i, tenantOpen: false }); this.toast('Token re-issued for ' + t.name); } })),
+      nav: screens.map(([k, l]) => { const on = navScreen === k; return { label: l, go: this.go(k), cur: on ? 'page' : undefined, fg: on ? 'var(--ink)' : 'var(--muted)', bg: on ? 'var(--surface2)' : 'transparent', weight: on ? 600 : 500, icon: { overview: '#ic-dashboard', entries: '#ic-content', types: '#ic-content-types', workflows: '#ic-workflows', runs: '#ic-history', analytics: '#ic-analytics', settings: '#ic-settings' }[k], ifg: on ? 'var(--accent)' : 'var(--muted)', count: k === 'entries' ? st.entries.length : k === 'workflows' ? st.wfs.filter(w => w.on).length : k === 'runs' ? (st.rRuns.filter(r => r.status === 'Failed' || r.status === 'PartiallyFailed').length || '') : '' }; }),
+      openPalette: this.openPal, paletteOpen: st.palette, closePalette: () => this.setState({ palette: false }), palRef: this.palRef,
+      pq: st.pq, onPq: e => this.setState({ pq: e.target.value, palIdx: 0 }),
+      palKey: e => { if (e.key === 'ArrowDown') { e.preventDefault(); this.setState(s => ({ palIdx: Math.min(s.palIdx + 1, pal.length - 1) })); } if (e.key === 'ArrowUp') { e.preventDefault(); this.setState(s => ({ palIdx: Math.max(s.palIdx - 1, 0) })); } if (e.key === 'Enter' && pal[st.palIdx]) pal[st.palIdx].go(); },
+      palItems: pal.map((p, i) => ({ ...p, bg: i === st.palIdx ? 'var(--surface2)' : 'transparent' })),
+
+      ranges: [7, 30, 90].map(r => ({ label: r + ' days', ...seg(st.range === r), pick: () => this.setState({ range: r }) })),
+      stats: [['Published', 42 * mult, '+12%', 1], ['Drafts', Math.max(3, 9 * mult / 2), '−3', 1], ['Workflow runs', 318 * mult, '+8%', 1], ['Failures', st.needs.some(n => n.id === 2) ? 2 : 0, st.needs.some(n => n.id === 2) ? 'Needs you' : 'None', 0]].map(([label, v, delta, good], si) => ({ label, value: fmt(v), delta, dfg: good ? 'var(--ok)' : (delta === 'None' ? 'var(--ok)' : 'var(--bad)'),
+        go: [() => this.setState({ screen: 'entries', estatus: 'Published' }), () => this.setState({ screen: 'entries', estatus: 'Draft' }), () => this.setState({ screen: 'runs', rFilter: 'All' }), () => this.setState({ screen: 'runs', rFilter: 'PartiallyFailed' })][si],
+        spark: Array.from({ length: 12 }, (_, i) => { const x = Math.sin((i + 1) * (si + 2) * 1.7 + st.range) * .5 + .5, last = i === 11; return { h: Math.round(8 + x * 26) + 'px', c: last ? (si === 3 ? 'var(--bad)' : 'var(--accent)') : (si === 3 ? 'var(--bad-bg)' : 'var(--accent-soft)') }; }) })),
+      quick: [['New entry', '#ic-plus', () => this.setState({ screen: 'editor', dirty: false, ed: { ...st.ed, id: 'n' + Date.now(), title: '', slug: 'untitled', summary: '', body: '', status: 'Draft', v: 0 } })], ['Fire a workflow', '#ic-play', () => { this.rFire(st.wfs.find(w => w.id === 'w5')); this.nav('runs'); }], ['Upload a file', '#ic-archive', () => this.setState({ screen: 'mod', modSel: 'Files', mRow: null })], ['Site settings', '#ic-settings', () => this.nav('settings')]].map(([t, icon, go]) => ({ t, icon, go })),
+      sys: [['API', 'api.cafe.example · 4.5.0', 'var(--ok)'], ['Modules', (this.props.suite ?? true) ? '16 detected' : '8 detected', 'var(--ok)'], ['Diagnostics', '1 warning · mail transport', 'var(--warn)'], ['Runner', st.rRuns.some(r => r.status === 'Running') ? 'running a workflow' : 'idle', st.rRuns.some(r => r.status === 'Running') ? 'var(--accent)' : 'var(--ok)']].map(([l, v, c]) => ({ l, v, c, go: l === 'Diagnostics' ? () => this.setState({ screen: 'mod', modSel: 'Diagnostics', mRow: null }) : l === 'Runner' ? this.go('runs') : l === 'Modules' ? this.go('suite') : () => {} })),
+      needsCount: st.needs.length, needsEmpty: st.needs.length === 0,
+      needs: st.needs.map(n => ({ ...n, dot: { sch: 'var(--accent)', bad: 'var(--bad)', warn: 'var(--warn)' }[n.k], act: this.go(n.to),
+        done: () => { const prev = st.needs; this.setState({ needs: prev.filter(x => x.id !== n.id) }); this.toast('Resolved: ' + n.t, () => this.setState({ needs: prev })); } })),
+      activity: st.activity.map(([time, who, what]) => ({ time, who, what })),
+      toggleLive: () => this.setState(s => ({ live: !s.live })), liveLabel: st.live ? 'Live' : 'Paused', liveDot: st.live ? 'var(--ok)' : 'var(--muted)', liveAnim: st.live ? 'pulse 1.6s ease-in-out infinite' : 'none',
+
+      newEntry: () => this.setState({ screen: 'editor', dirty: false, ed: { id: 'n' + Date.now(), title: '', type: st.etype === 'all' ? 'article' : st.etype, slug: 'untitled', summary: '', body: '', at: '', status: 'Draft', v: 0 }, history: [] }),
+      typeTabs: [['all', 'All'], ['article', 'Articles'], ['page', 'Pages'], ['event', 'Events']].map(([k, l]) => ({ label: l, ...seg(st.etype === k), pick: () => this.setState({ etype: k }) })),
+      statusChips: ['All', 'Draft', 'In review', 'Scheduled', 'Published', 'Archived'].map(c => { const on = st.estatus === c; return { label: c, count: c === 'All' ? byType.length : byType.filter(e => e.status === c).length, bg: on ? 'var(--ink)' : 'var(--surface)', fg: on ? 'var(--bg)' : 'var(--ink)', border: on ? 'var(--ink)' : 'var(--line)', pick: () => this.setState({ estatus: c }) }; }),
+      eq: st.eq, onEq: e => this.setState({ eq: e.target.value }),
+      rows: rows.map(e => { const sel = !!st.sel[e.id]; return { ...e, sel, sbg: SC[e.status][0], sfg: SC[e.status][1], bg: sel ? 'var(--accent-soft)' : 'transparent', cb: sel ? 'var(--accent)' : 'var(--line)', cbg: sel ? 'var(--accent)' : 'transparent', mark: sel ? '✓' : '',
+        check: () => this.setState(s => ({ sel: { ...s.sel, [e.id]: !s.sel[e.id] } })),
+        open: ev => { ev.preventDefault(); this.setState({ screen: 'editor', dirty: false, ed: { ...st.ed, id: e.id, title: e.title, type: e.type, status: e.status, slug: e.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') } }); } }; }),
+      rowsEmpty: rows.length === 0, hasSel: selIds.length > 0, selCount: selIds.length,
+      bulkPublish: () => { this.setEntryStatus(selIds, 'Published'); this.setState({ sel: {} }); this.toast(selIds.length + ' published'); },
+      bulkArchive: () => { const prev = st.entries; this.setEntryStatus(selIds, 'Archived'); this.setState({ sel: {} }); this.toast(selIds.length + ' archived', () => this.setState({ entries: prev })); },
+      clearSel: () => this.setState({ sel: {} }),
+
+      ed: { ...ed, sbg: SC[ed.status][0], sfg: SC[ed.status][1] }, goEntries: this.go('entries'),
+      dirtyLabel: st.dirty ? (st.localSaved ? 'Unsaved · kept on this device' : 'Unsaved changes') : 'All changes saved', dirtyFg: st.dirty ? 'var(--warn)' : 'var(--muted)',
+      setTitle: e => { const t = e.target.value; this.keepLocal(); this.setState(s => ({ dirty: true, localSaved: false, ed: { ...s.ed, title: t, slug: t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled' } })); },
+      setSummary: e => { const v = e.target.value; this.keepLocal(); this.setState(s => ({ dirty: true, localSaved: false, ed: { ...s.ed, summary: v } })); },
+      setBody: e => { const v = e.target.value; this.keepLocal(); this.setState(s => ({ dirty: true, localSaved: false, ed: { ...s.ed, body: v } })); },
+      setAt: e => { const v = e.target.value; this.keepLocal(); this.setState(s => ({ dirty: true, localSaved: false, ed: { ...s.ed, at: v } })); },
+      saveDraft: () => this.saveEd('Draft', 'Saved draft'),
+      schedule: () => { if (!ed.at) { this.toast('Pick a publish time first'); return; } this.saveEd('Scheduled', 'Scheduled'); },
+      publish: () => this.saveEd('Published', 'Published'),
+      publishQuiet: () => this.saveEd('Published', 'Published without notifying'),
+      pubMenu: st.pubMenu, togglePubMenu: () => this.setState(s => ({ pubMenu: !s.pubMenu })),
+      cantPublish: role !== 'Owner', pubOpacity: role !== 'Owner' ? .45 : 1,
+      publishTitle: role === 'Owner' ? 'Publish now' : role === 'Editor' ? 'Editors send for review; the Owner publishes' : 'Viewers cannot change entries',
+      onPublish: st.wfs.filter(w => /Published/.test(w.trigger)).map(w => ({ name: w.name, state: w.on ? 'will run' : 'paused', dot: w.on ? 'var(--ok)' : 'var(--muted)', go: this.go('workflows') })),
+      lifecycle: life.map((label, i) => {
+        const cur = i === curIdx, past = i < curIdx;
+        let reason = '';
+        if (role === 'Viewer') reason = 'Viewers cannot change status';
+        else if (label === 'Published' && role !== 'Owner') reason = 'Needs the Owner (Two-step approval)';
+        else if (label === 'Scheduled' && !ed.at) reason = 'Pick a publish time first';
+        const disabled = !!reason && !cur;
+        return { label, cur: cur ? 'step' : undefined, reason: reason || (cur ? 'Current status' : 'Move to ' + label), disabled, op: disabled ? .5 : 1, cursor: disabled ? 'not-allowed' : 'pointer',
+          border: cur ? 'var(--accent)' : 'var(--line)', bg: cur ? 'var(--accent-soft)' : 'var(--surface)', fg: cur ? 'var(--accent-text)' : 'var(--ink2)',
+          dotBg: cur ? 'var(--accent)' : past ? 'var(--ok)' : 'var(--surface2)', dotFg: cur || past ? '#fff' : 'var(--muted)', mark: past ? '✓' : String(i + 1), arrow: i < life.length - 1 ? 'inline' : 'none',
+          pick: () => { if (disabled || cur) return; this.setState(s => ({ dirty: true, ed: { ...s.ed, status: label } })); this.keepLocal(); } };
+      }),
+      roleNote: 'Signed in as ' + role,
+      leaveOpen: !!st.pendingNav,
+      leaveStay: () => this.setState({ pendingNav: null }),
+      leaveDiscard: () => { try { localStorage.removeItem('bk-brew-draft-' + ed.id); } catch (e) {} const to = st.pendingNav; this.setState({ dirty: false, localSaved: false }); this.nav(to); },
+      leaveSave: () => { const to = st.pendingNav; this.setState({ pendingNav: null }); this.saveEd('Draft', 'Saved draft', () => this.nav(to)); },
+      conflictOpen: !!st.conflict, theirs: 'When the café is open over the holidays. We close on the 25th and 1st.',
+      conflictCancel: () => this.setState({ conflict: null }),
+      conflictTheirs: () => { this.setState(s => ({ conflict: null, conflictDone: true, dirty: false, ed: { ...s.ed, summary: 'When the café is open over the holidays. We close on the 25th and 1st.', v: 15 }, history: [{ v: 15, t: 'Marco edited summary', when: 'just now' }, ...s.history] })); this.toast('Took Marco\'s version · v15'); },
+      conflictMine: () => { const c = st.conflict; this.setState(s => ({ conflict: null, conflictDone: true, ed: { ...s.ed, v: 15 }, history: [{ v: 15, t: 'Marco edited summary', when: 'just now' }, ...s.history] }), () => this.saveEd(c.status, c.msg + ' over v15', c.then)); },
+      isNarrow: narrow, drawerOpen: narrow && st.navOpen,
+      gridCols: narrow ? 'minmax(0,1fr)' : 'auto minmax(0,1fr)', asidePos: narrow ? 'fixed' : 'sticky', asideX: narrow && !st.navOpen ? 'translateX(-105%)' : 'none', asideShadow: narrow && st.navOpen ? 'var(--shadow)' : 'none',
+      openNav: () => this.setState({ navOpen: true }), closeNav: () => this.setState({ navOpen: false }),
+      screenTitle: st.screen === 'mod' ? st.modSel : st.screen === 'suite' ? 'Modules' : (screens.find(([k]) => k === navScreen) || [, ''])[1],
+      edCols: st.vw < 1180 ? 'minmax(0,1fr)' : 'minmax(0,1fr) 340px',
+      wfCols: st.vw < 1180 ? 'minmax(0,1fr)' : 'minmax(280px,360px) minmax(0,1fr)',
+      typesCols: st.vw < 760 ? 'minmax(0,1fr)' : 'minmax(200px,240px) minmax(0,1fr)',
+      history: st.history,
+
+      typeList: Object.entries(st.types).map(([k, t]) => ({ name: k, label: t.label, count: t.fields.length, bg: k === st.typeSel ? 'var(--accent-soft)' : 'transparent', pick: () => this.setState({ typeSel: k }) })),
+      typeNow: tdef, pickerOpen: st.picker, pickerLabel: st.picker ? 'Done' : 'Add a field', togglePicker: () => this.setState(s => ({ picker: !s.picker })),
+      typeFields: tdef.fields.map(([name, type, req, sens], i) => ({ name, type, req: req ? 'Required' : '', sl: sens, sbg: sens === 'Public' ? 'var(--ok-bg)' : 'var(--warn-bg)', sfg: sens === 'Public' ? 'var(--ok)' : 'var(--warn)',
+        sens: () => updType(f => f.map((x, j) => j === i ? [x[0], x[1], x[2], x[3] === 'Public' ? 'Sensitive' : 'Public'] : x)),
+        remove: () => { updType(f => f.filter((_, j) => j !== i)); this.toast('Removed ' + name); } })),
+      fieldGroups: groups.map(([name, ts]) => ({ name, types: ts.map(t => ({ t, add: () => { updType(f => [...f, [t + (f.length + 1), t, 0, 'Public']]); this.toast('Added a ' + t + ' field'); } })) })),
+
+      wfs: st.wfs.map(w => { const on = w.id === st.wfSel; const last = w.on ? w.last : 'Off'; return { ...w, last, lbg: SC[last][0], lfg: SC[last][1], border: on ? 'var(--accent)' : 'var(--line)', shadow: on ? 'var(--shadow)' : 'none', track: w.on ? 'var(--accent)' : 'var(--line)', knob: w.on ? '19px' : '3px',
+        pick: () => this.setState({ wfSel: w.id }),
+        toggle: e => { e.stopPropagation(); this.setState(s => ({ wfs: s.wfs.map(x => x.id === w.id ? { ...x, on: !x.on, last: !x.on && x.last === 'Off' ? 'Succeeded' : x.last } : x) })); this.toast(w.name + (w.on ? ' paused' : ' enabled')); } }; }),
+      wf: { ...wf, steps: wf.steps.map(([kind, label, detail], i) => ({ n: i + 1, kind, label, detail })) },
+      runs: (st.runs[wf.id] || []).map(([state, attempt, when]) => ({ state, attempt, when, dot: SC[state][1], anim: state === 'Running' ? 'pulse 1s ease-in-out infinite' : 'none' })),
+      runNow: () => { this.rFire(wf); this.toast(wf.name + ' fired. Following it in Workflow runs.'); this.nav('runs'); },
+
+      ...this.runVals(st), ...modV,
+      aStats: [['Visitors', 8420 * mult], ['Page views', 21300 * mult], ['Bounce rate', null], ['Avg. visit', null]].map(([label, v], i) => ({ label, value: v != null ? fmt(v) : (i === 2 ? (38 + st.range % 7) + '%' : '1m ' + (40 + st.range % 13) + 's') })),
+      bars: vals.map((v, i) => ({ h: Math.round(v / max * 100) + '%', bg: st.hover === i ? 'var(--accent)' : 'color-mix(in oklch, var(--accent) 45%, var(--surface2))', hover: () => this.setState({ hover: i }) })),
+      barGap: nBars > 30 ? '3px' : '5px',
+      hoverLabel: st.hover != null && vals[st.hover] != null ? 'Day ' + (st.hover + 1) + ' · ' + vals[st.hover].toLocaleString() + ' visitors' : 'Hover a bar',
+      clearHover: () => this.setState({ hover: null }),
+      breakdowns: [
+        { title: 'Top pages', rows: [['/menu', 38], ['/', 27], ['/events', 14], ['/find-us', 11]] },
+        { title: 'Referrers', rows: [['google.com', 46], ['instagram.com', 31], ['facebook.com', 12], ['Direct', 11]] },
+        { title: 'Devices', rows: [['Mobile', 71], ['Desktop', 24], ['Tablet', 5]] }
+      ].map(b => ({ title: b.title, rows: b.rows.map(([k, p]) => ({ k, v: p + '%', w: p + '%' })) })),
+
+      setTabs: [['site', 'Identity'], ['theme', 'Theme'], ['domains', 'Domains'], ['nav', 'Navigation']].map(([k, l]) => ({ label: l, ...seg(st.setTab === k), pick: () => this.setState({ setTab: k }) })),
+      tabSite: st.setTab === 'site', tabTheme: st.setTab === 'theme', tabDomains: st.setTab === 'domains', tabNav: st.setTab === 'nav',
+      site: st.site,
+      setSiteName: e => { const v = e.target.value; this.setState(s => ({ site: { ...s.site, name: v } })); },
+      setTagline: e => { const v = e.target.value; this.setState(s => ({ site: { ...s.site, tagline: v } })); },
+      setRadius: e => { const v = +e.target.value; this.setState(s => ({ site: { ...s.site, radius: v } })); },
+      swatches: ['#B4572E', '#5A46D6', '#0B7A6B', '#2F5DA8', '#1E1A16'].map(c => ({ c, ring: st.site.accent === c ? '0 0 0 2px var(--surface), 0 0 0 4px ' + c : 'none', pick: () => this.setState(s => ({ site: { ...s.site, accent: c } })) })),
+      fonts: [['Bricolage Grotesque', 'Grotesque'], ['Georgia', 'Serif'], ['JetBrains Mono', 'Mono']].map(([f, l]) => ({ label: l, fam: "'" + f + "'", ...seg(st.site.font === f), pick: () => this.setState(s => ({ site: { ...s.site, font: f } })) })),
+      previewFont: "'" + st.site.font + "', serif", previewRadius: st.site.radius + 'px',
+      domains: st.domains.map(([host, state]) => ({ host, state, bg: SC[state][0], fg: SC[state][1] })),
+      newDomain: st.newDomain, setNewDomain: e => this.setState({ newDomain: e.target.value }),
+      addDomain: e => { e.preventDefault(); const h = st.newDomain.trim(); if (!h) return; this.setState(s => ({ domains: [...s.domains, [h, 'Checking DNS']], newDomain: '' })); setTimeout(() => this.setState(s => ({ domains: s.domains.map(d => d[0] === h ? [h, 'Live'] : d) })), 2200); },
+      navItems: st.navItems.map(([label, href], i) => ({ label, href,
+        up: () => this.setState(s => { const a = [...s.navItems]; if (i > 0) [a[i - 1], a[i]] = [a[i], a[i - 1]]; return { navItems: a }; }),
+        down: () => this.setState(s => { const a = [...s.navItems]; if (i < a.length - 1) [a[i + 1], a[i]] = [a[i], a[i + 1]]; return { navItems: a }; }) })),
+      saveSettings: () => this.toast('Saved. Cache purged for tenant:kape-ana'),
+
+      toasts: st.toasts.map(t => ({ msg: t.msg, hasUndo: !!t.undo, undo: () => { t.undo(); this.setState(s => ({ toasts: s.toasts.filter(x => x.id !== t.id) })); } }))
+    };
+  }
+}
+</script>
+</body>
+</html>

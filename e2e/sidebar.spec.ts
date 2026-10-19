@@ -181,3 +181,64 @@ test('a rail that cannot read the module list keeps every item', async ({ page }
     await expect(nav.getByRole('link', { name: 'Files' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'PWA installs' })).toBeVisible();
 });
+
+/**
+ * The drawer. Below 1000px the rail is the Radix sheet, closed until the trigger is pressed; at
+ * 1000px and above it is the rail. 768 used to be the line, which left a 768 to 999 tablet with a
+ * 248px rail eating a quarter of the screen.
+ */
+test.describe('at 900px', () => {
+    test.use({ viewport: { width: 900, height: 800 } });
+
+    test('the rail is a drawer that traps Tab and closes on Escape', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, []);
+
+        await landOnAnAdminPage(page);
+
+        await expect(page.locator('[data-slot="sidebar"]')).toHaveCount(0);
+
+        await page.getByRole('button', { name: 'Toggle Sidebar' }).click();
+        const drawer = page.getByRole('dialog');
+        await expect(drawer.getByRole('link', { name: 'Overview' })).toBeVisible();
+
+        const links = await drawer.getByRole('link').count();
+        expect(links).toBeGreaterThan(3);
+        for (let i = 0; i < links + 8; i++) {
+            await page.keyboard.press('Tab');
+            const inside = await drawer.evaluate((el) => el.contains(document.activeElement));
+            expect(inside, `Tab ${i + 1} left the drawer`).toBe(true);
+        }
+
+        await page.keyboard.press('Escape');
+        await expect(drawer).toHaveCount(0);
+    });
+
+    test('the trigger is a 44px target', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, []);
+
+        await landOnAnAdminPage(page);
+
+        const box = await page.getByRole('button', { name: 'Toggle Sidebar' }).boundingBox();
+        expect(box?.width).toBeGreaterThanOrEqual(44);
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+    });
+});
+
+test.describe('at 1100px', () => {
+    test.use({ viewport: { width: 1100, height: 800 } });
+
+    test('the rail shows without opening anything', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, []);
+
+        await landOnAnAdminPage(page);
+
+        await expect(rail(page).getByRole('link', { name: 'Overview' })).toBeVisible();
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+    });
+});

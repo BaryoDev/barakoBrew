@@ -25,11 +25,11 @@ describe('the status vocabulary', () => {
 
     it('gives each state the tone its measured pair belongs to', () => {
         // Ink on ground, from the design's table:
-        //   Draft      #4A4E66 on #F2F3F9  muted     7.37:1
-        //   In review  #8A5A10 on #FDF2E3  warning   5.35:1
+        //   Draft      #2B2E45 on #F1F2F8  muted     11.90:1
+        //   In review  #8A5A00 on #FFF4DB  warning   5.42:1
         //   Scheduled  #4034A8 on #EEEBFD  accent    7.89:1
         //   Published  #0B7A6B on #E6F7F4  success   4.73:1
-        //   Archived   #63687D on #F2F3F9  subtle    4.98:1
+        //   Archived   #5D6178 on #F1F2F8  subtle    5.45:1
         expect(STATUS_VOCABULARY.Draft.tone).toBe('muted');
         expect(STATUS_VOCABULARY.InReview.tone).toBe('warning');
         expect(STATUS_VOCABULARY.Scheduled.tone).toBe('accent');

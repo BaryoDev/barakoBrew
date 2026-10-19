@@ -797,4 +797,17 @@ test.describe('accessibility', () => {
         await expect(page.getByRole('button', { name: 'Move Guide out of Docs' })).toBeVisible({ timeout: 15000 });
         await scan(page);
     });
+
+    test('the sidebar drawer at 900px, open', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubContentTypes(page, []);
+        await page.setViewportSize({ width: 900, height: 800 });
+        await page.goto('/api-keys');
+        await expect(page.getByRole('heading', { name: 'API keys' })).toBeVisible({ timeout: 15000 });
+
+        await page.getByRole('button', { name: 'Toggle Sidebar' }).click();
+        await expect(page.getByRole('dialog').getByRole('link', { name: 'Overview' })).toBeVisible();
+        await scan(page);
+    });
 });
