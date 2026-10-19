@@ -194,7 +194,7 @@ test.describe('workflow runs', () => {
     await expect.poll(() => stubs.detailReads.length).toBeGreaterThan(readsBefore);
   });
 
-  test('a refused retry says so and leaves the screen alone', async ({ page }) => {
+  test('a refused retry says so and reads the run again', async ({ page }) => {
     await authed(page);
     await stubShell(page);
     const stubs = await stubRuns(page, {
@@ -212,8 +212,10 @@ test.describe('workflow runs', () => {
 
     await page.getByRole('button', { name: /Retry action 2/ }).click();
 
+    // A 409 means the screen was wrong about the run, so it reads the run again and keeps the reason.
     await expect(page.getByText('That action is running now. Wait for it to finish.')).toBeVisible();
-    expect(stubs.detailReads.length).toBe(readsBefore);
+    await expect.poll(() => stubs.detailReads.length).toBeGreaterThan(readsBefore);
+    await expect(page.getByText('That action is running now. Wait for it to finish.')).toBeVisible();
   });
 
   test('every retry button is disabled while one retry is in flight', async ({ page }) => {

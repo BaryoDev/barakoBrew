@@ -221,7 +221,7 @@ function buildListSchema() {
   return paginatedSchema(workflowRunSchema).extend({
     /** Runs per status for the `contentId` filter, whatever the status filter and the page. */
     statusCounts: z.record(z.string(), z.number()).transform(canonicalCounts).nullish(),
-    /** Pass back as `changedSince`. Present only on a response to a `changedSince` request. */
+    /** Pass back as `changedSince`. A list read may carry one too, and polling then starts from it. */
     cursor: z.string().nullish(),
     /** Succeeded runs that finished before this are removed by the retention sweep. */
     succeededRetainedFrom: z.string().nullish(),
@@ -520,8 +520,9 @@ class ListState {
   /** The newest copy of every run a poll returned, for a refetch that was already in flight. */
   readonly polled = new Map<string, WorkflowRun>();
 
-  startAt(moment: Date) {
-    this.since ??= moment.toISOString();
+  /** A cursor the API sent wins over a time worked out from a clock. */
+  startAt(moment: Date, cursor?: string | null) {
+    this.since ??= cursor || moment.toISOString();
   }
 
   /** Keeps the copy of a run unless one that is newer is held. */
@@ -577,7 +578,7 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
 
       const header = response.headers?.date;
       const served = typeof header === 'string' ? Date.parse(header) : NaN;
-      list.startAt(new Date(Number.isNaN(served) ? started - CLIENT_CLOCK_MARGIN_MS : served - API_CURSOR_LAG_MS));
+      list.startAt(new Date(Number.isNaN(served) ? started - CLIENT_CLOCK_MARGIN_MS : served - API_CURSOR_LAG_MS), page.cursor);
 
       // The fresh page decides which runs are on it. A polled copy only replaces a row the page
       // already has, when it is newer, so an invalidation after a retry does not put back what the

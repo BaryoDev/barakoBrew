@@ -173,6 +173,20 @@ describe('polling the run list', () => {
     expect(sentCursor(2)).toBe('cursor-2');
   });
 
+  it('starts polling from the cursor the list read sent, when it sent one', async () => {
+    serve(
+      () => page([run('a', '10:00')], { cursor: 'list-cursor' }),
+      () => page([], { cursor: 'poll-cursor' }),
+    );
+
+    mount();
+    await settle();
+    await settle(POLL_INTERVAL_MS);
+
+    expect(polls()).toHaveLength(1);
+    expect(sentCursor(0)).toBe('list-cursor');
+  });
+
   it('takes the status counts of the poll', async () => {
     serve(
       () => page([run('a', '10:00')], { statusCounts: { Succeeded: 1, Failed: 0 } }),
