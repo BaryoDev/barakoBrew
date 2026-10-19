@@ -82,10 +82,14 @@ async function stubRuns(
   const detailReads: string[] = [];
   const retries: string[] = [];
 
+  // Polling is kept quiet: the list read sends a cursor and every poll reports nothing changed, so
+  // the only detail reads after the first are the ones the screen makes on purpose.
   await page.route(/\/api\/workflow-runs(\?|$)/, (route) => {
-    const status = new URL(route.request().url()).searchParams.get('status');
+    const params = new URL(route.request().url()).searchParams;
+    if (params.has('changedSince')) return route.fulfill({ json: { ...pageOf([]), cursor: 'quiet' } });
+    const status = params.get('status');
     const items = status ? RUNS.filter((r) => r.status === status) : RUNS;
-    return route.fulfill({ json: pageOf(items) });
+    return route.fulfill({ json: { ...pageOf(items), cursor: 'quiet' } });
   });
 
   await page.route(/\/api\/workflow-runs\/[^/]+$/, (route) => {
@@ -191,7 +195,7 @@ test.describe('workflow runs', () => {
     expect(stubs.retries[0]).toContain('/api/workflow-runs/run-partly/actions/2/retry');
 
     // The response body is discarded, so the only way the screen can be right is a fresh read.
-    await expect.poll(() => stubs.detailReads.length).toBeGreaterThan(readsBefore);
+    await expect.poll(() => stubs.detailReads.length).toBe(readsBefore + 1);
   });
 
   test('a refused retry says so and reads the run again', async ({ page }) => {
@@ -213,8 +217,7 @@ test.describe('workflow runs', () => {
     await page.getByRole('button', { name: /Retry action 2/ }).click();
 
     // A 409 means the screen was wrong about the run, so it reads the run again and keeps the reason.
-    await expect(page.getByText('That action is running now. Wait for it to finish.')).toBeVisible();
-    await expect.poll(() => stubs.detailReads.length).toBeGreaterThan(readsBefore);
+    await expect.poll(() => stubs.detailReads.length).toBe(readsBefore + 1);
     await expect(page.getByText('That action is running now. Wait for it to finish.')).toBeVisible();
   });
 
