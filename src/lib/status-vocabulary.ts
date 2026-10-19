@@ -37,9 +37,9 @@ export interface StatusMeta {
  * a bundle by a screen that only wants a label.
  */
 export const STATUS_VOCABULARY: Record<StatusKey, StatusMeta> = {
-    // #4A4E66 on #F2F3F9, 7.37:1. Warning used to be Draft's, before In review existed to claim it.
+    // #2B2E45 on #F1F2F8, 11.90:1. Warning used to be Draft's, before In review existed to claim it.
     Draft: { label: 'Draft', tone: 'muted' },
-    // #8A5A10 on #FDF2E3, 5.35:1. Amber because it blocks a publish, which is the thing a reader has
+    // #8A5A00 on #FFF4DB, 5.42:1. Amber because it blocks a publish, which is the thing a reader has
     // to notice about it.
     InReview: { label: 'In review', tone: 'warning' },
     // #4034A8 on #EEEBFD, 7.89:1. Accent since the 8 Sept bundle. Anything still mapping it to muted
@@ -47,7 +47,7 @@ export const STATUS_VOCABULARY: Record<StatusKey, StatusMeta> = {
     Scheduled: { label: 'Scheduled', tone: 'accent' },
     // #0B7A6B on #E6F7F4, 4.73:1.
     Published: { label: 'Published', tone: 'success' },
-    // #63687D on #F2F3F9, 4.98:1. Same ground as Draft, quieter ink, which is the only thing telling
+    // #5D6178 on #F1F2F8, 5.45:1. Same ground as Draft, quieter ink, which is the only thing telling
     // the two greys apart.
     Archived: { label: 'Archived', tone: 'subtle' },
 };

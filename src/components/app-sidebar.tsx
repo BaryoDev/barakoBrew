@@ -78,7 +78,7 @@ function NavMetricLabel({ item, metrics }: { item: NavItem; metrics: NavMetrics 
   return (
     <span
       className={cn(
-        'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 font-mono text-[10.5px] font-bold tabular-nums',
+        'flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 font-mono text-[10.5px] font-medium tabular-nums',
         item.tone === 'danger'
           ? 'bg-(--danger-soft) text-destructive'
           : 'bg-(--warning-soft) text-warning'
@@ -111,15 +111,17 @@ function NavList({
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
               asChild
+              closesDrawer
               isActive={active}
               tooltip={item.title}
               className={cn(
                 'gap-2.5 rounded-[10px] px-2.5 font-medium transition-colors',
-                primary ? 'h-[38px] text-[13.5px]' : 'h-[34px] text-[13px]',
-                'text-secondary-foreground hover:bg-secondary hover:text-foreground',
-                // The active item is a white card lifted off the page background, not a tint.
-                'data-[active=true]:bg-card data-[active=true]:text-foreground data-[active=true]:font-semibold',
-                'data-[active=true]:shadow-[var(--shadow-raised)]',
+                primary ? 'h-9 text-[13.5px] [&>svg]:size-[18px]' : 'h-[34px] text-[13px] [&>svg]:size-[17px]',
+                'text-secondary-foreground hover:text-foreground',
+                // Hover is half the sunken tint. The active item takes all of it, a hairline and the
+                // accent icon, as in the round 2 handoff, so the two never look alike.
+                'hover:bg-secondary/50',
+                'data-[active=true]:bg-secondary data-[active=true]:hover:bg-secondary data-[active=true]:text-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_0_0_0_1px_var(--border)]',
                 active ? '[&>svg]:text-primary' : '[&>svg]:text-(--faint)'
               )}
             >
@@ -221,7 +223,7 @@ export function AppSidebar() {
                   tooltip="Account"
                   className="h-auto rounded-[11px] border border-border bg-card p-2.5 shadow-[var(--shadow-card)] hover:bg-card data-[state=open]:bg-card"
                 >
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground font-mono text-[11px] font-bold text-background">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground font-mono text-[11px] font-medium text-background">
                     {initialsOf(user?.username)}
                   </div>
                   <div className="grid flex-1 text-left leading-tight">

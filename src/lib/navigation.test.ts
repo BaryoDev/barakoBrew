@@ -12,6 +12,14 @@ import {
 import { MODULE } from '@/types/modules';
 import { SUPER_ADMIN_ROLE_ID } from 'barako-content-form';
 import { accessFrom } from './access';
+import {
+    IconArchive,
+    IconContent,
+    IconCube,
+    IconFieldEdit,
+    IconHistory,
+    IconShield,
+} from '@/components/icons';
 
 const count = (roles: string[] | undefined) =>
     visibleGroups(NAV_GROUPS, roles).reduce((n, g) => n + g.items.length, 0);
@@ -395,5 +403,44 @@ describe('the rail against an API that reports capabilities', () => {
     it('offers Email to a role that may read the settings, which is manage_settings', () => {
         expect(seen(['manage_settings'])).toContain('Email');
         expect(seen(['manage_email_settings'])).not.toContain('Email');
+    });
+});
+
+describe('nav glyphs', () => {
+    // Pairs that share a glyph on purpose. The handoff gives Pages and Entries the same one
+    // (ic-content); Connectors and Outbound requests have shared IconWebhook since before round 2.
+    const ALLOWED_REPEATS = [
+        ['Entries', 'Pages'],
+        ['Connectors', 'Outbound requests'],
+    ];
+
+    it('gives every item in a group its own icon, bar the pairs named above', () => {
+        const allowed = new Set(ALLOWED_REPEATS.map((p) => [...p].sort().join('|')));
+        let checked = 0;
+        for (const group of NAV_GROUPS) {
+            const byIcon = new Map<unknown, string[]>();
+            for (const item of group.items) {
+                byIcon.set(item.icon, [...(byIcon.get(item.icon) ?? []), item.title]);
+                checked++;
+            }
+            for (const titles of byIcon.values()) {
+                if (titles.length > 1) {
+                    expect(allowed.has([...titles].sort().join('|')), titles.join(' and ')).toBe(true);
+                }
+            }
+        }
+        expect(checked).toBeGreaterThan(20);
+    });
+
+    it('does not let an allowed repeat go stale', () => {
+        expect(ALLOWED_REPEATS).toHaveLength(2);
+        for (const [a, b] of ALLOWED_REPEATS) {
+            const group = NAV_GROUPS.find((g) => g.items.some((i) => i.title === a));
+            const first = group?.items.find((i) => i.title === a);
+            const second = group?.items.find((i) => i.title === b);
+            expect(first, a).toBeDefined();
+            expect(second, `${b} in the same group as ${a}`).toBeDefined();
+            expect(first!.icon, `${a} and ${b} still share an icon`).toBe(second!.icon);
+        }
     });
 });

@@ -88,8 +88,8 @@ COPY --chown=nextjs:nodejs THIRD-PARTY-NOTICES.md LICENSE ./
 # with every copy of them. Named one by one, because a wildcard that matches nothing copies nothing
 # and the build still passes.
 COPY --chown=nextjs:nodejs \
-    src/app/fonts/OFL-sora.txt \
-    src/app/fonts/OFL-manrope.txt \
+    src/app/fonts/OFL-bricolage-grotesque.txt \
+    src/app/fonts/OFL-instrument-sans.txt \
     src/app/fonts/OFL-jetbrains-mono.txt \
     ./font-licences/
 

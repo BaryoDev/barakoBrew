@@ -2,38 +2,32 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
-// Signal theme (#407). Sora for display, Manrope for body, JetBrains Mono for anything a machine
-// produced. The files are in ./fonts rather than fetched by next/font/google, so neither the build
-// nor the browser asks another host for a font (#196). ./fonts/README.md says where each came from.
+// Bricolage Grotesque for headings, the wordmark and big numbers, Instrument Sans for body text,
+// JetBrains Mono for anything a machine produced. The files are in ./fonts rather than fetched by
+// next/font/google, so neither the build nor the browser asks another host for a font (#196).
+// ./fonts/README.md says where each came from.
 //
-// One face per weight, the same ones the Google import declared, although Manrope and JetBrains
-// Mono are each a single variable file. A weight range would let the mono's 600 render as 600; with
-// faces at 400, 500 and 700 it resolves to 700, as it always has. Written out because next/font
-// only accepts literals.
-const sora = localFont({
-  variable: "--font-sora",
+// Each is one variable file declared over the weight range the console uses, so a request outside
+// it resolves to the nearest end: the mono never renders heavier than 500. Written out because
+// next/font only accepts literals.
+const bricolage = localFont({
+  variable: "--font-bricolage-grotesque",
   src: [
-    { path: "./fonts/sora-latin-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/bricolage-grotesque-latin-wght.woff2", weight: "500 700", style: "normal" },
   ],
 });
 
-const manrope = localFont({
-  variable: "--font-manrope",
+const instrumentSans = localFont({
+  variable: "--font-instrument-sans",
   src: [
-    { path: "./fonts/manrope-latin-wght.woff2", weight: "400", style: "normal" },
-    { path: "./fonts/manrope-latin-wght.woff2", weight: "500", style: "normal" },
-    { path: "./fonts/manrope-latin-wght.woff2", weight: "600", style: "normal" },
-    { path: "./fonts/manrope-latin-wght.woff2", weight: "700", style: "normal" },
-    { path: "./fonts/manrope-latin-wght.woff2", weight: "800", style: "normal" },
+    { path: "./fonts/instrument-sans-latin-wght.woff2", weight: "400 700", style: "normal" },
   ],
 });
 
 const jetbrainsMono = localFont({
   variable: "--font-jetbrains-mono",
   src: [
-    { path: "./fonts/jetbrains-mono-latin-wght.woff2", weight: "400", style: "normal" },
-    { path: "./fonts/jetbrains-mono-latin-wght.woff2", weight: "500", style: "normal" },
-    { path: "./fonts/jetbrains-mono-latin-wght.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/jetbrains-mono-latin-wght.woff2", weight: "400 500", style: "normal" },
   ],
 });
 
@@ -78,7 +72,7 @@ export default function RootLayout({
         <script src={`${basePath}/env-config.js`} />
       </head>
       <body
-        className={`${sora.variable} ${manrope.variable} ${jetbrainsMono.variable} antialiased`}
+        className={`${bricolage.variable} ${instrumentSans.variable} ${jetbrainsMono.variable} antialiased`}
       >
         {/* Pinned to light. Dark mode was deferred with the Signal redesign (#407), so forcing it here
             is what stops a stored "dark" preference, or an OS setting, from rendering the old Yeti

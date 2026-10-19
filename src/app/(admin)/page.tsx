@@ -50,7 +50,7 @@ function StatCard({
           </CardAction>
         </CardHeader>
         <CardContent>
-          {isLoading ? <Skeleton className="h-8 w-14" /> : <div className="text-2xl font-semibold">{value}</div>}
+          {isLoading ? <Skeleton className="h-8 w-14" /> : <div className="font-display text-2xl font-semibold tabular-nums">{value}</div>}
         </CardContent>
       </Card>
     </Link>

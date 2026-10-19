@@ -293,7 +293,7 @@ function ContentListInner() {
         }
         badge={
           contents ? (
-            <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-[3px] font-mono text-[11px] font-bold tabular-nums">
+            <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-[3px] font-mono text-[11px] font-medium tabular-nums">
               {contents.totalItems}
             </span>
           ) : null

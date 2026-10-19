@@ -13,6 +13,19 @@ moved. Which API a console works against is stated per release instead.
 
 - **Workflow runs update while you watch.** The list polls every 2 seconds, using the API's cursor when it sends one and reading the page again when it does not. It stops in a hidden tab, backs off up to 60 seconds on errors, and stops on a 401 or 403. Status filters are chips with the API's own counts. A run's panel lists every try of an action when the API sends them, and `?run=<id>` opens a run. Abandon is a button on the run, and Retry, Cancel and Abandon show only to callers who hold the capability. Needs barakoCMS#1167 for the cursor, counts and tries; against older APIs the screen reads the page again each time. (#231)
 
+### Changed
+
+- **The console's fonts are Bricolage Grotesque, Instrument Sans and JetBrains Mono.** Bricolage
+  Grotesque (500 to 700, with its optical size axis) sets headings, the wordmark and the big
+  numbers on stat cards. Instrument Sans (400 to 700) is the body text. JetBrains Mono is limited to
+  400 to 500, so mono text that asked for bold now renders medium. Sora and Manrope are gone, files
+  and licence texts included. The vendored files are Google's `latin` subset, so ñ and most of Latin-1
+  render in the console fonts. Instrument Sans lacks ¤ ¦ ¬ ± ² ³ µ ¹ ¼ ½ ¾ and Bricolage Grotesque lacks
+  ¤ and the soft hyphen; those come from the system font. `font-extrabold` (800) now renders at 700,
+  since Instrument Sans stops there (devices, content, schemas and files pages, the sidebar). On Site, Theme,
+  typing `Sora` or `Manrope` in a font field no longer previews in the console's own copy, and
+  `Bricolage Grotesque` or `Instrument Sans` only preview on a machine that has them installed.
+
 ## [1.9.0] - 2026-10-13
 
 **Speaks API contracts 1 to 8, which covers barakoCMS 4.0.1 to 5.0.0.** barakoCMS 5.0.0 moves the

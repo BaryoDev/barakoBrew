@@ -81,7 +81,7 @@ function Metric({
       {loading ? (
         <Skeleton className="mt-1 h-6 w-12" />
       ) : (
-        <p className="mt-0.5 font-mono text-xl font-semibold">{text ?? nf.format(value ?? 0)}</p>
+        <p className="mt-0.5 font-display text-xl font-semibold tabular-nums">{text ?? nf.format(value ?? 0)}</p>
       )}
     </div>
   );

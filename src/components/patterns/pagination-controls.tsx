@@ -20,7 +20,7 @@ export function PaginationControls({ page, onPageChange }: PaginationControlsPro
       {/* Counts are machine-produced, so they are mono and tabular: the range stops shifting width
           as the page changes. The words around them are not. */}
       <p className="text-muted-foreground text-[13px]">
-        <span className="text-secondary-foreground font-mono font-bold tabular-nums">
+        <span className="text-secondary-foreground font-mono font-medium tabular-nums">
           {start} to {end}
         </span>{' '}
         of <span className="font-mono tabular-nums">{page.totalItems}</span>
