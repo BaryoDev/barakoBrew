@@ -398,7 +398,7 @@ describe('parseRunId', () => {
 });
 
 describe('isRunId', () => {
-  it('accepts a GUID in either case and nothing else', () => {
+  it('accepts the spellings of a GUID that parseRunId reads, and nothing else', () => {
     expect(isRunId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')).toBe(true);
     expect(isRunId('3F2504E0-4F89-11D3-9A0C-0305E82C3301')).toBe(true);
     for (const text of ['abc', '..', '', 'run-1', '3f2504e0-4f89-11d3-9a0c-0305e82c33010', '../3f2504e0-4f89-11d3-9a0c-0305e82c3301']) {

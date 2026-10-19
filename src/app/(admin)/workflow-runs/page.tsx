@@ -186,7 +186,7 @@ export default function WorkflowRunsPage() {
     if (!canonical || canonical === linked) return;
     const next = new URLSearchParams(window.location.search);
     next.set('run', canonical);
-    window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}`);
+    window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}${window.location.hash}`);
   }, [canonical, linked]);
 
   function select(id: string) {
@@ -194,7 +194,7 @@ export default function WorkflowRunsPage() {
     setBadLink(false);
     const next = new URLSearchParams(window.location.search);
     next.set('run', id);
-    window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}`);
+    window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}${window.location.hash}`);
   }
 
   const access = useAccess();

@@ -659,6 +659,26 @@ describe('a link to a run', () => {
     expect(asked.every((url) => url === `/api/workflow-runs/${GUID_TWO}`)).toBe(true);
   });
 
+  it('rewrites the address to the canonical id once, keeping the other parameters and the hash', async () => {
+    const spelled = `{${GUID_TWO.toUpperCase()}}`;
+    window.history.replaceState(null, '', `/workflow-runs?${new URLSearchParams({ run: spelled, foo: '1' })}#x`);
+    searchParams = new URLSearchParams({ run: spelled, foo: '1' });
+    const rewrite = vi.spyOn(window.history, 'replaceState');
+    try {
+      renderRuns([run(GUID_TWO, 'Two', 'Failed', [action(1, 'Failed')])]);
+      await screen.findByRole('heading', { name: 'Two' });
+
+      expect(rewrite).toHaveBeenCalledTimes(1);
+      const target = new URL(String(rewrite.mock.calls[0][2]), 'http://localhost');
+      expect(target.searchParams.get('run')).toBe(GUID_TWO);
+      expect(target.searchParams.get('foo')).toBe('1');
+      expect(target.hash).toBe('#x');
+    } finally {
+      rewrite.mockRestore();
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
   it.each(['abc', '..', '../x'])('says not found for %s without asking the API', async (link) => {
     searchParams = new URLSearchParams({ run: link });
     renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);
