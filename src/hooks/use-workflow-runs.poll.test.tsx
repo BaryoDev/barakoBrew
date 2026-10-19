@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ReactNode } from 'react';
 import { act, renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
 
 /**
@@ -94,13 +94,15 @@ function mount(query: { page?: number; status?: string } = {}) {
 const ids = (result: { current: { runs: { data?: { items: { id: string }[] } } } }) =>
   (result.current.runs.data?.items ?? []).map((r) => r.id);
 
-// TanStack Query hands its notifications to the system setTimeout, which the fake clock does not
-// own, so a cache write is only on screen after a real macrotask has passed.
-const realSetTimeout = globalThis.setTimeout;
+// TanStack Query flushes its notifications on setTimeout(0). The fake clock gives a zero delay
+// timer set while it is ticking a delay of 1 ms, so a poll's cache write would wait for a tick no
+// test makes. On a microtask the write is on screen when the advance that ran the poll returns.
+beforeAll(() => notifyManager.setScheduler(queueMicrotask));
+afterAll(() => notifyManager.setScheduler((callback) => setTimeout(callback, 0)));
+
 const settle = (ms = 0) =>
   act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
-    await new Promise<void>((resolve) => realSetTimeout(resolve, 0));
     await vi.advanceTimersByTimeAsync(0);
   });
 
