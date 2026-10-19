@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -28,7 +28,7 @@ import {
   RUN_CAPABILITIES,
   RUN_LEGACY_ROLES,
   RUN_STATUSES,
-  isRunId,
+  parseRunId,
   type LivePause,
   isAbandonable,
   isCancellable,
@@ -167,8 +167,8 @@ export default function WorkflowRunsPage() {
   const linked = searchParams.get('run');
   // An id in the address that is not shaped like a run id is answered with "not found" here. The
   // API would answer 400 to it, and there is nothing to ask.
-  const [selectedId, setSelectedId] = useState<string | null>(linked && isRunId(linked) ? linked : null);
-  const [badLink, setBadLink] = useState(!!linked && !isRunId(linked));
+  const [selectedId, setSelectedId] = useState<string | null>(linked ? parseRunId(linked) : null);
+  const [badLink, setBadLink] = useState(!!linked && parseRunId(linked) === null);
   const [refreshing, setRefreshing] = useState(false);
 
   // A link from another page, or the address bar, picks the run. Picking one here writes it back,
@@ -176,9 +176,18 @@ export default function WorkflowRunsPage() {
   const [seenLink, setSeenLink] = useState(linked);
   if (seenLink !== linked) {
     setSeenLink(linked);
-    setBadLink(!!linked && !isRunId(linked));
-    setSelectedId(linked && isRunId(linked) ? linked : null);
+    setBadLink(!!linked && parseRunId(linked) === null);
+    setSelectedId(linked ? parseRunId(linked) : null);
   }
+
+  // Put the canonical id in the address when the link spelled it another way.
+  const canonical = linked ? parseRunId(linked) : null;
+  useEffect(() => {
+    if (!canonical || canonical === linked) return;
+    const next = new URLSearchParams(window.location.search);
+    next.set('run', canonical);
+    window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}`);
+  }, [canonical, linked]);
 
   function select(id: string) {
     setSelectedId(id);

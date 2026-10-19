@@ -649,6 +649,16 @@ describe('a link to a run', () => {
     expect(screen.queryByRole('list', { name: 'Actions' })).toBeNull();
   });
 
+  it('asks for the canonical id when the link spells it with braces and capitals', async () => {
+    searchParams = new URLSearchParams({ run: `{${GUID_TWO.toUpperCase()}}` });
+    renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')]), run(GUID_TWO, 'Two', 'Failed', [action(1, 'Failed')])]);
+
+    expect(await screen.findByRole('heading', { name: 'Two' })).toBeInTheDocument();
+    const asked = vi.mocked(api.get).mock.calls.map(([url]) => String(url)).filter((url) => url !== '/api/workflow-runs');
+    expect(asked).toEqual(expect.arrayContaining([`/api/workflow-runs/${GUID_TWO}`]));
+    expect(asked.every((url) => url === `/api/workflow-runs/${GUID_TWO}`)).toBe(true);
+  });
+
   it.each(['abc', '..', '../x'])('says not found for %s without asking the API', async (link) => {
     searchParams = new URLSearchParams({ run: link });
     renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);

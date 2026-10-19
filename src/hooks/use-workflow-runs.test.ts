@@ -6,6 +6,7 @@ import {
   isAbandonable,
   isCancellable,
   isRunId,
+  parseRunId,
   isRetryable,
   isStopped,
   runAllowsRetry,
@@ -371,6 +372,29 @@ describe('a run read with the attempt history', () => {
     expect(parsed.actions[0].history).toBeUndefined();
     expect(parsed.updatedAt).toBeUndefined();
   });
+});
+
+describe('parseRunId', () => {
+  const canonical = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+
+  it.each([
+    canonical,
+    canonical.toUpperCase(),
+    `{${canonical}}`,
+    `(${canonical})`,
+    canonical.replaceAll('-', ''),
+    `  ${canonical}\n`,
+    `{${canonical.toUpperCase()}}`,
+  ])('reads %j as the canonical id', (text) => {
+    expect(parseRunId(text)).toBe(canonical);
+  });
+
+  it.each(['abc', '..', '', `{${canonical}`, `${canonical})`, `[${canonical}]`, `${canonical}0`, canonical.slice(1)])(
+    'refuses %j',
+    (text) => {
+      expect(parseRunId(text)).toBeNull();
+    },
+  );
 });
 
 describe('isRunId', () => {

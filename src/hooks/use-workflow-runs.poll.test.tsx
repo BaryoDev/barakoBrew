@@ -391,13 +391,15 @@ describe('polling an API that sends no cursor', () => {
     // The poll comes back without a cursor, so the page is read again, and that read fails.
     await settle(POLL_INTERVAL_MS);
     expect(lists()).toHaveLength(2);
-    expect(result.current.runs.pause).toEqual({ reason: 'backoff' });
+    // One failed read is not yet worth a note.
+    expect(result.current.runs.pause).toBeNull();
 
     // One error in a row waits twice the interval, two wait four times.
     await settle(POLL_INTERVAL_MS * 2 - 1);
     expect(lists()).toHaveLength(2);
     await settle(1);
     expect(lists()).toHaveLength(3);
+    expect(result.current.runs.pause).toEqual({ reason: 'backoff' });
     await settle(POLL_INTERVAL_MS * 4 - 1);
     expect(lists()).toHaveLength(3);
     await settle(1);
@@ -430,10 +432,11 @@ describe('polling an API that sends no cursor', () => {
     await settle(POLL_INTERVAL_MS);
     broken = true;
     await settle(POLL_INTERVAL_MS);
+    await settle(POLL_INTERVAL_MS * 2);
     expect(result.current.runs.pause).toEqual({ reason: 'backoff' });
 
     broken = false;
-    await settle(POLL_INTERVAL_MS * 2);
+    await settle(POLL_INTERVAL_MS * 4);
     expect(result.current.runs.pause).toBeNull();
   });
 });

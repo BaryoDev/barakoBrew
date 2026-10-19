@@ -11,11 +11,30 @@ import { useCurrentTenant } from '@/hooks/use-tenants';
 
 // Mirrors barakoCMS/Features/WorkflowRuns/Endpoints.cs (camelCase over the wire).
 
-const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const GUID_FORMS = [
+  /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i,
+  /^\{([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})\}$/i,
+  /^\(([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})\)$/i,
+  /^([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})$/i,
+];
 
-/** Whether text is shaped like a run id. The API answers 400 to anything else, so it is not sent. */
+/**
+ * The canonical id (hyphenated, lowercase) for text the API's Guid.TryParse accepts: with or
+ * without hyphens, in braces or parentheses, and with whitespace around it. Null for anything else,
+ * which the API would answer with a 400, so it is not sent.
+ */
+export function parseRunId(value: string): string | null {
+  const text = value.trim();
+  for (const form of GUID_FORMS) {
+    const match = form.exec(text);
+    if (match) return match.slice(1).join('-').toLowerCase();
+  }
+  return null;
+}
+
+/** Whether text is shaped like a run id. */
 export function isRunId(value: string): boolean {
-  return GUID.test(value);
+  return parseRunId(value) !== null;
 }
 
 /** The value the status filter uses for "do not filter". Not a status the API knows. */
@@ -682,7 +701,7 @@ function startPolling(input: PollingInput): () => void {
         }
       }
       failures = 0;
-      list.setPause(null);
+      if (!stopped) list.setPause(null);
     } catch (error) {
       if (stopped) return;
       if (isAuthRefusal(error)) {
@@ -691,7 +710,7 @@ function startPolling(input: PollingInput): () => void {
         return;
       }
       failures += 1;
-      list.setPause({ reason: 'backoff' });
+      if (failures >= 2) list.setPause({ reason: 'backoff' });
       next = backoffDelay(failures);
     } finally {
       busy = false;
