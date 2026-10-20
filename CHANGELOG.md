@@ -12,6 +12,7 @@ moved. Which API a console works against is stated per release instead.
 ### Added
 
 - Analytics draws the previous period as a dashed line behind the trend, using `compare=previous` on the series route (barakoCMS 5.0 and later). Against an older API the chart says there is no previous period. (#14)
+- The role screen sets which named transitions of a content type's lifecycle a role may run, each with its own conditions, and reads the rule back as a sentence. (#146)
 
 ## [1.10.0] - 2026-10-20
 
