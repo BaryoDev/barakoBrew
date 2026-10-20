@@ -352,4 +352,20 @@ describe('transition permissions', () => {
         const [permission] = submitted(onSubmit).permissions;
         expect(permission.transitions).toEqual({ approve: { enabled: false }, Explain: { enabled: true } });
     });
+
+    it('keeps the condition on a transition whose name holds a pipe', async () => {
+        ABSENCE.lifecycle.transitions.push({ name: 'Sign|Off', from: 'Approved', to: 'Approved' });
+        const onSubmit = await openAbsence();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Run Sign|Off on Absence' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+        fireEvent.change(screen.getByLabelText('Condition 1 field'), { target: { value: 'CreatedBy' } });
+        fireEvent.change(screen.getByLabelText('Condition 1 value'), { target: { value: '$CURRENT_USER' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
+        expect(permission.transitions).toEqual({
+            'Sign|Off': { enabled: true, conditions: { CreatedBy: { _eq: '$CURRENT_USER' } } },
+        });
+    });
 });

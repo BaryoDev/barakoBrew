@@ -71,7 +71,7 @@ export function RoleEditor({
   const [capabilityDraft, setCapabilityDraft] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [conditionDrafts, setConditionDrafts] = useState<Record<string, ConditionDraft>>({});
-  const [transitionDrafts, setTransitionDrafts] = useState<Record<string, ConditionDraft>>({});
+  const [transitionDrafts, setTransitionDrafts] = useState<Record<string, Record<string, ConditionDraft>>>({});
   const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
   const detailsSupported = contract.kind === 'ok' && contract.version >= RULE_DETAILS_CONTRACT;
 
@@ -111,14 +111,18 @@ export function RoleEditor({
     return permissions.some((p) => p.contentTypeSlug === slug && p[action]?.enabled);
   });
   // Same for a transition: a draft counts only while its rule is on.
-  const liveTransitionDrafts = Object.entries(transitionDrafts).filter(([key]) => {
-    const [slug, name] = key.split('|');
-    const held = permissions.find((p) => p.contentTypeSlug === slug);
-    return !!held && !!held.transitions?.[transitionKey(held, name)]?.enabled;
-  });
-  const conditionsBlocked = [...liveDrafts, ...liveTransitionDrafts].some(([, draft]) =>
-    draft.rows.some((row) => conditionProblem(row) !== null),
+  const liveTransitionDrafts = Object.entries(transitionDrafts).flatMap(([slug, byName]) =>
+    Object.entries(byName)
+      .filter(([name]) => {
+        const held = permissions.find((p) => p.contentTypeSlug === slug);
+        return !!held && !!held.transitions?.[transitionKey(held, name)]?.enabled;
+      })
+      .map(([name, draft]) => ({ slug, name, draft })),
   );
+  const conditionsBlocked = [
+    ...liveDrafts.map(([, draft]) => draft),
+    ...liveTransitionDrafts.map((t) => t.draft),
+  ].some((draft) => draft.rows.some((row) => conditionProblem(row) !== null));
 
   const withConditions = (list: ContentTypePermission[]) =>
     list.map((permission) => {
@@ -128,8 +132,7 @@ export function RoleEditor({
         if (slug !== permission.contentTypeSlug) continue;
         next = { ...next, [action]: { ...next[action], conditions: writeConditions(draft.rows, draft.kept) } };
       }
-      for (const [key, draft] of liveTransitionDrafts) {
-        const [slug, name] = key.split('|');
+      for (const { slug, name, draft } of liveTransitionDrafts) {
         if (slug !== permission.contentTypeSlug) continue;
         const at = transitionKey(next, name);
         next = {
@@ -257,13 +260,12 @@ export function RoleEditor({
                               schema={schema}
                               permission={permission}
                               roleName={name}
-                              transitionDrafts={Object.fromEntries(
-                                Object.entries(transitionDrafts)
-                                  .filter(([key]) => key.startsWith(`${schema.name}|`))
-                                  .map(([key, draft]) => [key.slice(schema.name.length + 1), draft]),
-                              )}
+                              transitionDrafts={transitionDrafts[schema.name]}
                               onTransitionDraft={(transition, draft) =>
-                                setTransitionDrafts((prev) => ({ ...prev, [`${schema.name}|${transition}`]: draft }))
+                                setTransitionDrafts((prev) => ({
+                                  ...prev,
+                                  [schema.name]: { ...prev[schema.name], [transition]: draft },
+                                }))
                               }
                               drafts={{
                                 read: conditionDrafts[`${schema.name}:read`],
