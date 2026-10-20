@@ -117,6 +117,22 @@ test('a run carries retryable on every action, and an execution log carries reda
         const contract = Number(detail.headers()['x-api-contract-version']);
         const run: Record<string, unknown> & { actions: Record<string, unknown>[] } = await detail.json();
         expect(run.actions).toHaveLength(1);
+        // The live-run fields arrive together, with the API that sends updatedAt on a run. The
+        // pinned 4.7.0 sends none of them, so the check keys on that field and not on a number.
+        const listed = await request.get(`${API}/api/workflow-runs?page=1&pageSize=50`, { headers });
+        expect(listed.status(), 'GET /api/workflow-runs').toBe(200);
+        const listing: Record<string, unknown> = await listed.json();
+        if ('updatedAt' in run) {
+            expect(listing, 'a list from an API that stamps runs also counts their statuses').toHaveProperty('statusCounts');
+            expect(typeof listing.statusCounts, 'statusCounts is an object of counts').toBe('object');
+            for (const action of run.actions) {
+                expect(Array.isArray(action.history), 'an action carries its history').toBe(true);
+                expect(typeof action.droppedAttempts, 'an action carries droppedAttempts').toBe('number');
+            }
+        } else {
+            expect(listing).not.toHaveProperty('statusCounts');
+        }
+
         if (contract >= 8) {
             for (const key of ['compensation', 'abandonedAt', 'executor']) {
                 expect(run, `a run carries ${key}`).toHaveProperty(key, null);

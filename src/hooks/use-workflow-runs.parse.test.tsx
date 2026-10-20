@@ -78,13 +78,13 @@ describe('the run reads', () => {
         expect(result.current.data?.items).toHaveLength(6);
     });
 
-    it('fail on a run status the filter does not know, so the filter cannot fall behind silently', async () => {
+    it('keep a run status the filter does not know, as it came', async () => {
         vi.mocked(api.get).mockResolvedValue({ data: envelope([run('r1', 'Succeeded'), run('r2', 'Paused')]) });
 
         const { result } = renderHook(() => useWorkflowRuns({ page: 1 }), { wrapper });
 
-        await waitFor(() => expect(result.current.isError).toBe(true));
-        expect(isResponseShapeError(result.current.error)).toBe(true);
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data?.items.map((r) => r.status)).toEqual(['Succeeded', 'Paused']);
     });
 
     it('fail on a run whose actions arrive under another name', async () => {

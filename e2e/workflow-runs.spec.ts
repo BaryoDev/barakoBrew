@@ -49,6 +49,7 @@ function run(id: string, workflowName: string, status: string, actions: Attempt[
     status,
     createdAt: new Date(Date.now() - 3600_000).toISOString(),
     completedAt: status === 'Pending' || status === 'Running' ? null : new Date().toISOString(),
+    abandonedAt: null,
     actions,
   };
 }
@@ -82,8 +83,12 @@ async function stubRuns(
   const detailReads: string[] = [];
   const retries: string[] = [];
 
+  // Polling is kept quiet: every poll reports nothing changed, so the only detail reads after the
+  // first are the ones the screen makes on purpose. Only a poll carries a cursor, as in the API.
   await page.route(/\/api\/workflow-runs(\?|$)/, (route) => {
-    const status = new URL(route.request().url()).searchParams.get('status');
+    const params = new URL(route.request().url()).searchParams;
+    if (params.has('changedSince')) return route.fulfill({ json: { ...pageOf([]), cursor: 'quiet' } });
+    const status = params.get('status');
     const items = status ? RUNS.filter((r) => r.status === status) : RUNS;
     return route.fulfill({ json: pageOf(items) });
   });
@@ -111,6 +116,13 @@ function actions(page: Page) {
   return page.getByRole('list', { name: 'Actions' }).getByRole('listitem');
 }
 
+/** A status chip in the filter group. Its name carries the count when the API sends one. */
+function chip(page: Page, status: string) {
+  return page
+    .getByRole('group', { name: 'Filter runs by status' })
+    .getByRole('button', { name: new RegExp(`^${status}\\b`) });
+}
+
 async function open(page: Page) {
   await authed(page);
   await stubShell(page);
@@ -136,8 +148,7 @@ test.describe('workflow runs', () => {
   test('a status filter narrows the list to that status', async ({ page }) => {
     await open(page);
 
-    await page.getByLabel('Filter runs by status').click();
-    await page.getByRole('option', { name: 'Failed', exact: true }).click();
+    await chip(page, 'Failed').click();
 
     const table = page.getByRole('table');
     await expect(table.getByText('Push to the CDN')).toBeVisible();
@@ -185,10 +196,10 @@ test.describe('workflow runs', () => {
     expect(stubs.retries[0]).toContain('/api/workflow-runs/run-partly/actions/2/retry');
 
     // The response body is discarded, so the only way the screen can be right is a fresh read.
-    await expect.poll(() => stubs.detailReads.length).toBeGreaterThan(readsBefore);
+    await expect.poll(() => stubs.detailReads.length).toBe(readsBefore + 1);
   });
 
-  test('a refused retry says so and leaves the screen alone', async ({ page }) => {
+  test('a refused retry says so and reads the run again', async ({ page }) => {
     await authed(page);
     await stubShell(page);
     const stubs = await stubRuns(page, {
@@ -206,8 +217,9 @@ test.describe('workflow runs', () => {
 
     await page.getByRole('button', { name: /Retry action 2/ }).click();
 
+    // A 409 means the screen was wrong about the run, so it reads the run again and keeps the reason.
+    await expect.poll(() => stubs.detailReads.length).toBe(readsBefore + 1);
     await expect(page.getByText('That action is running now. Wait for it to finish.')).toBeVisible();
-    expect(stubs.detailReads.length).toBe(readsBefore);
   });
 
   test('every retry button is disabled while one retry is in flight', async ({ page }) => {
@@ -470,8 +482,7 @@ test.describe('workflow runs paging', () => {
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(page.getByRole('table').getByText('Tidy the index')).toBeVisible();
 
-    await page.getByLabel('Filter runs by status').click();
-    await page.getByRole('option', { name: 'Failed', exact: true }).click();
+    await chip(page, 'Failed').click();
 
     // Page 2 of everything is not page 2 of one status. Staying there reads an empty page for a
     // filter that has a match, which is the screen telling the operator nothing is Failed.
@@ -483,5 +494,120 @@ test.describe('workflow runs paging', () => {
       )
       .toEqual(['1']);
     await expect(page.getByRole('table').getByText('Push to the CDN')).toBeVisible();
+  });
+});
+
+/**
+ * Live runs: the screen polls, a link opens a run, and a run can be abandoned. The polling timing is
+ * covered with fake timers in the hook tests; these are about the requests the browser really sends.
+ */
+test.describe('workflow runs live', () => {
+  test('shows the counts the API sends on the status chips', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await page.route(/\/api\/workflow-runs(\?|$)/, (route) =>
+      route.fulfill({ json: { ...pageOf(RUNS), statusCounts: { Pending: 1, Running: 1, Succeeded: 30, Failed: 4 } } })
+    );
+    await page.goto('/workflow-runs');
+
+    await expect(page.getByTestId('count-Succeeded')).toHaveText('30', { timeout: 15000 });
+    await expect(page.getByTestId('count-Failed')).toHaveText('4');
+  });
+
+  test('polls with the cursor the API sent and shows a run that changed', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    const asked: URL[] = [];
+    let polls = 0;
+    await page.route(/\/api\/workflow-runs(\?|$)/, (route) => {
+      const url = new URL(route.request().url());
+      asked.push(url);
+      if (!url.searchParams.has('changedSince')) return route.fulfill({ json: pageOf(RUNS) });
+      polls += 1;
+      const changed = RUNS.filter((r) => r.id === 'run-live').map((r) => ({ ...r, status: 'Succeeded' }));
+      return route.fulfill({ json: { ...pageOf(changed), cursor: `cursor-${polls}` } });
+    });
+    await page.goto('/workflow-runs');
+    await expect(page.getByRole('table').getByText('Notify the desk')).toBeVisible({ timeout: 15000 });
+
+    await expect.poll(() => asked.some((url) => url.searchParams.get('changedSince') === 'cursor-1'), { timeout: 15000 }).toBe(true);
+    await expect(page.getByRole('row', { name: /Notify the desk/ }).getByText('Succeeded', { exact: true })).toBeVisible();
+  });
+
+  const LINKED_ID = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+
+  /** The detail of one run under a real-looking id, which is the only kind a link is sent for. */
+  async function stubLinked(page: Page, source: ReturnType<typeof run>) {
+    const reads: string[] = [];
+    await page.route(new RegExp(`/api/workflow-runs/${LINKED_ID}$`), (route) => {
+      reads.push(LINKED_ID);
+      return route.fulfill({ json: { ...source, id: LINKED_ID } });
+    });
+    return reads;
+  }
+
+  test('opens the run named in the address', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubRuns(page);
+    await stubLinked(page, RUNS[2]);
+    await page.goto(`/workflow-runs?run=${LINKED_ID}`);
+
+    await expect(page.getByRole('heading', { name: 'Push to the CDN' })).toBeVisible({ timeout: 15000 });
+    await expect(actions(page)).toHaveCount(1);
+  });
+
+  test('says so when the run in the address does not exist', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubRuns(page);
+    await page.goto('/workflow-runs?run=4f2504e0-4f89-11d3-9a0c-0305e82c3309');
+
+    await expect(page.getByText('Run not found')).toBeVisible({ timeout: 15000 });
+  });
+
+  test('says not found for an id that is not a GUID without asking the API', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    const { detailReads } = await stubRuns(page);
+    await page.goto('/workflow-runs?run=abc');
+
+    await expect(page.getByText('Run not found')).toBeVisible({ timeout: 15000 });
+    expect(detailReads).toEqual([]);
+  });
+
+  test('offers no abandon for a run from an API that does not send abandonedAt', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubRuns(page);
+    const older: Record<string, unknown> = { ...PARTLY_FAILED };
+    delete older.abandonedAt;
+    await stubLinked(page, older as ReturnType<typeof run>);
+    await page.goto(`/workflow-runs?run=${LINKED_ID}`);
+
+    await expect(actions(page)).toHaveCount(5, { timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'Abandon run' })).toHaveCount(0);
+  });
+
+  test('abandons a run after asking, then reads it again', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubRuns(page);
+    const abandons: string[] = [];
+    const detailReads = await stubLinked(page, PARTLY_FAILED);
+    await page.route('**/api/workflow-runs/*/abandon', (route) => {
+      abandons.push(new URL(route.request().url()).pathname);
+      return route.fulfill({ json: { ...PARTLY_FAILED, status: 'Abandoned' } });
+    });
+    await page.goto(`/workflow-runs?run=${LINKED_ID}`);
+    await expect(actions(page)).toHaveCount(5, { timeout: 15000 });
+    const before = detailReads.length;
+
+    await page.getByRole('button', { name: 'Abandon run' }).click();
+    expect(abandons).toEqual([]);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Yes, abandon the run' }).click();
+
+    await expect.poll(() => abandons).toEqual([`/api/workflow-runs/${LINKED_ID}/abandon`]);
+    await expect.poll(() => detailReads.length).toBeGreaterThan(before);
   });
 });

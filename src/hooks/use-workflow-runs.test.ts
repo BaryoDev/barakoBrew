@@ -3,7 +3,10 @@ import {
   ANY_STATUS,
   failureKind,
   formatDuration,
+  isAbandonable,
   isCancellable,
+  isRunId,
+  parseRunId,
   isRetryable,
   isStopped,
   runAllowsRetry,
@@ -295,5 +298,140 @@ describe('workflowRunSchema', () => {
     expect(() =>
       workflowRunSchema.parse({ ...run, actions: [{ ...run.actions[0], compensation: { attempts: 0 } }] }),
     ).toThrow();
+  });
+});
+
+describe('isAbandonable', () => {
+  const ok = { action: (status: string) => ({ ordinal: 1, actionType: 'Webhook', status, attempts: 1 }) };
+
+  it('offers it on a run where something went out and the rest did not', () => {
+    expect(
+      isAbandonable({
+        status: 'PartiallyFailed',
+        cancelledAt: null,
+        abandonedAt: null,
+        actions: [ok.action('Succeeded'), ok.action('Failed')],
+      }),
+    ).toBe(true);
+  });
+
+  it('does not offer it on a run from an API that sends no abandonedAt', () => {
+    expect(
+      isAbandonable({ status: 'PartiallyFailed', cancelledAt: null, actions: [ok.action('Succeeded'), ok.action('Failed')] }),
+    ).toBe(false);
+  });
+
+  it('does not offer it when nothing succeeded, since there is nothing to undo', () => {
+    expect(isAbandonable({ status: 'Failed', cancelledAt: null, abandonedAt: null, actions: [ok.action('Failed')] })).toBe(false);
+  });
+
+  it('does not offer it on a run that finished with everything succeeded', () => {
+    expect(isAbandonable({ status: 'Succeeded', cancelledAt: null, abandonedAt: null, actions: [ok.action('Succeeded')] })).toBe(false);
+  });
+
+  it('does not offer it on a cancelled run or one already rolled back', () => {
+    const actions = [ok.action('Succeeded'), ok.action('Failed')];
+    expect(isAbandonable({ status: 'Cancelled', cancelledAt: '2026-10-19T10:00:00Z', abandonedAt: null, actions })).toBe(false);
+    expect(isAbandonable({ status: 'Failed', cancelledAt: null, abandonedAt: null, compensation: 'Compensating', actions })).toBe(false);
+    expect(isAbandonable({ status: 'Failed', cancelledAt: null, abandonedAt: '2026-10-19T10:00:00Z', actions })).toBe(false);
+  });
+});
+
+describe('a run read with the attempt history', () => {
+  const base = {
+    id: 'r1',
+    workflowDefinitionId: 'wf',
+    workflowName: 'Announce',
+    contentId: 'c',
+    contentType: 'article',
+    triggerEvent: 'Created',
+    status: 'Failed',
+    createdAt: '2026-10-19T10:00:00Z',
+  };
+
+  it('keeps every try and the dropped count', () => {
+    const parsed = workflowRunSchema.parse({
+      ...base,
+      updatedAt: '2026-10-19T10:01:00Z',
+      actions: [
+        {
+          ordinal: 1,
+          actionType: 'Webhook',
+          status: 'Failed',
+          attempts: 3,
+          droppedAttempts: 2,
+          history: [
+            { number: 4, outcome: 'Failed', responseStatus: 503, error: 'bad gateway', retryable: true, durationMs: 120 },
+            { number: 5, outcome: 'Succeeded' },
+          ],
+        },
+      ],
+    });
+
+    expect(parsed.updatedAt).toBe('2026-10-19T10:01:00Z');
+    expect(parsed.actions[0].history).toHaveLength(2);
+    expect(parsed.actions[0].history?.[0].number).toBe(4);
+    expect(parsed.actions[0].droppedAttempts).toBe(2);
+  });
+
+  it('still reads a run from an API without it', () => {
+    const parsed = workflowRunSchema.parse({
+      ...base,
+      actions: [{ ordinal: 1, actionType: 'Webhook', status: 'Failed', attempts: 1 }],
+    });
+
+    expect(parsed.actions[0].history).toBeUndefined();
+    expect(parsed.updatedAt).toBeUndefined();
+  });
+});
+
+describe('parseRunId', () => {
+  const canonical = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+
+  it.each([
+    canonical,
+    canonical.toUpperCase(),
+    `{${canonical}}`,
+    `(${canonical})`,
+    canonical.replaceAll('-', ''),
+    `  ${canonical}\n`,
+    `{${canonical.toUpperCase()}}`,
+  ])('reads %j as the canonical id', (text) => {
+    expect(parseRunId(text)).toBe(canonical);
+  });
+
+  it.each(['abc', '..', '', `{${canonical}`, `${canonical})`, `[${canonical}]`, `${canonical}0`, canonical.slice(1)])(
+    'refuses %j',
+    (text) => {
+      expect(parseRunId(text)).toBeNull();
+    },
+  );
+});
+
+describe('isRunId', () => {
+  it('accepts the spellings of a GUID that parseRunId reads, and nothing else', () => {
+    expect(isRunId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')).toBe(true);
+    expect(isRunId('3F2504E0-4F89-11D3-9A0C-0305E82C3301')).toBe(true);
+    for (const text of ['abc', '..', '', 'run-1', '3f2504e0-4f89-11d3-9a0c-0305e82c33010', '../3f2504e0-4f89-11d3-9a0c-0305e82c3301']) {
+      expect(isRunId(text), text).toBe(false);
+    }
+  });
+});
+
+describe('a run with a status this console does not know', () => {
+  it('parses, and keeps the status as it came', () => {
+    const parsed = workflowRunSchema.parse({
+      id: 'r1',
+      workflowDefinitionId: 'w',
+      workflowName: 'W',
+      contentId: 'c',
+      contentType: 't',
+      triggerEvent: 'Created',
+      status: 'Abandoned',
+      createdAt: '2026-10-19T10:00:00Z',
+      actions: [],
+    });
+
+    expect(parsed.status).toBe('Abandoned');
   });
 });

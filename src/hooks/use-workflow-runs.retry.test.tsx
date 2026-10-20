@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
-import { useRetryAttempt } from './use-workflow-runs';
+import { useAbandonRun, useCancelRun, useRetryAttempt } from './use-workflow-runs';
 
 vi.mock('@/lib/api', () => ({
   api: { get: vi.fn(), post: vi.fn() },
@@ -57,7 +58,17 @@ describe('useRetryAttempt', () => {
     });
   });
 
-  it('refetches nothing when the retry was refused, so the screen keeps what the server holds', async () => {
+  it('encodes the run id in the route, as cancel and abandon do', async () => {
+    const { wrapper } = harness();
+    const { result } = renderHook(() => useRetryAttempt(), { wrapper });
+
+    post.mockResolvedValueOnce({ data: {} });
+    await result.current.mutateAsync({ runId: '../x?y', ordinal: 2 });
+
+    expect(post).toHaveBeenCalledWith('/api/workflow-runs/..%2Fx%3Fy/actions/2/retry', {});
+  });
+
+  it('refetches nothing when the retry failed some other way, so the screen keeps what the server holds', async () => {
     const { wrapper, invalidated } = harness();
     const { result } = renderHook(() => useRetryAttempt(), { wrapper });
 
@@ -65,5 +76,60 @@ describe('useRetryAttempt', () => {
 
     await expect(result.current.mutateAsync({ runId: 'run-1', ordinal: 1 })).rejects.toThrow('409');
     expect(invalidated).toEqual([]);
+  });
+
+  it.each([403, 409])('refetches the run when the retry was refused with a %i, because the screen was wrong', async (status) => {
+    const { wrapper, invalidated } = harness();
+    const { result } = renderHook(() => useRetryAttempt(), { wrapper });
+
+    post.mockRejectedValueOnce(refusal(status));
+
+    await expect(result.current.mutateAsync({ runId: 'run-1', ordinal: 1 })).rejects.toThrow();
+    expect(invalidated).toEqual([['workflow-run', 'run-1'], ['workflow-runs']]);
+  });
+});
+
+function refusal(status: number) {
+  return new AxiosError('refused', 'ERR_BAD_REQUEST', undefined, undefined, {
+    status,
+    statusText: '',
+    data: { message: 'refused' },
+    headers: {},
+    config: { headers: new AxiosHeaders() },
+  });
+}
+
+describe('useAbandonRun and useCancelRun', () => {
+  beforeEach(() => {
+    post.mockReset();
+    post.mockResolvedValue({ data: {} });
+  });
+
+  it('abandon posts to the abandon route and refetches the run and the list', async () => {
+    const { wrapper, invalidated } = harness();
+    const { result } = renderHook(() => useAbandonRun(), { wrapper });
+
+    await result.current.mutateAsync('run-1');
+
+    expect(post).toHaveBeenCalledWith('/api/workflow-runs/run-1/abandon', {});
+    await waitFor(() => expect(invalidated).toEqual([['workflow-run', 'run-1'], ['workflow-runs']]));
+  });
+
+  it.each([403, 409])('abandon refetches the run when it is refused with a %i', async (status) => {
+    const { wrapper, invalidated } = harness();
+    const { result } = renderHook(() => useAbandonRun(), { wrapper });
+    post.mockRejectedValueOnce(refusal(status));
+
+    await expect(result.current.mutateAsync('run-1')).rejects.toThrow();
+    expect(invalidated).toEqual([['workflow-run', 'run-1'], ['workflow-runs']]);
+  });
+
+  it('cancel refetches the run when it is refused with a 409', async () => {
+    const { wrapper, invalidated } = harness();
+    const { result } = renderHook(() => useCancelRun(), { wrapper });
+    post.mockRejectedValueOnce(refusal(409));
+
+    await expect(result.current.mutateAsync('run-1')).rejects.toThrow();
+    expect(invalidated).toEqual([['workflow-run', 'run-1'], ['workflow-runs']]);
   });
 });
