@@ -247,6 +247,41 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
+    test('the storage screen, with S3 chosen and a failed test shown', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await page.route(/\/api\/settings\/storage\/test$/, (r) =>
+            r.fulfill({
+                json: { ok: false, step: 'put', errorCode: 'NoSuchBucket', message: 'The specified bucket does not exist.' },
+            })
+        );
+        await page.route(/\/api\/settings\/storage$/, (r) =>
+            r.fulfill({
+                json: {
+                    provider: 's3',
+                    activeProvider: 's3',
+                    readOnly: false,
+                    environmentKeys: [],
+                    availableProviders: ['postgres', 's3'],
+                    s3: {
+                        bucket: 'media',
+                        region: 'eu-west-1',
+                        usePublicReadAcl: false,
+                        forcePathStyle: true,
+                        accessKey: 'AKIAEXAMPLE',
+                        secretSet: true,
+                    },
+                },
+            })
+        );
+
+        await page.goto('/settings/storage');
+        await expect(page.getByRole('heading', { name: 'Storage', exact: true })).toBeVisible({ timeout: 15000 });
+        await page.getByRole('button', { name: 'Test connection' }).click();
+        await expect(page.getByTestId('storage-test-result')).toContainText('NoSuchBucket');
+        await scan(page);
+    });
+
     test('the devices list, with a row of every status', async ({ page }) => {
         await authed(page);
         await stubShell(page);

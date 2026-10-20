@@ -404,6 +404,11 @@ describe('the rail against an API that reports capabilities', () => {
         expect(seen(['manage_settings'])).toContain('Email');
         expect(seen(['manage_email_settings'])).not.toContain('Email');
     });
+
+    it('offers Storage to a role holding manage_storage and to no other capability', () => {
+        expect(seen(['manage_storage'])).toContain('Storage');
+        expect(seen(['manage_settings'])).not.toContain('Storage');
+    });
 });
 
 describe('nav glyphs', () => {

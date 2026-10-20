@@ -7,6 +7,7 @@ import {
   IconContent,
   IconContentTypes,
   IconDashboard,
+  IconDatabase,
   IconEnvelope,
   IconFieldEdit,
   IconFilter,
@@ -205,6 +206,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // Reading takes manage_settings; saving and the test send take manage_email_settings, which the
       // screen checks for its buttons.
       { title: 'Email', href: '/settings/email', icon: IconEnvelope, capability: 'manage_settings', roles: ['SuperAdmin'] },
+      // Reading and saving both take manage_storage, seeded to SuperAdmin and Admin by BarakoCMS.Files.
+      { title: 'Storage', href: '/settings/storage', icon: IconDatabase, module: MODULE.files, capability: 'manage_storage', roles: ['SuperAdmin', 'Admin'] },
       // The caller's own second factor. With capabilities known it is offered to every signed-in
       // caller, as the API serves it; the roles are what an older API's console offered.
       { title: 'Security', href: '/settings/security', icon: IconLock, roles: ['SuperAdmin', 'Admin'] },
