@@ -499,6 +499,8 @@ type RunListCache = WorkflowRunList;
 class Throttle {
   /** A counts-only read. */
   countsReadAt = -Infinity;
+  /** Counts reads that failed in a row, which lengthen the wait before the next one. */
+  countsFailures = 0;
   /** A page read asked for because a run left the filter. */
   holeAt = -Infinity;
   /** A full page read made because the API has no `changedSince`. */
@@ -571,10 +573,10 @@ class ListState {
     for (const listener of this.listeners) listener();
   }
 
-  /** The newest copy of every run a poll returned, for a refetch that was already in flight. */
   /** Throttle times shared by every hook on this client and key, so a remount does not reset them. */
   constructor(readonly throttle: Throttle = new Throttle()) {}
 
+  /** The newest copy of every run a poll returned, for a refetch that was already in flight. */
   readonly polled = new Map<string, WorkflowRun>();
   /** When the copy in `polled` was first seen, by id. */
   private readonly seenAt = new Map<string, number>();
@@ -920,6 +922,7 @@ function startPolling(input: PollingInput): () => void {
 
       const response = await api.get<unknown>('/api/workflow-runs', { params });
       const counted = parseResponse(workflowRunListSchema(), response.data, 'GET /api/workflow-runs?pageSize=1');
+      list.throttle.countsFailures = 0;
       if (stopped || !counted.statusCounts) return;
       // A read that began before newer counts landed is older than them.
       if (started < list.landedAt || started < list.countsAt) return;
@@ -928,9 +931,11 @@ function startPolling(input: PollingInput): () => void {
       queryClient.setQueryData<RunListCache>(listKey, (current) => (current ? applyCounts(current, counts, status) : current));
       list.countsLanded(started);
     } catch {
-      // The counts stay dirty and are asked for again at the pace of a hole read. Errors that matter
+      // The counts stay dirty and are asked for again after 10 s, then doubling to a minute. Errors that matter
       // reach the poll, which backs off or stops on its own.
-      list.throttle.countsReadAt = started - COUNTS_REFRESH_MS + HOLE_REFETCH_MS;
+      const failures = (list.throttle.countsFailures += 1);
+      const wait = Math.min(HOLE_REFETCH_MS * 2 ** (failures - 1), COUNTS_REFRESH_MS);
+      list.throttle.countsReadAt = started - COUNTS_REFRESH_MS + wait;
     }
   }
 
@@ -950,7 +955,6 @@ function startPolling(input: PollingInput): () => void {
 
   return () => {
     stopped = true;
-    list.clearDirty();
     clearTimeout(timer);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility);
   };
