@@ -9,6 +9,15 @@ import {
   useSetWorkflowEnabled,
   useWorkflows,
 } from '@/hooks/use-workflows';
+import { useAccess } from '@/hooks/use-access';
+import {
+  RUN_WORKFLOWS_CAPABILITY,
+  RUN_WORKFLOWS_LEGACY_ROLES,
+  VIEW_RUNS_CAPABILITY,
+  useWorkflowHealth,
+} from '@/hooks/use-workflow-health';
+import { HealthTile } from '@/components/workflow/health-tile';
+import { RunNowButton } from '@/components/workflow/run-now';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { Switch } from '@/components/ui/switch';
 import { apiErrorMessage } from '@/lib/api';
@@ -35,6 +44,12 @@ export default function WorkflowsPage() {
   const remove = useDeleteWorkflow();
   // An API before 4.6 has neither route, and no workflow it returns carries `enabled`.
   const switchable = supportsWorkflowSwitch(workflows);
+  const access = useAccess();
+  // Health asks for the same capability the run list does. A caller without it, or an API with no
+  // such route, sees no tiles and no Run now.
+  const health = useWorkflowHealth(access.can(VIEW_RUNS_CAPABILITY, ['Admin']));
+  const showHealth = health.data?.available === true;
+  const showRun = !health.unavailable && access.can(RUN_WORKFLOWS_CAPABILITY, RUN_WORKFLOWS_LEGACY_ROLES);
 
   const toggle = (id: string, name: string, enabled: boolean) =>
     setEnabled.mutate(
@@ -93,7 +108,13 @@ export default function WorkflowsPage() {
                 <TableHead>Workflow</TableHead>
                 <TableHead>Trigger</TableHead>
                 <TableHead className="hidden sm:table-cell">Actions</TableHead>
+                {showHealth && <TableHead>Health</TableHead>}
                 {switchable && <TableHead>On</TableHead>}
+                {showRun && (
+                  <TableHead className="w-10">
+                    <span className="sr-only">Run now</span>
+                  </TableHead>
+                )}
                 {switchable && (
                   <TableHead className="w-10">
                     <span className="sr-only">Delete</span>
@@ -125,6 +146,11 @@ export default function WorkflowsPage() {
                       ))}
                     </div>
                   </TableCell>
+                  {showHealth && (
+                    <TableCell>
+                      <HealthTile health={health.healthOf(workflow.id)} windowDays={health.windowDays} />
+                    </TableCell>
+                  )}
                   {switchable && workflow.id && (
                     // The row opens the workflow on click, so the controls keep their clicks.
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -134,6 +160,11 @@ export default function WorkflowsPage() {
                         aria-label={`${workflow.name} is on`}
                         onCheckedChange={(checked) => toggle(workflow.id!, workflow.name, checked)}
                       />
+                    </TableCell>
+                  )}
+                  {showRun && (
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <RunNowButton workflow={workflow} size="icon" />
                     </TableCell>
                   )}
                   {switchable && workflow.id && (

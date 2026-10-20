@@ -19,7 +19,14 @@ globalThis.ResizeObserver ??= class {
     disconnect() {}
 };
 
+const { accessFrom } = await import('@/lib/access');
+type AccessResult = ReturnType<typeof accessFrom>;
+const EVERYTHING = accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: [], capabilities: ['*'] }, []);
+let access: AccessResult = EVERYTHING;
+vi.mock('@/hooks/use-access', () => ({ useAccess: () => access }));
+
 const { api } = await import('@/lib/api');
+const { AxiosError, AxiosHeaders } = await import('axios');
 const { default: WorkflowsPage } = await import('./page');
 
 function workflow(id: string, name: string, extra: Record<string, unknown> = {}) {
@@ -34,10 +41,42 @@ function workflow(id: string, name: string, extra: Record<string, unknown> = {})
     };
 }
 
-function renderWith(items: unknown[]) {
-    vi.mocked(api.get).mockResolvedValue({
-        data: { items, page: 1, pageSize: 25, totalItems: items.length, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+function page(items: unknown[]) {
+    return { items, page: 1, pageSize: 25, totalItems: items.length, totalPages: 1, hasNextPage: false, hasPreviousPage: false };
+}
+
+function refusal(status: number) {
+    return new AxiosError('refused', 'ERR_BAD_REQUEST', undefined, undefined, {
+        status,
+        statusText: '',
+        data: {},
+        headers: {},
+        config: { headers: new AxiosHeaders() },
     });
+}
+
+function healthOf(workflowId: string, extra: Record<string, unknown> = {}) {
+    return {
+        workflowId,
+        name: 'x',
+        enabled: true,
+        lastOutcomes: [],
+        successRate: null,
+        finishedRuns: 0,
+        averageActionDurationMs: null,
+        ...extra,
+    };
+}
+
+/** The list, and what `/api/workflows/health` does: an array of rows, or an error to throw. */
+function renderWith(items: unknown[], health: unknown[] | Error = refusal(404)) {
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+        if (url === '/api/workflows/health') {
+            if (health instanceof Error) throw health;
+            return { data: { ...page(health), windowDays: 7, windowFrom: '2026-10-13T00:00:00Z' } };
+        }
+        return { data: page(items) };
+    }) as typeof api.get);
     render(
         <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
             <WorkflowsPage />
@@ -46,6 +85,7 @@ function renderWith(items: unknown[]) {
 }
 
 beforeEach(() => {
+    access = EVERYTHING;
     vi.mocked(api.get).mockReset();
     vi.mocked(api.put).mockReset();
     vi.mocked(api.delete).mockReset();
@@ -98,3 +138,69 @@ describe('the workflow list', () => {
         expect(push).toHaveBeenCalledWith('/workflows/w1');
     });
 });
+
+describe('the health tiles', () => {
+    it('shows no runs yet, a rate with its sample size, and the last outcomes', async () => {
+        renderWith(
+            [workflow('w1', 'Announce', { enabled: true }), workflow('w2', 'Archive', { enabled: true })],
+            [
+                healthOf('w1'),
+                healthOf('w2', {
+                    successRate: 1,
+                    finishedRuns: 3,
+                    lastOutcomes: [{ runId: 'r1', status: 'Succeeded', createdAt: '2026-10-19T00:00:00Z' }],
+                }),
+            ],
+        );
+
+        expect(await screen.findByText('No runs yet')).toBeInTheDocument();
+        expect(screen.getByText('100%')).toBeInTheDocument();
+        expect(screen.getByText(/3 of 3/)).toBeInTheDocument();
+        expect(within(screen.getByRole('list', { name: 'Last outcomes' })).getByText('Succeeded')).toBeInTheDocument();
+    });
+
+    it('does not mistake a rate of zero for no runs', async () => {
+        renderWith([workflow('w1', 'Announce', { enabled: true })], [healthOf('w1', { successRate: 0, finishedRuns: 2 })]);
+
+        expect(await screen.findByText('0%')).toBeInTheDocument();
+        expect(screen.getByText(/0 of 2/)).toBeInTheDocument();
+        expect(screen.queryByText('No runs yet')).toBeNull();
+    });
+
+    it('shows nothing at all, not even the column, when health answers 404', async () => {
+        renderWith([workflow('w1', 'Announce', { enabled: true })], refusal(404));
+
+        expect(await screen.findByText('Announce')).toBeInTheDocument();
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/health', expect.anything()));
+        expect(screen.queryByRole('columnheader', { name: 'Health' })).toBeNull();
+        expect(screen.queryByText('No runs yet')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Run Announce now' })).toBeNull();
+    });
+
+    it('shows nothing at all when health fails with a 500', async () => {
+        renderWith([workflow('w1', 'Announce', { enabled: true })], refusal(500));
+
+        expect(await screen.findByText('Announce')).toBeInTheDocument();
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/health', expect.anything()));
+        expect(screen.queryByRole('columnheader', { name: 'Health' })).toBeNull();
+        expect(screen.queryByText('No runs yet')).toBeNull();
+    });
+
+    it('does not ask for health from a caller who cannot see runs', async () => {
+        access = accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: [], capabilities: ['manage_workflows'] }, []);
+        renderWith([workflow('w1', 'Announce', { enabled: true })], [healthOf('w1')]);
+
+        expect(await screen.findByText('Announce')).toBeInTheDocument();
+        expect(api.get).not.toHaveBeenCalledWith('/api/workflows/health', expect.anything());
+    });
+
+    it('opens the run now dialog from a row without opening the workflow', async () => {
+        renderWith([workflow('w1', 'Announce', { enabled: true })], [healthOf('w1')]);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Run Announce now' }));
+
+        expect(await screen.findByRole('dialog')).toBeInTheDocument();
+        expect(push).not.toHaveBeenCalled();
+    });
+});
+

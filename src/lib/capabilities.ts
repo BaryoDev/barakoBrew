@@ -38,6 +38,7 @@ export const KNOWN_CAPABILITIES: readonly CapabilityInfo[] = [
     { name: 'view_connectors', label: 'See connectors' },
     { name: 'manage_connectors', label: 'Manage connectors' },
     { name: 'manage_workflows', label: 'Manage workflows' },
+    { name: 'run_workflows', label: 'Run workflows by hand' },
     { name: 'view_workflow_runs', label: 'See workflow runs' },
     { name: 'view_webhook_response_bodies', label: 'See webhook response bodies' },
     { name: 'retry_workflow_actions', label: 'Retry workflow actions' },

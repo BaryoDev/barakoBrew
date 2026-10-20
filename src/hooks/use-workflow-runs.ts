@@ -245,6 +245,8 @@ export interface WorkflowRunsQuery {
   /** A RunStatus name, or ANY_STATUS / empty for every status. */
   status?: string;
   contentId?: string;
+  /** Only the runs of this workflow. Needs barakoCMS#1165; an older API ignores it. */
+  workflowId?: string;
 }
 
 /**
@@ -265,6 +267,9 @@ export function runListParams(query: WorkflowRunsQuery): Record<string, string |
 
   const contentId = query.contentId?.trim();
   if (contentId) params.contentId = contentId;
+
+  const workflowId = query.workflowId?.trim();
+  if (workflowId) params.workflowId = workflowId;
 
   return params;
 }
