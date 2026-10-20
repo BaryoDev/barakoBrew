@@ -439,7 +439,8 @@ describe('polling the run list', () => {
     expect(polls()).toHaveLength(1);
     expect(lists()).toHaveLength(2);
 
-    await settle(REREAD_MS - POLL_INTERVAL_MS - 1);
+    // The last full read began at 2 s, so the next may begin at 32 s and not before.
+    await settle(REREAD_MS - 1);
     expect(polls()).toHaveLength(1);
     expect(lists()).toHaveLength(2);
 
@@ -787,7 +788,7 @@ describe('what the counts refresh costs', () => {
           : page(rows, { statusCounts: { Failed: 2, Running: 1 }, totalItems: 2 }),
       () => {
         polled += 1;
-        return page([run('z', '07:00', { status: 'Failed' })], { cursor: `c${polled}`, statusCounts: null });
+        return page([run('z', '07:00', { status: 'Running' })], { cursor: `c${polled}`, statusCounts: null });
       },
     );
 
@@ -890,15 +891,16 @@ describe('the counts hint and the throttle across mounts', () => {
     expect(countReads()).toHaveLength(1);
   });
 
-  it('says nothing once polling has stopped, and drops the flag', async () => {
+  it('forgets the dirty flag when polling stops, so it is not back when polling resumes', async () => {
     const late: { release?: () => void } = {};
     let polled = 0;
     vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: Params }) => {
       const params = config?.params ?? {};
       if ('changedSince' in params) {
         polled += 1;
-        if (polled > 1) throw failure(403);
-        return { data: page([offPage()], { cursor: 'c1', statusCounts: null }) };
+        if (polled === 2) throw failure(403);
+        const items = polled === 1 ? [offPage()] : [];
+        return { data: page(items, { cursor: `c${polled}`, statusCounts: null }) };
       }
       const body = page([run('a', '10:00', { status: 'Failed' })], { statusCounts: { Failed: 1, Running: 2 }, totalItems: 1 });
       if (params.pageSize !== 1) return { data: body };
@@ -907,14 +909,81 @@ describe('the counts hint and the throttle across mounts', () => {
       });
     }) as unknown as typeof api.get);
 
-    const { result } = mount({ status: 'Failed' });
+    const { result, rerender } = renderHook(
+      ({ live }) => useWorkflowRuns({ page: 1, pageSize: 25, status: 'Failed' }, { live }),
+      { wrapper, initialProps: { live: true } },
+    );
     await settle(POLL_INTERVAL_MS);
     expect(countReads()).toHaveLength(1);
-    expect(result.current.runs.countsBehind).toBe(true);
+    expect(result.current.countsBehind).toBe(true);
 
     await settle(POLL_INTERVAL_MS);
-    expect(result.current.runs.pause).toEqual({ reason: 'stopped' });
-    expect(result.current.runs.countsBehind).toBe(false);
+    expect(result.current.pause).toEqual({ reason: 'stopped' });
+    expect(result.current.countsBehind).toBe(false);
+
+    // The API answers again and polling restarts. The counts read that was in flight when it
+    // stopped never landed, so a flag that survived the stop would show here.
+    rerender({ live: false });
+    rerender({ live: true });
+    await settle(POLL_INTERVAL_MS);
+    expect(result.current.pause).toBeNull();
+    expect(result.current.countsBehind).toBe(false);
+  });
+
+  it('keeps the dirty flag when the polling effect reruns without a stop', async () => {
+    serve(
+      () => page([run('a', '10:00', { status: 'Failed' })], { statusCounts: { Failed: 1, Running: 2 }, totalItems: 1 }),
+      () => page([offPage()], { cursor: 'c', statusCounts: null }),
+    );
+    let broken = true;
+    const base = vi.mocked(api.get).getMockImplementation() as (...args: unknown[]) => Promise<unknown>;
+    vi.mocked(api.get).mockImplementation(((...args: unknown[]) => {
+      const params = ((args[1] as { params?: Params } | undefined)?.params ?? {}) as Params;
+      if (broken && params.pageSize === 1) return Promise.reject(failure(500));
+      return base(...args);
+    }) as unknown as typeof api.get);
+
+    const { result, rerender } = renderHook(
+      ({ live }) => useWorkflowRuns({ page: 1, pageSize: 25, status: 'Failed' }, { live }),
+      { wrapper, initialProps: { live: true } },
+    );
+    await settle(POLL_INTERVAL_MS);
+    expect(countReads()).toHaveLength(1);
+    expect(result.current.countsBehind).toBe(true);
+
+    rerender({ live: false });
+    rerender({ live: true });
+    broken = false;
+    expect(result.current.countsBehind).toBe(true);
+
+    await settle(HOLE_REFETCH_MS);
+    expect(countReads()).toHaveLength(2);
+    expect(result.current.countsBehind).toBe(false);
+  });
+
+  it('waits longer after each failed counts read, up to a minute', async () => {
+    serve(
+      (params) => {
+        if (params.pageSize !== 1) return page([run('a', '10:00', { status: 'Failed' })], { statusCounts: { Failed: 1, Running: 2 }, totalItems: 1 });
+        return failure(500);
+      },
+      () => page([offPage()], { cursor: 'c', statusCounts: null }),
+    );
+
+    mount({ status: 'Failed' });
+    // Reads begin at 2 s, then 10 s, 20 s and 40 s later, then a minute apart.
+    await settle(POLL_INTERVAL_MS);
+    expect(countReads()).toHaveLength(1);
+    await settle(HOLE_REFETCH_MS);
+    expect(countReads()).toHaveLength(2);
+    await settle(HOLE_REFETCH_MS * 2);
+    expect(countReads()).toHaveLength(3);
+    await settle(HOLE_REFETCH_MS * 4);
+    expect(countReads()).toHaveLength(4);
+    await settle(COUNTS_REFRESH_MS - POLL_INTERVAL_MS);
+    expect(countReads()).toHaveLength(4);
+    await settle(POLL_INTERVAL_MS);
+    expect(countReads()).toHaveLength(5);
   });
 
   it('tries a failed counts read again after ten seconds, not a minute, and clears the hint when it lands', async () => {
