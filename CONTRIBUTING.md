@@ -95,7 +95,8 @@ requirements below.
    `bash scripts/smoke-check.sh` too (needs Docker).
 5. Title the PR `Area: Description (closes #123)` and put `Fixes #123` on its own line in the
    body. GitHub only auto-closes from the body, so the title suffix is for readers.
-6. Open it.
+6. For a UI change, cite the rules it follows in [docs/design-rules.md](docs/design-rules.md).
+7. Open it.
 
 ## Tests for a bug fix must fail before the fix
 
