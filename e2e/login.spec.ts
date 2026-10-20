@@ -65,7 +65,7 @@ test.describe('Login & Authentication', () => {
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await expect(page).toHaveURL('/', { timeout: 10000 });
-        await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
     });
 
     test('two-factor: password step asks for a code instead of signing in', async ({ page }) => {
@@ -126,7 +126,7 @@ test.describe('Login & Authentication', () => {
         await page.getByRole('button', { name: 'Verify' }).click();
 
         await expect(page).toHaveURL('/', { timeout: 10000 });
-        await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
     });
 
     test('device approval: an unapproved device asks for the emailed code', async ({ page }) => {

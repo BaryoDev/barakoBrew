@@ -4,23 +4,19 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { useAccess } from '@/hooks/use-access';
+import { useAllowedGroups, hrefsOf } from '@/hooks/use-visible-hrefs';
 import { BrandMark, BrandWordmark } from '@/components/brand';
 import {
-  NAV_GROUPS,
   activeNavHref,
-  visibleGroups,
-  withModules,
   withSingletons,
   type NavGroup,
   type NavItem,
 } from '@/lib/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useNavMetrics, type NavMetrics } from '@/hooks/use-nav-metrics';
-import { useEnabledModules } from '@/hooks/use-modules';
 import { CommandMenu } from '@/components/command-menu';
 import { TenantSwitcher } from '@/components/tenant-switcher';
-import { IconMore, IconSignOut } from '@/components/icons';
+import { IconChevronDown } from '@/components/icons';
 import { AboutDialog } from '@/components/about-dialog';
 import { useApiMeta } from '@/hooks/use-meta';
 import { cn } from '@/lib/utils';
@@ -36,22 +32,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-
-/** Two letters from a username, so `demo_admin` reads as DA and `rosa` as RO. */
-function initialsOf(username: string | undefined): string {
-  if (!username) return '?';
-  const parts = username.split(/[^A-Za-z0-9]+/).filter(Boolean);
-  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : username.slice(0, 2);
-  return letters.toUpperCase();
-}
 
 /**
  * The number beside a nav item. Three shapes, all of them real:
@@ -61,12 +41,20 @@ function initialsOf(username: string | undefined): string {
  *
  * The screen-reader text is not decoration. "Errors 2" on its own does not say two of what.
  */
-function NavMetricLabel({ item, metrics }: { item: NavItem; metrics: NavMetrics }) {
+function NavMetricLabel({ item, metrics, dot }: { item: NavItem; metrics: NavMetrics; dot?: boolean }) {
   const metric = item.metric ? metrics[item.metric] : undefined;
   if (!metric) return null;
 
   // A tinted pill exists to report a problem. Nothing wrong, nothing shown.
   if (item.tone && metric.value === 0) return null;
+
+  if (dot) {
+    return (
+      <span className="size-[7px] rounded-full bg-warning">
+        <span className="sr-only">{item.tone === 'danger' ? 'Unresolved' : 'Needs attention'}</span>
+      </span>
+    );
+  }
 
   const text = metric.atLeast ? `${metric.value}+` : `${metric.value}`;
 
@@ -98,7 +86,9 @@ function NavList({
   primary,
   activeHref,
   metrics,
+  dots,
 }: {
+  dots?: boolean;
   group: NavGroup;
   primary: boolean;
   activeHref: string | undefined;
@@ -129,7 +119,7 @@ function NavList({
               <Link href={item.href}>
                 <item.icon />
                 <span className="flex-1 truncate">{item.title}</span>
-                <NavMetricLabel item={item} metrics={metrics} />
+                <NavMetricLabel item={item} metrics={metrics} dot={dots && !!item.tone} />
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -143,24 +133,14 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  // Filtered rather than rendered whole. Every item used to be shown to every role, so a User saw
-  // all nineteen destinations and sixteen of them answered 403 on arrival. The backend was never
-  // the problem; the sidebar was advertising doors it knew were locked.
-  const access = useAccess();
-  const roleFiltered = visibleGroups(NAV_GROUPS, user?.roles, access.known ? access.can : undefined);
-
-  // And filtered again by what the deployment actually runs. Until /api/modules answers, and for a
-  // caller it will not answer, this is the role-filtered list unchanged: see withModules.
-  const modules = useEnabledModules();
-  const allowed = withModules(roleFiltered, modules);
+  // Filtered by role or capability and by the modules the deployment runs, see useAllowedGroups.
+  const allowed = useAllowedGroups();
   const { data: meta } = useApiMeta();
   const [aboutOpen, setAboutOpen] = useState(false);
 
   // Only the destinations that survived filtering get a count fetched for them.
-  const visibleHrefs = useMemo(
-    () => new Set(allowed.flatMap((g) => g.items.map((i) => i.href))),
-    [allowed]
-  );
+  const visibleHrefs = useMemo(() => hrefsOf(allowed), [allowed]);
+  const [modulesOpen, setModulesOpen] = useState(true);
   const metrics = useNavMetrics(visibleHrefs);
 
   // Only fetched for a caller the rail already offers Content types to, since the API answers 403
@@ -200,16 +180,35 @@ export function AppSidebar() {
       <SidebarContent className="px-4 pb-2">
         {groups.map((group, i) => {
           const primary = !group.label;
+          const isModules = group.label === 'Modules';
+          const open = !isModules || modulesOpen;
           return (
             <SidebarGroup key={group.label ?? i} className="p-0 pt-3 first:pt-1">
-              {group.label && (
-                <SidebarGroupLabel className="h-6 px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase">
-                  {group.label}
-                </SidebarGroupLabel>
+              {group.label && isModules ? (
+                <button
+                  type="button"
+                  aria-expanded={modulesOpen}
+                  onClick={() => setModulesOpen((v) => !v)}
+                  className="flex h-6 items-center gap-2 rounded-[9px] px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  <span className="flex-1 text-left">{group.label}</span>
+                  <span className="font-mono text-[11px] font-normal tracking-normal">{group.items.length}</span>
+                  <IconChevronDown
+                    className={cn('size-3.5 transition-transform duration-200', !modulesOpen && '-rotate-90')}
+                  />
+                </button>
+              ) : (
+                group.label && (
+                  <SidebarGroupLabel className="h-6 px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase">
+                    {group.label}
+                  </SidebarGroupLabel>
+                )
               )}
-              <SidebarGroupContent>
-                <NavList group={group} primary={primary} activeHref={activeHref} metrics={metrics} />
-              </SidebarGroupContent>
+              {open && (
+                <SidebarGroupContent>
+                  <NavList group={group} primary={primary} activeHref={activeHref} metrics={metrics} dots={isModules} />
+                </SidebarGroupContent>
+              )}
             </SidebarGroup>
           );
         })}
@@ -218,39 +217,16 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 pt-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  tooltip="Account"
-                  className="h-auto rounded-[11px] border border-border bg-card p-2.5 shadow-[var(--shadow-card)] hover:bg-card data-[state=open]:bg-card"
-                >
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground font-mono text-[11px] font-medium text-background">
-                    {initialsOf(user?.username)}
-                  </div>
-                  <div className="grid flex-1 text-left leading-tight">
-                    <span className="truncate text-[13px] font-semibold">{user?.username ?? 'Account'}</span>
-                    <span className="truncate text-[11.5px] text-muted-foreground">
-                      {user?.roles.join(', ') || 'Signed in'}
-                    </span>
-                  </div>
-                  <IconMore className="ml-auto size-4 text-(--faint)" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" className="w-56">
-                <DropdownMenuLabel className="font-normal">
-                  <div className="grid gap-0.5">
-                    <span className="text-sm font-medium">{user?.username}</span>
-                    <span className="text-xs text-muted-foreground">{user?.roles.join(', ')}</span>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout} variant="destructive">
-                  <IconSignOut />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SidebarMenuButton
+              tooltip="Sign out"
+              onClick={logout}
+              className="h-[34px] gap-2.5 rounded-[9px] px-2.5 text-[13.5px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <span aria-hidden className="size-3 shrink-0 rounded-full border-2 border-primary bg-accent" />
+              <span className="truncate">
+                {user?.username ?? 'Account'} · Sign out
+              </span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
