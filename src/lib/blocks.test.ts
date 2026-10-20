@@ -7,6 +7,8 @@ import {
     fieldProblem,
     isBindable,
     isStructured,
+    maxBlocksOf,
+    maxDepthOf,
     MAX_LIST_ITEMS,
     move,
     newBlock,
@@ -583,5 +585,46 @@ describe('new list entries', () => {
         expect(newListEntry(fieldOf('tags').item!)).toBe('');
         expect(newListEntry(fieldOf('scores').item!)).toBe(0);
         expect(newListEntry(fieldOf('stages').item!)).toEqual({});
+    });
+});
+
+describe('the limits and theme a site may publish', () => {
+    it('reads maxBlocks, maxDepth and the theme slots', () => {
+        const parsed = parseBlockSchema({
+            ...PUBLISHED,
+            limits: { maxBlocks: 200, maxDepth: 6 },
+            theme: { colors: ['accent', 'sand'], fonts: ['display'] },
+        }) as BlockSchema;
+        expect(parsed.limits).toEqual({ maxBlocks: 200, maxDepth: 6 });
+        expect(parsed.theme).toEqual({ colors: ['accent', 'sand'], fonts: ['display'] });
+        expect(maxBlocksOf(parsed)).toBe(200);
+        expect(maxDepthOf(parsed)).toBe(6);
+    });
+
+    it('falls back to 100 blocks and 4 levels when the site publishes none', () => {
+        expect(schema.limits).toBeUndefined();
+        expect(schema.theme).toBeUndefined();
+        expect(maxBlocksOf(schema)).toBe(100);
+        expect(maxDepthOf(schema)).toBe(4);
+        expect(maxBlocksOf(null)).toBe(100);
+        expect(maxDepthOf(undefined)).toBe(4);
+    });
+
+    it('ignores malformed members without refusing the schema', () => {
+        const parsed = parseBlockSchema({
+            ...PUBLISHED,
+            limits: { maxBlocks: -3, maxDepth: 'deep', other: 1 },
+            theme: { colors: 'accent', fonts: [1, ''] },
+        }) as BlockSchema;
+        expect(parsed).not.toBeNull();
+        expect(parsed.blocks.length).toBeGreaterThan(0);
+        expect(parsed.limits).toBeUndefined();
+        expect(parsed.theme).toBeUndefined();
+        expect(parseBlockSchema({ ...PUBLISHED, limits: 5, theme: [] })?.limits).toBeUndefined();
+    });
+
+    it('keeps the valid half of a limits object', () => {
+        const parsed = parseBlockSchema({ ...PUBLISHED, limits: { maxBlocks: 1.5, maxDepth: 3 } }) as BlockSchema;
+        expect(parsed.limits).toEqual({ maxDepth: 3 });
     });
 });

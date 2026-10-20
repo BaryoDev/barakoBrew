@@ -82,6 +82,21 @@ export interface BlockSchema {
     /** Null from a site that publishes none, which is every version 1 site. */
     bindings: BlockBindings | null;
     blocks: BlockType[];
+    /** What the site says it renders at most. Absent from a site that publishes none, which is today's. */
+    limits?: BlockLimits;
+    /** The colour and font names the site's theme reads. Absent from a site that publishes none. */
+    theme?: BlockTheme;
+}
+
+/** Each member is present only when the site sent a positive whole number for it. */
+export interface BlockLimits {
+    maxBlocks?: number;
+    maxDepth?: number;
+}
+
+export interface BlockTheme {
+    colors: string[];
+    fonts: string[];
 }
 
 /** The order the palette groups layers in: parts first, then arrangements, then the data blocks. */
@@ -110,6 +125,16 @@ export type BlockItem = Record<string, unknown>;
 export const MAX_BLOCKS = 100;
 export const MAX_DEPTH = 4;
 
+/** The block count the site shows, from its schema or else the built-in bound. */
+export function maxBlocksOf(schema: BlockSchema | null | undefined): number {
+    return schema?.limits?.maxBlocks ?? MAX_BLOCKS;
+}
+
+/** The depth the site reads, from its schema or else the built-in bound. */
+export function maxDepthOf(schema: BlockSchema | null | undefined): number {
+    return schema?.limits?.maxDepth ?? MAX_DEPTH;
+}
+
 /** How deep lists and groups nest inside one field, counting the field itself. A list of groups counts once. */
 export const MAX_FIELD_DEPTH = 3;
 
@@ -131,6 +156,29 @@ function finite(value: unknown): number | undefined {
 
 function stringList(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v !== '') : [];
+}
+
+function positiveInt(value: unknown): number | undefined {
+    const n = finite(value);
+    return n !== undefined && Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+function parseLimits(raw: unknown): BlockLimits | undefined {
+    if (!isRecord(raw)) return undefined;
+    const maxBlocks = positiveInt(raw.maxBlocks);
+    const maxDepth = positiveInt(raw.maxDepth);
+    if (maxBlocks === undefined && maxDepth === undefined) return undefined;
+    return {
+        ...(maxBlocks !== undefined && { maxBlocks }),
+        ...(maxDepth !== undefined && { maxDepth }),
+    };
+}
+
+function parseTheme(raw: unknown): BlockTheme | undefined {
+    if (!isRecord(raw)) return undefined;
+    const colors = [...new Set(stringList(raw.colors))];
+    const fonts = [...new Set(stringList(raw.fonts))];
+    return colors.length === 0 && fonts.length === 0 ? undefined : { colors, fonts };
 }
 
 /**
@@ -253,7 +301,9 @@ export function parseBlockSchema(raw: unknown): BlockSchema | null {
             fields,
         });
     }
-    return { version, bindings, blocks };
+    const limits = parseLimits(raw.limits);
+    const theme = parseTheme(raw.theme);
+    return { version, bindings, blocks, ...(limits && { limits }), ...(theme && { theme }) };
 }
 
 /** A stored value as a list of blocks. Nothing stored reads as empty; anything but a list is null. */

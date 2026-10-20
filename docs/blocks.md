@@ -120,6 +120,26 @@ With no `NEXT_PUBLIC_PRESS_URL`, when `/api/blocks` cannot be read, when it publ
 this console does not read, or when the stored value is not a list, the field is the JSON editor it
 always was, with a note saying why.
 
+## Limits and theme slots
+
+The schema may carry two optional members. They are the contract this console proposes to barakoPress,
+which does not publish them yet.
+
+```json
+{
+    "limits": { "maxBlocks": 100, "maxDepth": 4 },
+    "theme": { "colors": ["pageBg", "accent"], "fonts": ["heading", "body", "mono"] }
+}
+```
+
+- `limits.maxBlocks` is how many blocks the site shows. The block editor warns past it.
+- `limits.maxDepth` is how many levels deep the site reads blocks. The editor warns at it.
+- `theme.colors` and `theme.fonts` are the colour and font names the Theme screen lists as slots.
+
+Each member is optional. A missing, non-numeric, non-positive or non-list value is ignored, never an
+error, and the console uses what it always did: 100 blocks, 4 levels, and its built-in slot names. The
+same applies with no schema at all. A stored colour that is not a published slot shows as a site colour.
+
 ## Against a site that publishes version 1
 
 A version 1 schema has no `bindings` key, so the editor offers no binding picker, marks no data
