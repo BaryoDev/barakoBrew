@@ -262,6 +262,31 @@ describe('cancelling a run', () => {
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/api/workflow-runs/run-wait/cancel', {}));
   });
 
+  it('keeps the confirmation open when a refresh shows the run has since been cancelled, and does not send the request', async () => {
+    renderRuns();
+    fireEvent.click(await screen.findByRole('radio', { name: /Send the invoice/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel run' }));
+    const dialog = await screen.findByRole('alertdialog');
+
+    const cancelledMeanwhile = { ...WAITING, status: 'Cancelled', cancelledAt: '2026-09-03T10:00:09Z' };
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') {
+        return {
+          data: { items: [cancelledMeanwhile], page: 1, pageSize: 25, totalItems: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+        };
+      }
+      return { data: cancelledMeanwhile };
+    }) as typeof api.get);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0));
+
+    expect(screen.getByRole('alertdialog')).toBe(dialog);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, cancel the run' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('no longer be cancelled')));
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it('offers no cancel on an API that sends no cancelledAt', async () => {
     renderRuns();
     fireEvent.click(await screen.findByRole('radio', { name: /Old waiting run/ }));
@@ -393,6 +418,37 @@ describe('the status chips', () => {
     expect(screen.getAllByRole('row')).toHaveLength(3);
   });
 
+  it('names a chip with its count apart from the label, so it does not read as one word', async () => {
+    renderRuns([run('r1', 'One', 'Failed', [])], { statusCounts: COUNTS, totalItems: 48 });
+    await screen.findByRole('radio', { name: /One/ });
+
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    expect(within(group).getByRole('button', { name: 'Failed, 4 runs' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: 'Pending, 1 run' })).toBeInTheDocument();
+  });
+
+  it('keeps the table and says so when a refresh fails after the list has loaded', async () => {
+    const loaded = [run('r1', 'One', 'Failed', [])];
+    let lists = 0;
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url !== '/api/workflow-runs') throw httpError(404);
+      lists += 1;
+      if (lists > 1) throw httpError(500);
+      return { data: listOf(loaded, {}) };
+    }) as typeof api.get);
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('radio', { name: /One/ });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be refreshed/);
+    expect(screen.getByRole('radio', { name: /One/ })).toBeInTheDocument();
+  });
+
   it('is a plain filter, with no counts, against an API that sends none', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])]);
     await screen.findByRole('radio', { name: /One/ });
@@ -469,6 +525,7 @@ describe('who sees the buttons on a run', () => {
   const LIVE = {
     ...run('r1', 'Charge the card', 'Running', [action(1, 'Succeeded'), action(2, 'Failed', { retryable: true })]),
     cancelledAt: null,
+    abandonedAt: null,
   };
 
   beforeEach(() => {
@@ -533,7 +590,10 @@ describe('who sees the buttons on a run', () => {
 });
 
 describe('abandoning a run', () => {
-  const PARTLY = run('r1', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Failed')]);
+  const PARTLY = {
+    ...run('r1', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Failed')]),
+    abandonedAt: null,
+  };
 
   beforeEach(() => {
     vi.mocked(api.get).mockReset();
@@ -574,7 +634,7 @@ describe('abandoning a run', () => {
   });
 
   it('offers no abandon on a run nothing succeeded in', async () => {
-    renderRuns([run('r2', 'Nothing went out', 'Failed', [action(1, 'Failed')])]);
+    renderRuns([{ ...run('r2', 'Nothing went out', 'Failed', [action(1, 'Failed')]), abandonedAt: null }]);
     fireEvent.click(await screen.findByRole('radio', { name: /Nothing went out/ }));
 
     await screen.findByRole('list', { name: 'Actions' });

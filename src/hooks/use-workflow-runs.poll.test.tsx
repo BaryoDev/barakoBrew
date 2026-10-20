@@ -173,30 +173,69 @@ describe('polling the run list', () => {
     expect(sentCursor(2)).toBe('cursor-2');
   });
 
-  it('starts polling from the cursor the list read sent, when it sent one', async () => {
+  it('moves the chips and the total when a poll changes the status of a run, though it carries no counts', async () => {
     serve(
-      () => page([run('a', '10:00')], { cursor: 'list-cursor' }),
-      () => page([], { cursor: 'poll-cursor' }),
+      () => page([run('a', '10:00', { status: 'Failed' })], { statusCounts: { Failed: 1, Succeeded: 5 }, totalItems: 1 }),
+      () => page([run('a', '10:00', { status: 'Succeeded', updatedAt: '2026-10-19T11:00:00Z' })], { cursor: 'c', statusCounts: null }),
     );
 
-    mount();
-    await settle();
+    const { result } = mount({ status: 'Failed' });
     await settle(POLL_INTERVAL_MS);
 
     expect(polls()).toHaveLength(1);
-    expect(sentCursor(0)).toBe('list-cursor');
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 0, Succeeded: 6 });
+    expect(result.current.runs.data?.totalItems).toBe(0);
+    expect(ids(result)).toHaveLength(0);
   });
 
-  it('takes the status counts of the poll', async () => {
+  it('moves the chips and the total when a poll adds a run', async () => {
     serve(
-      () => page([run('a', '10:00')], { statusCounts: { Succeeded: 1, Failed: 0 } }),
-      () => page([], { cursor: 'c', statusCounts: { Succeeded: 1, Failed: 4 } }),
+      () => page([run('a', '10:00')], { statusCounts: { Failed: 0, Succeeded: 1 }, totalItems: 1 }),
+      () => page([run('n', '11:00', { status: 'Failed' })], { cursor: 'c', statusCounts: null }),
     );
 
     const { result } = mount();
     await settle(POLL_INTERVAL_MS);
 
-    expect(result.current.runs.data?.statusCounts).toEqual({ Succeeded: 1, Failed: 4 });
+    expect(ids(result)).toEqual(['n', 'a']);
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 1, Succeeded: 1 });
+    expect(result.current.runs.data?.totalItems).toBe(2);
+
+    await settle(POLL_INTERVAL_MS);
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 1, Succeeded: 1 });
+    expect(result.current.runs.data?.totalItems).toBe(2);
+  });
+
+  it('keeps counting from the local delta when the list holds no counts', async () => {
+    serve(
+      () => page([run('a', '10:00')]),
+      () => page([run('n', '11:00')], { cursor: 'c', statusCounts: null }),
+    );
+
+    const { result } = mount();
+    await settle(POLL_INTERVAL_MS);
+
+    expect(result.current.runs.data?.statusCounts).toBeUndefined();
+    expect(result.current.runs.data?.totalItems).toBe(2);
+  });
+
+  it('resumes from the cursor the last poll sent when live is switched off and on', async () => {
+    serve(() => page([run('a', '10:00')]), () => page([], { cursor: 'poll-cursor' }));
+
+    const { rerender } = renderHook(
+      ({ live }: { live: boolean }) => useWorkflowRuns({ page: 1, pageSize: 25 }, { live }),
+      { wrapper, initialProps: { live: true } },
+    );
+    await settle(POLL_INTERVAL_MS);
+    expect(polls()).toHaveLength(1);
+
+    rerender({ live: false });
+    await settle();
+    rerender({ live: true });
+    await settle(POLL_INTERVAL_MS);
+
+    expect(polls()).toHaveLength(2);
+    expect(sentCursor(1)).toBe('poll-cursor');
   });
 
   it('does not poll in a hidden tab, and polls at once when the tab is shown again', async () => {
@@ -498,14 +537,18 @@ describe('what a fresh read decides', () => {
     expect(ids(result)).toEqual(['a']);
   });
 
-  it('keeps the newer counts when a read that began before the poll lands after it', async () => {
+  it('keeps the counts a poll moved when a read that began before the poll lands after it', async () => {
     const lateRead: { release?: (body: unknown) => void } = {};
     let reads = 0;
+    const stale = () => page([run('a', '10:00')], { statusCounts: { Failed: 0, Succeeded: 1 } });
     vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: Params }) => {
       const params = config?.params ?? {};
-      if ('changedSince' in params) return { data: page([], { cursor: 'c', statusCounts: { Failed: 4, Succeeded: 1 } }) };
+      if ('changedSince' in params) {
+        const changed = run('a', '10:00', { status: 'Failed', updatedAt: '2026-10-19T11:00:00Z' });
+        return { data: page([changed], { cursor: 'c', statusCounts: null }) };
+      }
       reads += 1;
-      if (reads === 1) return { data: page([run('a', '10:00')], { statusCounts: { Failed: 0, Succeeded: 1 } }) };
+      if (reads === 1) return { data: stale() };
       return new Promise<{ data: unknown }>((resolve) => {
         lateRead.release = (body) => resolve({ data: body });
       });
@@ -515,15 +558,17 @@ describe('what a fresh read decides', () => {
     await settle();
     expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 0, Succeeded: 1 });
 
-    // A read begins, and before it answers a poll brings newer counts.
+    // A read begins, and before it answers a poll finds the run failed.
     act(() => void client.invalidateQueries({ queryKey: ['workflow-runs'] }));
     await settle(POLL_INTERVAL_MS);
-    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 4, Succeeded: 1 });
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 1, Succeeded: 0 });
 
-    await act(async () => lateRead.release?.(page([run('a', '10:00')], { statusCounts: { Failed: 0, Succeeded: 1 } })));
+    await act(async () => lateRead.release?.(stale()));
     await settle();
 
-    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 4, Succeeded: 1 });
+    expect(result.current.runs.data?.items).toHaveLength(1);
+    expect(result.current.runs.data?.items[0].status).toBe('Failed');
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 1, Succeeded: 0 });
   });
 
   it('reads the counts of the API whatever case their keys arrive in', async () => {

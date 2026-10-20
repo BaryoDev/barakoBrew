@@ -221,7 +221,7 @@ function buildListSchema() {
   return paginatedSchema(workflowRunSchema).extend({
     /** Runs per status for the `contentId` filter, whatever the status filter and the page. */
     statusCounts: z.record(z.string(), z.number()).transform(canonicalCounts).nullish(),
-    /** Pass back as `changedSince`. A list read may carry one too, and polling then starts from it. */
+    /** Pass back as `changedSince`. Sent with a `changedSince` read, in place of `statusCounts`. */
     cursor: z.string().nullish(),
     /** Succeeded runs that finished before this are removed by the retention sweep. */
     succeededRetainedFrom: z.string().nullish(),
@@ -310,6 +310,7 @@ export function isCancellable(run: Pick<WorkflowRun, 'status' | 'cancelledAt'>):
 export function isAbandonable(
   run: Pick<WorkflowRun, 'status' | 'cancelledAt' | 'compensation' | 'abandonedAt' | 'actions'>,
 ): boolean {
+  if (!('abandonedAt' in run)) return false;
   if (isStopped(run) || isRolledBack(run)) return false;
   if (run.status === 'Succeeded') return false;
   return run.actions.some((action) => action.status === 'Succeeded');
@@ -703,6 +704,7 @@ function startPolling(input: PollingInput): () => void {
           await reread();
         } else {
           cursor = polled.cursor;
+          list.since = polled.cursor;
           if (applyPoll(polled, readAt)) next = CATCH_UP_MS;
         }
       }
@@ -726,7 +728,9 @@ function startPolling(input: PollingInput): () => void {
 
   /** Merges one poll into the page and the open run. Returns whether another page is waiting. */
   function applyPoll(polled: RunListCache, readAt: number): boolean {
-    const counts = list.offerCounts(polled.statusCounts, readAt);
+    // A poll carries no counts. Without them the merge moves the held ones by each run's change.
+    const counts = polled.statusCounts ? list.offerCounts(polled.statusCounts, readAt) : null;
+    const known = new Map(list.polled);
     for (const run of polled.items) {
       list.remember(run);
       const detailKey = ['workflow-run', run.id, tenant];
@@ -737,7 +741,7 @@ function startPolling(input: PollingInput): () => void {
     let hole = false;
     queryClient.setQueryData<RunListCache>(listKey, (current) => {
       if (!current) return current;
-      const merged = mergeRunPage(current, polled.items, { status, statusCounts: counts });
+      const merged = mergeRunPage(current, polled.items, { status, statusCounts: counts, known });
       hole = merged.removed > 0 && current.hasNextPage;
       return {
         ...merged.page,

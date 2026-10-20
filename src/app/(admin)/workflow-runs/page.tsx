@@ -109,6 +109,7 @@ function StatusChips({
           size="sm"
           variant={chip.status === value ? 'default' : 'outline'}
           aria-pressed={chip.status === value}
+          aria-label={chip.count !== null ? `${chip.label}, ${chip.count} ${chip.count === 1 ? 'run' : 'runs'}` : undefined}
           onClick={() => onChange(chip.status)}
         >
           {chip.label}
@@ -170,6 +171,8 @@ export default function WorkflowRunsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(linked ? parseRunId(linked) : null);
   const [badLink, setBadLink] = useState(!!linked && parseRunId(linked) === null);
   const [refreshing, setRefreshing] = useState(false);
+  // Held here, not inside the run's panel, so a poll that changes the run cannot unmount an open dialog.
+  const [confirming, setConfirming] = useState<{ kind: 'cancel' | 'abandon'; id: string; name: string } | null>(null);
 
   // A link from another page, or the address bar, picks the run. Picking one here writes it back,
   // so the address can be shared.
@@ -235,6 +238,24 @@ export default function WorkflowRunsPage() {
     }
   }
 
+  async function onConfirm() {
+    const target = confirming;
+    if (!target) return;
+    // The run may have moved on while the dialog was open. Ask the API only about what still applies.
+    const current = run.data?.id === target.id ? run.data : null;
+    const applies =
+      current !== null &&
+      (target.kind === 'cancel'
+        ? canCancel && isCancellable(current)
+        : canAbandon && isAbandonable(current));
+    if (!applies) {
+      toast.error(`That run changed, so it can no longer be ${target.kind === 'cancel' ? 'cancelled' : 'abandoned'}.`);
+      return;
+    }
+    if (target.kind === 'cancel') await onCancel(target.id);
+    else await onAbandon(target.id);
+  }
+
   async function onCancel(runId: string) {
     try {
       await cancel.mutateAsync(runId);
@@ -297,12 +318,20 @@ export default function WorkflowRunsPage() {
           </div>
 
           {runs.pause && <PauseNote pause={runs.pause} updatedAt={runs.dataUpdatedAt} />}
+          {runs.isError && runs.data && (
+            <p role="alert" className="text-destructive mt-3 text-[12px]">
+              The runs could not be refreshed, so this is the last list that loaded.{' '}
+              <button type="button" className="underline" onClick={() => void runs.refetch()}>
+                Try again
+              </button>
+            </p>
+          )}
 
           {runs.isLoading ? (
             <div className="mt-4">
               <TableSkeleton rows={6} />
             </div>
-          ) : runs.isError ? (
+          ) : runs.isError && !runs.data ? (
             <ErrorState
               className="mt-4"
               entity="workflow runs"
@@ -389,7 +418,7 @@ export default function WorkflowRunsPage() {
             />
           ) : run.isLoading ? (
             <TableSkeleton rows={4} />
- ) : run.isError && isNotFound(run.error) ? (
+          ) : run.isError && isNotFound(run.error) ? (
             <EmptyState
               icon={IconWorkflows}
               title="Run not found"
@@ -403,37 +432,26 @@ export default function WorkflowRunsPage() {
                 <h2 className="text-[15px] font-bold">{run.data.workflowName}</h2>
                 <StatusBadge tone={toneForRunStatus(run.data.status)}>{run.data.status}</StatusBadge>
                 {canCancel && isCancellable(run.data) && (
-                  <ConfirmDialog
-                    trigger={
-                      <Button className="ml-auto" size="sm" variant="outline" disabled={cancel.isPending}>
-                        {cancel.isPending ? 'Cancelling...' : 'Cancel run'}
-                      </Button>
-                    }
-                    title={`Cancel this ${run.data.workflowName} run?`}
-                    description="Actions that have not started will not run. One already out finishes and its outcome is kept. A cancelled run cannot be retried."
-                    confirmLabel="Yes, cancel the run"
-                    destructive
-                    onConfirm={() => void onCancel(run.data!.id)}
-                  />
+                  <Button
+                    className="ml-auto"
+                    size="sm"
+                    variant="outline"
+                    disabled={cancel.isPending}
+                    onClick={() => setConfirming({ kind: 'cancel', id: run.data!.id, name: run.data!.workflowName })}
+                  >
+                    {cancel.isPending ? 'Cancelling...' : 'Cancel run'}
+                  </Button>
                 )}
                 {canAbandon && isAbandonable(run.data) && (
-                  <ConfirmDialog
-                    trigger={
-                      <Button
-                        className={isCancellable(run.data) && canCancel ? undefined : 'ml-auto'}
-                        size="sm"
-                        variant="outline"
-                        disabled={abandon.isPending}
-                      >
-                        {abandon.isPending ? 'Abandoning...' : 'Abandon run'}
-                      </Button>
-                    }
-                    title={`Abandon this ${run.data.workflowName} run?`}
-                    description="Nothing in it runs again. What already went out is undone by the compensation each action declares, and an action that declares none is reported as not undone."
-                    confirmLabel="Yes, abandon the run"
-                    destructive
-                    onConfirm={() => void onAbandon(run.data!.id)}
-                  />
+                  <Button
+                    className={isCancellable(run.data) && canCancel ? undefined : 'ml-auto'}
+                    size="sm"
+                    variant="outline"
+                    disabled={abandon.isPending}
+                    onClick={() => setConfirming({ kind: 'abandon', id: run.data!.id, name: run.data!.workflowName })}
+                  >
+                    {abandon.isPending ? 'Abandoning...' : 'Abandon run'}
+                  </Button>
                 )}
               </div>
 
@@ -461,6 +479,24 @@ export default function WorkflowRunsPage() {
           ) : null}
         </section>
       </div>
+
+      {confirming && (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirming(null);
+          }}
+          title={`${confirming.kind === 'cancel' ? 'Cancel' : 'Abandon'} this ${confirming.name} run?`}
+          description={
+            confirming.kind === 'cancel'
+              ? 'Actions that have not started will not run. One already out finishes and its outcome is kept. A cancelled run cannot be retried.'
+              : 'Nothing in it runs again. What already went out is undone by the compensation each action declares, and an action that declares none is reported as not undone.'
+          }
+          confirmLabel={confirming.kind === 'cancel' ? 'Yes, cancel the run' : 'Yes, abandon the run'}
+          destructive
+          onConfirm={() => void onConfirm()}
+        />
+      )}
     </div>
   );
 }

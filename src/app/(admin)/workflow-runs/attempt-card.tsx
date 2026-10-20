@@ -154,9 +154,9 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
         <TryList attempt={attempt} />
       ) : (
         attempt.error && (
-        <pre className="bg-muted mt-3 max-h-40 overflow-auto rounded-md p-3 text-[12px] whitespace-pre-wrap">
-          {attempt.error}
-        </pre>
+          <pre className="bg-muted mt-3 max-h-40 overflow-auto rounded-md p-3 text-[12px] whitespace-pre-wrap">
+            {attempt.error}
+          </pre>
         )
       )}
     </li>
