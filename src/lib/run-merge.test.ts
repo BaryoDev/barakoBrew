@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAsNew, isNewer, mergeRunPage, type MergeablePage, type MergeableRun } from './run-merge';
+import { applyCounts, isAsNew, isNewer, mergeRunPage, type MergeablePage, type MergeableRun } from './run-merge';
 
 function run(id: string, created: string, extra: Partial<MergeableRun> = {}): MergeableRun {
     return { id, status: 'Succeeded', createdAt: `2026-10-19T${created}:00Z`, updatedAt: `2026-10-19T${created}:30Z`, ...extra };
@@ -214,4 +214,32 @@ describe('merging a poll into a page', () => {
     it('treats a missing updatedAt on the held copy as older', () => {
         expect(isAsNew(run('a', '10:00'), { id: 'a', status: 'Failed', createdAt: '2026-10-19T10:00:00Z' })).toBe(true);
     });
+});
+
+describe('applying counts from a counts-only read', () => {
+  it('moves the totals and the held counts and keeps the rows as they are', () => {
+    const rows = [run('a', '10:00', { status: 'Failed' }), run('b', '09:00', { status: 'Failed' })];
+    const current = page(rows, { statusCounts: { Failed: 2, Running: 1 }, totalItems: 2, pageSize: 1 });
+
+    const next = applyCounts(current, { Failed: 3, Running: 1 }, 'Failed');
+
+    expect(next.items).toBe(rows);
+    expect(next.items).toHaveLength(2);
+    expect(next.statusCounts).toEqual({ Failed: 3, Running: 1 });
+    expect(next.totalItems).toBe(3);
+    expect(next.totalPages).toBe(3);
+    expect(next.hasNextPage).toBe(true);
+  });
+
+  it('totals every status when no filter is set', () => {
+    const next = applyCounts(page([run('a', '10:00')]), { Failed: 3, Running: 1 }, 'all');
+
+    expect(next.totalItems).toBe(4);
+  });
+
+  it('keeps the total when the filtered status has no count', () => {
+    const next = applyCounts(page([run('a', '10:00')], { totalItems: 7 }), { Running: 1 }, 'Failed');
+
+    expect(next.totalItems).toBe(7);
+  });
 });
