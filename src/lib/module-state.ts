@@ -46,8 +46,12 @@ export function groupByCategory(modules: readonly ModuleSummary[]): ModuleGroup[
         }));
 }
 
+const NUGET_ID = /^[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*$/;
+
+/** The package id comes from the API and ends up pasted into a shell, so only a plain NuGet id is accepted. */
 export function installLine(m: Pick<ModuleSummary, 'package'>): string | null {
-    return m.package ? `dotnet add package ${m.package}` : null;
+    const id = m.package?.trim();
+    return id && NUGET_ID.test(id) ? `dotnet add package ${id}` : null;
 }
 
 export function moduleHref(name: string): string {

