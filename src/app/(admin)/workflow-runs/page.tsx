@@ -173,6 +173,16 @@ export default function WorkflowRunsPage() {
   const [refreshing, setRefreshing] = useState(false);
   // Held here, not inside the run's panel, so a poll that changes the run cannot unmount an open dialog.
   const [confirming, setConfirming] = useState<{ kind: 'cancel' | 'abandon'; id: string; name: string } | null>(null);
+  // What the dialog says, kept through its closing animation once `confirming` is cleared.
+  const [shown, setShown] = useState(confirming);
+  if (confirming && confirming !== shown) setShown(confirming);
+  // The button that opened the dialog, so focus goes back to it on close.
+  const opener = useRef<HTMLButtonElement | null>(null);
+
+  function ask(kind: 'cancel' | 'abandon', target: { id: string; workflowName: string }, button: HTMLButtonElement) {
+    opener.current = button;
+    setConfirming({ kind, id: target.id, name: target.workflowName });
+  }
 
   // A link from another page, or the address bar, picks the run. Picking one here writes it back,
   // so the address can be shared.
@@ -186,6 +196,9 @@ export default function WorkflowRunsPage() {
       setSelectedId(linked ? parseRunId(linked) : null);
     }
   }
+
+  // A question about one run must not stay up once another is picked.
+  if (confirming && confirming.id !== selectedId) setConfirming(null);
 
   // Put the canonical id in the address when the link spelled it another way.
   const canonical = linked ? parseRunId(linked) : null;
@@ -437,7 +450,7 @@ export default function WorkflowRunsPage() {
                     size="sm"
                     variant="outline"
                     disabled={cancel.isPending}
-                    onClick={() => setConfirming({ kind: 'cancel', id: run.data!.id, name: run.data!.workflowName })}
+                    onClick={(event) => ask('cancel', run.data!, event.currentTarget)}
                   >
                     {cancel.isPending ? 'Cancelling...' : 'Cancel run'}
                   </Button>
@@ -448,7 +461,7 @@ export default function WorkflowRunsPage() {
                     size="sm"
                     variant="outline"
                     disabled={abandon.isPending}
-                    onClick={() => setConfirming({ kind: 'abandon', id: run.data!.id, name: run.data!.workflowName })}
+                    onClick={(event) => ask('abandon', run.data!, event.currentTarget)}
                   >
                     {abandon.isPending ? 'Abandoning...' : 'Abandon run'}
                   </Button>
@@ -480,19 +493,26 @@ export default function WorkflowRunsPage() {
         </section>
       </div>
 
-      {confirming && (
+      {shown && (
         <ConfirmDialog
-          open
+          open={confirming !== null}
           onOpenChange={(open) => {
             if (!open) setConfirming(null);
           }}
-          title={`${confirming.kind === 'cancel' ? 'Cancel' : 'Abandon'} this ${confirming.name} run?`}
+          onCloseAutoFocus={(event) => {
+            const button = opener.current;
+            opener.current = null;
+            if (!button?.isConnected || button.disabled) return;
+            event.preventDefault();
+            button.focus();
+          }}
+          title={`${shown.kind === 'cancel' ? 'Cancel' : 'Abandon'} this ${shown.name} run?`}
           description={
-            confirming.kind === 'cancel'
+            shown.kind === 'cancel'
               ? 'Actions that have not started will not run. One already out finishes and its outcome is kept. A cancelled run cannot be retried.'
               : 'Nothing in it runs again. What already went out is undone by the compensation each action declares, and an action that declares none is reported as not undone.'
           }
-          confirmLabel={confirming.kind === 'cancel' ? 'Yes, cancel the run' : 'Yes, abandon the run'}
+          confirmLabel={shown.kind === 'cancel' ? 'Yes, cancel the run' : 'Yes, abandon the run'}
           destructive
           onConfirm={() => void onConfirm()}
         />

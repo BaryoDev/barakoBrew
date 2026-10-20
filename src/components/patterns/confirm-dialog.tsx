@@ -23,6 +23,8 @@ interface ConfirmDialogProps {
   confirmLabel: string;
   destructive?: boolean;
   onConfirm: () => void;
+  /** Where focus goes on close. Needed with `open`, since there is no trigger to return it to. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export function ConfirmDialog({
@@ -34,11 +36,12 @@ export function ConfirmDialog({
   confirmLabel,
   destructive = false,
   onConfirm,
+  onCloseAutoFocus,
 }: ConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
-      <AlertDialogContent>
+      <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>

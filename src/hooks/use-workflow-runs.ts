@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import axios from 'axios';
 import { z } from 'zod';
 import { api, paginatedSchema, parseResponse } from '@/lib/api';
-import { isAsNew, mergeRunPage } from '@/lib/run-merge';
+import { isAsNew, isNewer, mergeRunPage } from '@/lib/run-merge';
 import type { Tone } from '@/components/patterns/status-badge';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 
@@ -459,6 +459,9 @@ const CLIENT_CLOCK_MARGIN_MS = 60_000;
 
 const POLL_PAGE_SIZE = 100;
 
+/** The least time between two reads asked for only to put the counts right. */
+export const COUNTS_REFRESH_MS = 10_000;
+
 /** Every mutation of a run carries this key, so a poll can tell one is in flight. */
 export const RUN_MUTATION_KEY = ['workflow-run-action'] as const;
 
@@ -487,9 +490,16 @@ type RunListCache = WorkflowRunList;
 class ListState {
   /** Where polling starts, taken from the list read it follows. */
   since: string | null = null;
-  /** The newest counts held, and when the read that carried them was made. */
-  counts: Record<string, number> | null = null;
-  countsAt = -Infinity;
+  /**
+   * Set while the counts on screen are known to miss a change: when a poll found a run whose old
+   * status is not on the page. Holds when the newest such change was seen, so only a read that
+   * began after it clears it.
+   */
+  dirtyAt: number | null = null;
+  /** When the read that last landed began, so an older one landing later cannot replace it. */
+  landedAt = -Infinity;
+  /** When polling last asked for a fresh read to fix the counts. */
+  refreshedAt = -Infinity;
   /** Why polling is not at its normal pace, or null when it is. Read through `useSyncExternalStore`. */
   private pause: LivePause | null = null;
   private readonly listeners = new Set<() => void>();
@@ -507,32 +517,47 @@ class ListState {
     for (const listener of this.listeners) listener();
   }
 
-  /**
-   * Keeps the counts of the read that was made last. A read that began before the held counts were
-   * read does not replace them, so a refetch landing after a poll cannot roll the chips back.
-   */
-  offerCounts(counts: Record<string, number> | null | undefined, readAt: number): Record<string, number> | null {
-    if (counts && readAt >= this.countsAt) {
-      this.counts = counts;
-      this.countsAt = readAt;
-    }
-    return this.counts;
-  }
   /** The newest copy of every run a poll returned, for a refetch that was already in flight. */
   readonly polled = new Map<string, WorkflowRun>();
+  /** When the copy in `polled` was first seen, by id. */
+  private readonly seenAt = new Map<string, number>();
+
+  markDirty(at: number) {
+    this.dirtyAt = Math.max(this.dirtyAt ?? -Infinity, at);
+  }
+
+  /**
+   * Called when a list read that began at `startedAt` lands with the runs in `onPage`. The read's
+   * counts are the server's, so they are right for every change made before it began. A change seen
+   * after that, of a run the read did not put on the page, may be missing from them. A read that
+   * carried no counts has none to be wrong.
+   */
+  readLanded(startedAt: number, onPage: ReadonlySet<string>, counted: boolean) {
+    this.landedAt = startedAt;
+    if (this.dirtyAt !== null && startedAt >= this.dirtyAt) this.dirtyAt = null;
+    if (!counted) return;
+    for (const [id, seen] of this.seenAt) {
+      if (seen > startedAt && !onPage.has(id)) this.markDirty(seen);
+    }
+  }
 
   /** A cursor the API sent wins over a time worked out from a clock. */
   startAt(moment: Date, cursor?: string | null) {
     this.since ??= cursor || moment.toISOString();
   }
 
-  /** Keeps the copy of a run unless one that is newer is held. */
-  remember(run: WorkflowRun) {
+  /** Keeps the copy of a run when it is a change the held copy does not show. */
+  remember(run: WorkflowRun, seenAt: number) {
     const held = this.polled.get(run.id);
-    if (held && !isAsNew(run, held)) return;
+    if (held && !isNewer(run, held)) return;
     this.polled.delete(run.id);
     this.polled.set(run.id, run);
-    while (this.polled.size > POLLED_CAP) this.polled.delete(this.polled.keys().next().value as string);
+    this.seenAt.set(run.id, seenAt);
+    while (this.polled.size > POLLED_CAP) {
+      const oldest = this.polled.keys().next().value as string;
+      this.polled.delete(oldest);
+      this.seenAt.delete(oldest);
+    }
   }
 }
 
@@ -581,19 +606,22 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
       const served = typeof header === 'string' ? Date.parse(header) : NaN;
       list.startAt(new Date(Number.isNaN(served) ? started - CLIENT_CLOCK_MARGIN_MS : served - API_CURSOR_LAG_MS), page.cursor);
 
+      // A read that began before the one already shown is older than it. Keep what is shown.
+      if (started < list.landedAt) {
+        const shown = queryClient.getQueryData<RunListCache>(queryKey);
+        if (shown) return shown;
+      }
+
       // The fresh page decides which runs are on it. A polled copy only replaces a row the page
       // already has, when it is newer, so an invalidation after a retry does not put back what the
-      // poll just showed, and a run that has since left the page is not brought back.
+      // poll just showed, and a run that has since left the page is not brought back. The page and
+      // its counts are one read, so moving a count for such a row is exact.
       const onPage = new Set(page.items.map((item) => item.id));
       const overlay = [...list.polled.values()].filter((item) => onPage.has(item.id));
-      let result = overlay.length === 0 ? page : mergeRunPage(page, overlay, { status: params.status as string | undefined }).page;
-
-      // The counts of the newest read win, whichever read lands last.
-      const counts = list.offerCounts(page.statusCounts, started);
-      if (counts && counts !== page.statusCounts) {
-        result = mergeRunPage(result, [] as WorkflowRun[], { status: params.status as string | undefined, statusCounts: counts }).page;
-      }
-      return result;
+      const merged = overlay.length === 0 ? null : mergeRunPage(page, overlay, { status: params.status as string | undefined });
+      list.readLanded(started, onPage, !!page.statusCounts);
+      if (merged?.countsOff) list.markDirty(Date.now());
+      return merged?.page ?? page;
     },
   });
 
@@ -689,7 +717,6 @@ function startPolling(input: PollingInput): () => void {
         };
         if (contentId) params.contentId = contentId;
 
-        const readAt = Date.now();
         const response = await api.get<unknown>('/api/workflow-runs', { params });
         if (stopped) return;
         const polled = parseResponse(workflowRunListSchema(), response.data, 'GET /api/workflow-runs?changedSince');
@@ -700,7 +727,8 @@ function startPolling(input: PollingInput): () => void {
         } else {
           cursor = polled.cursor;
           list.since = polled.cursor;
-          if (applyPoll(polled, readAt)) next = CATCH_UP_MS;
+          if (applyPoll(polled)) next = CATCH_UP_MS;
+          refreshCounts();
         }
       }
       failures = 0;
@@ -721,13 +749,17 @@ function startPolling(input: PollingInput): () => void {
     schedule(next);
   }
 
-  /** Merges one poll into the page and the open run. Returns whether another page is waiting. */
-  function applyPoll(polled: RunListCache, readAt: number): boolean {
-    // A poll carries no counts. Without them the merge moves the held ones by each run's change.
-    const counts = polled.statusCounts ? list.offerCounts(polled.statusCounts, readAt) : null;
+  /**
+   * Merges one poll into the page and the open run. Returns whether another page is waiting.
+   *
+   * A poll carries no counts. The merge moves them only for a run on the page, whose old status it
+   * knows. Any other change marks them dirty, and `refreshCounts` reads them from the server again.
+   */
+  function applyPoll(polled: RunListCache): boolean {
+    const seenAt = Date.now();
     const known = new Map(list.polled);
     for (const run of polled.items) {
-      list.remember(run);
+      list.remember(run, seenAt);
       const detailKey = ['workflow-run', run.id, tenant];
       const open = queryClient.getQueryData<WorkflowRun>(detailKey);
       if (open && isAsNew(run, open)) queryClient.setQueryData(detailKey, run);
@@ -736,8 +768,16 @@ function startPolling(input: PollingInput): () => void {
     let hole = false;
     queryClient.setQueryData<RunListCache>(listKey, (current) => {
       if (!current) return current;
-      const merged = mergeRunPage(current, polled.items, { status, statusCounts: counts, known });
+      const merged = mergeRunPage(current, polled.items, { status, moveCounts: list.dirtyAt === null });
       hole = merged.removed > 0 && current.hasNextPage;
+      if (current.statusCounts) {
+        // A copy seen before is a repeat of the lagging cursor, already in any read since.
+        const missed = merged.offPage.some((run) => {
+          const seen = known.get(run.id);
+          return !seen || isNewer(run, seen);
+        });
+        if (missed || merged.countsOff) list.markDirty(seenAt);
+      }
       return {
         ...merged.page,
         succeededRetainedFrom: polled.succeededRetainedFrom ?? current.succeededRetainedFrom,
@@ -748,6 +788,19 @@ function startPolling(input: PollingInput): () => void {
     // A run left the filter and more runs follow this page, so the page now ends short. Read it again.
     if (hole) void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
     return polled.hasNextPage;
+  }
+
+  /**
+   * Reads the list again while its counts are dirty, at most once per `COUNTS_REFRESH_MS` and never
+   * while a read of it is in flight. That read clears the flag only if it began after the change.
+   */
+  function refreshCounts() {
+    if (list.dirtyAt === null) return;
+    if (queryClient.isFetching({ queryKey: listKey, exact: true }) > 0) return;
+    const now = Date.now();
+    if (now - list.refreshedAt < COUNTS_REFRESH_MS) return;
+    list.refreshedAt = now;
+    void queryClient.refetchQueries({ queryKey: listKey, exact: true });
   }
 
   function onVisibility() {
