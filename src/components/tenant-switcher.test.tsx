@@ -49,7 +49,7 @@ describe('TenantSwitcher', () => {
     });
 
     it('keeps a switch to Home from being undone by the auto-switch', async () => {
-        render(<TenantSwitcher />);
+        const { rerender } = render(<TenantSwitcher />);
         expect(mutate).not.toHaveBeenCalled();
         await openPopover();
         fireEvent.click(await screen.findByRole('button', { name: /Home/ }));
@@ -57,7 +57,6 @@ describe('TenantSwitcher', () => {
         expect(mutate).toHaveBeenCalledWith('default');
         current = 'default';
         mutate.mockClear();
-        const { rerender } = render(<TenantSwitcher />);
         rerender(<TenantSwitcher />);
         expect(mutate).not.toHaveBeenCalled();
     });
