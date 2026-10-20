@@ -4,7 +4,6 @@ import { Fragment } from 'react';
 import { usePathname } from 'next/navigation';
 import { breadcrumbsFor } from '@/lib/navigation';
 import { useCrumbTitle } from '@/components/crumb-title';
-import { TenantSwitcher } from '@/components/tenant-switcher';
 import { WhatsNew } from '@/components/whats-new';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -53,7 +52,6 @@ export function AppHeader() {
           ))}
         </BreadcrumbList>
       </Breadcrumb>
-      <TenantSwitcher />
       <WhatsNew />
     </header>
   );
