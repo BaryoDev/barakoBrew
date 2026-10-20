@@ -11,6 +11,8 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **The Overview shows a system strip and workflow health.** The strip has the API version, the contract version, and database and storage health; each part falls back to a dash or Unknown when its own call fails. Workflow health lists the last outcomes per workflow and hides against an API without barakoCMS#1165. (#9)
+
 - **Workflow runs update while you watch.** The list polls every 2 seconds, using the API's cursor when it sends one and reading the page again when it does not. It stops in a hidden tab, backs off up to 60 seconds on errors, and stops on a 401 or 403. Status filters are chips with the API's own counts. A run's panel lists every try of an action when the API sends them, and `?run=<id>` opens a run. Abandon is a button on the run, and Retry, Cancel and Abandon show only to callers who hold the capability. Needs barakoCMS#1167 for the cursor, counts and tries; against older APIs the screen reads the page again each time. (#231)
 
 - **Workflows show their health and can be run by hand.** Each workflow in the list has a tile with its success rate over the last seven days and the sample it was taken over ("3 of 3"), or "No runs yet". The workflow's recent runs come from the run list and each opens on the runs page. Run now picks an entry of the workflow's type (searched and paged), asks for confirmation naming the entry, starts the run and opens it, with Dry run beside it on the workflow page. It needs the `run_workflows` capability and a switched-on workflow, and the tiles and the button are hidden against an API without barakoCMS#1165. (#232)
