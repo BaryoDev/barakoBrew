@@ -12,6 +12,32 @@ export interface ModuleSummary {
     /** `ready`, `needs-migration`, or `unknown` when the preflight did not run for it. */
     schemaState: string;
     schemaChanges: string[];
+    /** NuGet package id. Not sent by every API; the card shows what it is given. */
+    package?: string;
+    version?: string;
+    category?: string;
+    description?: string;
+    /**
+     * False for a module the API knows of and the deployment does not carry. An API that omits it
+     * is saying nothing, which is read as installed, because `/api/modules` lists only what it saw.
+     */
+    installed?: boolean;
+}
+
+/** What the module screen's Configuration card reads, from `GET /api/modules/{name}/configuration`. */
+export interface ModuleConfigurationEntry {
+    key: string;
+    /** Null when `redacted`, and null when the key is unset. */
+    value: string | null;
+    redacted: boolean;
+    scope: 'deployment' | 'tenant' | string;
+    source: 'appsettings' | 'environment' | 'default' | 'unknown' | string;
+}
+
+export interface ModuleConfiguration {
+    module: string;
+    section: string;
+    entries: ModuleConfigurationEntry[];
 }
 
 /**

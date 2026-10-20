@@ -185,6 +185,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Modules',
     items: [
+      { title: 'All modules', href: '/modules', icon: IconCube, capability: 'view_modules', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Accounting', href: '/accounting', icon: IconCoins , module: MODULE.accounting, capability: 'view_ledger', roles: ['SuperAdmin', 'Admin', 'Accountant'] },
       { title: 'Analytics', href: '/analytics', icon: IconAnalytics , module: MODULE.analytics, capability: 'view_analytics', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Email events', href: '/email-events', icon: IconEnvelope, metric: 'recentBounces', tone: 'warning', module: MODULE.emailEvents, capability: 'view_email_events', roles: ['SuperAdmin', 'Admin'] },
@@ -292,6 +293,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   'email-events': 'Email events',
   'feature-flags': 'Feature flags',
   files: 'Files',
+  modules: 'All modules',
   pwa: 'PWA installs',
   devices: 'Devices',
   portability: 'Export and import',
