@@ -446,7 +446,7 @@ export default function NewWorkflowPage() {
                       <li key={meta.type}>
                         <button
                           type="button"
-                          aria-label={`Add ${meta.type}`}
+                          aria-describedby={meta.description ? `action-help-${meta.type}` : undefined}
                           onClick={() => addAction(meta.type)}
                           className="hover:bg-accent flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left"
                         >
@@ -455,9 +455,14 @@ export default function NewWorkflowPage() {
                             className="text-primary mt-0.5 size-3.5 shrink-0"
                           />
                           <span className="min-w-0">
+                            <span className="sr-only">Add</span>{' '}
                             <span className="block text-sm">{meta.type}</span>
                             {meta.description && (
-                              <span className="text-muted-foreground block text-xs">
+                              <span
+                                id={`action-help-${meta.type}`}
+                                aria-hidden="true"
+                                className="text-muted-foreground block text-xs"
+                              >
                                 {meta.description}
                               </span>
                             )}
