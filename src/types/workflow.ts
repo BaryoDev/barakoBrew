@@ -35,6 +35,8 @@ export interface WorkflowDefinition {
     id?: string;
     name: string;
     triggerContentType: string;
+    /** More types the workflow fires on, besides `triggerContentType`. Absent from an older API. */
+    triggerContentTypes?: string[];
     triggerEvent: TriggerEvent;
     conditions: Record<string, string>;
     actions: WorkflowAction[];

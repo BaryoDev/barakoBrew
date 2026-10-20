@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { WorkflowExecutionLog } from '@/types/workflow';
 
 const useWorkflowDebugLogs = vi.fn();
@@ -7,7 +7,41 @@ vi.mock('@/hooks/use-workflows', () => ({
   useWorkflowDebugLogs: (id: string) => useWorkflowDebugLogs(id),
 }));
 
+// The run list. The tests below that are about the debug log run with the list refused, which is
+// how an API before barakoCMS#1165 or a caller without the capability reaches that panel.
+const useWorkflowRuns = vi.fn();
+vi.mock('@/hooks/use-workflow-runs', async () => {
+  const actual = await vi.importActual<typeof import('@/hooks/use-workflow-runs')>('@/hooks/use-workflow-runs');
+  return { ...actual, useWorkflowRuns: (...args: unknown[]) => useWorkflowRuns(...args) };
+});
+
+const { AxiosError, AxiosHeaders } = await import('axios');
 const { RunsPanel } = await import('./runs-panel');
+
+function refused(status: number) {
+  return new AxiosError('refused', 'ERR_BAD_REQUEST', undefined, undefined, {
+    status,
+    statusText: '',
+    data: {},
+    headers: {},
+    config: { headers: new AxiosHeaders() },
+  });
+}
+
+function listRun(id: string, extra: Record<string, unknown> = {}) {
+  return {
+    id,
+    workflowDefinitionId: 'wf-1',
+    workflowName: 'Announce',
+    contentId: 'c-1',
+    contentType: 'post',
+    triggerEvent: 'Created',
+    status: 'Succeeded',
+    createdAt: '2026-09-03T10:15:00Z',
+    actions: [],
+    ...extra,
+  };
+}
 
 const NOTE = 'Redacted: credentials and exception messages are not stored.';
 
@@ -43,6 +77,90 @@ function renderPanel(logs: WorkflowExecutionLog[]) {
 describe('RunsPanel', () => {
   beforeEach(() => {
     useWorkflowDebugLogs.mockReset();
+    useWorkflowRuns.mockReset();
+    useWorkflowRuns.mockReturnValue({ isLoading: false, isError: true, error: refused(404), data: undefined });
+  });
+
+  describe('from the run list', () => {
+    it('asks for this workflow only and links each run to the runs page', () => {
+      useWorkflowRuns.mockReturnValue({
+        isLoading: false,
+        isError: false,
+        data: { items: [listRun('r-1'), listRun('r-2', { status: 'Failed' })] },
+      });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(useWorkflowRuns).toHaveBeenCalledWith(expect.objectContaining({ workflowId: 'wf-1' }));
+      const links = within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link');
+      expect(links).toHaveLength(2);
+      expect(links[0]).toHaveAttribute('href', '/workflow-runs?run=r-1');
+      expect(links[1]).toHaveAttribute('href', '/workflow-runs?run=r-2');
+      expect(links[1]).toHaveTextContent('Failed');
+      expect(useWorkflowDebugLogs).not.toHaveBeenCalled();
+    });
+
+    it('shows the debug log, not the empty message, when the list holds another workflow run', () => {
+      useWorkflowRuns.mockReturnValue({
+        isLoading: false,
+        isError: false,
+        data: { items: [listRun('r-9', { workflowDefinitionId: 'wf-2' })] },
+      });
+      useWorkflowDebugLogs.mockReturnValue({ data: [], isLoading: false });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(useWorkflowDebugLogs).toHaveBeenCalledWith('wf-1');
+      expect(screen.queryByRole('link')).toBeNull();
+    });
+
+    it('says the workflow has not run when the list is empty', () => {
+      useWorkflowRuns.mockReturnValue({ isLoading: false, isError: false, data: { items: [] } });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(screen.getByText(/This workflow has not run yet/)).toBeInTheDocument();
+    });
+
+    it('shows an error with a retry for a failure that is not a refusal, not the debug log', () => {
+      const refetch = vi.fn();
+      useWorkflowRuns.mockReturnValue({ isLoading: false, isError: true, error: refused(500), refetch });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(screen.getByRole('alert')).toHaveTextContent('The runs could not be read.');
+      expect(useWorkflowDebugLogs).not.toHaveBeenCalled();
+    });
+
+    it('keeps the run list when a refetch fails and says it is the last that loaded', () => {
+      const refetch = vi.fn();
+      useWorkflowRuns.mockReturnValue({
+        isLoading: false,
+        isError: true,
+        error: refused(500),
+        data: { items: [listRun('r-1'), listRun('r-2')] },
+        refetch,
+      });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link')).toHaveLength(2);
+      expect(screen.getByRole('alert')).toHaveTextContent('The runs could not be refreshed, so this is the last list that loaded.');
+
+      fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Try again' }));
+      expect(refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing about a refresh when the list read answered', () => {
+      useWorkflowRuns.mockReturnValue({ isLoading: false, isError: false, data: { items: [listRun('r-1')] } });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link')).toHaveLength(1);
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('falls back to the debug log on a 403', () => {
+      useWorkflowRuns.mockReturnValue({ isLoading: false, isError: true, error: refused(403) });
+      useWorkflowDebugLogs.mockReturnValue({ data: [], isLoading: false });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(useWorkflowDebugLogs).toHaveBeenCalledWith('wf-1');
+    });
   });
 
   it('marks a log the API calls redacted and says once what is not stored', () => {

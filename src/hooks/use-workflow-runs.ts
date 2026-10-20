@@ -245,6 +245,7 @@ export interface WorkflowRunsQuery {
   /** A RunStatus name, or ANY_STATUS / empty for every status. */
   status?: string;
   contentId?: string;
+  /** Only the runs of this workflow. Needs barakoCMS#1165; an older API ignores it. */
   workflowId?: string;
 }
 

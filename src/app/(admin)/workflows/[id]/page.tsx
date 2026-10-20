@@ -15,11 +15,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { IconBolt, IconBug, IconPlay, IconWorkflows } from '@/components/icons';
 import Link from 'next/link';
+import { RunNowButton } from '@/components/workflow/run-now';
+import { VIEW_RUNS_CAPABILITY, useWorkflowHealth } from '@/hooks/use-workflow-health';
+import { useAccess } from '@/hooks/use-access';
 import { RunsPanel } from './runs-panel';
 
 export default function WorkflowDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: workflow, isLoading } = useWorkflow(id);
+  const [tab, setTab] = useState('runs');
+  // Only to learn whether this API has the routes: the button is hidden while health loads and when
+  // it answers 404, and shown on any other failure. Asked only of a caller who can read it. For anyone else the button stays, and a 404 from the
+  // run itself shows its message.
+  const access = useAccess();
+  const canReadHealth = access.can(VIEW_RUNS_CAPABILITY, ['Admin']);
+  const health = useWorkflowHealth(canReadHealth);
 
   if (isLoading) return <TableSkeleton />;
 
@@ -45,6 +55,15 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
       <PageHeader
         title={workflow.name}
         description={`Runs when a ${workflow.triggerContentType} entry is ${workflow.triggerEvent.toLowerCase()}.`}
+        actions={
+          <div className="flex items-center gap-2">
+            <RunNowButton workflow={workflow} available={canReadHealth ? health.offersRun : true} />
+            <Button type="button" variant="outline" size="sm" onClick={() => setTab('dry-run')}>
+              <IconPlay className="size-3.5" />
+              Dry run
+            </Button>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -109,7 +128,7 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
         </Card>
 
         <Card>
-          <Tabs defaultValue="runs">
+          <Tabs value={tab} onValueChange={setTab}>
             <CardHeader>
               <TabsList>
                 <TabsTrigger value="runs">

@@ -160,6 +160,11 @@ export async function stubShell(page: Page) {
     await page.route(/\/api\/content-types(\?|$)/, (r) => r.fulfill({ json: countOf(6) }));
     await page.route(/\/api\/workflows(\?|$)/, (r) => r.fulfill({ json: countOf(3) }));
     await page.route(/\/api\/client-errors(\?|$)/, (r) => r.fulfill({ json: countOf(0) }));
+    // The workflow screens read health and the run list. Answered as an API before health existed
+    // answers, so no tile or Run now shows, and the run list is empty. A spec about either
+    // registers its own route.
+    await page.route(/\/api\/workflows\/health(\?|$)/, (r) => r.fulfill({ status: 404, json: {} }));
+    await page.route(/\/api\/workflow-runs(\?|$)/, (r) => r.fulfill({ json: pageOf([]) }));
     await page.route(/\/api\/email-events(\?|$)/, (r) => r.fulfill({ json: [] }));
 
     // The rail asks the API which modules it runs and leaves out the items for the ones it does

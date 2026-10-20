@@ -33,7 +33,6 @@ test('a Published webhook workflow with a Secret can be created, and the Secret 
     await page.route('**/api/workflows/variables**', (r) =>
         r.fulfill({ json: { systemVariables: [], dataFields: [] } })
     );
-    await page.route('**/api/workflows/*/debug**', (r) => r.fulfill({ json: [] }));
 
     let created: unknown = null;
     await page.route(/\/api\/workflows(\?|$)/, (r) => {
