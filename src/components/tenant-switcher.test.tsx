@@ -78,10 +78,11 @@ describe('TenantSwitcher', () => {
     it('filters the list with the find field', async () => {
         render(<TenantSwitcher />);
         await openPopover();
-        expect(screen.getByText('The Club')).toBeTruthy();
+        // The current tenant's name is on the trigger as well as in its row in the list.
+        expect(screen.getAllByText('The Club')).toHaveLength(2);
         expect(screen.getByText('Other Place')).toBeTruthy();
         fireEvent.change(screen.getByRole('textbox', { name: 'Find a tenant' }), { target: { value: 'oth' } });
-        expect(screen.queryByText('The Club')).toBeNull();
+        expect(screen.getAllByText('The Club')).toHaveLength(1);
         expect(screen.getByText('Other Place')).toBeTruthy();
     });
 });

@@ -66,7 +66,9 @@ function renderOverview(answers: Answers = {}) {
                     totalItems: 1,
                     page: 1,
                     pageSize: 100,
+                    totalPages: 1,
                     hasNextPage: false,
+                    hasPreviousPage: false,
                     windowDays: 7,
                 },
             };
@@ -157,6 +159,6 @@ describe('the Overview', () => {
     it('renders when the analytics module is absent', async () => {
         renderOverview({ analytics: 'absent' });
         expect(await screen.findByText('Latest entries')).toBeInTheDocument();
-        expect(screen.queryByText('Visitors')).not.toBeInTheDocument();
+        await vi.waitFor(() => expect(screen.queryAllByText('Visitors')).toHaveLength(0));
     });
 });

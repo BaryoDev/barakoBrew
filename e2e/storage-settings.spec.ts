@@ -92,8 +92,12 @@ test.describe('Storage settings', () => {
 
     await page.getByLabel('Bucket').fill('media-2');
     await expect(save).toBeDisabled();
+    // Back to the values the passing test ran against, so that test covers the form again.
     await page.getByLabel('Bucket').fill('media');
+    await expect(save).toBeEnabled();
+    await page.getByLabel('Bucket').fill('media-3');
     await expect(save).toBeDisabled();
+    await page.getByLabel('Bucket').fill('media');
     await page.getByRole('button', { name: 'Test connection' }).click();
     await expect(save).toBeEnabled();
 

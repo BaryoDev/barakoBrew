@@ -317,7 +317,8 @@ describe('the version rail beside the editor', () => {
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
 
         const rail = await screen.findByRole('complementary', { name: 'Versions' });
-        await within(rail).findByText(/Created/);
+        // A card names the change twice, as its label and as the raw change type.
+        expect(await within(rail).findAllByText(/Created/)).toHaveLength(2);
         expect(within(rail).getAllByRole('listitem')).toHaveLength(2);
         expect(within(rail).queryByRole('button', { name: /restore this version/i })).toBeNull();
     });

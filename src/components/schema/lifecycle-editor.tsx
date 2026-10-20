@@ -226,7 +226,7 @@ export function LifecycleEditor({
                     </div>
                 </div>
 
-                <div aria-label="Lifecycle diagram" className="min-w-0">
+                <div className="min-w-0">
                     <LifecycleDiagram lifecycle={value} />
                 </div>
             </div>

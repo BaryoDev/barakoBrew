@@ -33,7 +33,11 @@ function wrap(ui: ReactNode) {
     return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-beforeEach(() => get.mockReset());
+// A braced body: mockReset returns the mock, and a function returned from beforeEach is run by
+// vitest as the teardown, which would call the mock once more after the test.
+beforeEach(() => {
+    get.mockReset();
+});
 
 describe('All modules page', () => {
     it('renders detected, installed but not enabled, and not installed from /api/modules', async () => {
@@ -73,7 +77,7 @@ describe('All modules page', () => {
 });
 
 describe('module screen template', () => {
-    const module = { ...base, name: 'Files', enabled: true };
+    const filesModule = { ...base, name: 'Files', enabled: true };
 
     it('shows a redacted value as the marker, never as an empty field', async () => {
         get.mockResolvedValue({
@@ -86,7 +90,7 @@ describe('module screen template', () => {
                 ],
             },
         });
-        wrap(<ModuleScreen module={module} />);
+        wrap(<ModuleScreen module={filesModule} />);
 
         expect(await screen.findByText('files.example.com')).toBeTruthy();
         const marker = screen.getByTestId('config-redacted');
@@ -97,14 +101,14 @@ describe('module screen template', () => {
 
     it('says the configuration is unavailable on a 403 instead of an empty card', async () => {
         get.mockRejectedValue(Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403 } }));
-        wrap(<ModuleScreen module={module} />);
+        wrap(<ModuleScreen module={filesModule} />);
         expect(await screen.findByText(/not available to you/)).toBeTruthy();
     });
 
     it('renders the module content below the Configuration card', async () => {
         get.mockResolvedValue({ data: { module: 'Files', section: 's', entries: [] } });
         wrap(
-            <ModuleScreen module={module}>
+            <ModuleScreen module={filesModule}>
                 <p>module body</p>
             </ModuleScreen>,
         );

@@ -64,7 +64,10 @@ function renderEditor(schema: Record<string, unknown> = SCHEMA) {
                 headers: {},
             };
         }
-        return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
+        // The history the version rail reads: a complete page, so the rail has nothing of its own to retry.
+        return {
+            data: { items: [], totalItems: 0, page: 1, pageSize: 20, totalPages: 0, hasNextPage: false, hasPreviousPage: false },
+        };
     });
 
     const client = new QueryClient({

@@ -43,7 +43,8 @@ describe('the block count warning', () => {
         renderWith({ version: 1, blocks: BLOCKS, limits: { maxBlocks: 200 } });
         expect(await screen.findAllByRole('listitem')).not.toHaveLength(0);
         expect(screen.queryByText(/This page holds/)).toBeNull();
-    });
+        // 150 rows queried by role takes seconds under a parallel run, past the default 5s.
+    }, 30000);
 
     it('warns at 150 blocks against the built-in 100 when the site publishes no limit', async () => {
         renderWith({ version: 1, blocks: BLOCKS });

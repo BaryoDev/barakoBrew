@@ -288,20 +288,22 @@ describe('modules in the rail', () => {
         expect(moduleTitles(undefined)).toContain('Accounting');
     });
 
-    it('drops a group whose every item belonged to a module that is gone', () => {
-        // The Modules group is nothing but module items, so a deployment running none of them must
-        // not render a "Modules" heading with nothing under it.
+    it('leaves only All modules in the Modules group when no module is running', () => {
+        // All modules is core: it is how a deployment with none of them sees that. Every other item
+        // in the group belongs to a module, so those go and the heading stays over the one left.
         const groups = withModules(visibleGroups(NAV_GROUPS, ['SuperAdmin']), []);
         expect(groups.length).toBeGreaterThan(0);
-        expect(groups.map((g) => g.label)).not.toContain('Modules');
         for (const g of groups) expect(g.items.length).toBeGreaterThan(0);
+        const modules = groups.find((g) => g.label === 'Modules');
+        expect(modules).toBeDefined();
+        expect(modules!.items.map((i) => i.title)).toEqual(['All modules']);
     });
 
-    it('names a module for every item in the Modules group', () => {
+    it('names a module for every item in the Modules group except All modules', () => {
         const group = NAV_GROUPS.find((g) => g.label === 'Modules');
         expect(group).toBeDefined();
-        expect(group!.items.length).toBeGreaterThan(0);
-        expect(group!.items.filter((i) => !i.module).map((i) => i.title)).toEqual([]);
+        expect(group!.items.length).toBeGreaterThan(1);
+        expect(group!.items.filter((i) => !i.module).map((i) => i.title)).toEqual(['All modules']);
     });
 
     it('gates on names the API could actually report', () => {
