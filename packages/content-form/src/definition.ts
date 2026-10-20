@@ -7,6 +7,7 @@
 
 export enum SensitivityLevel {
     Public = 'Public',
+    Members = 'Members',
     Sensitive = 'Sensitive',
     Hidden = 'Hidden',
 }

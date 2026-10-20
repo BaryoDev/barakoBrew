@@ -4,6 +4,7 @@
 // in barako-content-form and is re-exported here, where every screen already looks for it.
 import { SensitivityLevel } from 'barako-content-form';
 import { z } from 'zod';
+import type { ContractState } from '@/lib/api-contract';
 
 export { SensitivityLevel };
 
@@ -139,11 +140,50 @@ export const contentVersionSchema = z.looseObject({
     status: z.enum(ContentStatus).nullish(),
     scheduledPublishAt: z.string().nullish(),
     scheduledUnpublishAt: z.string().nullish(),
-    sensitivity: z.enum(SensitivityLevel).nullish(),
+    // Any string, so a level a newer API adds does not fail the whole history.
+    sensitivity: z
+        .string()
+        .transform((value) => value as SensitivityLevel)
+        .nullish(),
 }) satisfies z.ZodType<ContentVersion>;
 
 export const SENSITIVITY_META: Record<SensitivityLevel, { label: string; description: string }> = {
     [SensitivityLevel.Public]: { label: 'Public', description: 'Visible to every reader' },
+    [SensitivityLevel.Members]: {
+        label: 'Members',
+        description: 'Delivered to a caller holding a viewer token, never to an anonymous one',
+    },
     [SensitivityLevel.Sensitive]: { label: 'Sensitive', description: 'Data hidden except from SuperAdmin and HR' },
     [SensitivityLevel.Hidden]: { label: 'Hidden', description: 'Data hidden except from SuperAdmin' },
 };
+
+/** The admin contract that first accepts and sends the Members level (barakoCMS 5.1.0). */
+export const MEMBERS_CONTRACT = 9;
+
+/**
+ * The label and description for a level, including one this console has never heard of. The API
+ * adds levels without asking, and a screen that indexes the record directly crashes on the next one.
+ */
+export function sensitivityMeta(level: string | null | undefined): { label: string; description: string } {
+    if (!level) return SENSITIVITY_META[SensitivityLevel.Public];
+    return (
+        (SENSITIVITY_META as Record<string, { label: string; description: string }>)[level] ?? {
+            label: level,
+            description: 'A level this console does not know',
+        }
+    );
+}
+
+/**
+ * The levels to offer when setting one. Members is left out against an API older than contract 9
+ * (or one that has not answered yet), which would not know it. A level already set stays in the
+ * list so the picker can show it.
+ */
+export function sensitivityChoices(
+    contract: ContractState,
+    candidates: readonly SensitivityLevel[],
+    current?: string | null,
+): SensitivityLevel[] {
+    const membersKnown = contract.kind === 'ok' && contract.version >= MEMBERS_CONTRACT;
+    return candidates.filter((level) => level !== SensitivityLevel.Members || membersKnown || current === level);
+}

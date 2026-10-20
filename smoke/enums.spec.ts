@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ContentStatus, SensitivityLevel } from '../src/types/content';
+import { ContentStatus, MEMBERS_CONTRACT, SensitivityLevel } from '../src/types/content';
 import { FieldMask } from '../src/types/schema';
 import { smokeApiUrl } from './api-url';
 
@@ -29,8 +29,12 @@ import { smokeApiUrl } from './api-url';
  * barakoCMS; when the API names it, one entry here closes it.
  */
 
-/** The console's copy, and the schema name the API publishes it under. */
-const MIRRORED = [
+/**
+ * The console's copy, and the schema name the API publishes it under. `since` names the values the
+ * console knows from a contract newer than the oldest one it speaks, keyed to that contract: an API
+ * below it does not publish them, and the console only offers them once the API reports it.
+ */
+const MIRRORED: ReadonlyArray<{ name: string; schema: string; ours: string[]; since?: Record<string, number> }> = [
     {
         name: 'ContentStatus',
         schema: 'BarakoCMSModelsContentStatus',
@@ -40,19 +44,21 @@ const MIRRORED = [
         name: 'SensitivityLevel',
         schema: 'BarakoCMSModelsSensitivityLevel',
         ours: Object.values(SensitivityLevel) as string[],
+        since: { [SensitivityLevel.Members]: MEMBERS_CONTRACT },
     },
     {
         name: 'FieldMask',
         schema: 'BarakoCMSModelsFieldMask',
         ours: Object.values(FieldMask) as string[],
     },
-] as const;
+];
 
 interface OpenApiDocument {
     components?: { schemas?: Record<string, { enum?: string[] }> };
 }
 
 let document: OpenApiDocument;
+let contract: number;
 
 // The API, not the console. The pack's baseURL is the admin under test, so an absolute URL is
 // needed here or this asks the console for the server's description of itself.
@@ -66,6 +72,12 @@ test.beforeAll(async ({ request }) => {
             'scripts/smoke-check.sh starts it with Swagger__Enabled=true; a 404 here means that stopped.'
     ).toBe(200);
     document = await response.json();
+
+    // The same unauthenticated read the contract check makes; the header is on its 401 too.
+    const probe = await request.get(`${API}/api/contents?page=1&pageSize=1`);
+    const version = Number(probe.headers()['x-api-contract-version']);
+    expect(Number.isInteger(version), 'the API answered with no X-Api-Contract-Version').toBe(true);
+    contract = version;
 });
 
 test('the API publishes the enums this console mirrors', () => {
@@ -83,9 +95,10 @@ test('the API publishes the enums this console mirrors', () => {
     }
 });
 
-for (const { name, schema, ours } of MIRRORED) {
+for (const { name, schema, ours: all, since = {} } of MIRRORED) {
     test(`${name} matches the server, value for value`, () => {
         const theirs = document.components?.schemas?.[schema]?.enum ?? [];
+        const ours = all.filter((value) => (since[value] ?? 0) <= contract);
 
         // Sorted, because the order a console lists a filter in is its own business. Membership is
         // the contract: a value on one side and not the other is the drift worth failing on.

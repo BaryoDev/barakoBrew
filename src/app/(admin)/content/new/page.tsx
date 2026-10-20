@@ -1,15 +1,16 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAccess } from '@/hooks/use-access';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useCreateContent } from '@/hooks/use-contents';
 import { apiErrorMessage } from '@/lib/api';
+import { getContractServerState, getContractState, subscribeToContract } from '@/lib/api-contract';
 import { singletonHref } from '@/lib/navigation';
 import { PAGE_FIELDS } from '@/lib/page-tree';
-import { ContentStatus, SensitivityLevel, SENSITIVITY_META } from '@/types/content';
+import { ContentStatus, SensitivityLevel, sensitivityChoices, sensitivityMeta } from '@/types/content';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { DynamicForm } from '@/components/content/dynamic-form';
@@ -42,6 +43,7 @@ function NewContentInner() {
     return parent && field ? { [field]: parent } : {};
   });
   const [sensitivity, setSensitivity] = useState(SensitivityLevel.Public);
+  const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
   const [refusal, setRefusal] = useState<{ message: string; status: ContentStatus } | null>(null);
 
   const schema = schemas?.find((s) => s.name === contentType);
@@ -112,10 +114,10 @@ function NewContentInner() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(SENSITIVITY_META).map(([value, meta]) => (
+                {sensitivityChoices(contract, Object.values(SensitivityLevel), sensitivity).map((value) => (
                   <SelectItem key={value} value={value}>
-                    <span className="font-medium">{meta.label}</span>
-                    <span className="text-muted-foreground ml-1.5 text-xs">{meta.description}</span>
+                    <span className="font-medium">{sensitivityMeta(value).label}</span>
+                    <span className="text-muted-foreground ml-1.5 text-xs">{sensitivityMeta(value).description}</span>
                   </SelectItem>
                 ))}
               </SelectContent>

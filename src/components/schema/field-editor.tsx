@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { Controller, useForm, useFormState, useWatch } from 'react-hook-form';
@@ -38,7 +38,8 @@ import {
     type FieldDefinition,
     type FieldType,
 } from '@/types/schema';
-import { SENSITIVITY_META } from '@/types/content';
+import { sensitivityChoices, sensitivityMeta } from '@/types/content';
+import { getContractServerState, getContractState, subscribeToContract } from '@/lib/api-contract';
 import { OptionsEditor } from '@/components/schema/options-editor';
 import { TOKEN_LENGTH, editorsFor, rolesFor } from '@/lib/field-presentation';
 import { fieldFormSchema, numberText } from '@/lib/field-form';
@@ -124,6 +125,11 @@ function cleaned(field: FieldDefinition): FieldDefinition {
     if (next.scale === null || next.scale === undefined) delete next.scale;
     if (next.tokenLength === null || next.tokenLength === undefined) delete next.tokenLength;
     if (next.referenceType !== undefined) next.referenceType = next.referenceType.trim();
+    // The API refuses a Members field that carries roles or a mask, and the form hides both for it.
+    if (next.sensitivity === SensitivityLevel.Members) {
+        next.visibleToRoles = [];
+        next.mask = FieldMask.Default;
+    }
     return next;
 }
 
@@ -369,7 +375,7 @@ function FieldRow({
                             </Badge>
                         )}
                         <Badge variant="outline" className="text-xs">
-                            {SENSITIVITY_META[sensitivity].label}
+                            {sensitivityMeta(sensitivity).label}
                         </Badge>
                     </div>
                     <p className="text-muted-foreground text-xs">
@@ -378,7 +384,7 @@ function FieldRow({
                         {field.currency ? ` in ${field.currency}` : ''}
                         {field.section ? ` · ${field.section}` : ''}
                     </p>
-                    {sensitivity !== SensitivityLevel.Public && (
+                    {sensitivity !== SensitivityLevel.Public && sensitivity !== SensitivityLevel.Members && (
                         <p className="text-muted-foreground text-xs">
                             Mask: {mask?.label}
                             {field.visibleToRoles?.length ? ` · Visible to ${field.visibleToRoles.join(', ')}` : ''}
@@ -460,6 +466,7 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
         mode: 'onChange',
     });
     const form = useWatch({ control }) as FieldDefinition;
+    const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
     const { errors, isValid } = useFormState({ control });
 
     const resolvedType = resolveFieldType(form.type);
@@ -817,14 +824,22 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {(isToken
-                                        ? [SensitivityLevel.Sensitive, SensitivityLevel.Hidden]
-                                        : [SensitivityLevel.Public, SensitivityLevel.Sensitive, SensitivityLevel.Hidden]
+                                    {sensitivityChoices(
+                                        contract,
+                                        isToken
+                                            ? [SensitivityLevel.Sensitive, SensitivityLevel.Hidden]
+                                            : [
+                                                  SensitivityLevel.Public,
+                                                  SensitivityLevel.Members,
+                                                  SensitivityLevel.Sensitive,
+                                                  SensitivityLevel.Hidden,
+                                              ],
+                                        field.value,
                                     ).map((level) => (
                                         <SelectItem key={level} value={String(level)}>
-                                            <span className="font-medium">{SENSITIVITY_META[level].label}</span>
+                                            <span className="font-medium">{sensitivityMeta(level).label}</span>
                                             <span className="text-muted-foreground ml-1.5 text-xs">
-                                                {SENSITIVITY_META[level].description}
+                                                {sensitivityMeta(level).description}
                                             </span>
                                         </SelectItem>
                                     ))}
@@ -834,7 +849,9 @@ function FieldForm({ initial, isNew, others, contentTypes, onSave, onCancel }: F
                     />
                 </div>
 
-                {form.sensitivity !== undefined && form.sensitivity !== SensitivityLevel.Public && (
+                {form.sensitivity !== undefined &&
+                    form.sensitivity !== SensitivityLevel.Public &&
+                    form.sensitivity !== SensitivityLevel.Members && (
                     <>
                         <div className="space-y-2">
                             <Label htmlFor="field-roles">Visible to roles</Label>

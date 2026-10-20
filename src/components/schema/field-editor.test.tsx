@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { FieldEditor } from './field-editor';
+import { recordContractVersion, __resetContractForTests } from '@/lib/api-contract';
 import { FIELD_TYPES, FIELD_TYPE_GROUPS, FieldMask, SensitivityLevel, type FieldDefinition } from '@/types/schema';
 
 // Radix Select drives itself with pointer capture and scrolls the active item into view. jsdom has
@@ -364,5 +365,87 @@ describe('the field rows', () => {
 
         expect(within(rows()[0]).getByRole('group', { name: 'Edit Salary' })).toBeInTheDocument();
         expect(within(rows()[1]).queryByRole('group')).toBeNull();
+    });
+});
+
+describe('the Members sensitivity', () => {
+    const MEMBERS_FIELD: FieldDefinition = {
+        name: 'Perk',
+        displayName: 'Perk',
+        type: 'string',
+        isRequired: false,
+        sensitivity: SensitivityLevel.Members,
+    };
+    const ODD_FIELD = { ...MEMBERS_FIELD, name: 'Odd', displayName: 'Odd', sensitivity: 'Partners' as SensitivityLevel };
+
+    beforeEach(() => __resetContractForTests());
+
+    function openSensitivity(fields: FieldDefinition[]) {
+        render(<FieldEditor fields={fields} onChange={() => {}} />);
+        fireEvent.click(screen.getByRole('button', { name: `Edit ${fields[0].displayName}` }));
+        fireEvent.keyDown(screen.getByRole('combobox', { name: 'Sensitivity' }), { key: 'ArrowDown' });
+        return within(screen.getByRole('listbox')).getAllByRole('option');
+    }
+
+    it('shows on a field row without the mask line staff do not need', () => {
+        render(<FieldEditor fields={[MEMBERS_FIELD]} onChange={() => {}} />);
+
+        const row = within(screen.getByRole('list', { name: 'Fields' })).getAllByRole('listitem')[0];
+        expect(row).toHaveTextContent('Members');
+        expect(row).not.toHaveTextContent('Mask:');
+    });
+
+    it('can be picked against an API on contract 9', () => {
+        recordContractVersion('9');
+        const options = openSensitivity([{ ...MEMBERS_FIELD, sensitivity: SensitivityLevel.Public }]);
+
+        expect(options).toHaveLength(4);
+        expect(options.map((o) => o.textContent ?? '').some((t) => t.startsWith('Members'))).toBe(true);
+    });
+
+    it('is not offered against an API on contract 8', () => {
+        recordContractVersion('8');
+        const options = openSensitivity([{ ...MEMBERS_FIELD, sensitivity: SensitivityLevel.Public }]);
+
+        expect(options).toHaveLength(3);
+        expect(options.map((o) => o.textContent ?? '').some((t) => t.startsWith('Members'))).toBe(false);
+    });
+
+    it('renders a level it does not know instead of crashing', () => {
+        render(<FieldEditor fields={[ODD_FIELD]} onChange={() => {}} />);
+
+        const row = within(screen.getByRole('list', { name: 'Fields' })).getAllByRole('listitem')[0];
+        expect(row).toHaveTextContent('Partners');
+    });
+
+    it('sends no roles and the default mask when a Sensitive field becomes Members', async () => {
+        recordContractVersion('9');
+        const saved: FieldDefinition[][] = [];
+        const salary: FieldDefinition = {
+            name: 'Salary',
+            displayName: 'Salary',
+            type: 'string',
+            isRequired: false,
+            sensitivity: SensitivityLevel.Sensitive,
+            mask: FieldMask.Redact,
+            visibleToRoles: ['HR'],
+        };
+        render(<FieldEditor fields={[salary]} onChange={(next) => saved.push(next)} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit Salary' }));
+        fireEvent.keyDown(screen.getByRole('combobox', { name: 'Sensitivity' }), { key: 'ArrowDown' });
+        const members = within(screen.getByRole('listbox'))
+            .getAllByRole('option')
+            .find((o) => (o.textContent ?? '').startsWith('Members'));
+        expect(members).toBeDefined();
+        fireEvent.keyDown(members!, { key: 'Enter' });
+        const save = screen.getByRole('button', { name: 'Save field' });
+        await waitFor(() => expect(save).toBeEnabled());
+        fireEvent.click(save);
+
+        await waitFor(() => expect(saved).toHaveLength(1));
+        expect(saved[0][0].sensitivity).toBe(SensitivityLevel.Members);
+        expect(saved[0][0].visibleToRoles).toEqual([]);
+        expect(saved[0][0].mask).toBe(FieldMask.Default);
     });
 });

@@ -66,3 +66,12 @@ describe('the masked notice', () => {
         expect(maskedNotice(sensitive)).not.toMatch(/your roles/i);
     });
 });
+
+describe('a Members field', () => {
+    it('is read by staff like a Public one, with or without capabilities', () => {
+        const members = field(SensitivityLevel.Members);
+
+        expect(fieldIsVisibleTo(members, ['Nurse'])).toBe(true);
+        expect(fieldIsVisibleTo(members, { roles: ['Nurse'], capabilities: [] })).toBe(true);
+    });
+});
