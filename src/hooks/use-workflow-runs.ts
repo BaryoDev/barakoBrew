@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import axios from 'axios';
 import { z } from 'zod';
 import { api, paginatedSchema, parseResponse } from '@/lib/api';
-import { isAsNew, isNewer, mergeRunPage } from '@/lib/run-merge';
+import { applyCounts, isAsNew, isNewer, mergeRunPage } from '@/lib/run-merge';
 import type { Tone } from '@/components/patterns/status-badge';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 
@@ -459,8 +459,14 @@ const CLIENT_CLOCK_MARGIN_MS = 60_000;
 
 const POLL_PAGE_SIZE = 100;
 
-/** The least time between two reads asked for only to put the counts right. */
-export const COUNTS_REFRESH_MS = 10_000;
+/**
+ * The least time between two counts-only reads. A counts read is a GROUP BY over every run of the
+ * tenant on the API, so its cost grows with the table and it is paid once per open page.
+ */
+export const COUNTS_REFRESH_MS = 60_000;
+
+/** The least time between two full page reads asked for because a run left the filter. */
+export const HOLE_REFETCH_MS = 10_000;
 
 /** Every mutation of a run carries this key, so a poll can tell one is in flight. */
 export const RUN_MUTATION_KEY = ['workflow-run-action'] as const;
@@ -498,8 +504,12 @@ class ListState {
   dirtyAt: number | null = null;
   /** When the read that last landed began, so an older one landing later cannot replace it. */
   landedAt = -Infinity;
-  /** When polling last asked for a fresh read to fix the counts. */
+  /** When polling last started a counts-only read. */
   refreshedAt = -Infinity;
+  /** When the last page read asked for because a run left the filter started. */
+  holeAt = -Infinity;
+  /** When the counts-only read that last landed began, so an older one cannot replace it. */
+  countsAt = -Infinity;
   /** Why polling is not at its normal pace, or null when it is. Read through `useSyncExternalStore`. */
   private pause: LivePause | null = null;
   private readonly listeners = new Set<() => void>();
@@ -510,6 +520,15 @@ class ListState {
   };
 
   getPause = () => this.pause;
+
+  /** Whether the counts on screen are known to miss a change. Read through `useSyncExternalStore`. */
+  getBehind = () => this.dirtyAt !== null;
+
+  private setDirty(next: number | null) {
+    const changed = (this.dirtyAt === null) !== (next === null);
+    this.dirtyAt = next;
+    if (changed) for (const listener of this.listeners) listener();
+  }
 
   setPause(next: LivePause | null) {
     if (this.pause?.reason === next?.reason) return;
@@ -523,7 +542,20 @@ class ListState {
   private readonly seenAt = new Map<string, number>();
 
   markDirty(at: number) {
-    this.dirtyAt = Math.max(this.dirtyAt ?? -Infinity, at);
+    this.setDirty(Math.max(this.dirtyAt ?? -Infinity, at));
+  }
+
+  /**
+   * Called when a counts-only read that began at `startedAt` lands and its counts are on the page.
+   * Clears the flag if no change was seen after the read began, and keeps it if one was, since the
+   * counts are then older than that change.
+   */
+  countsLanded(startedAt: number) {
+    this.countsAt = startedAt;
+    if (this.dirtyAt !== null && startedAt >= this.dirtyAt) this.setDirty(null);
+    let newest = -Infinity;
+    for (const seen of this.seenAt.values()) if (seen > startedAt) newest = Math.max(newest, seen);
+    if (newest > startedAt) this.markDirty(newest);
   }
 
   /**
@@ -534,7 +566,7 @@ class ListState {
    */
   readLanded(startedAt: number, onPage: ReadonlySet<string>, counted: boolean) {
     this.landedAt = startedAt;
-    if (this.dirtyAt !== null && startedAt >= this.dirtyAt) this.dirtyAt = null;
+    if (this.dirtyAt !== null && startedAt >= this.dirtyAt) this.setDirty(null);
     if (!counted) return;
     for (const [id, seen] of this.seenAt) {
       if (seen > startedAt && !onPage.has(id)) this.markDirty(seen);
@@ -635,6 +667,7 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
       list,
       status: (params.status as string | undefined) ?? null,
       contentId: (params.contentId as string | undefined) ?? null,
+      workflowId: (params.workflowId as string | undefined) ?? null,
       tenant,
     });
     // The key text stands for every part of the key, and `ready` flips once per key.
@@ -642,8 +675,9 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
   }, [live, ready, keyText]);
 
   const pause = useSyncExternalStore(list.subscribe, list.getPause, () => null);
+  const countsBehind = useSyncExternalStore(list.subscribe, list.getBehind, () => false);
 
-  return { ...result, pause };
+  return { ...result, pause, countsBehind };
 }
 
 interface PollingInput {
@@ -652,6 +686,7 @@ interface PollingInput {
   list: ListState;
   status: string | null;
   contentId: string | null;
+  workflowId: string | null;
   tenant: string | null;
 }
 
@@ -661,7 +696,7 @@ interface PollingInput {
  * restart the moment a hidden tab is shown.
  */
 function startPolling(input: PollingInput): () => void {
-  const { queryClient, listKey, list, status, contentId, tenant } = input;
+  const { queryClient, listKey, list, status, contentId, workflowId, tenant } = input;
 
   let stopped = false;
   let busy = false;
@@ -670,6 +705,10 @@ function startPolling(input: PollingInput): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   // Set the first time a response comes back with no cursor: this API cannot say what changed.
   let rereading = false;
+  // A counts-only read is in flight.
+  let countsBusy = false;
+  // A run left the filter and the page now ends short, but the page read has not gone out yet.
+  let holePending = false;
 
   const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
@@ -729,6 +768,7 @@ function startPolling(input: PollingInput): () => void {
           list.since = polled.cursor;
           if (applyPoll(polled)) next = CATCH_UP_MS;
           refreshCounts();
+          refetchHole();
         }
       }
       failures = 0;
@@ -753,7 +793,8 @@ function startPolling(input: PollingInput): () => void {
    * Merges one poll into the page and the open run. Returns whether another page is waiting.
    *
    * A poll carries no counts. The merge moves them only for a run on the page, whose old status it
-   * knows. Any other change marks them dirty, and `refreshCounts` reads them from the server again.
+   * knows. Any other change marks them dirty, and `refreshCounts` reads them from the server again
+   * with a read that carries no rows.
    */
   function applyPoll(polled: RunListCache): boolean {
     const seenAt = Date.now();
@@ -786,21 +827,62 @@ function startPolling(input: PollingInput): () => void {
     });
 
     // A run left the filter and more runs follow this page, so the page now ends short. Read it again.
-    if (hole) void queryClient.invalidateQueries({ queryKey: listKey, exact: true });
+    if (hole) holePending = true;
     return polled.hasNextPage;
   }
 
   /**
-   * Reads the list again while its counts are dirty, at most once per `COUNTS_REFRESH_MS` and never
-   * while a read of it is in flight. That read clears the flag only if it began after the change.
+   * Reads a page again when a run left the filter and more runs follow, so the page ends short and
+   * needs rows. At most once per `HOLE_REFETCH_MS`, never while a read of the list is in flight, and
+   * without cancelling one: a throttled hole waits for a later poll.
+   */
+  function refetchHole() {
+    if (!holePending || hidden()) return;
+    if (queryClient.isFetching({ queryKey: listKey, exact: true }) > 0) return;
+    const now = Date.now();
+    if (now - list.holeAt < HOLE_REFETCH_MS) return;
+    list.holeAt = now;
+    holePending = false;
+    void queryClient.refetchQueries({ queryKey: listKey, exact: true }, { cancelRefetch: false });
+  }
+
+  /**
+   * Reads the counts again while they are dirty, with a one-row read of the list, at most once per
+   * `COUNTS_REFRESH_MS` and never while a counts read or a read of the list is in flight. The
+   * server's counts ignore the status filter, so none is sent. The read clears the flag only if it
+   * began after the change, and an older read never replaces newer counts.
    */
   function refreshCounts() {
-    if (list.dirtyAt === null) return;
+    if (list.dirtyAt === null || countsBusy || hidden()) return;
     if (queryClient.isFetching({ queryKey: listKey, exact: true }) > 0) return;
     const now = Date.now();
     if (now - list.refreshedAt < COUNTS_REFRESH_MS) return;
     list.refreshedAt = now;
-    void queryClient.refetchQueries({ queryKey: listKey, exact: true });
+    countsBusy = true;
+    void readCounts(now).finally(() => {
+      countsBusy = false;
+    });
+  }
+
+  async function readCounts(started: number) {
+    try {
+      const params: Record<string, string | number> = { page: 1, pageSize: 1 };
+      if (contentId) params.contentId = contentId;
+      if (workflowId) params.workflowId = workflowId;
+
+      const response = await api.get<unknown>('/api/workflow-runs', { params });
+      const counted = parseResponse(workflowRunListSchema(), response.data, 'GET /api/workflow-runs?pageSize=1');
+      if (stopped || !counted.statusCounts) return;
+      // A read that began before newer counts landed is older than them.
+      if (started < list.landedAt || started < list.countsAt) return;
+
+      const counts = counted.statusCounts;
+      queryClient.setQueryData<RunListCache>(listKey, (current) => (current ? applyCounts(current, counts, status) : current));
+      list.countsLanded(started);
+    } catch {
+      // The counts stay dirty and are asked for again after the interval. Errors that matter reach
+      // the poll, which backs off or stops on its own.
+    }
   }
 
   function onVisibility() {

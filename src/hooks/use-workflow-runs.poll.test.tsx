@@ -14,9 +14,8 @@ vi.mock('@/lib/api', async () => {
 });
 
 const { api, tokenStore } = await import('@/lib/api');
-const { useWorkflowRuns, useRetryAttempt, backoffDelay, COUNTS_REFRESH_MS, POLL_INTERVAL_MS, POLL_MAX_BACKOFF_MS } = await import(
-  './use-workflow-runs'
-);
+const { useWorkflowRuns, useRetryAttempt, backoffDelay, COUNTS_REFRESH_MS, HOLE_REFETCH_MS, POLL_INTERVAL_MS, POLL_MAX_BACKOFF_MS } =
+  await import('./use-workflow-runs');
 
 type Params = Record<string, string | number>;
 type Responder = (params: Params) => unknown;
@@ -77,6 +76,9 @@ function serve(onList: Responder, onPoll: Responder) {
 const paramsOf = (config?: { params?: unknown }) => (config?.params ?? {}) as Params;
 const polls = () => vi.mocked(api.get).mock.calls.filter(([, config]) => 'changedSince' in paramsOf(config));
 const lists = () => vi.mocked(api.get).mock.calls.filter(([, config]) => !('changedSince' in paramsOf(config)));
+/** The one-row reads that fetch only the counts, and the page reads that fetch rows. */
+const countReads = () => lists().filter(([, config]) => paramsOf(config).pageSize === 1);
+const pageReads = () => lists().filter(([, config]) => paramsOf(config).pageSize !== 1);
 const sentCursor = (n: number) => (polls()[n][1]?.params as Params).changedSince;
 
 let client: QueryClient;
@@ -85,7 +87,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function mount(query: { page?: number; status?: string } = {}) {
+function mount(query: { page?: number; pageSize?: number; status?: string } = {}) {
   return renderHook(() => ({ runs: useWorkflowRuns({ page: 1, pageSize: 25, ...query }, { live: true }), retry: useRetryAttempt() }), {
     wrapper,
   });
@@ -735,5 +737,178 @@ describe('what a fresh read decides', () => {
     await settle();
 
     expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 2, Pending: 1, Succeeded: 3 });
+  });
+});
+
+describe('what the counts refresh costs', () => {
+  it('reads only the counts, a few times in three minutes, while an off-page run changes on every poll', async () => {
+    const A = run('a', '10:00', { status: 'Failed' });
+    let polled = 0;
+    serve(
+      () => page([A], { statusCounts: { Failed: 1, Running: 2 }, totalItems: 1 }),
+      () => {
+        polled += 1;
+        const changed = run('z', '09:00', { status: 'Running', updatedAt: new Date(Date.now()).toISOString() });
+        return page([changed], { cursor: `c${polled}`, statusCounts: null });
+      },
+    );
+
+    mount({ status: 'Failed' });
+    await settle(180_000);
+
+    expect(polls()).toHaveLength(90);
+    expect(pageReads()).toHaveLength(1);
+    const reads = countReads();
+    expect(reads).toHaveLength(3);
+    for (const [, config] of reads) {
+      expect(config?.params).toEqual({ page: 1, pageSize: 1 });
+    }
+    expect(COUNTS_REFRESH_MS).toBe(60_000);
+  });
+
+  it('puts a counts read on the chips and the total and leaves the rows alone', async () => {
+    const rows = [run('a', '10:00', { status: 'Failed' }), run('b', '09:00', { status: 'Failed' })];
+    let polled = 0;
+    serve(
+      (params) =>
+        params.pageSize === 1
+          ? page([run('other', '08:00', { status: 'Failed' })], {
+              totalItems: 99,
+              statusCounts: { Failed: 3, Running: 1 },
+            })
+          : page(rows, { statusCounts: { Failed: 2, Running: 1 }, totalItems: 2 }),
+      () => {
+        polled += 1;
+        return page([run('z', '07:00', { status: 'Failed' })], { cursor: `c${polled}`, statusCounts: null });
+      },
+    );
+
+    const { result } = mount({ status: 'Failed' });
+    await settle();
+    expect(ids(result)).toHaveLength(2);
+
+    await settle(POLL_INTERVAL_MS);
+
+    expect(countReads()).toHaveLength(1);
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 3, Running: 1 });
+    expect(result.current.runs.data?.totalItems).toBe(3);
+    expect(ids(result)).toHaveLength(2);
+    expect(ids(result)).toEqual(['a', 'b']);
+    expect(result.current.runs.data?.items).toEqual(rows);
+  });
+
+  it('says the counts are catching up while they are dirty, and stops saying it once a read lands', async () => {
+    const late: { release?: () => void } = {};
+    const body = () => page([run('a', '10:00', { status: 'Failed' })], { statusCounts: { Failed: 1, Running: 3 }, totalItems: 1 });
+    vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: Params }) => {
+      const params = config?.params ?? {};
+      if ('changedSince' in params) {
+        return { data: page([run('z', '09:00', { status: 'Running' })], { cursor: 'c1', statusCounts: null }) };
+      }
+      if (params.pageSize !== 1) return { data: page([run('a', '10:00', { status: 'Failed' })], { statusCounts: { Failed: 1, Running: 2 }, totalItems: 1 }) };
+      return new Promise<{ data: unknown }>((resolve) => {
+        late.release = () => resolve({ data: body() });
+      });
+    }) as unknown as typeof api.get);
+
+    const { result } = mount({ status: 'Failed' });
+    await settle();
+    expect(result.current.runs.countsBehind).toBe(false);
+
+    await settle(POLL_INTERVAL_MS);
+    expect(countReads()).toHaveLength(1);
+    expect(result.current.runs.countsBehind).toBe(true);
+
+    await act(async () => late.release?.());
+    await settle();
+    expect(result.current.runs.countsBehind).toBe(false);
+    expect(result.current.runs.data?.statusCounts).toEqual({ Failed: 1, Running: 3 });
+  });
+
+  it('does not start a counts read while another is still in flight', async () => {
+    const late: { release?: () => void } = {};
+    let polled = 0;
+    vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: Params }) => {
+      const params = config?.params ?? {};
+      if ('changedSince' in params) {
+        polled += 1;
+        const changed = run('z', '09:00', { status: 'Running', updatedAt: new Date(Date.now()).toISOString() });
+        return { data: page([changed], { cursor: `c${polled}`, statusCounts: null }) };
+      }
+      const body = page([run('a', '10:00', { status: 'Failed' })], { statusCounts: { Failed: 1, Running: 2 }, totalItems: 1 });
+      if (params.pageSize !== 1 || countReads().length === 1) return { data: body };
+      return new Promise<{ data: unknown }>((resolve) => {
+        late.release = () => resolve({ data: body });
+      });
+    }) as unknown as typeof api.get);
+
+    mount({ status: 'Failed' });
+    await settle(POLL_INTERVAL_MS);
+    expect(countReads()).toHaveLength(1);
+
+    // Past the interval, the first read is done, so the second goes out and then hangs.
+    await settle(COUNTS_REFRESH_MS);
+    expect(countReads()).toHaveLength(2);
+
+    await settle(COUNTS_REFRESH_MS * 2);
+    expect(countReads()).toHaveLength(2);
+
+    await act(async () => late.release?.());
+    await settle(POLL_INTERVAL_MS);
+    expect(countReads()).toHaveLength(3);
+  });
+});
+
+describe('a run that leaves the filter with more runs behind the page', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => run(`x${i + 1}`, `10:${String(59 - i).padStart(2, '0')}`, { status: 'Failed' }));
+
+  function leaving(polled: number) {
+    const changed = { ...rows[polled - 1], status: 'Succeeded', updatedAt: `2026-10-19T11:${String(polled).padStart(2, '0')}:00Z` };
+    return page([changed], { cursor: `c${polled}` });
+  }
+
+  it('is read again at most once per ten seconds', async () => {
+    let polled = 0;
+    serve(
+      () => page(rows, { pageSize: 40, totalItems: 80, totalPages: 2, hasNextPage: true }),
+      () => leaving((polled += 1)),
+    );
+
+    mount({ status: 'Failed', pageSize: 40 });
+    await settle(60_000);
+
+    expect(polls()).toHaveLength(30);
+    // The first read, then a hole at 2 s, 12 s, 22 s, 32 s, 42 s and 52 s. Unthrottled it was 31.
+    expect(pageReads()).toHaveLength(7);
+    expect(HOLE_REFETCH_MS).toBe(10_000);
+  });
+
+  it('does not cancel a read of the list that is already in flight', async () => {
+    const slow: { release?: () => void } = {};
+    let polled = 0;
+    let reads = 0;
+    vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: Params }) => {
+      const params = config?.params ?? {};
+      if ('changedSince' in params) return { data: leaving((polled += 1)) };
+      reads += 1;
+      const body = page(rows, { pageSize: 40, totalItems: 80, totalPages: 2, hasNextPage: true });
+      if (reads !== 2) return { data: body };
+      return new Promise<{ data: unknown }>((resolve) => {
+        slow.release = () => resolve({ data: body });
+      });
+    }) as unknown as typeof api.get);
+
+    mount({ status: 'Failed', pageSize: 40 });
+    await settle(POLL_INTERVAL_MS);
+    expect(pageReads()).toHaveLength(2);
+
+    // Many polls with a hole each, while the second read is still open.
+    await settle(30_000);
+    expect(polls().length).toBeGreaterThan(10);
+    expect(pageReads()).toHaveLength(2);
+
+    await act(async () => slow.release?.());
+    await settle(POLL_INTERVAL_MS);
+    expect(pageReads()).toHaveLength(3);
   });
 });

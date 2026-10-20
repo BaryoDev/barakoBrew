@@ -170,3 +170,20 @@ export function mergeRunPage<T extends MergeableRun, P extends MergeablePage<T>>
     },
   };
 }
+
+/**
+ * Puts counts from a counts-only read on a page. The rows are the same array, in the same order,
+ * and only the totals and the held counts change, so a read that carried no rows cannot disturb
+ * what is on screen.
+ */
+export function applyCounts<T extends MergeableRun, P extends MergeablePage<T>>(
+  current: P,
+  statusCounts: Record<string, number>,
+  status?: string | null,
+): P {
+  const filter = status && status !== 'all' ? status : null;
+  const counted = filter ? statusCounts[filter] : Object.values(statusCounts).reduce((sum, n) => sum + n, 0);
+  const totalItems = typeof counted === 'number' ? counted : current.totalItems;
+  const totalPages = Math.max(1, Math.ceil(totalItems / current.pageSize));
+  return { ...current, statusCounts, totalItems, totalPages, hasNextPage: current.page < totalPages };
+}
