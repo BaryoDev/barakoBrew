@@ -39,7 +39,8 @@ export interface Viewer {
  */
 export function fieldIsVisibleTo(field: FieldDefinition, viewer: readonly string[] | Viewer): boolean {
     const level = field.sensitivity;
-    if (!level || level === SensitivityLevel.Public) return true;
+    // Members is read by staff like Public: the API holds it back from anonymous callers only.
+    if (!level || level === SensitivityLevel.Public || level === SensitivityLevel.Members) return true;
 
     const who: Viewer = isRoleList(viewer) ? { roles: viewer } : viewer;
     const listed = field.visibleToRoles && field.visibleToRoles.length > 0 ? field.visibleToRoles : null;

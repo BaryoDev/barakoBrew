@@ -175,3 +175,18 @@ describe('the contract versions this build speaks', () => {
         expect(classifyContract('9')).toEqual({ kind: 'api-newer', version: 9 });
     });
 });
+
+describe('the supported range after barakoCMS 5.1.0', () => {
+    // Literal numbers, not the ends of SUPPORTED_CONTRACT, so widening or narrowing it fails here.
+    it('takes contract 9 as ok', () => {
+        expect(classifyContract('9')).toEqual({ kind: 'ok', version: 9 });
+    });
+
+    it('calls contract 10 newer', () => {
+        expect(classifyContract('10')).toEqual({ kind: 'api-newer', version: 10 });
+    });
+
+    it('ends the range at 9', () => {
+        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 9 });
+    });
+});

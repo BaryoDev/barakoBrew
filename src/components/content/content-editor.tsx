@@ -16,7 +16,7 @@ import {
 import { apiErrorMessage, isConflict } from '@/lib/api';
 import { SaveConflictError } from '@/lib/concurrent-save';
 import { conflictReason, useConcurrentSave } from '@/hooks/use-concurrent-save';
-import { ContentStatus, SENSITIVITY_META } from '@/types/content';
+import { ContentStatus, sensitivityMeta } from '@/types/content';
 import { statusMeta } from '@/lib/status-vocabulary';
 import type { ContentDetail } from '@/types/content';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -158,7 +158,7 @@ export function ContentEditor({
   const blocked = schema
     ? Object.keys(choiceProblems(schema.fields, values, storedChoiceKept ? seeded?.data : undefined)).length > 0
     : false;
-  const sensitivityMeta = SENSITIVITY_META[content.sensitivity];
+  const sensitivityLabel = sensitivityMeta(content.sensitivity).label;
 
   // The version and the ETag come from what was seeded, never from the latest read. Sending the
   // latest is what made a stale save succeed: the entry moved on, the conflict banner went up, and
@@ -243,7 +243,7 @@ export function ContentEditor({
     <>
       <PageHeader
         title={title}
-        description={`${schema?.displayName ?? content.contentType} · ${sensitivityMeta?.label ?? 'Public'} · version ${content.version}`}
+        description={`${schema?.displayName ?? content.contentType} · ${sensitivityLabel} · version ${content.version}`}
         actions={
           <div className="flex items-center gap-2">
             <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
