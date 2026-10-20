@@ -11,6 +11,8 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **Block limits and theme slots come from the site's schema when it publishes them.** The block editor's warnings use the site's `limits.maxBlocks` and `limits.maxDepth`, and the Theme screen lists the colour and font slots from `theme.colors` and `theme.fonts`. Without them, or without a site address, it uses 100 blocks, 4 levels and its built-in slots as before. barakoPress does not publish these yet, so nothing changes until it does; the names are in docs/blocks.md. (#166)
+
 - **The console works against barakoCMS 4.0.1 to 5.1.0 (admin contract 9) and shows Members.** Contract 9 is no longer refused as a newer API. Members is a sensitivity level for fields and entries: delivered to a caller holding a viewer token, never to an anonymous one, and read by staff like Public. It shows on field rows and entries, and can be picked in the field editor and on a new entry, only against an API on contract 9 or later. A sensitivity the console does not know is shown by its own name instead of breaking the screen. (#237)
 
 - **Workflow runs update while you watch.** The list polls every 2 seconds, using the API's cursor when it sends one and reading the page again when it does not. It stops in a hidden tab, backs off up to 60 seconds on errors, and stops on a 401 or 403. Status filters are chips with the API's own counts. A run's panel lists every try of an action when the API sends them, and `?run=<id>` opens a run. Abandon is a button on the run, and Retry, Cancel and Abandon show only to callers who hold the capability. Needs barakoCMS#1167 for the cursor, counts and tries; against older APIs the screen reads the page again each time. (#231)

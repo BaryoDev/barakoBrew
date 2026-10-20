@@ -30,8 +30,8 @@ import {
     dropIndex,
     LAYER_LABELS,
     LAYER_ORDER,
-    MAX_BLOCKS,
-    MAX_DEPTH,
+    maxBlocksOf,
+    maxDepthOf,
     move,
     newBlock,
     propsOf,
@@ -296,12 +296,13 @@ function Editor({
     onChange: (list: unknown[]) => void;
 }) {
     const total = countBlocks(ctx.schema, list);
+    const maxBlocks = maxBlocksOf(ctx.schema);
     return (
         <>
             <BlockList ctx={ctx} list={list} spot={ROOT} name={name} onChange={onChange} />
-            {total > MAX_BLOCKS && (
+            {total > maxBlocks && (
                 <p className="text-warning text-xs">
-                    This page holds {total} blocks, and the site shows the first {MAX_BLOCKS}.
+                    This page holds {total} blocks, and the site shows the first {maxBlocks}.
                 </p>
             )}
         </>
@@ -393,11 +394,13 @@ function BlockList({
         setOpen(next);
     };
 
+    const maxDepth = maxDepthOf(ctx.schema);
+
     return (
         <div ref={ref} className="space-y-2">
-            {depth >= MAX_DEPTH && (
+            {depth >= maxDepth && (
                 <p className="text-warning text-xs">
-                    The site reads blocks {MAX_DEPTH} levels deep at most, so nothing in here is shown.
+                    The site reads blocks {maxDepth} levels deep at most, so nothing in here is shown.
                 </p>
             )}
             {list.length === 0 ? (

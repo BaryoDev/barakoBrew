@@ -70,6 +70,15 @@ export const FONT_ROLES = ['heading', 'body', 'mono'] as const;
 export const RADII_KEYS = ['panel', 'control', 'pill'] as const;
 export const LAYOUT_KEYS = ['prose', 'wide', 'gutter'] as const;
 
+/** The slots to list: the ones the site's schema names, or else the built-in ones. */
+export function colorSlotsFor(published?: readonly string[]): readonly string[] {
+    return published && published.length > 0 ? published : COLOR_SLOTS;
+}
+
+export function fontRolesFor(published?: readonly string[]): readonly string[] {
+    return published && published.length > 0 ? published : FONT_ROLES;
+}
+
 const isBlank = (value: unknown) => value === undefined || value === null;
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
