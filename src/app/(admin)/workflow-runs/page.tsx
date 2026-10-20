@@ -329,8 +329,8 @@ export default function WorkflowRunsPage() {
               }}
             />
           </div>
-          <div aria-live="polite">
-            {runs.countsBehind && <p className="text-muted-foreground mt-2 text-[12px]">Counts update within a minute</p>}
+          <div aria-live="polite" className="min-h-6">
+            {runs.countsBehind && <p className="text-muted-foreground pt-2 text-[12px]">Counts update within a minute</p>}
           </div>
 
           {runs.pause && <PauseNote pause={runs.pause} updatedAt={runs.dataUpdatedAt} />}
