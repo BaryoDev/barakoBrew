@@ -49,6 +49,7 @@ function run(id: string, workflowName: string, status: string, actions: Attempt[
     status,
     createdAt: new Date(Date.now() - 3600_000).toISOString(),
     completedAt: status === 'Pending' || status === 'Running' ? null : new Date().toISOString(),
+    abandonedAt: null,
     actions,
   };
 }
@@ -82,14 +83,14 @@ async function stubRuns(
   const detailReads: string[] = [];
   const retries: string[] = [];
 
-  // Polling is kept quiet: the list read sends a cursor and every poll reports nothing changed, so
-  // the only detail reads after the first are the ones the screen makes on purpose.
+  // Polling is kept quiet: every poll reports nothing changed, so the only detail reads after the
+  // first are the ones the screen makes on purpose. Only a poll carries a cursor, as in the API.
   await page.route(/\/api\/workflow-runs(\?|$)/, (route) => {
     const params = new URL(route.request().url()).searchParams;
     if (params.has('changedSince')) return route.fulfill({ json: { ...pageOf([]), cursor: 'quiet' } });
     const status = params.get('status');
     const items = status ? RUNS.filter((r) => r.status === status) : RUNS;
-    return route.fulfill({ json: { ...pageOf(items), cursor: 'quiet' } });
+    return route.fulfill({ json: pageOf(items) });
   });
 
   await page.route(/\/api\/workflow-runs\/[^/]+$/, (route) => {
@@ -517,13 +518,14 @@ test.describe('workflow runs live', () => {
     await authed(page);
     await stubShell(page);
     const asked: URL[] = [];
-    let reads = 0;
+    let polls = 0;
     await page.route(/\/api\/workflow-runs(\?|$)/, (route) => {
       const url = new URL(route.request().url());
       asked.push(url);
-      reads += 1;
-      const changed = reads > 1 ? RUNS.map((r) => (r.id === 'run-live' ? { ...r, status: 'Succeeded' } : r)) : RUNS;
-      return route.fulfill({ json: { ...pageOf(changed), cursor: `cursor-${reads}` } });
+      if (!url.searchParams.has('changedSince')) return route.fulfill({ json: pageOf(RUNS) });
+      polls += 1;
+      const changed = RUNS.filter((r) => r.id === 'run-live').map((r) => ({ ...r, status: 'Succeeded' }));
+      return route.fulfill({ json: { ...pageOf(changed), cursor: `cursor-${polls}` } });
     });
     await page.goto('/workflow-runs');
     await expect(page.getByRole('table').getByText('Notify the desk')).toBeVisible({ timeout: 15000 });
@@ -572,6 +574,19 @@ test.describe('workflow runs live', () => {
 
     await expect(page.getByText('Run not found')).toBeVisible({ timeout: 15000 });
     expect(detailReads).toEqual([]);
+  });
+
+  test('offers no abandon for a run from an API that does not send abandonedAt', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    await stubRuns(page);
+    const older: Record<string, unknown> = { ...PARTLY_FAILED };
+    delete older.abandonedAt;
+    await stubLinked(page, older as ReturnType<typeof run>);
+    await page.goto(`/workflow-runs?run=${LINKED_ID}`);
+
+    await expect(actions(page)).toHaveCount(5, { timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'Abandon run' })).toHaveCount(0);
   });
 
   test('abandons a run after asking, then reads it again', async ({ page }) => {
