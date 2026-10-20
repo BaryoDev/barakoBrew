@@ -102,7 +102,7 @@ test.describe('Storage settings', () => {
     await expect(save).toBeEnabled();
 
     await save.click();
-    await expect(page.getByText(/Files already stored stay/)).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: /Files already stored stay/ })).toBeVisible();
     expect(saved).not.toBeNull();
     expect(saved!.s3!.secretKey).toBe(SECRET);
 
