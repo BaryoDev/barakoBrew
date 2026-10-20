@@ -48,15 +48,19 @@ function NavMetricLabel({ item, metrics, dot }: { item: NavItem; metrics: NavMet
   // A tinted pill exists to report a problem. Nothing wrong, nothing shown.
   if (item.tone && metric.value === 0) return null;
 
-  if (dot) {
+  const text = metric.atLeast ? `${metric.value}+` : `${metric.value}`;
+  const why = item.tone === 'danger' ? ' unresolved' : ' bounced in the last 24 hours';
+
+  if (dot && item.tone) {
     return (
-      <span className="size-[7px] rounded-full bg-warning">
-        <span className="sr-only">{item.tone === 'danger' ? 'Unresolved' : 'Needs attention'}</span>
+      <span
+        className={cn('size-[7px] rounded-full', item.tone === 'danger' ? 'bg-destructive' : 'bg-warning')}
+        title={`${text}${why}`}
+      >
+        <span className="sr-only">{` ${text}${why}`}</span>
       </span>
     );
   }
-
-  const text = metric.atLeast ? `${metric.value}+` : `${metric.value}`;
 
   if (!item.tone) {
     return (
@@ -74,9 +78,7 @@ function NavMetricLabel({ item, metrics, dot }: { item: NavItem; metrics: NavMet
       )}
     >
       {text}
-      <span className="sr-only">
-        {item.tone === 'danger' ? ' unresolved' : ' bounced in the last 24 hours'}
-      </span>
+      <span className="sr-only">{why}</span>
     </span>
   );
 }
