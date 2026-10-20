@@ -13,7 +13,7 @@ import { useWorkflowHealth } from '@/hooks/use-workflow-health';
  * when the read fails rather than claiming the workflows have no runs.
  */
 export function WorkflowHealthCard() {
-  const { data: workflows } = useWorkflows();
+  const { data: workflows, isLoading, isError: workflowsFailed } = useWorkflows();
   const health = useWorkflowHealth();
 
   if (health.unavailable) return null;
@@ -32,9 +32,9 @@ export function WorkflowHealthCard() {
         </CardAction>
       </CardHeader>
       <CardContent>
-        {health.isError ? (
+        {health.isError || workflowsFailed ? (
           <p className="text-muted-foreground text-sm">Workflow health could not be read.</p>
-        ) : !workflows?.length ? (
+        ) : isLoading ? null : !workflows?.length ? (
           <p className="text-muted-foreground text-sm">No workflows yet.</p>
         ) : (
           <ul className="divide-y">

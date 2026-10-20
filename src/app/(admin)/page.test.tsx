@@ -30,10 +30,11 @@ interface Answers {
     health?: 'fail' | Record<string, { status: string }>;
     workflowHealth?: 'fail' | '404' | { successRate: number; finishedRuns: number };
     analytics?: 'absent';
+    workflows?: 'fail';
 }
 
 function renderOverview(answers: Answers = {}) {
-    const { entries = 12, version = '4.9.1', contract = 7, health, workflowHealth, analytics } = answers;
+    const { entries = 12, version = '4.9.1', contract = 7, health, workflowHealth, analytics, workflows } = answers;
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url === '/api/meta') return { data: { version, swaggerEnabled: false, apiContractVersion: contract } };
         if (url === '/api/monitoring/health') {
@@ -70,6 +71,7 @@ function renderOverview(answers: Answers = {}) {
                 },
             };
         }
+        if (url === '/api/workflows' && workflows === 'fail') throw fail(500);
         if (url === '/api/workflows') return page([{ id: 'w1', name: 'Notify' }]);
         if (url === '/api/analytics/websites' && analytics === 'absent') throw fail(404);
         if (url.startsWith('/api/contents')) return page([], entries);
@@ -138,6 +140,12 @@ describe('the Overview', () => {
     it('says workflow health could not be read when that call fails', async () => {
         renderOverview({ workflowHealth: 'fail' });
         expect(await screen.findByText('Workflow health could not be read.')).toBeInTheDocument();
+    });
+
+    it('does not say there are no workflows when the workflow list fails', async () => {
+        renderOverview({ workflows: 'fail' });
+        expect(await screen.findByText('Workflow health could not be read.')).toBeInTheDocument();
+        expect(screen.queryByText('No workflows yet.')).not.toBeInTheDocument();
     });
 
     it('hides workflow health against an API without the route', async () => {
