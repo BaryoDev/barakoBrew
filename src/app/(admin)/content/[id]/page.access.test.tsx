@@ -293,3 +293,112 @@ describe('a link naming a transition', () => {
         expect(toast.error).not.toHaveBeenCalled();
     });
 });
+
+describe('the version rail beside the editor', () => {
+    const version = (n: number, changeType: string, extra: Record<string, unknown> = {}) => ({
+        id: ID,
+        versionId: `v${n}`,
+        changeType,
+        timestamp: `2026-09-0${n}T00:00:00Z`,
+        ...extra,
+    });
+    const page = (items: unknown[]) => ({
+        items,
+        totalItems: items.length,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+    });
+
+    it('shows no Restore button to a caller without the rollback capability', async () => {
+        renderEditor({ me: { roles: [REGISTRAR], capabilities: ['upload_files'] } });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
+
+        const rail = await screen.findByRole('complementary', { name: 'Versions' });
+        await within(rail).findByText(/Created/);
+        expect(within(rail).getAllByRole('listitem')).toHaveLength(2);
+        expect(within(rail).queryByRole('button', { name: /restore this version/i })).toBeNull();
+    });
+
+    it('offers Restore on a version with a document and not on a status-only one', async () => {
+        session.user = { userId: 'u1', username: 'a', roles: ['Admin'] };
+        const data = { Title: 'Ana', Salary: '90000' };
+        renderEditor({
+            me: 'missing',
+            history: page([
+                version(1, 'Created', { data }),
+                version(2, 'StatusChanged', { status: 'Published' }),
+                version(3, 'Updated', { data }),
+            ]),
+        });
+
+        const rail = await screen.findByRole('complementary', { name: 'Versions' });
+        await within(rail).findByText('Status set to Published');
+        const cards = within(rail).getAllByRole('listitem');
+        expect(cards).toHaveLength(3);
+        // Newest first: the current card, the status-only one, then the created one.
+        expect(within(cards[0]).queryByRole('button', { name: /restore this version/i })).toBeNull();
+        expect(within(cards[1]).queryByRole('button', { name: /restore this version/i })).toBeNull();
+        expect(within(cards[2]).getByRole('button', { name: /restore this version/i })).toBeInTheDocument();
+    });
+
+    it('is named Content, Scheduling, History and Permissions', async () => {
+        renderEditor();
+        await screen.findByRole('button', { name: /save changes/i });
+
+        for (const name of ['Content', 'Scheduling', 'History', 'Permissions']) {
+            expect(screen.getByRole('tab', { name })).toBeInTheDocument();
+        }
+    });
+});
+
+describe('the Permissions tab', () => {
+    it('lists each field with its sensitivity, roles and mask, read only', async () => {
+        renderEditor({
+            schema: {
+                ...SCHEMA,
+                fields: [
+                    SCHEMA.fields[0],
+                    { ...SCHEMA.fields[1], visibleToRoles: ['Payroll'], mask: 'Last4' },
+                ],
+            },
+        });
+
+        const tab = await screen.findByRole('tab', { name: 'Permissions' });
+        fireEvent.mouseDown(tab);
+        fireEvent.click(tab);
+
+        const row = (await screen.findByText('Salary')).closest('tr') as HTMLElement;
+        expect(within(row).getByText('Sensitive')).toBeInTheDocument();
+        expect(within(row).getByText('Payroll')).toBeInTheDocument();
+        expect(within(row).getByText('Last4')).toBeInTheDocument();
+        expect(screen.queryByRole('combobox')).toBeNull();
+    });
+});
+
+describe('the editor around the form', () => {
+    it('shows the field type beside its label and the type and version in the meta line', async () => {
+        renderEditor();
+        await screen.findByRole('button', { name: /save changes/i });
+
+        const hints = screen.getAllByTestId('field-type-hint');
+        expect(hints.length).toBeGreaterThan(0);
+        expect(hints[0]).toHaveTextContent('string');
+        expect(screen.getByTestId('entry-meta')).toHaveTextContent('staff · v2');
+    });
+
+    it('saving one field leaves the others as they were', async () => {
+        vi.mocked(api.put).mockResolvedValue({ data: { id: ID, version: 3 }, headers: {} });
+        renderEditor({ data: { Title: 'Ana', Salary: '***' } });
+
+        const save = await screen.findByRole('button', { name: /save changes/i });
+        fireEvent.change(document.getElementById('Title') as HTMLInputElement, { target: { value: 'Bea' } });
+        fireEvent.click(save);
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        const [, body] = vi.mocked(api.put).mock.calls[0];
+        expect((body as { data: Record<string, unknown> }).data).toEqual({ Title: 'Bea', Salary: '***' });
+    });
+});

@@ -28,6 +28,9 @@ import { DynamicForm } from '@/components/content/dynamic-form';
 import { TransitionActions } from '@/components/content/transition-dialog';
 import { SaveRefusal, isRetryableRefusal } from '@/components/content/save-refusal';
 import { withoutTokenFields } from '@/lib/token-fields';
+import { VersionRail } from '@/components/content/version-rail';
+import { WorkflowsWatching } from '@/components/content/workflows-watching';
+import { PermissionsPanel } from '@/components/content/permissions-panel';
 import { EntrySharePanel } from '@/components/content/entry-share-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -307,18 +310,34 @@ export function ContentEditor({
         </div>
       )}
 
+      <p data-testid="entry-meta" className="text-muted-foreground mt-2 font-mono text-xs">
+        {[
+          content.contentType,
+          `v${content.version}`,
+          content.scheduledPublishAt
+            ? `publishes ${format(new Date(content.scheduledPublishAt), 'PPp')}`
+            : meta.label.toLowerCase(),
+          schema?.isPubliclyDeliverable ? `/api/public/${content.contentType}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="edit">Edit</TabsTrigger>
-          <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          <TabsTrigger value="edit">Content</TabsTrigger>
+          <TabsTrigger value="schedule">Scheduling</TabsTrigger>
           <TabsTrigger value="history">
             <IconHistory className="size-3.5" />
             History
           </TabsTrigger>
+          <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="share">Share</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="edit" className="mt-4 max-w-2xl">
+        <TabsContent value="edit" className="mt-4">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="min-w-0 max-w-2xl flex-1">
           {schema ? (
             <>
               <DynamicForm
@@ -328,6 +347,7 @@ export function ContentEditor({
                 contentType={content.contentType}
                 viewer={access.viewer}
                 files={content.files}
+                typeHints
               />
               <Separator className="my-6" />
               <div className="flex items-center gap-2">
@@ -359,6 +379,10 @@ export function ContentEditor({
               cannot be edited here.
             </p>
           )}
+          <WorkflowsWatching contentType={content.contentType} />
+          </div>
+          <VersionRail id={id} canRollback={canRollback} />
+          </div>
         </TabsContent>
 
         <TabsContent value="schedule" className="mt-4">
@@ -374,6 +398,16 @@ export function ContentEditor({
 
         <TabsContent value="history" className="mt-4">
           <HistoryPanel id={id} active={tab === 'history'} canRollback={canRollback} />
+        </TabsContent>
+
+<TabsContent value="permissions" className="mt-4">
+          {schema ? (
+            <PermissionsPanel fields={schema.fields} />
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              The content type “{content.contentType}” is not readable with your role.
+            </p>
+          )}
         </TabsContent>
 
         <TabsContent value="share" className="mt-4 max-w-3xl">

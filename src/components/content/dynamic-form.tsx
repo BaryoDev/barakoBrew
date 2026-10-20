@@ -40,6 +40,8 @@ export interface DynamicFormProps {
      * is in the data. Absent on a create, and from an API older than file fields.
      */
     files?: Record<string, ResolvedFile>;
+    /** Shows each field's type in mono beside its label. The entry editor turns it on. */
+    typeHints?: boolean;
 }
 
 /** The resolved file for a field, found as the API keys it: by the name in the data, any case. */
@@ -67,6 +69,7 @@ export function DynamicForm({
     contentType,
     viewer,
     files,
+    typeHints,
 }: DynamicFormProps) {
     const renderField = ({ field, type, label, value, error, onChange: set }: FieldRenderProps) => {
         // The editor the field's hint names, or the one its name has always given it.
@@ -223,6 +226,7 @@ export function DynamicForm({
             viewerRoleIds={viewer?.roleIds}
             viewerCapabilities={viewer?.capabilities}
             renderField={renderField}
+            typeHints={typeHints}
         />
     );
 }
