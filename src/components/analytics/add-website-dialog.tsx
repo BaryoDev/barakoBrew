@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { IconPlus, IconCopy, IconRefresh, IconCheckCircle } from '@/components/icons';
+import { withDataDomains } from '@/lib/tracking-snippet';
 import { useCreateWebsite, useSiteStatus, type CreatedWebsite } from '@/hooks/use-analytics';
 
 /** Registers a new site in Umami and shows the tracking snippet to paste — no leaving the admin. */
@@ -47,7 +48,7 @@ export function AddWebsiteDialog({ onCreated }: { onCreated?: (id: string) => vo
 
   function copySnippet() {
     if (!created) return;
-    navigator.clipboard.writeText(created.snippet).then(
+    navigator.clipboard.writeText(withDataDomains(created.snippet, created.domain)).then(
       () => toast.success('Snippet copied'),
       () => toast.error('Copy failed — select and copy manually'),
     );
@@ -125,8 +126,14 @@ export function AddWebsiteDialog({ onCreated }: { onCreated?: (id: string) => vo
                 <li>Open {created.domain} in a browser, then hit <strong>Verify</strong> here.</li>
               </ol>
               <pre className="bg-muted overflow-x-auto rounded-md p-3 text-xs leading-relaxed">
-                {created.snippet}
+                {withDataDomains(created.snippet, created.domain)}
               </pre>
+              <p className="text-muted-foreground text-xs">
+                <code>data-domains</code> keeps visits from localhost and preview hosts out of your
+                numbers. For a local build, leave the tracker URL and website id empty rather than
+                hardcoding the hosted ones; Brew only reads stats from Umami, so a visit already sent
+                is counted before Brew sees it.
+              </p>
 
               {status.data?.installed ? (
                 <p className="flex items-center gap-2 font-medium text-emerald-600">
