@@ -128,6 +128,19 @@ describe('RunsPanel', () => {
       expect(useWorkflowDebugLogs).not.toHaveBeenCalled();
     });
 
+    it('keeps the run list when a refetch fails and stale data is present', () => {
+      useWorkflowRuns.mockReturnValue({
+        isLoading: false,
+        isError: true,
+        error: refused(500),
+        data: { items: [listRun('r-1'), listRun('r-2')] },
+      });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link')).toHaveLength(2);
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
     it('falls back to the debug log on a 403', () => {
       useWorkflowRuns.mockReturnValue({ isLoading: false, isError: true, error: refused(403) });
       useWorkflowDebugLogs.mockReturnValue({ data: [], isLoading: false });

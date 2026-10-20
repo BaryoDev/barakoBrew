@@ -28,7 +28,8 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
   // Asked only of a caller who can read it. For anyone else the button stays, and a 404 from the
   // run itself shows its message.
   const access = useAccess();
-  const health = useWorkflowHealth(access.can(VIEW_RUNS_CAPABILITY, ['Admin']));
+  const canReadHealth = access.can(VIEW_RUNS_CAPABILITY, ['Admin']);
+  const health = useWorkflowHealth(canReadHealth);
 
   if (isLoading) return <TableSkeleton />;
 
@@ -56,7 +57,7 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
         description={`Runs when a ${workflow.triggerContentType} entry is ${workflow.triggerEvent.toLowerCase()}.`}
         actions={
           <div className="flex items-center gap-2">
-            <RunNowButton workflow={workflow} available={!health.unavailable} />
+            <RunNowButton workflow={workflow} available={canReadHealth ? health.data?.available === true : true} />
             <Button type="button" variant="outline" size="sm" onClick={() => setTab('dry-run')}>
               <IconPlay className="size-3.5" />
               Dry run

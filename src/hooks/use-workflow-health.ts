@@ -26,9 +26,9 @@ const healthSchema = z.looseObject({
   workflowId: z.string(),
   name: z.string(),
   enabled: z.boolean(),
-  lastOutcomes: z.array(outcomeSchema),
+  lastOutcomes: z.array(outcomeSchema).nullish().transform((v) => v ?? []),
   successRate: z.number().nullish(),
-  finishedRuns: z.number(),
+  finishedRuns: z.number().nullish().transform((v) => v ?? 0),
   averageActionDurationMs: z.number().nullish(),
 });
 

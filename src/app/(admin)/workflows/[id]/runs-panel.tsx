@@ -18,10 +18,10 @@ export function RunsPanel({ workflowId }: { workflowId: string }) {
   const runs = useWorkflowRuns({ page: 1, pageSize: RECENT_RUNS, workflowId });
 
   if (runs.isLoading) return <TableSkeleton rows={3} />;
-  if (runs.isError && (isNotFound(runs.error) || isForbidden(runs.error))) {
+  if (runs.isError && !runs.data && (isNotFound(runs.error) || isForbidden(runs.error))) {
     return <DebugLogPanel workflowId={workflowId} />;
   }
-  if (runs.isError) {
+  if (runs.isError && !runs.data) {
     return (
       <p role="alert" className="text-muted-foreground py-8 text-center text-sm">
         The runs could not be read.{' '}

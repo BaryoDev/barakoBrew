@@ -47,9 +47,13 @@ export default function WorkflowsPage() {
   const access = useAccess();
   // Health asks for the same capability the run list does. A caller without it, or an API with no
   // such route, sees no tiles and no Run now.
-  const health = useWorkflowHealth(access.can(VIEW_RUNS_CAPABILITY, ['Admin']));
+  const canReadHealth = access.can(VIEW_RUNS_CAPABILITY, ['Admin']);
+  const health = useWorkflowHealth(canReadHealth);
   const showHealth = health.data?.available === true;
-  const showRun = !health.unavailable && access.can(RUN_WORKFLOWS_CAPABILITY, RUN_WORKFLOWS_LEGACY_ROLES);
+  // A caller who can read health sees Run now once health has answered, so it never flashes and
+  // goes. A caller who cannot read it keeps the button, and a 404 from the run shows its message.
+  const showRun =
+    access.can(RUN_WORKFLOWS_CAPABILITY, RUN_WORKFLOWS_LEGACY_ROLES) && (canReadHealth ? showHealth : true);
 
   const toggle = (id: string, name: string, enabled: boolean) =>
     setEnabled.mutate(

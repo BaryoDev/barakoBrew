@@ -18,6 +18,9 @@ const EVERYTHING = accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: 
 let access: AccessResult = EVERYTHING;
 vi.mock('@/hooks/use-access', () => ({ useAccess: () => access }));
 
+let tenant: string | null = 'acme';
+vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => tenant }));
+
 // Radix sizes its dialog with one, and jsdom ships no implementation.
 globalThis.ResizeObserver ??= class {
   observe() {}
@@ -30,6 +33,7 @@ const { AxiosError, AxiosHeaders } = await import('axios');
 const { RunNowButton } = await import('./run-now');
 
 const ENTRY = { id: '11111111-2222-3333-4444-555555555555', contentType: 'post', data: { Title: 'Spring launch' } };
+const ENTRY_B = { id: '99999999-2222-3333-4444-555555555555', contentType: 'post', data: { Title: 'Autumn recap' } };
 const WORKFLOW = { id: 'wf-1', name: 'Announce', triggerContentType: 'post', enabled: true };
 
 function refusal(status: number, data: unknown = {}) {
@@ -45,12 +49,13 @@ function refusal(status: number, data: unknown = {}) {
 function renderButton(workflow: Record<string, unknown> = WORKFLOW, props: { available?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const invalidate = vi.spyOn(client, 'invalidateQueries');
-  render(
+  const tree = () => (
     <QueryClientProvider client={client}>
       <RunNowButton workflow={workflow as never} {...props} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return { invalidate };
+  const view = render(tree());
+  return { invalidate, rerender: () => view.rerender(tree()) };
 }
 
 /** Opens the dialog, picks the entry, and stops on the confirm step. */
@@ -66,6 +71,7 @@ function confirmButton() {
 
 beforeEach(() => {
   access = EVERYTHING;
+  tenant = 'acme';
   push.mockReset();
   vi.mocked(api.get).mockReset();
   vi.mocked(api.post).mockReset();
@@ -194,6 +200,67 @@ describe('Run now', () => {
 
     const keys = vi.mocked(api.post).mock.calls.map((call) => (call[2] as { headers: Record<string, string> }).headers['Idempotency-Key']);
     expect(keys[0]).toBe(keys[1]);
+  });
+
+  it('uses a different key for a different entry after a failure, and the same key when the same entry is retried', async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      data: { items: [ENTRY, ENTRY_B], page: 1, pageSize: 10, totalItems: 2, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+    });
+    vi.mocked(api.post).mockRejectedValue(refusal(500));
+    renderButton();
+    fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /Spring launch/ }));
+    fireEvent.click(confirmButton());
+    await screen.findByRole('alert');
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Back' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Autumn recap/ }));
+    fireEvent.click(confirmButton());
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Back' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Spring launch/ }));
+    fireEvent.click(confirmButton());
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(3));
+
+    const calls = vi.mocked(api.post).mock.calls;
+    expect(calls).toHaveLength(3);
+    const keyOf = (i: number) => (calls[i][2] as { headers: Record<string, string> }).headers['Idempotency-Key'];
+    expect(calls[0][1]).toEqual({ entryId: ENTRY.id });
+    expect(calls[1][1]).toEqual({ entryId: ENTRY_B.id });
+    expect(keyOf(0)).not.toBe(keyOf(1));
+    expect(keyOf(2)).toBe(keyOf(0));
+  });
+
+  it('shows a pending confirm button while the request is in flight', async () => {
+    vi.mocked(api.post).mockImplementation(() => new Promise(() => {}));
+    renderButton();
+    await toConfirm();
+
+    fireEvent.click(confirmButton());
+
+    const pending = await within(screen.getByRole('dialog')).findByRole('button', { name: 'Starting…' });
+    expect(pending).toBeDisabled();
+    expect(pending).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('closes the dialog when the tenant changes, so the entry is not posted under the new token', async () => {
+    const { rerender } = renderButton();
+    await toConfirm();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    tenant = 'globex';
+    rerender();
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('gives the reason a switched-off workflow cannot run to assistive technology', () => {
+    renderButton({ ...WORKFLOW, enabled: false });
+    const button = screen.getByRole('button', { name: 'Run now' });
+    expect(button).toHaveAccessibleDescription('Switch the workflow on to run it.');
   });
 
   it.each([

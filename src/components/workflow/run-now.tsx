@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import { IconPlay } from '@/components/icons';
 import { useAccess } from '@/hooks/use-access';
 import { useContents } from '@/hooks/use-contents';
 import { useDebounced } from '@/hooks/use-debounced';
+import { useCurrentTenant } from '@/hooks/use-tenants';
 import {
   RUN_WORKFLOWS_CAPABILITY,
   RUN_WORKFLOWS_LEGACY_ROLES,
@@ -66,6 +67,7 @@ export function RunNowButton({
 }) {
   const access = useAccess();
   const [open, setOpen] = useState(false);
+  const offReasonId = useId();
 
   if (!available || !workflow.id || !access.can(RUN_WORKFLOWS_CAPABILITY, RUN_WORKFLOWS_LEGACY_ROLES)) return null;
 
@@ -79,12 +81,18 @@ export function RunNowButton({
         size={size}
         disabled={!runnable}
         title={runnable ? undefined : 'Switch the workflow on to run it.'}
+        aria-describedby={runnable ? undefined : offReasonId}
         aria-label={size === 'icon' ? `Run ${workflow.name} now` : undefined}
         onClick={() => setOpen(true)}
       >
         <IconPlay className="size-3.5" />
         {size === 'icon' ? null : 'Run now'}
       </Button>
+      {!runnable && (
+        <span id={offReasonId} className="sr-only">
+          Switch the workflow on to run it.
+        </span>
+      )}
       {/* Mounted only while open, so every open starts on the first step with a new idempotency
           key, and a close (cancel or success) throws both away. */}
       {open && <RunNowDialog workflow={workflow as RunNowWorkflow & { id: string }} onClose={() => setOpen(false)} />}
@@ -103,8 +111,24 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
   const [error, setError] = useState<string | null>(null);
   const query = useDebounced(search, 300);
 
-  // One key for this open. The same confirm sent twice finds the first run instead of starting two.
-  const [idempotencyKey] = useState(() => uuidV4());
+  // The key belongs to the entry. The same confirm sent twice finds the first run instead of
+  // starting two, and another entry never rides on a key the server already recorded for this one.
+  const keys = useRef(new Map<string, string>());
+  function keyFor(entryId: string): string {
+    let key = keys.current.get(entryId);
+    if (!key) {
+      key = uuidV4();
+      keys.current.set(entryId, key);
+    }
+    return key;
+  }
+
+  // An entry read under one tenant is never posted under another tenant's token.
+  const tenant = useCurrentTenant();
+  const openedUnder = useRef(tenant);
+  useEffect(() => {
+    if (tenant !== openedUnder.current) onClose();
+  }, [tenant, onClose]);
 
   // A ref, not `run.isPending`: the second click of a double click lands before React renders the
   // pending state, so only a flag set in the same tick as the first click stops the second request.
@@ -123,7 +147,7 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
     setError(null);
 
     try {
-      const started = await run.mutateAsync({ workflowId: workflow.id, entryId: chosen.id, idempotencyKey });
+      const started = await run.mutateAsync({ workflowId: workflow.id, entryId: chosen.id, idempotencyKey: keyFor(chosen.id) });
       toast.success(started.repeated ? 'That run was already started. Opening it.' : 'Run queued.');
       onClose();
       router.push(`/workflow-runs?run=${encodeURIComponent(started.runId)}`);
@@ -171,8 +195,8 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
               >
                 Back
               </Button>
-              <Button type="button" onClick={() => void start()}>
-                Run now
+              <Button type="button" disabled={run.isPending} aria-busy={run.isPending} onClick={() => void start()}>
+                {run.isPending ? 'Starting…' : 'Run now'}
               </Button>
             </DialogFooter>
           </>

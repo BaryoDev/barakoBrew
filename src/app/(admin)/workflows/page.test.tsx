@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -167,23 +167,63 @@ describe('the health tiles', () => {
         expect(screen.queryByText('No runs yet')).toBeNull();
     });
 
-    it('shows nothing at all, not even the column, when health answers 404', async () => {
+    it('shows no health column and no Run now when health answers 404', async () => {
         renderWith([workflow('w1', 'Announce', { enabled: true })], refusal(404));
 
         expect(await screen.findByText('Announce')).toBeInTheDocument();
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/health', expect.anything()));
+        // Run now is not shown while health is pending, so wait for the settled state, not the request.
+        await waitFor(() => expect(screen.queryByRole('columnheader', { name: 'Run now' })).toBeNull());
         expect(screen.queryByRole('columnheader', { name: 'Health' })).toBeNull();
         expect(screen.queryByText('No runs yet')).toBeNull();
         expect(screen.queryByRole('button', { name: 'Run Announce now' })).toBeNull();
     });
 
-    it('shows nothing at all when health fails with a 500', async () => {
+    it('does not show Run now before health has answered, then shows it', async () => {
+        let release: (value: unknown) => void = () => {};
+        vi.mocked(api.get).mockImplementation((async (url: string) => {
+            if (url === '/api/workflows/health') {
+                await new Promise((resolve) => (release = resolve));
+                return { data: { ...page([healthOf('w1')]), windowDays: 7 } };
+            }
+            return { data: page([workflow('w1', 'Announce', { enabled: true })]) };
+        }) as typeof api.get);
+        render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <WorkflowsPage />
+            </QueryClientProvider>,
+        );
+
+        expect(await screen.findByText('Announce')).toBeInTheDocument();
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/health', expect.anything()));
+        expect(screen.queryByRole('button', { name: 'Run Announce now' })).toBeNull();
+
+        await act(async () => release(undefined));
+
+        expect(await screen.findByRole('button', { name: 'Run Announce now' })).toBeInTheDocument();
+    });
+
+    it('shows the list without health tiles or Run now when health fails with a 500', async () => {
         renderWith([workflow('w1', 'Announce', { enabled: true })], refusal(500));
 
         expect(await screen.findByText('Announce')).toBeInTheDocument();
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/health', expect.anything()));
-        expect(screen.queryByRole('columnheader', { name: 'Health' })).toBeNull();
+        await waitFor(() => expect(screen.queryByRole('columnheader', { name: 'Health' })).toBeNull());
         expect(screen.queryByText('No runs yet')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Run Announce now' })).toBeNull();
+    });
+
+    it('still tiles the other workflows when one health row lacks lastOutcomes and finishedRuns', async () => {
+        const bare: Record<string, unknown> = healthOf('w1');
+        delete bare.lastOutcomes;
+        delete bare.finishedRuns;
+        renderWith(
+            [workflow('w1', 'Announce', { enabled: true }), workflow('w2', 'Archive', { enabled: true })],
+            [bare, healthOf('w2', { successRate: 1, finishedRuns: 3 })],
+        );
+
+        expect(await screen.findByText('100%')).toBeInTheDocument();
+        expect(screen.getAllByText('No runs yet')).toHaveLength(1);
     });
 
     it('does not ask for health from a caller who cannot see runs', async () => {
