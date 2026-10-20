@@ -9,6 +9,13 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-20
+
+**Speaks API contracts 1 to 9, which covers barakoCMS 4.0.1 to 5.1.0.** barakoCMS 5.1.0 moves the
+contract to 9. A console that stops at 8 refuses that API outright, so deploy this console before or
+with barakoCMS 5.1.0. Every change below keys on the field the API sends, not on the number, so
+against older APIs the screens behave as they did. (#237)
+
 ### Added
 
 - **The design rules are written down, and every undrawn route is audited against them.** `docs/design-rules.md` holds the philosophy screen's six principles, the shell tokens, the 44px row minimum, the mono rule and the status vocabulary as numbered rules a reviewer can cite, plus a table giving each route without a drawing a verdict and a reason. The pull request template and CONTRIBUTING.md point at it. Conforming the routes is not done yet. (#54)
@@ -832,7 +839,8 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.10.0
 [1.9.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.9.0
 [1.8.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.8.0
 [1.7.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.7.0
