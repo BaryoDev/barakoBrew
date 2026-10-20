@@ -455,7 +455,7 @@ export default function NewWorkflowPage() {
                             className="text-primary mt-0.5 size-3.5 shrink-0"
                           />
                           <span className="min-w-0">
-                            <span className="sr-only">Add </span>
+                            <span className="sr-only">Add</span>{' '}
                             <span className="block text-sm">{meta.type}</span>
                             {meta.description && (
                               <span
