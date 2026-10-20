@@ -99,15 +99,17 @@ describe('RunsPanel', () => {
       expect(useWorkflowDebugLogs).not.toHaveBeenCalled();
     });
 
-    it('drops a run of another workflow, as an API that ignores the filter sends one', () => {
+    it('shows the debug log, not the empty message, when the list holds another workflow run', () => {
       useWorkflowRuns.mockReturnValue({
         isLoading: false,
         isError: false,
-        data: { items: [listRun('r-1'), listRun('r-9', { workflowDefinitionId: 'wf-2' })] },
+        data: { items: [listRun('r-9', { workflowDefinitionId: 'wf-2' })] },
       });
+      useWorkflowDebugLogs.mockReturnValue({ data: [], isLoading: false });
       render(<RunsPanel workflowId="wf-1" />);
 
-      expect(within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link')).toHaveLength(1);
+      expect(useWorkflowDebugLogs).toHaveBeenCalledWith('wf-1');
+      expect(screen.queryByRole('link')).toBeNull();
     });
 
     it('says the workflow has not run when the list is empty', () => {

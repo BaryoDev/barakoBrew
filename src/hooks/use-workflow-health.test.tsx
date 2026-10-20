@@ -183,3 +183,22 @@ describe('runListParams', () => {
     expect(runListParams({})).not.toHaveProperty('workflowId');
   });
 });
+
+describe('useWorkflowHealth paging', () => {
+  it('reads every page, so no tile is dropped past the first', async () => {
+    vi.mocked(api.get).mockImplementation((async (_url: string, config: { params: { page: number } }) => {
+      const first = config.params.page === 1;
+      return {
+        data: {
+          ...envelope([row(first ? 'w0' : 'w1', { name: first ? 'first' : 'second page' })]),
+          page: config.params.page,
+          hasNextPage: first,
+        },
+      };
+    }) as typeof api.get);
+    renderWith(<Probe />);
+
+    expect(await screen.findByText('second page')).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledTimes(2);
+  });
+});

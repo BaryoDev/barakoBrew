@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -124,7 +124,40 @@ describe('Run now', () => {
     fireEvent.click(button);
     fireEvent.click(button);
 
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    // Let anything a second click queued run, then count again.
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
     expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('cannot go back while the request is in flight', async () => {
+    vi.mocked(api.post).mockImplementation(() => new Promise(() => {}));
+    renderButton();
+    await toConfirm();
+
+    fireEvent.click(confirmButton());
+
+    await waitFor(() => expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Back' })).toBeDisabled());
+  });
+
+  it('offers entries of every type the workflow fires on, once each', async () => {
+    renderButton({ ...WORKFLOW, triggerContentType: 'post', triggerContentTypes: ['page', 'post', 'event'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
+    await screen.findByRole('button', { name: /Spring launch/ });
+
+    const select = screen.getByRole('combobox', { name: 'Entry type' });
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['post', 'page', 'event']);
+
+    fireEvent.change(select, { target: { value: 'page' } });
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith(
+        '/api/contents',
+        expect.objectContaining({ params: expect.objectContaining({ contentType: 'page', page: 1 }) }),
+      ),
+    );
   });
 
   it('makes a new idempotency key for each open, after a success and after a cancel', async () => {

@@ -10,6 +10,7 @@ import type {
     ScheduleContentRequest,
 } from '@/types/content';
 import { contentVersionSchema } from '@/types/content';
+import { useCurrentTenant } from '@/hooks/use-tenants';
 
 export function useContents(
     params: PageParams & { contentType?: string; search?: string; status?: ContentStatus } = {},
@@ -17,8 +18,11 @@ export function useContents(
     // default is the behaviour every existing caller already has.
     enabled = true
 ) {
+    // The tenant is part of the key, so another tenant's entries never sit on screen while the
+    // new tenant's load. Last, so the ['contents'] prefixes mutations invalidate on still match.
+    const tenant = useCurrentTenant();
     return useQuery({
-        queryKey: ['contents', 'list', params],
+        queryKey: ['contents', 'list', params, tenant],
         queryFn: async () => {
             const response = await api.get<Paginated<ContentListItem>>('/api/contents', { params });
             return response.data;

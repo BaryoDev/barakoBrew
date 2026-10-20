@@ -26,13 +26,21 @@ import {
 } from '@/hooks/use-workflow-health';
 import { contentTitle } from '@/lib/content-title';
 import { apiErrorMessage } from '@/lib/api';
+import { uuidV4 } from '@/lib/uuid';
 import type { ContentListItem } from '@/types/content';
 
 export interface RunNowWorkflow {
   id?: string;
   name: string;
   triggerContentType: string;
+  triggerContentTypes?: string[] | null;
   enabled?: boolean;
+}
+
+/** Every type the workflow fires on, as the API counts them: the single type first, then the list, each once. */
+export function triggerTypes(workflow: Pick<RunNowWorkflow, 'triggerContentType' | 'triggerContentTypes'>): string[] {
+  const all = [workflow.triggerContentType, ...(workflow.triggerContentTypes ?? [])];
+  return all.filter((type, i) => !!type?.trim() && all.indexOf(type) === i);
 }
 
 /** Run now is offered when the workflow is switched on. A workflow with no `enabled` field counts as on. */
@@ -87,6 +95,8 @@ export function RunNowButton({
 function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: string }; onClose: () => void }) {
   const router = useRouter();
   const run = useRunWorkflow();
+  const types = triggerTypes(workflow);
+  const [contentType, setContentType] = useState(types[0] ?? workflow.triggerContentType);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [chosen, setChosen] = useState<ContentListItem | null>(null);
@@ -94,14 +104,14 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
   const query = useDebounced(search, 300);
 
   // One key for this open. The same confirm sent twice finds the first run instead of starting two.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => uuidV4());
 
   // A ref, not `run.isPending`: the second click of a double click lands before React renders the
   // pending state, so only a flag set in the same tick as the first click stops the second request.
   const inFlight = useRef(false);
 
   const entries = useContents({
-    contentType: workflow.triggerContentType,
+    contentType,
     search: query || undefined,
     page,
     pageSize: 10,
@@ -150,7 +160,15 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
               </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setChosen(null); setError(null); }}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={run.isPending}
+                onClick={() => {
+                  setChosen(null);
+                  setError(null);
+                }}
+              >
                 Back
               </Button>
               <Button type="button" onClick={() => void start()}>
@@ -163,13 +181,30 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
             <DialogHeader>
               <DialogTitle>Run &quot;{workflow.name}&quot; now</DialogTitle>
               <DialogDescription>
-                Pick the {workflow.triggerContentType} entry to run it on. You confirm on the next step.
+                Pick the {contentType} entry to run it on. You confirm on the next step.
               </DialogDescription>
             </DialogHeader>
+            {types.length > 1 && (
+              <select
+                aria-label="Entry type"
+                className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+                value={contentType}
+                onChange={(event) => {
+                  setContentType(event.target.value);
+                  setPage(1);
+                }}
+              >
+                {types.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            )}
             <Input
               type="search"
               aria-label="Search entries"
-              placeholder={`Search ${workflow.triggerContentType} entries`}
+              placeholder={`Search ${contentType} entries`}
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
@@ -189,7 +224,7 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
               </div>
             ) : items.length === 0 ? (
               <p className="text-muted-foreground py-6 text-center text-sm">
-                {query ? 'No entries match that search.' : `There are no ${workflow.triggerContentType} entries yet.`}
+                {query ? 'No entries match that search.' : `There are no ${contentType} entries yet.`}
               </p>
             ) : (
               <ul aria-label="Entries" className="max-h-72 space-y-1 overflow-y-auto">

@@ -16,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { IconBolt, IconBug, IconPlay, IconWorkflows } from '@/components/icons';
 import Link from 'next/link';
 import { RunNowButton } from '@/components/workflow/run-now';
-import { useWorkflowHealth } from '@/hooks/use-workflow-health';
+import { VIEW_RUNS_CAPABILITY, useWorkflowHealth } from '@/hooks/use-workflow-health';
+import { useAccess } from '@/hooks/use-access';
 import { RunsPanel } from './runs-panel';
 
 export default function WorkflowDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +25,10 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
   const { data: workflow, isLoading } = useWorkflow(id);
   const [tab, setTab] = useState('runs');
   // Only to learn whether this API has the routes: the button is hidden when health answers 404.
-  const health = useWorkflowHealth();
+  // Asked only of a caller who can read it. For anyone else the button stays, and a 404 from the
+  // run itself shows its message.
+  const access = useAccess();
+  const health = useWorkflowHealth(access.can(VIEW_RUNS_CAPABILITY, ['Admin']));
 
   if (isLoading) return <TableSkeleton />;
 

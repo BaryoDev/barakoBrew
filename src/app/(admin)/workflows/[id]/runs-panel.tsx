@@ -33,7 +33,11 @@ export function RunsPanel({ workflowId }: { workflowId: string }) {
   }
 
   // An API before barakoCMS#1165 ignores the filter and sends every workflow's runs.
-  const items = (runs.data?.items ?? []).filter((run) => run.workflowDefinitionId === workflowId);
+  const all = runs.data?.items ?? [];
+  const items = all.filter((run) => run.workflowDefinitionId === workflowId);
+  // Rows of other workflows mean the filter was ignored, and the page of ten says nothing about
+  // this workflow. "Has not run yet" would be a claim the data cannot back, so show the log.
+  if (items.length < all.length) return <DebugLogPanel workflowId={workflowId} />;
   if (items.length === 0) {
     return (
       <p className="text-muted-foreground py-8 text-center text-sm">

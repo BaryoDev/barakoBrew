@@ -43,6 +43,9 @@ export type WorkflowHealth = z.infer<typeof healthSchema>;
 /** Enough workflows in one read that a console with a few dozen never pages. */
 const HEALTH_PAGE_SIZE = 100;
 
+/** At most this many pages are read, so a runaway total cannot become a runaway loop. */
+const HEALTH_MAX_PAGES = 10;
+
 /**
  * Each workflow's health, by workflow id.
  *
@@ -60,11 +63,19 @@ export function useWorkflowHealth(enabled = true) {
     queryKey: ['workflow-health', tenant],
     queryFn: async () => {
       try {
-        const response = await api.get<unknown>('/api/workflows/health', {
-          params: { page: 1, pageSize: HEALTH_PAGE_SIZE },
-        });
-        const page = parseResponse(healthListSchema, response.data, 'GET /api/workflows/health');
-        return { available: true as const, windowDays: page.windowDays, byId: new Map(page.items.map((item) => [item.workflowId, item])) };
+        const byId = new Map<string, WorkflowHealth>();
+        let windowDays = 0;
+        // Every page, up to a bound, so a console with more workflows than one page loses no tile.
+        for (let number = 1; number <= HEALTH_MAX_PAGES; number++) {
+          const response = await api.get<unknown>('/api/workflows/health', {
+            params: { page: number, pageSize: HEALTH_PAGE_SIZE },
+          });
+          const page = parseResponse(healthListSchema, response.data, 'GET /api/workflows/health');
+          windowDays = page.windowDays;
+          for (const item of page.items) byId.set(item.workflowId, item);
+          if (!page.hasNextPage) break;
+        }
+        return { available: true as const, windowDays, byId };
       } catch (error) {
         if (isNotFound(error)) return { available: false as const };
         throw error;
