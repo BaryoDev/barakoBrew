@@ -124,9 +124,13 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
   }
 
   // An entry read under one tenant is never posted under another tenant's token.
+  // A request already out when the tenant changes still lands, so the tenant it lands under is
+  // checked too: the run it started belongs to the old tenant and is not opened under the new one.
   const tenant = useCurrentTenant();
   const openedUnder = useRef(tenant);
+  const tenantNow = useRef(tenant);
   useEffect(() => {
+    tenantNow.current = tenant;
     if (tenant !== openedUnder.current) onClose();
   }, [tenant, onClose]);
 
@@ -148,6 +152,10 @@ function RunNowDialog({ workflow, onClose }: { workflow: RunNowWorkflow & { id: 
 
     try {
       const started = await run.mutateAsync({ workflowId: workflow.id, entryId: chosen.id, idempotencyKey: keyFor(chosen.id) });
+      if (tenantNow.current !== openedUnder.current) {
+        toast.success('Run queued under the tenant this dialog was opened in.');
+        return;
+      }
       toast.success(started.repeated ? 'That run was already started. Opening it.' : 'Run queued.');
       onClose();
       router.push(`/workflow-runs?run=${encodeURIComponent(started.runId)}`);

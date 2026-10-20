@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { WorkflowExecutionLog } from '@/types/workflow';
 
 const useWorkflowDebugLogs = vi.fn();
@@ -128,16 +128,29 @@ describe('RunsPanel', () => {
       expect(useWorkflowDebugLogs).not.toHaveBeenCalled();
     });
 
-    it('keeps the run list when a refetch fails and stale data is present', () => {
+    it('keeps the run list when a refetch fails and says it is the last that loaded', () => {
+      const refetch = vi.fn();
       useWorkflowRuns.mockReturnValue({
         isLoading: false,
         isError: true,
         error: refused(500),
         data: { items: [listRun('r-1'), listRun('r-2')] },
+        refetch,
       });
       render(<RunsPanel workflowId="wf-1" />);
 
       expect(within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link')).toHaveLength(2);
+      expect(screen.getByRole('alert')).toHaveTextContent('The runs could not be refreshed, so this is the last list that loaded.');
+
+      fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Try again' }));
+      expect(refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing about a refresh when the list read answered', () => {
+      useWorkflowRuns.mockReturnValue({ isLoading: false, isError: false, data: { items: [listRun('r-1')] } });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link')).toHaveLength(1);
       expect(screen.queryByRole('alert')).toBeNull();
     });
 

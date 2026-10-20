@@ -203,14 +203,15 @@ describe('the health tiles', () => {
         expect(await screen.findByRole('button', { name: 'Run Announce now' })).toBeInTheDocument();
     });
 
-    it('shows the list without health tiles or Run now when health fails with a 500', async () => {
+    it('shows the list and Run now without health tiles when health fails with a 500', async () => {
         renderWith([workflow('w1', 'Announce', { enabled: true })], refusal(500));
 
         expect(await screen.findByText('Announce')).toBeInTheDocument();
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/workflows/health', expect.anything()));
-        await waitFor(() => expect(screen.queryByRole('columnheader', { name: 'Health' })).toBeNull());
+        // A 500 says nothing about whether the run route is there, so the button stays.
+        expect(await screen.findByRole('button', { name: 'Run Announce now' })).toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: 'Health' })).toBeNull();
         expect(screen.queryByText('No runs yet')).toBeNull();
-        expect(screen.queryByRole('button', { name: 'Run Announce now' })).toBeNull();
     });
 
     it('still tiles the other workflows when one health row lacks lastOutcomes and finishedRuns', async () => {

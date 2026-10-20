@@ -38,29 +38,45 @@ export function RunsPanel({ workflowId }: { workflowId: string }) {
   // Rows of other workflows mean the filter was ignored, and the page of ten says nothing about
   // this workflow. "Has not run yet" would be a claim the data cannot back, so show the log.
   if (items.length < all.length) return <DebugLogPanel workflowId={workflowId} />;
+  // A failed refetch keeps the last runs that loaded. Say so, as the runs page does.
+  const stale = runs.isError && (
+    <p role="alert" className="text-destructive mb-3 text-[12px]">
+      The runs could not be refreshed, so this is the last list that loaded.{' '}
+      <button type="button" className="underline" onClick={() => void runs.refetch()}>
+        Try again
+      </button>
+    </p>
+  );
+
   if (items.length === 0) {
     return (
-      <p className="text-muted-foreground py-8 text-center text-sm">
-        This workflow has not run yet. It executes when matching content events occur.
-      </p>
+      <>
+        {stale}
+        <p className="text-muted-foreground py-8 text-center text-sm">
+          This workflow has not run yet. It executes when matching content events occur.
+        </p>
+      </>
     );
   }
 
   return (
-    <ul aria-label="Recent runs" className="space-y-2">
-      {items.map((run) => (
-        <li key={run.id}>
-          <Link
-            href={`/workflow-runs?run=${encodeURIComponent(run.id)}`}
-            className="hover:bg-accent flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
-          >
-            <span className="mr-auto text-sm">{format(new Date(run.createdAt), 'PPp')}</span>
-            <span className="text-muted-foreground text-xs">{run.triggerEvent}</span>
-            <StatusBadge tone={toneForRunStatus(run.status)}>{run.status}</StatusBadge>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <>
+      {stale}
+      <ul aria-label="Recent runs" className="space-y-2">
+        {items.map((run) => (
+          <li key={run.id}>
+            <Link
+              href={`/workflow-runs?run=${encodeURIComponent(run.id)}`}
+              className="hover:bg-accent flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+            >
+              <span className="mr-auto text-sm">{format(new Date(run.createdAt), 'PPp')}</span>
+              <span className="text-muted-foreground text-xs">{run.triggerEvent}</span>
+              <StatusBadge tone={toneForRunStatus(run.status)}>{run.status}</StatusBadge>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

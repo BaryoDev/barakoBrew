@@ -88,6 +88,12 @@ export function useWorkflowHealth(enabled = true) {
   return {
     ...query,
     unavailable: query.data?.available === false,
+    /**
+     * Whether Run now is offered: health answered, or failed with anything but a 404. A 500 or a
+     * dropped connection says nothing about whether the run route is there, so it does not hide the
+     * button. False while the first read is in flight, so the button never flashes and goes.
+     */
+    offersRun: query.data?.available === true || (query.isError && query.data?.available !== false),
     windowDays: query.data?.available ? query.data.windowDays : undefined,
     healthOf: (workflowId: string | undefined): WorkflowHealth | undefined =>
       query.data?.available && workflowId ? query.data.byId.get(workflowId) : undefined,

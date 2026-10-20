@@ -257,6 +257,23 @@ describe('Run now', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  it('does not open the run under the new tenant when the tenant changes while the request is out', async () => {
+    let answer: (value: unknown) => void = () => {};
+    vi.mocked(api.post).mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    const { rerender } = renderButton();
+    await toConfirm();
+    fireEvent.click(confirmButton());
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+
+    tenant = 'globex';
+    rerender();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await act(async () => answer({ data: { runId: 'run-9', repeated: false } }));
+
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('gives the reason a switched-off workflow cannot run to assistive technology', () => {
     renderButton({ ...WORKFLOW, enabled: false });
     const button = screen.getByRole('button', { name: 'Run now' });

@@ -50,10 +50,11 @@ export default function WorkflowsPage() {
   const canReadHealth = access.can(VIEW_RUNS_CAPABILITY, ['Admin']);
   const health = useWorkflowHealth(canReadHealth);
   const showHealth = health.data?.available === true;
-  // A caller who can read health sees Run now once health has answered, so it never flashes and
-  // goes. A caller who cannot read it keeps the button, and a 404 from the run shows its message.
+  // A caller who can read health sees Run now once health has settled, unless it answered 404, so
+  // it never flashes and goes. A caller who cannot read it keeps the button, and a 404 from the run
+  // shows its message.
   const showRun =
-    access.can(RUN_WORKFLOWS_CAPABILITY, RUN_WORKFLOWS_LEGACY_ROLES) && (canReadHealth ? showHealth : true);
+    access.can(RUN_WORKFLOWS_CAPABILITY, RUN_WORKFLOWS_LEGACY_ROLES) && (canReadHealth ? health.offersRun : true);
 
   const toggle = (id: string, name: string, enabled: boolean) =>
     setEnabled.mutate(

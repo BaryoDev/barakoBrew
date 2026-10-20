@@ -24,8 +24,8 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
   const { id } = use(params);
   const { data: workflow, isLoading } = useWorkflow(id);
   const [tab, setTab] = useState('runs');
-  // Only to learn whether this API has the routes: the button is hidden when health answers 404.
-  // Asked only of a caller who can read it. For anyone else the button stays, and a 404 from the
+  // Only to learn whether this API has the routes: the button is hidden while health loads and when
+  // it answers 404, and shown on any other failure. Asked only of a caller who can read it. For anyone else the button stays, and a 404 from the
   // run itself shows its message.
   const access = useAccess();
   const canReadHealth = access.can(VIEW_RUNS_CAPABILITY, ['Admin']);
@@ -57,7 +57,7 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
         description={`Runs when a ${workflow.triggerContentType} entry is ${workflow.triggerEvent.toLowerCase()}.`}
         actions={
           <div className="flex items-center gap-2">
-            <RunNowButton workflow={workflow} available={canReadHealth ? health.data?.available === true : true} />
+            <RunNowButton workflow={workflow} available={canReadHealth ? health.offersRun : true} />
             <Button type="button" variant="outline" size="sm" onClick={() => setTab('dry-run')}>
               <IconPlay className="size-3.5" />
               Dry run
