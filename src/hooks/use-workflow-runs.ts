@@ -473,6 +473,9 @@ export const COUNTS_REFRESH_MS = 60_000;
 /** The least time between two full page reads asked for because a run left the filter. */
 export const HOLE_REFETCH_MS = 10_000;
 
+/** Against an API with no `changedSince`, the least time between two full page reads. */
+export const REREAD_MS = 30_000;
+
 /** Every mutation of a run carries this key, so a poll can tell one is in flight. */
 export const RUN_MUTATION_KEY = ['workflow-run-action'] as const;
 
@@ -493,6 +496,33 @@ export function backoffDelay(failures: number): number {
 
 type RunListCache = WorkflowRunList;
 
+/** When each kind of read last started for one list key, held outside the component. */
+class Throttle {
+  /** A counts-only read. */
+  countsReadAt = -Infinity;
+  /** A page read asked for because a run left the filter. */
+  holeAt = -Infinity;
+  /** A full page read made because the API has no `changedSince`. */
+  rereadAt = -Infinity;
+}
+
+const THROTTLES = new WeakMap<QueryClient, Map<string, Throttle>>();
+const THROTTLES_PER_CLIENT = 50;
+
+function throttleFor(queryClient: QueryClient, keyText: string): Throttle {
+  let byKey = THROTTLES.get(queryClient);
+  if (!byKey) THROTTLES.set(queryClient, (byKey = new Map()));
+  let held = byKey.get(keyText);
+  if (held) {
+    byKey.delete(keyText);
+  } else {
+    held = new Throttle();
+  }
+  byKey.set(keyText, held);
+  while (byKey.size > THROTTLES_PER_CLIENT) byKey.delete(byKey.keys().next().value as string);
+  return held;
+}
+
 /**
  * What one list remembers between reads. A class, so the hook that owns it only calls methods on it
  * and never assigns to it, and a new key gets a new one, which is what drops the cursor on a tenant
@@ -509,10 +539,6 @@ class ListState {
   dirtyAt: number | null = null;
   /** When the read that last landed began, so an older one landing later cannot replace it. */
   landedAt = -Infinity;
-  /** When polling last started a counts-only read. */
-  refreshedAt = -Infinity;
-  /** When the last page read asked for because a run left the filter started. */
-  holeAt = -Infinity;
   /** When the counts-only read that last landed began, so an older one cannot replace it. */
   countsAt = -Infinity;
   /** Why polling is not at its normal pace, or null when it is. Read through `useSyncExternalStore`. */
@@ -529,6 +555,11 @@ class ListState {
   /** Whether the counts on screen are known to miss a change. Read through `useSyncExternalStore`. */
   getBehind = () => this.dirtyAt !== null;
 
+  /** Forgets that the counts are behind, for when nothing is going to catch them up. */
+  clearDirty() {
+    this.setDirty(null);
+  }
+
   private setDirty(next: number | null) {
     const changed = (this.dirtyAt === null) !== (next === null);
     this.dirtyAt = next;
@@ -542,6 +573,9 @@ class ListState {
   }
 
   /** The newest copy of every run a poll returned, for a refetch that was already in flight. */
+  /** Throttle times shared by every hook on this client and key, so a remount does not reset them. */
+  constructor(readonly throttle: Throttle = new Throttle()) {}
+
   readonly polled = new Map<string, WorkflowRun>();
   /** When the copy in `polled` was first seen, by id. */
   private readonly seenAt = new Map<string, number>();
@@ -630,7 +664,7 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
 
   // Per key, so a tenant switch or a new filter drops the cursor and the polled copies with it.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is the point of the dependency
-  const list = useMemo(() => new ListState(), [keyText]);
+  const list = useMemo(() => new ListState(throttleFor(queryClient, keyText)), [keyText]);
 
   const result = useQuery({
     queryKey,
@@ -682,7 +716,8 @@ export function useWorkflowRuns(query: WorkflowRunsQuery, options: { live?: bool
   const pause = useSyncExternalStore(list.subscribe, list.getPause, () => null);
   const countsBehind = useSyncExternalStore(list.subscribe, list.getBehind, () => false);
 
-  return { ...result, pause, countsBehind };
+  // Only a list that is polling will catch the counts up, so only then is it worth saying so.
+  return { ...result, pause, countsBehind: countsBehind && live && !pause };
 }
 
 interface PollingInput {
@@ -740,6 +775,13 @@ function startPolling(input: PollingInput): () => void {
     if (detail.status === 'rejected' && isAuthRefusal(detail.reason)) throw detail.reason;
   }
 
+  /** A full read of the page at most every `REREAD_MS`. A failure does not count, so it backs off instead. */
+  async function rereadThrottled() {
+    if (Date.now() - list.throttle.rereadAt < REREAD_MS) return;
+    await reread();
+    list.throttle.rereadAt = Date.now();
+  }
+
   async function tick() {
     if (stopped || busy || hidden()) return;
     if (queryClient.isMutating({ mutationKey: RUN_MUTATION_KEY }) > 0) {
@@ -752,7 +794,7 @@ function startPolling(input: PollingInput): () => void {
     let next = POLL_INTERVAL_MS;
     try {
       if (rereading || cursor === null) {
-        await reread();
+        await rereadThrottled();
       } else {
         const params: Record<string, string | number> = {
           page: 1,
@@ -760,6 +802,7 @@ function startPolling(input: PollingInput): () => void {
           changedSince: cursor,
         };
         if (contentId) params.contentId = contentId;
+        if (workflowId) params.workflowId = workflowId;
 
         const response = await api.get<unknown>('/api/workflow-runs', { params });
         if (stopped) return;
@@ -767,13 +810,13 @@ function startPolling(input: PollingInput): () => void {
 
         if (!polled.cursor) {
           rereading = true;
-          await reread();
+          await rereadThrottled();
         } else {
           cursor = polled.cursor;
           list.since = polled.cursor;
           if (applyPoll(polled)) next = CATCH_UP_MS;
-          refreshCounts();
           refetchHole();
+          refreshCounts();
         }
       }
       failures = 0;
@@ -782,6 +825,7 @@ function startPolling(input: PollingInput): () => void {
       if (stopped) return;
       if (isAuthRefusal(error)) {
         stopped = true;
+        list.clearDirty();
         list.setPause({ reason: 'stopped' });
         return;
       }
@@ -845,8 +889,8 @@ function startPolling(input: PollingInput): () => void {
     if (!holePending || hidden()) return;
     if (queryClient.isFetching({ queryKey: listKey, exact: true }) > 0) return;
     const now = Date.now();
-    if (now - list.holeAt < HOLE_REFETCH_MS) return;
-    list.holeAt = now;
+    if (now - list.throttle.holeAt < HOLE_REFETCH_MS) return;
+    list.throttle.holeAt = now;
     holePending = false;
     void queryClient.refetchQueries({ queryKey: listKey, exact: true }, { cancelRefetch: false });
   }
@@ -861,8 +905,8 @@ function startPolling(input: PollingInput): () => void {
     if (list.dirtyAt === null || countsBusy || hidden()) return;
     if (queryClient.isFetching({ queryKey: listKey, exact: true }) > 0) return;
     const now = Date.now();
-    if (now - list.refreshedAt < COUNTS_REFRESH_MS) return;
-    list.refreshedAt = now;
+    if (now - list.throttle.countsReadAt < COUNTS_REFRESH_MS) return;
+    list.throttle.countsReadAt = now;
     countsBusy = true;
     void readCounts(now).finally(() => {
       countsBusy = false;
@@ -885,8 +929,9 @@ function startPolling(input: PollingInput): () => void {
       queryClient.setQueryData<RunListCache>(listKey, (current) => (current ? applyCounts(current, counts, status) : current));
       list.countsLanded(started);
     } catch {
-      // The counts stay dirty and are asked for again after the interval. Errors that matter reach
-      // the poll, which backs off or stops on its own.
+      // The counts stay dirty and are asked for again at the pace of a hole read. Errors that matter
+      // reach the poll, which backs off or stops on its own.
+      list.throttle.countsReadAt = started - COUNTS_REFRESH_MS + HOLE_REFETCH_MS;
     }
   }
 
@@ -906,6 +951,7 @@ function startPolling(input: PollingInput): () => void {
 
   return () => {
     stopped = true;
+    list.clearDirty();
     clearTimeout(timer);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility);
   };

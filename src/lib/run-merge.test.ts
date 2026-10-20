@@ -218,15 +218,15 @@ describe('merging a poll into a page', () => {
 
 describe('applying counts from a counts-only read', () => {
   it('moves the totals and the held counts and keeps the rows as they are', () => {
-    const rows = [run('a', '10:00', { status: 'Failed' }), run('b', '09:00', { status: 'Failed' })];
-    const current = page(rows, { statusCounts: { Failed: 2, Running: 1 }, totalItems: 2, pageSize: 1 });
+    const rows = Array.from({ length: 25 }, (_, i) => run(`r${i}`, `10:${String(59 - i).padStart(2, '0')}`, { status: 'Failed' }));
+    const current = page(rows, { statusCounts: { Failed: 25, Running: 1 }, totalItems: 25 });
 
-    const next = applyCounts(current, { Failed: 3, Running: 1 }, 'Failed');
+    const next = applyCounts(current, { Failed: 60, Running: 1 }, 'Failed');
 
     expect(next.items).toBe(rows);
-    expect(next.items).toHaveLength(2);
-    expect(next.statusCounts).toEqual({ Failed: 3, Running: 1 });
-    expect(next.totalItems).toBe(3);
+    expect(next.items).toHaveLength(25);
+    expect(next.statusCounts).toEqual({ Failed: 60, Running: 1 });
+    expect(next.totalItems).toBe(60);
     expect(next.totalPages).toBe(3);
     expect(next.hasNextPage).toBe(true);
   });
