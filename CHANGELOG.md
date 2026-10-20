@@ -11,6 +11,8 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- **The design rules are written down, and every undrawn route is audited against them.** `docs/design-rules.md` holds the philosophy screen's six principles, the shell tokens, the 44px row minimum, the mono rule and the status vocabulary as numbered rules a reviewer can cite, plus a table giving each route without a drawing a verdict and a reason. The pull request template and CONTRIBUTING.md point at it. Conforming the routes is not done yet. (#54)
+
 - **The console works against barakoCMS 4.0.1 to 5.1.0 (admin contract 9) and shows Members.** Contract 9 is no longer refused as a newer API. Members is a sensitivity level for fields and entries: delivered to a caller holding a viewer token, never to an anonymous one, and read by staff like Public. It shows on field rows and entries, and can be picked in the field editor and on a new entry, only against an API on contract 9 or later. A sensitivity the console does not know is shown by its own name instead of breaking the screen. (#237)
 
 - **The Overview shows a system strip and workflow health.** The strip has the API version, the contract version, and database and storage health; each part falls back to a dash or Unknown when its own call fails. Workflow health lists the last outcomes per workflow and hides against an API without barakoCMS#1165. (#9)
