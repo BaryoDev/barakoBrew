@@ -7,6 +7,7 @@ import {
   IconContent,
   IconContentTypes,
   IconDashboard,
+  IconDatabase,
   IconEnvelope,
   IconFieldEdit,
   IconFilter,
@@ -185,6 +186,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Modules',
     items: [
+      { title: 'All modules', href: '/modules', icon: IconCube, capability: 'view_modules', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Accounting', href: '/accounting', icon: IconCoins , module: MODULE.accounting, capability: 'view_ledger', roles: ['SuperAdmin', 'Admin', 'Accountant'] },
       { title: 'Analytics', href: '/analytics', icon: IconAnalytics , module: MODULE.analytics, capability: 'view_analytics', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Email events', href: '/email-events', icon: IconEnvelope, metric: 'recentBounces', tone: 'warning', module: MODULE.emailEvents, capability: 'view_email_events', roles: ['SuperAdmin', 'Admin'] },
@@ -205,6 +207,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // Reading takes manage_settings; saving and the test send take manage_email_settings, which the
       // screen checks for its buttons.
       { title: 'Email', href: '/settings/email', icon: IconEnvelope, capability: 'manage_settings', roles: ['SuperAdmin'] },
+      // Reading and saving both take manage_storage, seeded to SuperAdmin and Admin by BarakoCMS.Files.
+      { title: 'Storage', href: '/settings/storage', icon: IconDatabase, module: MODULE.files, capability: 'manage_storage', roles: ['SuperAdmin', 'Admin'] },
       // The caller's own second factor. With capabilities known it is offered to every signed-in
       // caller, as the API serves it; the roles are what an older API's console offered.
       { title: 'Security', href: '/settings/security', icon: IconLock, roles: ['SuperAdmin', 'Admin'] },
@@ -292,6 +296,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   'email-events': 'Email events',
   'feature-flags': 'Feature flags',
   files: 'Files',
+  modules: 'All modules',
   pwa: 'PWA installs',
   devices: 'Devices',
   portability: 'Export and import',

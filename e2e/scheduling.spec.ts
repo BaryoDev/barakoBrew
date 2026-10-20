@@ -41,7 +41,7 @@ async function openSchedule(page: import('@playwright/test').Page, detail: Recor
     await page.route(`**/api/contents/${CONTENT_ID}/history**`, (r) => r.fulfill({ json: pageOf([]) }));
 
     await page.goto(`/content/${CONTENT_ID}`);
-    await page.getByRole('tab', { name: 'Schedule' }).click();
+    await page.getByRole('tab', { name: 'Scheduling' }).click();
 }
 
 test('an entry with nothing armed says so', async ({ page }) => {
@@ -155,7 +155,7 @@ test('the inputs pick up the server answer after saving', async ({ page }) => {
     });
 
     await page.goto(`/content/${CONTENT_ID}`);
-    await page.getByRole('tab', { name: 'Schedule' }).click();
+    await page.getByRole('tab', { name: 'Scheduling' }).click();
 
     await page.getByLabel('Publish at').fill('2027-03-04T05:06');
     await page.getByRole('button', { name: 'Save schedule' }).click();

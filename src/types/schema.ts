@@ -92,4 +92,6 @@ export interface CreateSchemaRequest {
     isSingleton?: boolean;
     /** Left out when empty, so an API older than the member is sent nothing it does not know. */
     routeTemplate?: string;
+    /** Left out when the type has none, so it keeps Draft, Published and Archived. */
+    lifecycle?: LifecycleDefinition;
 }

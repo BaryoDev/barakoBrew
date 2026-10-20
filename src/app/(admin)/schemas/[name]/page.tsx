@@ -9,6 +9,7 @@ import { FieldOptionsDialog } from '@/components/schema/field-options-dialog';
 import { FieldPresentationDialog } from '@/components/schema/field-presentation-dialog';
 import { FieldCurrencyDialog } from '@/components/schema/field-currency-dialog';
 import { RouteTemplatePanel } from '@/components/schema/route-template-panel';
+import { LifecycleDiagram } from '@/components/schema/lifecycle-diagram';
 import { UniquenessPanel } from '@/components/schema/uniqueness-panel';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
@@ -140,6 +141,38 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
       />
 
       <UniquenessPanel schema={schema} />
+
+      <section aria-labelledby="lifecycle-heading" className="mb-6 space-y-3 rounded-lg border p-4">
+        <h2 id="lifecycle-heading" className="text-sm font-medium">
+          Lifecycle
+        </h2>
+        {schema.lifecycle && schema.lifecycle.states.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2 text-sm">
+              <p>
+                States: {schema.lifecycle.states.join(', ')}. New entries start in{' '}
+                <strong>{schema.lifecycle.initialState}</strong>.
+              </p>
+              <ul className="list-disc pl-5">
+                {schema.lifecycle.transitions.map((t) => (
+                  <li key={t.name}>
+                    <span className="font-mono">{t.name}</span>: {t.from} to {t.to}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <LifecycleDiagram lifecycle={schema.lifecycle} />
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            No lifecycle. Entries are Draft, Published or Archived.
+          </p>
+        )}
+        <p className="text-muted-foreground text-sm">
+          The API reads a lifecycle only when a type is created, so it is set on the new content type
+          screen and cannot be changed here yet.
+        </p>
+      </section>
 
       <div className="rounded-lg border">
         <Table>

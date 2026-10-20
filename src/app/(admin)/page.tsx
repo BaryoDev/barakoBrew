@@ -18,6 +18,8 @@ import {
   IconPlus,
   IconWorkflows,
 } from '@/components/icons';
+import { SystemStrip } from '@/components/overview/system-strip';
+import { WorkflowHealthCard } from '@/components/overview/workflow-health-card';
 import { OverviewAnalytics } from '@/components/analytics/overview-analytics';
 import { formatDistanceToNow } from 'date-fns';
 import { contentTitle } from '@/lib/content-title';
@@ -79,6 +81,8 @@ export default function DashboardPage() {
         }
       />
 
+      <SystemStrip />
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           label="Content types"
@@ -99,6 +103,8 @@ export default function DashboardPage() {
           isLoading={workflowsLoading}
         />
       </div>
+
+      <WorkflowHealthCard />
 
       <OverviewAnalytics />
 

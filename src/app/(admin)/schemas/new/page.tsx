@@ -8,13 +8,15 @@ import { routeTemplateProblem } from '@/lib/field-presentation';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { FieldEditor } from '@/components/schema/field-editor';
+import { LifecycleEditor } from '@/components/schema/lifecycle-editor';
+import { EMPTY_LIFECYCLE, lifecycleProblems, lifecycleToSend } from '@/lib/lifecycle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import type { FieldDefinition } from '@/types/schema';
+import type { FieldDefinition, LifecycleDefinition } from '@/types/schema';
 
 function slugify(input: string): string {
   return input.trim().toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
@@ -32,11 +34,13 @@ export default function NewSchemaPage() {
   const [singleton, setSingleton] = useState(false);
   const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [routeTemplate, setRouteTemplate] = useState('');
+  const [lifecycle, setLifecycle] = useState<LifecycleDefinition>(EMPTY_LIFECYCLE);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [editingField, setEditingField] = useState(false);
 
   const routeIssue = routeTemplateProblem(routeTemplate);
-  const canSave = displayName.trim() && name.trim() && fields.length > 0 && !routeIssue && !editingField;
+  const canSave = displayName.trim() && name.trim() && fields.length > 0 && !routeIssue && !editingField &&
+    lifecycleProblems(lifecycle).length === 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +55,7 @@ export default function NewSchemaPage() {
         isPubliclyDeliverable: publiclyDeliverable,
         isSingleton: singleton,
         routeTemplate: routeTemplate || undefined,
+        lifecycle: lifecycleToSend(lifecycle) ?? undefined,
       },
       {
         onSuccess: () => {
@@ -75,7 +80,7 @@ export default function NewSchemaPage() {
         description="Types cannot be edited or deleted through the API once created, so double-check the fields."
       />
 
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+      <form onSubmit={handleSubmit} className="max-w-4xl space-y-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="displayName">Display name</Label>
@@ -172,6 +177,8 @@ export default function NewSchemaPage() {
           onEditingChange={setEditingField}
           contentTypes={schemas?.map((s) => ({ name: s.name, displayName: s.displayName }))}
         />
+
+        <LifecycleEditor value={lifecycle} onChange={setLifecycle} />
 
         {refusal && (
           <p role="alert" className="text-destructive text-sm">

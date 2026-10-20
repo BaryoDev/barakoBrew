@@ -1,38 +1,78 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { useAuth } from '@/hooks/use-auth';
 import { useMyTenants, useCurrentTenant, useSwitchTenant } from '@/hooks/use-tenants';
 
 // Matches Tenant.DefaultSlug on the server. The default partition is the platform/home context; the
 // cross-tenant token guard always permits a token for it, so switching here never needs a membership.
 const DEFAULT_SLUG = 'default';
 
+interface Option {
+  slug: string;
+  name: string;
+  roles?: { id: string; name: string }[];
+}
+
+function TenantRow({
+  option: o,
+  current,
+  pending,
+  onPick,
+}: {
+  option: Option;
+  current: string | null;
+  pending: boolean;
+  onPick: (slug: string) => void;
+}) {
+  const roleNames = o.roles?.map((r) => r.name).join(', ');
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(o.slug)}
+      disabled={pending}
+      className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-hidden hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+    >
+      <span className="mt-0.5 size-4 shrink-0">
+        {o.slug === current && <CheckIcon className="size-4" aria-label="Current tenant" />}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate">{o.name}</span>
+        {o.slug !== DEFAULT_SLUG && (
+          <span className="block truncate font-mono text-[11px] text-(--faint)">
+            {o.slug}
+            {roleNames ? ` · ${roleNames}` : ''}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
 /**
- * Tenant picker for multi-tenant deployments. Behaviours:
+ * Tenant picker for multi-tenant deployments, a popover in the rail. Behaviours:
  *  - Auto-scope: if the session token isn't scoped to a tenant the user belongs to (e.g. login lands
- *    on the default partition), switch into their first tenant automatically — so a single-tenant
+ *    on the default partition), switch into their first tenant automatically, so a single-tenant
  *    user lands on their data without any UI.
- *  - Manual switch: a user with any membership can move between their tenants AND back to Home (the
+ *  - Manual switch: a user with any membership can move between their tenants and back to Home (the
  *    default partition). Without the Home entry the default partition is unreachable once you've
- *    switched away — which is how a deployment's data got stranded under *DEFAULT*.
+ *    switched away.
  * A user with no memberships (a plain single-tenant deployment) renders nothing and never auto-switches.
  */
 export function TenantSwitcher() {
   const { data: memberships } = useMyTenants();
   const current = useCurrentTenant();
   const switchTenant = useSwitchTenant();
+  const { user } = useAuth();
   const autoSwitched = useRef(false);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
-  // On first load, if the token isn't scoped to a tenant the user belongs to (login lands on the
-  // default partition), auto-switch into their first tenant so they see their data immediately.
-  // Only once per mount — a manual pick below sets the same ref so it never fights the user, which
+  // Only once per mount. A manual pick below sets the same ref so it never fights the user, which
   // is what lets a deliberate switch to Home stick.
   useEffect(() => {
     if (autoSwitched.current || switchTenant.isPending) return;
@@ -43,34 +83,75 @@ export function TenantSwitcher() {
     }
   }, [memberships, current, switchTenant]);
 
-  // Nothing to switch on a single-tenant deployment (no memberships).
   if (!memberships || memberships.length === 0) return null;
 
-  // Home (default) is always offered alongside the user's tenants.
-  const options = [{ slug: DEFAULT_SLUG, name: 'Home' }, ...memberships];
-  const value = options.some((o) => o.slug === current) ? current ?? undefined : undefined;
+  const home: Option = { slug: DEFAULT_SLUG, name: 'Home' };
+  const needle = query.trim().toLowerCase();
+  const matches = (o: Option) =>
+    !needle || o.name.toLowerCase().includes(needle) || o.slug.toLowerCase().includes(needle);
+  const tenants = memberships.filter(matches);
+  const showHome = matches(home);
+  const label = [home, ...memberships].find((o) => o.slug === current)?.name ?? 'Select tenant';
+  const isSuperAdmin = !!user?.roles?.includes('SuperAdmin');
+
+  const pick = (slug: string) => {
+    // A manual pick settles the tenant, so the auto-switch effect cannot bounce a deliberate
+    // switch to Home back to the user's first tenant.
+    autoSwitched.current = true;
+    if (slug !== current) switchTenant.mutate(slug);
+    setOpen(false);
+  };
 
   return (
-    <Select
-      value={value}
-      onValueChange={(slug) => {
-        // A manual pick settles the tenant — stop the auto-switch effect from overriding it, so a
-        // deliberate switch to Home (default) isn't immediately bounced back to the user's club.
-        autoSwitched.current = true;
-        if (slug !== current) switchTenant.mutate(slug);
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery('');
       }}
-      disabled={switchTenant.isPending}
     >
-      <SelectTrigger size="sm" className="w-44" aria-label="Switch tenant">
-        <SelectValue placeholder="Select tenant" />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((t) => (
-          <SelectItem key={t.slug} value={t.slug}>
-            {t.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Switch tenant"
+          disabled={switchTenant.isPending}
+          className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input px-3 text-sm outline-hidden hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[330px] p-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Find a tenant"
+          aria-label="Find a tenant"
+          className="mb-2 h-8"
+        />
+        <div className="max-h-64 overflow-y-auto">{tenants.map((o) => (
+            <TenantRow key={o.slug} option={o} current={current} pending={switchTenant.isPending} onPick={pick} />
+          ))}</div>
+        {tenants.length > 0 && showHome && <div role="separator" className="my-1 h-px bg-border" />}
+        {showHome && (
+          <TenantRow option={home} current={current} pending={switchTenant.isPending} onPick={pick} />
+        )}
+        {tenants.length === 0 && !showHome && (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">No tenant matches.</p>
+        )}
+        <p className="mt-2 px-2 text-xs text-muted-foreground">
+          Switching signs you in again to the tenant you pick, with a new token.
+        </p>
+        {isSuperAdmin && (
+          <Link
+            href="/tenants"
+            onClick={() => setOpen(false)}
+            className="mt-2 block rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+          >
+            Create a tenant
+          </Link>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

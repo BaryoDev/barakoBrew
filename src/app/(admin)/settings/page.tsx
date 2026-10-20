@@ -1,9 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { useSettings, useUpdateSetting, type SystemSetting } from '@/hooks/use-settings';
 import { apiErrorMessage } from '@/lib/api';
+import { useAccess } from '@/hooks/use-access';
+import { useModuleEnabled } from '@/hooks/use-modules';
+import { MODULE } from '@/types/modules';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
@@ -11,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { IconSettings } from '@/components/icons';
+import { IconDatabase, IconSettings } from '@/components/icons';
 
 function isBooleanValue(value: string) {
   return value === 'true' || value === 'false';
@@ -19,6 +23,8 @@ function isBooleanValue(value: string) {
 
 export default function SettingsPage() {
   const { data: settings, isLoading } = useSettings();
+  const filesRunning = useModuleEnabled(MODULE.files) !== false;
+  const canManageStorage = useAccess().can('manage_storage', ['SuperAdmin', 'Admin']);
 
   const categories = settings
     ? [...new Set(settings.map((s) => s.category))].sort()
@@ -30,6 +36,21 @@ export default function SettingsPage() {
         title="Settings"
         description="Runtime configuration. Changes take effect without a redeploy."
       />
+
+      {filesRunning && canManageStorage && (
+        <Link
+          href="/settings/storage"
+          className="mb-4 flex max-w-2xl items-center gap-3 rounded-xl border p-4 text-sm hover:bg-accent"
+        >
+          <IconDatabase className="size-5 shrink-0" aria-hidden />
+          <span>
+            <span className="block font-medium">Storage</span>
+            <span className="text-muted-foreground text-xs">
+              Choose Database or S3 for new uploads, and test the connection.
+            </span>
+          </span>
+        </Link>
+      )}
 
       {isLoading ? (
         <TableSkeleton />

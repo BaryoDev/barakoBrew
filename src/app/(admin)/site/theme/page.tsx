@@ -19,8 +19,8 @@ import {
     type ContrastResult,
 } from '@/lib/contrast';
 import {
-    COLOR_SLOTS,
-    FONT_ROLES,
+    colorSlotsFor,
+    fontRolesFor,
     LAYOUT_KEYS,
     RADII_KEYS,
     isCssLength,
@@ -42,6 +42,7 @@ import {
     tokensAndTonesProblem,
     validTokens,
 } from '@/lib/theme-tokens';
+import { useBlockSchema } from '@/hooks/use-block-schema';
 import type { ContentTypeDefinition } from '@/types/schema';
 
 const SELECT =
@@ -77,6 +78,10 @@ function ThemeEditor({
     set: (field: string, value: unknown) => void;
     schema: ContentTypeDefinition;
 }) {
+    const press = useBlockSchema();
+    const theme = press.status === 'ready' ? press.schema.theme : undefined;
+    const slots = colorSlotsFor(theme?.colors);
+    const fontRoles = fontRolesFor(theme?.fonts);
     const colors = readStringMap(values.Colors) ?? {};
     const fonts = readStringMap(values.Fonts) ?? {};
     const radii = readStringMap(values.Radii) ?? {};
@@ -95,7 +100,7 @@ function ThemeEditor({
                 description="The theme slots the site reads, then any site colours blocks can refer to by name."
             >
                 <Structured field="Colors" label="Colours" value={values.Colors} read={readStringMap} onChange={(v) => set('Colors', v)}>
-                    {(map) => <ColourMap map={map} onChange={(next) => set('Colors', next)} />}
+                    {(map) => <ColourMap slots={slots} map={map} onChange={(next) => set('Colors', next)} />}
                 </Structured>
             </Section>
 
@@ -131,18 +136,18 @@ function ThemeEditor({
             </Section>
 
             <Section title="Contrast" description={`Each text colour against the background it sits on. WCAG AA asks for ${AA_NORMAL}:1 for body-size text.`}>
-                <ContrastReport colors={colors} />
+                <ContrastReport colors={colors} slots={slots} />
             </Section>
 
             <Section title="Fonts" description="Family names as Google Fonts spells them. The site loads them and adds a fallback.">
                 <Structured field="Fonts" label="Fonts" value={values.Fonts} read={readStringMap} onChange={(v) => set('Fonts', v)}>
                     {(map) => (
                         <div className="space-y-4">
-                            {FONT_ROLES.map((role) => (
+                            {fontRoles.map((role) => (
                                 <div key={role} className="space-y-1">
                                     <TextField
                                         id={`font-${role}`}
-                                        label={FONT_LABELS[role]}
+                                        label={FONT_LABELS[role] ?? role}
                                         placeholder={role === 'mono' ? 'JetBrains Mono' : role === 'heading' ? 'Zilla Slab' : 'Open Sans'}
                                         value={map[role] ?? ''}
                                         onChange={(v) => set('Fonts', setOrRemove(map, role, v))}
@@ -208,7 +213,7 @@ function ThemeEditor({
 
             <Section title="Visitor theme variants" description="Themes a visitor can switch between. Each one overrides colours only.">
                 <Structured field="Variants" label="Variants" value={values.Variants} read={readVariants} onChange={(v) => set('Variants', v)}>
-                    {(list) => <Variants variants={list} base={colors} onChange={(next) => set('Variants', next)} />}
+                    {(list) => <Variants slots={slots} variants={list} base={colors} onChange={(next) => set('Variants', next)} />}
                 </Structured>
             </Section>
 
@@ -231,16 +236,24 @@ function ThemeEditor({
     );
 }
 
-function ColourMap({ map, onChange }: { map: Record<string, string>; onChange: (map: Record<string, string>) => void }) {
+function ColourMap({
+    slots,
+    map,
+    onChange,
+}: {
+    slots: readonly string[];
+    map: Record<string, string>;
+    onChange: (map: Record<string, string>) => void;
+}) {
     const base = useId();
     const [newName, setNewName] = useState('');
-    const custom = Object.keys(map).filter((name) => !(COLOR_SLOTS as readonly string[]).includes(name));
+    const custom = Object.keys(map).filter((name) => !slots.includes(name));
     const nameTaken = newName.trim() !== '' && newName.trim() in map;
 
     return (
         <div className="space-y-5">
             <div className="space-y-2">
-                {COLOR_SLOTS.map((slot) => (
+                {slots.map((slot) => (
                     <ColourInput
                         key={slot}
                         id={`${base}-${slot}`}
@@ -331,9 +344,9 @@ function ContrastRows({ results }: { results: readonly ContrastResult[] }) {
     );
 }
 
-function ContrastReport({ colors }: { colors: Record<string, string> }) {
+function ContrastReport({ colors, slots }: { colors: Record<string, string>; slots: readonly string[] }) {
     const results = checkContrast(colors);
-    const names = Object.keys(colors).filter((n) => !(COLOR_SLOTS as readonly string[]).includes(n));
+    const names = Object.keys(colors).filter((n) => !slots.includes(n));
     const backgrounds = Object.keys(colors);
     const [background, setBackground] = useState('pageBg');
     const againstBg = backgrounds.includes(background) ? background : backgrounds[0] ?? 'pageBg';
@@ -406,17 +419,19 @@ function LengthFields({
 }
 
 function Variants({
+    slots,
     variants,
     base,
     onChange,
 }: {
+    slots: readonly string[];
     variants: readonly ThemeVariant[];
     base: Record<string, string>;
     onChange: (variants: ThemeVariant[]) => void;
 }) {
     const id = useId();
     const update = (index: number, variant: ThemeVariant) => onChange(variants.map((v, i) => (i === index ? variant : v)));
-    const names = Array.from(new Set([...COLOR_SLOTS, ...Object.keys(base)]));
+    const names = Array.from(new Set([...slots, ...Object.keys(base)]));
 
     return (
         <div className="space-y-3">

@@ -62,3 +62,13 @@ if (typeof window !== 'undefined') {
         mediaQueries.clear();
     });
 }
+
+// jsdom has no ResizeObserver, and Radix measures with one as soon as a checkbox, select or popover
+// mounts. Tests that need to see a resize install their own.
+if (typeof window !== 'undefined') {
+    globalThis.ResizeObserver ??= class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    };
+}

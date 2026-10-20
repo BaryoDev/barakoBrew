@@ -9,6 +9,8 @@ export interface ApiMeta {
   version: string;
   /** Whether the instance exposes /swagger, so the About dialog can link to it or leave it out. */
   swaggerEnabled: boolean;
+  /** The admin HTTP contract number the API reports, absent on an API that does not send it. */
+  apiContractVersion?: number | null;
 }
 
 /**
