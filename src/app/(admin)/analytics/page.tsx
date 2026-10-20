@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { SegmentedControl, SegmentedControlItem } from '@/components/ui/segmented-control';
 import { AddWebsiteDialog } from '@/components/analytics/add-website-dialog';
 import { Sparkline } from '@/components/analytics/sparkline';
+import { MetricMark } from '@/components/analytics/marks';
 import { IconAnalytics, IconRefresh } from '@/components/icons';
 import {
   useAnalyticsWebsites,
@@ -248,9 +249,10 @@ function MetricCard({
                   style={{ width: `${(row.y / max) * 100}%` }}
                   aria-hidden
                 />
-                <span className={`relative z-10 min-w-0 truncate ${mono ? 'font-mono text-xs' : ''}`}>
+                <span className={`relative z-10 flex min-w-0 items-center gap-2 ${mono ? 'font-mono text-xs' : ''}`}>
+                  <MetricMark type={type} name={row.x} />
                   {country && flag(row.x) ? <span className="mr-1.5">{flag(row.x)}</span> : null}
-                  {label}
+                  <span className="truncate">{label}</span>
                 </span>
                 <span className="relative z-10 font-mono text-xs tabular-nums">{nf.format(row.y)}</span>
               </div>
