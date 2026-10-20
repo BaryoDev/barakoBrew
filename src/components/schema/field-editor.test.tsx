@@ -417,4 +417,33 @@ describe('the Members sensitivity', () => {
         const row = within(screen.getByRole('list', { name: 'Fields' })).getAllByRole('listitem')[0];
         expect(row).toHaveTextContent('Partners');
     });
+
+    it('sends no roles and the default mask when a Sensitive field becomes Members', async () => {
+        recordContractVersion('9');
+        const saved: FieldDefinition[][] = [];
+        const salary: FieldDefinition = {
+            name: 'Salary',
+            displayName: 'Salary',
+            type: 'string',
+            isRequired: false,
+            sensitivity: SensitivityLevel.Sensitive,
+            mask: FieldMask.Redact,
+            visibleToRoles: ['HR'],
+        };
+        render(<FieldEditor fields={[salary]} onChange={(next) => saved.push(next)} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit Salary' }));
+        fireEvent.keyDown(screen.getByRole('combobox', { name: 'Sensitivity' }), { key: 'ArrowDown' });
+        const members = within(screen.getByRole('listbox'))
+            .getAllByRole('option')
+            .find((o) => (o.textContent ?? '').startsWith('Members'));
+        expect(members).toBeDefined();
+        fireEvent.click(members!);
+        fireEvent.click(screen.getByRole('button', { name: 'Save field' }));
+
+        await waitFor(() => expect(saved).toHaveLength(1));
+        expect(saved[0][0].sensitivity).toBe(SensitivityLevel.Members);
+        expect(saved[0][0].visibleToRoles).toEqual([]);
+        expect(saved[0][0].mask).toBe(FieldMask.Default);
+    });
 });

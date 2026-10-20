@@ -125,6 +125,11 @@ function cleaned(field: FieldDefinition): FieldDefinition {
     if (next.scale === null || next.scale === undefined) delete next.scale;
     if (next.tokenLength === null || next.tokenLength === undefined) delete next.tokenLength;
     if (next.referenceType !== undefined) next.referenceType = next.referenceType.trim();
+    // The API refuses a Members field that carries roles or a mask, and the form hides both for it.
+    if (next.sensitivity === SensitivityLevel.Members) {
+        next.visibleToRoles = [];
+        next.mask = FieldMask.Default;
+    }
     return next;
 }
 
