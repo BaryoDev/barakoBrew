@@ -75,12 +75,74 @@ describe('merging a poll into a page', () => {
         expect(merged.hasNextPage).toBe(true);
     });
 
-    it('takes the totals from the counts the poll carries, under a filter and without', () => {
+    it('takes the totals from counts handed in, under a filter and without', () => {
         const current = page([run('a', '10:00', { status: 'Failed' })]);
         const counts = { Failed: 7, Succeeded: 3 };
 
         expect(mergeRunPage(current, none, { statusCounts: counts }).page.totalItems).toBe(10);
         expect(mergeRunPage(current, none, { statusCounts: counts, status: 'Failed' }).page.totalItems).toBe(7);
+    });
+
+    describe('with held counts and a poll that carries none', () => {
+        const held = () =>
+            page([run('a', '10:00', { status: 'Failed' }), run('b', '09:00')], {
+                statusCounts: { Failed: 1, Succeeded: 5 },
+                totalItems: 6,
+            });
+        const changedA = run('a', '10:00', { status: 'Succeeded', updatedAt: '2026-10-19T11:00:00Z' });
+
+        it('moves a count from the old status of a run to its new one', () => {
+            const merged = mergeRunPage(held(), [changedA]).page;
+
+            expect(merged.items).toHaveLength(2);
+            expect(merged.statusCounts).toEqual({ Failed: 0, Succeeded: 6 });
+            expect(merged.totalItems).toBe(6);
+        });
+
+        it('counts a run new to the list under its status and raises the total', () => {
+            const merged = mergeRunPage(held(), [run('c', '12:00', { status: 'Pending' })]).page;
+
+            expect(ids(merged)).toEqual(['c', 'a', 'b']);
+            expect(merged.statusCounts).toEqual({ Failed: 1, Succeeded: 5, Pending: 1 });
+            expect(merged.totalItems).toBe(7);
+        });
+
+        it('takes the total of a filtered view from the adjusted count, not from the stale one', () => {
+            const filtered = page([run('a', '10:00', { status: 'Failed' })], {
+                statusCounts: { Failed: 1, Succeeded: 5 },
+                totalItems: 1,
+            });
+            const merged = mergeRunPage(filtered, [changedA], { status: 'Failed' }).page;
+
+            expect(merged.items).toHaveLength(0);
+            expect(merged.totalItems).toBe(0);
+            expect(merged.statusCounts).toEqual({ Failed: 0, Succeeded: 6 });
+        });
+
+        it('moves a count for a run that is off the page but was seen before', () => {
+            const seen = new Map([['z', run('z', '01:00', { status: 'Running', updatedAt: '2026-10-19T01:30:00Z' })]]);
+            const current = page([run('a', '10:00')], { statusCounts: { Running: 1, Succeeded: 4 }, totalItems: 5 });
+            const merged = mergeRunPage(current, [run('z', '01:00', { status: 'Failed', updatedAt: '2026-10-19T02:00:00Z' })], {
+                known: seen,
+            }).page;
+
+            expect(merged.statusCounts).toEqual({ Running: 0, Succeeded: 4, Failed: 1 });
+            expect(merged.totalItems).toBe(5);
+        });
+
+        it('changes nothing when the same run comes back again', () => {
+            const once = mergeRunPage(held(), [changedA]).page;
+            const twice = mergeRunPage(once, [changedA]).page;
+
+            expect(twice.statusCounts).toEqual({ Failed: 0, Succeeded: 6 });
+            expect(twice.totalItems).toBe(6);
+        });
+
+        it('keeps the local delta for the total when no counts are held', () => {
+            const bare = page([run('a', '10:00')], { totalItems: 4 });
+
+            expect(mergeRunPage(bare, [run('c', '12:00')]).page.totalItems).toBe(5);
+        });
     });
 
     it('treats a missing updatedAt on the held copy as older', () => {

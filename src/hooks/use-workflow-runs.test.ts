@@ -306,22 +306,33 @@ describe('isAbandonable', () => {
 
   it('offers it on a run where something went out and the rest did not', () => {
     expect(
-      isAbandonable({ status: 'PartiallyFailed', cancelledAt: null, actions: [ok.action('Succeeded'), ok.action('Failed')] }),
+      isAbandonable({
+        status: 'PartiallyFailed',
+        cancelledAt: null,
+        abandonedAt: null,
+        actions: [ok.action('Succeeded'), ok.action('Failed')],
+      }),
     ).toBe(true);
   });
 
+  it('does not offer it on a run from an API that sends no abandonedAt', () => {
+    expect(
+      isAbandonable({ status: 'PartiallyFailed', cancelledAt: null, actions: [ok.action('Succeeded'), ok.action('Failed')] }),
+    ).toBe(false);
+  });
+
   it('does not offer it when nothing succeeded, since there is nothing to undo', () => {
-    expect(isAbandonable({ status: 'Failed', cancelledAt: null, actions: [ok.action('Failed')] })).toBe(false);
+    expect(isAbandonable({ status: 'Failed', cancelledAt: null, abandonedAt: null, actions: [ok.action('Failed')] })).toBe(false);
   });
 
   it('does not offer it on a run that finished with everything succeeded', () => {
-    expect(isAbandonable({ status: 'Succeeded', cancelledAt: null, actions: [ok.action('Succeeded')] })).toBe(false);
+    expect(isAbandonable({ status: 'Succeeded', cancelledAt: null, abandonedAt: null, actions: [ok.action('Succeeded')] })).toBe(false);
   });
 
   it('does not offer it on a cancelled run or one already rolled back', () => {
     const actions = [ok.action('Succeeded'), ok.action('Failed')];
-    expect(isAbandonable({ status: 'Cancelled', cancelledAt: '2026-10-19T10:00:00Z', actions })).toBe(false);
-    expect(isAbandonable({ status: 'Failed', cancelledAt: null, compensation: 'Compensating', actions })).toBe(false);
+    expect(isAbandonable({ status: 'Cancelled', cancelledAt: '2026-10-19T10:00:00Z', abandonedAt: null, actions })).toBe(false);
+    expect(isAbandonable({ status: 'Failed', cancelledAt: null, abandonedAt: null, compensation: 'Compensating', actions })).toBe(false);
     expect(isAbandonable({ status: 'Failed', cancelledAt: null, abandonedAt: '2026-10-19T10:00:00Z', actions })).toBe(false);
   });
 });

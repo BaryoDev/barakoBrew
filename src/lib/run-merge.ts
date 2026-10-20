@@ -5,26 +5,26 @@
  */
 
 export interface MergeableRun {
-    id: string;
-    status: string;
-    createdAt: string;
-    updatedAt?: string | null;
+  id: string;
+  status: string;
+  createdAt: string;
+  updatedAt?: string | null;
 }
 
 export interface MergeablePage<T> {
-    items: T[];
-    page: number;
-    pageSize: number;
-    totalItems: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-    statusCounts?: Record<string, number> | null;
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  statusCounts?: Record<string, number> | null;
 }
 
 function at(value: string | null | undefined): number {
-    const parsed = value ? Date.parse(value) : NaN;
-    return Number.isNaN(parsed) ? -Infinity : parsed;
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isNaN(parsed) ? -Infinity : parsed;
 }
 
 /**
@@ -33,27 +33,39 @@ function at(value: string | null | undefined): number {
  * later write must win, and an equal one replaces it, which changes nothing.
  */
 export function isAsNew(candidate: MergeableRun, held: MergeableRun): boolean {
-    return at(candidate.updatedAt) >= at(held.updatedAt);
+  return at(candidate.updatedAt) >= at(held.updatedAt);
 }
 
 /** Newest first, as the list is without `changedSince`. Id breaks a tie so the order is stable. */
 function byCreatedDesc(a: MergeableRun, b: MergeableRun): number {
-    const diff = at(b.createdAt) - at(a.createdAt);
-    if (diff !== 0) return diff;
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  const diff = at(b.createdAt) - at(a.createdAt);
+  if (diff !== 0) return diff;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 export interface MergeOptions {
-    /** The status filter of the view, if any. A run that no longer has it leaves. */
-    status?: string | null;
-    /** Counts from the poll's response, newer than the page's. Absent keeps the page's own. */
-    statusCounts?: Record<string, number> | null;
+  /** The status filter of the view, if any. A run that no longer has it leaves. */
+  status?: string | null;
+  /** Counts from a read that carried them, newer than the page's. They replace the page's own. */
+  statusCounts?: Record<string, number> | null;
+  /**
+   * Runs seen before that are not on this page, by id. Without counts from the server, a run
+   * found here moves the held counts from its old status to its new one. A run found nowhere is
+   * counted as new only when the merge adds it to the page.
+   */
+  known?: ReadonlyMap<string, MergeableRun>;
+}
+
+function moveCount(counts: Record<string, number>, from: string | null, to: string) {
+  if (from === to) return;
+  if (from !== null) counts[from] = Math.max(0, (counts[from] ?? 0) - 1);
+  counts[to] = (counts[to] ?? 0) + 1;
 }
 
 export interface MergeResult<P> {
-    page: P;
-    /** Rows that left the view, so a caller can top up a page that now has a hole. */
-    removed: number;
+  page: P;
+  /** Rows that left the view, so a caller can top up a page that now has a hole. */
+  removed: number;
 }
 
 /**
@@ -68,59 +80,65 @@ export interface MergeResult<P> {
  *   run twice across a page change.
  */
 export function mergeRunPage<T extends MergeableRun, P extends MergeablePage<T>>(
-    current: P,
-    changed: readonly T[],
-    options: MergeOptions = {},
+  current: P,
+  changed: readonly T[],
+  options: MergeOptions = {},
 ): MergeResult<P> {
-    const filter = options.status && options.status !== 'all' ? options.status : null;
-    const held = new Map(current.items.map((run) => [run.id, run]));
-    const oldest = current.items.length > 0 ? current.items[current.items.length - 1] : null;
-    const full = current.items.length >= current.pageSize;
+  const filter = options.status && options.status !== 'all' ? options.status : null;
+  const held = new Map(current.items.map((run) => [run.id, run]));
+  const oldest = current.items.length > 0 ? current.items[current.items.length - 1] : null;
+  const full = current.items.length >= current.pageSize;
 
-    let added = 0;
-    let removed = 0;
+  let added = 0;
+  let removed = 0;
+  const adjusted: Record<string, number> | null =
+    !options.statusCounts && current.statusCounts ? { ...current.statusCounts } : null;
 
-    for (const run of changed) {
-        const matches = !filter || run.status === filter;
-        const existing = held.get(run.id);
+  for (const run of changed) {
+    const matches = !filter || run.status === filter;
+    const existing = held.get(run.id);
+    const prior = existing ?? options.known?.get(run.id);
 
-        if (existing) {
-            if (!isAsNew(run, existing)) continue;
-            if (matches) {
-                held.set(run.id, run);
-            } else {
-                held.delete(run.id);
-                removed += 1;
-            }
-            continue;
-        }
+    if (prior && adjusted && isAsNew(run, prior)) moveCount(adjusted, prior.status, run.status);
 
-        if (!matches || current.page !== 1) continue;
-        if (full && oldest && byCreatedDesc(run, oldest) > 0) continue;
+    if (existing) {
+      if (!isAsNew(run, existing)) continue;
+      if (matches) {
         held.set(run.id, run);
-        added += 1;
+      } else {
+        held.delete(run.id);
+        removed += 1;
+      }
+      continue;
     }
 
-    const items = [...held.values()].sort(byCreatedDesc).slice(0, current.pageSize);
+    if (!matches || current.page !== 1) continue;
+    if (full && oldest && byCreatedDesc(run, oldest) > 0) continue;
+    held.set(run.id, run);
+    added += 1;
+    if (!prior && adjusted) moveCount(adjusted, null, run.status);
+  }
 
-    const counts = options.statusCounts ?? current.statusCounts ?? null;
-    let totalItems = Math.max(0, current.totalItems + added - removed);
-    if (counts) {
-        const counted = filter ? counts[filter] : Object.values(counts).reduce((sum, n) => sum + n, 0);
-        if (typeof counted === 'number') totalItems = counted;
-    }
+  const items = [...held.values()].sort(byCreatedDesc).slice(0, current.pageSize);
 
-    const totalPages = Math.max(1, Math.ceil(totalItems / current.pageSize));
+  const counts = options.statusCounts ?? adjusted ?? current.statusCounts ?? null;
+  let totalItems = Math.max(0, current.totalItems + added - removed);
+  if (counts) {
+    const counted = filter ? counts[filter] : Object.values(counts).reduce((sum, n) => sum + n, 0);
+    if (typeof counted === 'number') totalItems = counted;
+  }
 
-    return {
-        removed,
-        page: {
-            ...current,
-            items,
-            totalItems,
-            totalPages,
-            hasNextPage: current.page < totalPages,
-            ...(counts ? { statusCounts: counts } : {}),
-        },
-    };
+  const totalPages = Math.max(1, Math.ceil(totalItems / current.pageSize));
+
+  return {
+    removed,
+    page: {
+      ...current,
+      items,
+      totalItems,
+      totalPages,
+      hasNextPage: current.page < totalPages,
+      ...(counts ? { statusCounts: counts } : {}),
+    },
+  };
 }
