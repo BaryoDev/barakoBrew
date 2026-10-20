@@ -277,7 +277,7 @@ describe('cancelling a run', () => {
       }
       return { data: cancelledMeanwhile };
     }) as typeof api.get);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh', hidden: true }));
     await waitFor(() => expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0));
 
     expect(screen.getByRole('alertdialog')).toBe(dialog);
