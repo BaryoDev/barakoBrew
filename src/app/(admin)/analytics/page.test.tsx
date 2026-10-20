@@ -11,6 +11,12 @@ const rows: Record<string, Array<{ x: string; y: number }>> = {
   country: [],
 };
 
+let series: {
+  pageviews: Array<{ x: string; y: number }>;
+  sessions: Array<{ x: string; y: number }>;
+  previous?: { pageviews: Array<{ x: string; y: number }>; sessions: Array<{ x: string; y: number }> };
+} = { pageviews: [], sessions: [] };
+
 vi.mock('@/hooks/use-analytics', () => ({
   useAnalyticsWebsites: () => ({
     isError: false,
@@ -18,7 +24,7 @@ vi.mock('@/hooks/use-analytics', () => ({
     data: { configured: true, websites: [{ id: 'w1', name: 'Site', domain: 'example.com' }] },
   }),
   useAnalyticsSummary: () => ({ isLoading: false, data: undefined }),
-  useAnalyticsSeries: () => ({ isLoading: false, data: { pageviews: [], sessions: [] } }),
+  useAnalyticsSeries: () => ({ isLoading: false, data: series }),
   useAnalyticsMetric: (_id: string, type: string) => ({ isLoading: false, data: rows[type] }),
   useSiteStatus: () => ({ isLoading: false, data: { installed: true } }),
 }));
@@ -35,5 +41,23 @@ describe('the analytics page', () => {
     const monograms = screen.getAllByTestId('monogram');
     expect(monograms).toHaveLength(3);
     expect(monograms.map((m) => m.getAttribute('data-letter'))).toEqual(['W', 'C', '?']);
+  });
+
+  it('draws the previous period dashed behind the current line when the API returns it', () => {
+    series = {
+      pageviews: [{ x: 'a', y: 3 }, { x: 'b', y: 5 }],
+      sessions: [],
+      previous: { pageviews: [{ x: 'c', y: 2 }, { x: 'd', y: 9 }], sessions: [] },
+    };
+    render(React.createElement(AnalyticsPage));
+    expect(screen.getByTestId('previous-line')).toBeTruthy();
+    expect(screen.getByText('Previous period')).toBeTruthy();
+  });
+
+  it('says plainly that there is no previous period when the API does not return one', () => {
+    series = { pageviews: [{ x: 'a', y: 3 }, { x: 'b', y: 5 }], sessions: [] };
+    render(React.createElement(AnalyticsPage));
+    expect(screen.queryByTestId('previous-line')).toBeNull();
+    expect(screen.getByText('No previous period from this API')).toBeTruthy();
   });
 });
