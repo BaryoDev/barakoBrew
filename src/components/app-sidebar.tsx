@@ -19,6 +19,7 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { useNavMetrics, type NavMetrics } from '@/hooks/use-nav-metrics';
 import { useEnabledModules } from '@/hooks/use-modules';
 import { CommandMenu } from '@/components/command-menu';
+import { TenantSwitcher } from '@/components/tenant-switcher';
 import { IconMore, IconSignOut } from '@/components/icons';
 import { AboutDialog } from '@/components/about-dialog';
 import { useApiMeta } from '@/hooks/use-meta';
@@ -192,6 +193,7 @@ export function AppSidebar() {
           )}
         </div>
 
+        <TenantSwitcher />
         <CommandMenu />
       </SidebarHeader>
 
