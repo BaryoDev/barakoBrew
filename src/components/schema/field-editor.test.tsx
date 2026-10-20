@@ -438,8 +438,10 @@ describe('the Members sensitivity', () => {
             .getAllByRole('option')
             .find((o) => (o.textContent ?? '').startsWith('Members'));
         expect(members).toBeDefined();
-        fireEvent.click(members!);
-        fireEvent.click(screen.getByRole('button', { name: 'Save field' }));
+        fireEvent.keyDown(members!, { key: 'Enter' });
+        const save = screen.getByRole('button', { name: 'Save field' });
+        await waitFor(() => expect(save).toBeEnabled());
+        fireEvent.click(save);
 
         await waitFor(() => expect(saved).toHaveLength(1));
         expect(saved[0][0].sensitivity).toBe(SensitivityLevel.Members);

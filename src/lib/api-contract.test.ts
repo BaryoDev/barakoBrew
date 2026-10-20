@@ -148,15 +148,15 @@ describe('recording what the last response said', () => {
  * (BaryoDev/barakoCMS#1028), 6 is the release that enforces a field's validation rules
  * (BaryoDev/barakoCMS#927), 7 is 4.7.0, which replays an idempotent retry and refuses credential-named
  * connector settings, 8 is 5.0.0, which gives tenants a status and roles an owner
- * (BaryoDev/barakoCMS#894, BaryoDev/barakoCMS#913), and a console that speaks only some of them goes
+ * (BaryoDev/barakoCMS#894, BaryoDev/barakoCMS#913), 9 is 5.1.0, which adds the Members sensitivity, and a console that speaks only some of them goes
  * blank against the rest.
  *
  * Widening the range is a decision about what this build handles, not a number carried along, so
  * these have to be edited by hand when it moves.
  */
 describe('the contract versions this build speaks', () => {
-    it('speaks 1, 2, 3, 4, 5, 6, 7 and 8', () => {
-        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 8 });
+    it('speaks 1, 2, 3, 4, 5, 6, 7, 8 and 9', () => {
+        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 9 });
     });
 
     it('accepts both of them from a response', () => {
@@ -168,11 +168,12 @@ describe('the contract versions this build speaks', () => {
         expect(classifyContract('6')).toEqual({ kind: 'ok', version: 6 });
         expect(classifyContract('7')).toEqual({ kind: 'ok', version: 7 });
         expect(classifyContract('8')).toEqual({ kind: 'ok', version: 8 });
+        expect(classifyContract('9')).toEqual({ kind: 'ok', version: 9 });
     });
 
-    it('still refuses 0 as too old and 9 as too new', () => {
+    it('still refuses 0 as too old and 10 as too new', () => {
         expect(classifyContract('0')).toEqual({ kind: 'api-older', version: 0 });
-        expect(classifyContract('9')).toEqual({ kind: 'api-newer', version: 9 });
+        expect(classifyContract('10')).toEqual({ kind: 'api-newer', version: 10 });
     });
 });
 
