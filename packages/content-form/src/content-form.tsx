@@ -47,6 +47,8 @@ export interface ContentFormProps {
     renderField?: (props: FieldRenderProps) => ReactNode | null;
     /** What to say when the definition has no fields at all. */
     emptyMessage?: ReactNode;
+    /** Adds the field's type in mono type beside its label. Off by default, so a host opts in. */
+    typeHints?: boolean;
 }
 
 /**
@@ -91,6 +93,7 @@ export function ContentForm({
     viewerRoleIds,
     renderField,
     emptyMessage,
+    typeHints,
 }: ContentFormProps) {
     const viewer: Viewer = { roles: viewerRoles, roleIds: viewerRoleIds, capabilities: viewerCapabilities };
     // Undefined removes the key, so a cleared optional value is left out of the save rather than
@@ -122,6 +125,7 @@ export function ContentForm({
                 field={field}
                 viewer={viewer}
                 renderField={renderField}
+                typeHints={typeHints}
                 value={values[key]}
                 error={errors?.[field.name]}
                 onChange={(v) => setField(key, v)}
@@ -165,6 +169,7 @@ function FieldControl({
     field,
     viewer,
     renderField,
+    typeHints,
     value,
     error,
     onChange,
@@ -172,6 +177,7 @@ function FieldControl({
     field: FieldDefinition;
     viewer: Viewer;
     renderField?: (props: FieldRenderProps) => ReactNode | null;
+    typeHints?: boolean;
     value: unknown;
     error?: string;
     onChange: (value: unknown) => void;
@@ -180,6 +186,11 @@ function FieldControl({
         <Label htmlFor={field.name}>
             {field.displayName}
             {field.isRequired && <span className="text-destructive ml-0.5">*</span>}
+            {typeHints && (
+                <span data-testid="field-type-hint" className="text-muted-foreground ml-2 font-mono text-xs font-normal">
+                    {field.type}
+                </span>
+            )}
         </Label>
     );
 
