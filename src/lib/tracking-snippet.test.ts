@@ -26,4 +26,10 @@ describe('withDataDomains', () => {
     expect(out).toContain('data-domains="a.comscriptx"');
     expect(out).not.toContain('"><script>x');
   });
+
+  it('reduces a pasted url to its bare host so the tracker still matches', () => {
+    expect(withDataDomains(snippet, 'https://Example.com:8080/blog?x=1')).toContain(
+      'data-domains="example.com"',
+    );
+  });
 });

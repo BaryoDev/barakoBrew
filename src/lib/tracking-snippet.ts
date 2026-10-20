@@ -4,7 +4,12 @@
  * already carries the attribute is left alone.
  */
 export function withDataDomains(snippet: string, domain: string): string {
-  const host = domain.trim();
+  const host = domain
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/:\d+$/, '');
   if (!host || /\sdata-domains\s*=/i.test(snippet)) return snippet;
   const safe = host.replace(/[&"<>]/g, '');
   if (!safe) return snippet;
