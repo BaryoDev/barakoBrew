@@ -86,3 +86,26 @@ describe('TenantSwitcher', () => {
         expect(screen.getByText('Other Place')).toBeTruthy();
     });
 });
+
+describe('the tenant card', () => {
+    beforeEach(() => {
+        memberships = [club, other];
+        current = 'club';
+        roles = ['Registrar'];
+    });
+
+    it('shows initials, the tenant name and the role the caller holds there', () => {
+        render(<TenantSwitcher />);
+        const card = screen.getByRole('button', { name: 'Switch tenant' });
+        expect(card.textContent).toContain('TC');
+        expect(card.textContent).toContain('The Club');
+        expect(card.textContent).toContain('Registrar');
+    });
+
+    it('falls back to the roles on the session when the membership names none', () => {
+        current = 'other';
+        roles = ['Admin'];
+        render(<TenantSwitcher />);
+        expect(screen.getByRole('button', { name: 'Switch tenant' }).textContent).toContain('Admin');
+    });
+});

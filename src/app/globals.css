@@ -240,16 +240,41 @@
    fire or dialogs and sheets never finish unmounting. */
 @keyframes rise {
   from {
-    opacity: 0;
     transform: translateY(8px);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
 
-@keyframes live-pulse {
+@keyframes pop {
+  from {
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes toast {
+  from {
+    transform: translateY(12px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes slidein {
+  from {
+    transform: translateX(24px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes pulse {
   0%,
   100% {
     opacity: 1;
@@ -259,14 +284,84 @@
   }
 }
 
-/* Entry motion for the Overview. Switched off below with every other animation. */
+/* Motion from the design prototype. Cards and panels rise, menus pop, toasts and drawers slide,
+   live indicators and attention dots pulse. All of it is switched off below. */
 .rise {
   animation: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+.pop {
+  animation: pop 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.toast-in {
+  animation: toast 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.slidein {
+  animation: slidein 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.pulse {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+/* Sonner owns the toast's position and stacking transform, so the entry motion goes on the content
+   inside it rather than on the toast itself. */
+[data-sonner-toast] > * {
+  animation: toast 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Hover and press, as the prototype has them. A card lifts two pixels with the shadow and the
+   accent border; a button one pixel with the accent shadow; a press shrinks to 0.97 (a button) or
+   0.99 (a card); an icon grows to 1.08. */
+.hover-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.hover-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-popover);
+  border-color: var(--primary);
+}
+.hover-card:active {
+  transform: scale(0.99);
+}
+
+.hover-button {
+  transition-property: transform, box-shadow, background-color, color, border-color;
+  transition-duration: 0.15s;
+}
+.hover-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -12px var(--primary);
+}
+.hover-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.hover-icon {
+  transition: transform 0.15s ease;
+}
+.hover-icon:hover:not(:disabled) {
+  transform: scale(1.08);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rise {
+  .rise,
+  .pop,
+  .toast-in,
+  .slidein,
+  .pulse,
+  [data-sonner-toast] > * {
     animation: none;
+  }
+
+  .hover-card:hover,
+  .hover-card:active,
+  .hover-button:hover:not(:disabled),
+  .hover-button:active:not(:disabled),
+  .hover-icon:hover:not(:disabled) {
+    transform: none;
   }
 
   *,

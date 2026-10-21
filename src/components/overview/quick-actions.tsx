@@ -29,9 +29,9 @@ export function QuickActions() {
         <Link
           key={a.href}
           href={a.href}
-          className="border-border bg-card hover:border-primary flex h-10 items-center gap-2 rounded-full border pr-3.5 pl-2.5 text-[13.5px] font-semibold transition-[border-color,transform] duration-200 outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.97]"
+          className="border-border bg-card hover:border-primary flex h-10 items-center gap-2 rounded-full border pr-3.5 pl-2.5 text-[13.5px] font-semibold hover-button rise outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
         >
-          <span className="bg-accent text-accent-foreground grid size-6 place-items-center rounded-full">
+          <span className="hover-icon bg-accent text-accent-foreground grid size-6 place-items-center rounded-full">
             <a.icon className="size-3.5" aria-hidden />
           </span>
           {a.title}

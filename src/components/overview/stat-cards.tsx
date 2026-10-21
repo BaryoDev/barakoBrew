@@ -64,9 +64,8 @@ export function StatCard({ label, href, state, value, bars, change, caption, ton
       href={href}
       className={cn(
         'group border-border bg-card text-card-foreground grid grid-cols-[1fr_auto] items-end gap-x-3 gap-y-2 rounded-2xl border p-[18px] outline-hidden',
-        'transition-[transform,box-shadow,border-color] duration-200',
-        'hover:border-primary hover:-translate-y-0.5 hover:shadow-[var(--shadow-popover)]',
-        'focus-visible:ring-ring/50 focus-visible:ring-2 active:translate-y-0 active:scale-[0.985]',
+        'hover-card rise',
+        'focus-visible:ring-ring/50 focus-visible:ring-2',
       )}
     >
       <span className="text-muted-foreground col-span-full flex items-center justify-between text-[13px]">

@@ -30,8 +30,8 @@ function Item({ label, dot, children }: { label: string; dot: Dot; children: Rea
         className={cn(
           'size-[7px] rounded-full',
           dot === 'ok' && 'bg-success',
-          dot === 'warn' && 'bg-warning',
-          dot === 'bad' && 'bg-destructive',
+          dot === 'warn' && 'bg-warning pulse',
+          dot === 'bad' && 'bg-destructive pulse',
           dot === 'none' && 'bg-(--faint)',
         )}
       />

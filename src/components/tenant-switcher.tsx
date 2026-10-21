@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
+import { CheckIcon } from 'lucide-react';
+import { IconChevronDown } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
@@ -16,6 +17,14 @@ interface Option {
   slug: string;
   name: string;
   roles?: { id: string; name: string }[];
+}
+
+/** Two letters for the badge: the first of each of the first two words, or the first two of one. */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  const letters = words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2);
+  return letters.toUpperCase();
 }
 
 function TenantRow({
@@ -93,6 +102,9 @@ export function TenantSwitcher() {
   const showHome = matches(home);
   const label = [home, ...memberships].find((o) => o.slug === current)?.name ?? 'Select tenant';
   const isSuperAdmin = !!user?.roles?.includes('SuperAdmin');
+  // The roles the caller holds in the tenant they are in, else the ones on their session.
+  const held = memberships.find((t) => t.slug === current)?.roles?.map((r) => r.name);
+  const role = (held && held.length > 0 ? held : (user?.roles ?? [])).join(', ');
 
   const pick = (slug: string) => {
     // A manual pick settles the tenant, so the auto-switch effect cannot bounce a deliberate
@@ -115,10 +127,19 @@ export function TenantSwitcher() {
           type="button"
           aria-label="Switch tenant"
           disabled={switchTenant.isPending}
-          className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input px-3 text-sm outline-hidden hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+          className="border-border bg-card hover-card flex h-[52px] w-full items-center gap-2.5 rounded-xl border px-2.5 text-left shadow-[var(--shadow-card)] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
         >
-          <span className="truncate">{label}</span>
-          <ChevronsUpDownIcon className="size-4 shrink-0 opacity-60" />
+          <span
+            aria-hidden
+            className="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-lg text-[11px] font-bold"
+          >
+            {initialsOf(label)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] leading-tight font-semibold">{label}</span>
+            {role && <span className="text-muted-foreground block truncate text-[11.5px] leading-tight">{role}</span>}
+          </span>
+          <IconChevronDown aria-hidden className="size-3.5 shrink-0 text-(--faint)" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[330px] p-2">

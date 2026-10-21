@@ -8,6 +8,7 @@ import {
   IconContentTypes,
   IconDashboard,
   IconDatabase,
+  IconDisk,
   IconEnvelope,
   IconFieldEdit,
   IconFilter,
@@ -80,10 +81,20 @@ export interface NavItem {
    * deployment always has them and naming a module here would be a guess.
    */
   module?: string;
+  /**
+   * The href of the item this one sits under. A child is listed beneath its parent while the parent
+   * or any of its children is the open screen, and is otherwise left out of the rail. It stays in
+   * NAV_GROUPS, so the command palette and the visibility rules treat it like any other item.
+   */
+  parent?: string;
 }
 
 export interface NavGroup {
   label?: string;
+  /** The rail folds this group under its heading. The unlabelled primary group never does. */
+  collapsible?: boolean;
+  /** Open before anyone has touched it. A closed group opens by itself when its screen is open. */
+  defaultOpen?: boolean;
   items: NavItem[];
 }
 
@@ -153,28 +164,58 @@ export const NAV_GROUPS: NavGroup[] = [
       // Editor was removed when #373 took that grant off GET /api/content-types. Leaving it here
       // rendered a link the API answered 403 to, and nothing creates an Editor role anyway.
       { title: 'Content types', href: '/schemas', icon: IconContentTypes, metric: 'contentTypes', capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Workflows', href: '/workflows', icon: IconWorkflows, metric: 'workflows', capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Workflow runs', href: '/workflow-runs', icon: IconHistory, metric: 'workflowRuns', capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Analytics', href: '/analytics', icon: IconAnalytics, module: MODULE.analytics, capability: 'view_analytics', roles: ['SuperAdmin', 'Admin'] },
+      // manage_content_types, which GET /api/content-types asks for, since these screens find the
+      // site type through it before they read or write the entry. Theme and Style recipes are
+      // settings of the site, so they sit under it and show while one of the three is open.
+      { title: 'Site settings', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Theme', href: '/site/theme', parent: '/site', icon: IconSun, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Style recipes', href: '/site/recipes', parent: '/site', icon: IconPen, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+    ],
+  },
+  {
+    label: 'Modules',
+    collapsible: true,
+    defaultOpen: true,
+    items: [
+      { title: 'All modules', href: '/modules', icon: IconCube, capability: 'view_modules', roles: ['SuperAdmin', 'Admin'] },
       // Signed in is enough for GET /api/pages/tree, but the screen lists the types through
       // GET /api/content-types before it can move anything.
       { title: 'Pages', href: '/pages', icon: IconContent, module: MODULE.pages, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Workflows', href: '/workflows', icon: IconWorkflows, metric: 'workflows', capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Workflow runs', href: '/workflow-runs', icon: IconHistory, metric: 'workflowRuns', capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Accounting', href: '/accounting', icon: IconCoins , module: MODULE.accounting, capability: 'view_ledger', roles: ['SuperAdmin', 'Admin', 'Accountant'] },
+      { title: 'Email events', href: '/email-events', icon: IconEnvelope, metric: 'recentBounces', tone: 'warning', module: MODULE.emailEvents, capability: 'view_email_events', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Feature flags', href: '/feature-flags', icon: IconFlag , module: MODULE.featureFlags, capability: 'manage_feature_flags', roles: ['SuperAdmin', 'Admin'] },
+      // upload_files, which BarakoCMS.Files seeds to Admin. The roles are the fallback for an API
+      // that does not report capabilities, where a custom role granted it is not offered Files.
+      { title: 'Files', href: '/files', icon: IconArchive, module: MODULE.files, capability: 'upload_files', roles: ['SuperAdmin', 'Admin'] },
+      // Reading and saving both take manage_storage, seeded to SuperAdmin and Admin by BarakoCMS.Files.
+      { title: 'Storage', href: '/settings/storage', icon: IconDatabase, module: MODULE.files, capability: 'manage_storage', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'PWA installs', href: '/pwa', icon: IconMobile , module: MODULE.pwa, capability: 'view_pwa_installs', roles: ['SuperAdmin', 'Admin'] },
+      // Every seeded role, because GET /api/devices is scoped to the caller and lists their own
+      // devices: an ordinary User has as much right to it as an Admin. Named rather than left
+      // ungated, since an item with no roles is offered to a signed-out caller too, and Overview
+      // and Health are the only two that should be.
+      { title: 'Devices', href: '/settings/devices', icon: IconShield , module: MODULE.deviceTrust, roles: ['SuperAdmin', 'Admin', 'User'] },
+      { title: 'Export and import', href: '/settings/portability', icon: IconDisk , module: MODULE.portability, capability: 'export_content', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , module: MODULE.import, capability: 'analyze_spreadsheets', roles: ['SuperAdmin', 'Admin'] },
+      // manage_forms, which BarakoCMS.Forms seeds to Admin; SuperAdmin passes every gate.
+      { title: 'Forms', href: '/settings/forms', icon: IconFieldEdit, module: MODULE.forms, capability: 'manage_forms', roles: ['SuperAdmin', 'Admin'] },
+    ],
+  },
+  {
+    label: 'Tools',
+    collapsible: true,
+    items: [
       // manage_workflows, which the preview asks for; the templates themselves are entries.
       { title: 'Email templates', href: '/email-templates', icon: IconEnvelope, capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Queries', href: '/queries', icon: IconFilter, capability: 'manage_queries', roles: ['SuperAdmin', 'Admin'] },
     ],
   },
   {
-    label: 'Site',
-    items: [
-      // manage_content_types, which GET /api/content-types asks for, since these screens find the
-      // site type through it before they read or write the entry.
-      { title: 'Site', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Theme', href: '/site/theme', icon: IconSun, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Style recipes', href: '/site/recipes', icon: IconPen, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
-    ],
-  },
-  {
     label: 'Access',
+    collapsible: true,
     items: [
       // Admin for the members list, where a tenant Admin gives roles in their tenant. The tenant list
       // and New tenant stay SuperAdmin only on the screen itself.
@@ -186,21 +227,8 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Modules',
-    items: [
-      { title: 'All modules', href: '/modules', icon: IconCube, capability: 'view_modules', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Accounting', href: '/accounting', icon: IconCoins , module: MODULE.accounting, capability: 'view_ledger', roles: ['SuperAdmin', 'Admin', 'Accountant'] },
-      { title: 'Analytics', href: '/analytics', icon: IconAnalytics , module: MODULE.analytics, capability: 'view_analytics', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Email events', href: '/email-events', icon: IconEnvelope, metric: 'recentBounces', tone: 'warning', module: MODULE.emailEvents, capability: 'view_email_events', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Feature flags', href: '/feature-flags', icon: IconFlag , module: MODULE.featureFlags, capability: 'manage_feature_flags', roles: ['SuperAdmin', 'Admin'] },
-      // upload_files, which BarakoCMS.Files seeds to Admin. The roles are the fallback for an API
-      // that does not report capabilities, where a custom role granted it is not offered Files.
-      { title: 'Files', href: '/files', icon: IconArchive, module: MODULE.files, capability: 'upload_files', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'PWA installs', href: '/pwa', icon: IconMobile , module: MODULE.pwa, capability: 'view_pwa_installs', roles: ['SuperAdmin', 'Admin'] },
-    ],
-  },
-  {
     label: 'System',
+    collapsible: true,
     items: [
       { title: 'Audit log', href: '/audit', icon: IconEye, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Errors', href: '/errors', icon: IconBug, metric: 'unresolvedErrors', tone: 'danger', capability: 'manage_client_errors', roles: ['SuperAdmin', 'Admin'] },
@@ -208,23 +236,12 @@ export const NAV_GROUPS: NavGroup[] = [
       // Reading takes manage_settings; saving and the test send take manage_email_settings, which the
       // screen checks for its buttons.
       { title: 'Email', href: '/settings/email', icon: IconEnvelope, capability: 'manage_settings', roles: ['SuperAdmin'] },
-      // Reading and saving both take manage_storage, seeded to SuperAdmin and Admin by BarakoCMS.Files.
-      { title: 'Storage', href: '/settings/storage', icon: IconDatabase, module: MODULE.files, capability: 'manage_storage', roles: ['SuperAdmin', 'Admin'] },
       // The caller's own second factor. With capabilities known it is offered to every signed-in
       // caller, as the API serves it; the roles are what an older API's console offered.
       { title: 'Security', href: '/settings/security', icon: IconLock, roles: ['SuperAdmin', 'Admin'] },
-      // Every seeded role, because GET /api/devices is scoped to the caller and lists their own
-      // devices: an ordinary User has as much right to it as an Admin. Named rather than left
-      // ungated, since an item with no roles is offered to a signed-out caller too, and Overview
-      // and Health are the only two that should be.
-      { title: 'Devices', href: '/settings/devices', icon: IconShield , module: MODULE.deviceTrust, roles: ['SuperAdmin', 'Admin', 'User'] },
-      { title: 'Export and import', href: '/settings/portability', icon: IconCube , module: MODULE.portability, capability: 'export_content', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , module: MODULE.import, capability: 'analyze_spreadsheets', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Connectors', href: '/settings/connectors', icon: IconWebhook, capability: 'view_connectors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Outbound requests', href: '/settings/requests', icon: IconWebhook, capability: 'manage_requests', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Deliveries', href: '/settings/deliveries', icon: IconTasks, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
-      // manage_forms, which BarakoCMS.Forms seeds to Admin; SuperAdmin passes every gate.
-      { title: 'Forms', href: '/settings/forms', icon: IconFieldEdit, module: MODULE.forms, capability: 'manage_forms', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Settings', href: '/settings', icon: IconSettings, capability: 'manage_settings', roles: ['SuperAdmin', 'Admin'] },
     ],
   },

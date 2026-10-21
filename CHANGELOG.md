@@ -17,6 +17,15 @@ moved. Which API a console works against is stated per release instead.
   (newest 100 rows). Live activity says it is not available yet (barakoCMS#677).
 - Sidebar shows counts beside Entries, Workflows and Workflow runs, and a dot on Modules that need
   attention. Cards and links lift on hover and press, and none of it moves under reduced motion.
+- Sidebar matches the design prototype: a tenant card (initials, name, your role) under the search
+  box, a short core list (Overview, Entries, Content types, Workflows, Workflow runs, Analytics, Site
+  settings), a collapsible Modules group with its count, and Dark mode and Sign out in the footer.
+  Theme and Style recipes sit under Site settings. Everything else is still in the rail, in Tools,
+  Access and System groups that fold, with the same role and capability gating as before. The Dark
+  mode switch is shown off until a dark palette exists.
+- Motion follows the prototype: cards rise, menus pop, drawers slide in, toasts rise, and attention
+  dots pulse. Buttons lift a pixel on hover and shrink on press, icon buttons grow slightly. All of
+  it stops under reduced motion.
 
 ## [1.10.0] - 2026-10-20
 

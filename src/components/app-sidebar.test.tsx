@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 /**
@@ -71,5 +71,28 @@ describe('the rail', () => {
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
         expect(screen.getByRole('link', { name: /^Overview/ })).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: /^Files/ })).toBeNull();
+    });
+
+    it('folds the Modules group, with its count, and opens it again', async () => {
+        renderRail({ capabilities: ['upload_files', 'view_modules'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument());
+
+        const toggle = screen.getByRole('button', { name: /^Modules/ });
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(toggle.textContent).toMatch(/\d+/);
+
+        fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByRole('link', { name: /^Files/ })).toBeNull();
+
+        fireEvent.click(toggle);
+        expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument();
+    });
+
+    it('keeps Sign out and a Dark mode row in the footer', async () => {
+        renderRail({ capabilities: [] });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
+        expect(screen.getByText(/Sign out/)).toBeInTheDocument();
+        expect(screen.getByRole('switch', { name: /Dark mode/ })).toBeInTheDocument();
     });
 });
