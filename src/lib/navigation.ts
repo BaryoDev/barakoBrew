@@ -44,6 +44,7 @@ export type NavMetric =
   | 'entries'
   | 'contentTypes'
   | 'workflows'
+  | 'workflowRuns'
   | 'unresolvedErrors'
   | 'recentBounces';
 
@@ -156,6 +157,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // GET /api/content-types before it can move anything.
       { title: 'Pages', href: '/pages', icon: IconContent, module: MODULE.pages, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Workflows', href: '/workflows', icon: IconWorkflows, metric: 'workflows', capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Workflow runs', href: '/workflow-runs', icon: IconHistory, metric: 'workflowRuns', capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
       // manage_workflows, which the preview asks for; the templates themselves are entries.
       { title: 'Email templates', href: '/email-templates', icon: IconEnvelope, capability: 'manage_workflows', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Queries', href: '/queries', icon: IconFilter, capability: 'manage_queries', roles: ['SuperAdmin', 'Admin'] },
@@ -202,7 +204,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: 'Audit log', href: '/audit', icon: IconEye, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Errors', href: '/errors', icon: IconBug, metric: 'unresolvedErrors', tone: 'danger', capability: 'manage_client_errors', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'Workflow runs', href: '/workflow-runs', icon: IconHistory, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Health', href: '/ops/health', icon: IconHealth },
       // Reading takes manage_settings; saving and the test send take manage_email_settings, which the
       // screen checks for its buttons.

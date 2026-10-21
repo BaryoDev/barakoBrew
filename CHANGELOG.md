@@ -14,6 +14,15 @@ moved. Which API a console works against is stated per release instead.
 - Analytics draws the previous period as a dashed line behind the trend, using `compare=previous` on the series route (barakoCMS 5.0 and later). Against an older API the chart says there is no previous period. (#14)
 - The role screen sets which named transitions of a content type's lifecycle a role may run, each with its own conditions, and reads the rule back as a sentence. (#146)
 
+### Changed
+
+- Overview is rebuilt: tenant name and greeting with a 7, 30 and 90 day switch, four stat cards
+  (Published, Drafts, Workflow runs, Failures) with a sparkline and change figure, quick actions, a
+  status strip, workflow health and a Needs you card. Every figure comes from one bounded request
+  (newest 100 rows). Live activity says it is not available yet (barakoCMS#677).
+- Sidebar shows counts beside Entries, Workflows and Workflow runs, and a dot on Modules that need
+  attention. Cards and links lift on hover and press, and none of it moves under reduced motion.
+
 ### Fixed
 
 - The Theme screen lists the colour slots and font roles barakoPress publishes. The console read `theme.colors` and `theme.fonts`, but the site sends `theme.colorSlots` and `theme.fontRoles`, so it always fell back to its built-in list. (#166)

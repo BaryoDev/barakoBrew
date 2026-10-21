@@ -105,6 +105,7 @@ export function useNavMetrics(visibleHrefs: ReadonlySet<string>): NavMetrics {
   const entries = useTotalItems('entries', '/api/contents', visibleHrefs.has('/content'));
   const contentTypes = useTotalItems('contentTypes', '/api/content-types', visibleHrefs.has('/schemas'));
   const workflows = useTotalItems('workflows', '/api/workflows', visibleHrefs.has('/workflows'));
+  const workflowRuns = useTotalItems('workflowRuns', '/api/workflow-runs', visibleHrefs.has('/workflow-runs'));
   const errors = useTotalItems('unresolvedErrors', '/api/client-errors', visibleHrefs.has('/errors'), {
     resolved: false,
   });
@@ -118,6 +119,7 @@ export function useNavMetrics(visibleHrefs: ReadonlySet<string>): NavMetrics {
   put('entries', entries.data);
   put('contentTypes', contentTypes.data);
   put('workflows', workflows.data);
+  put('workflowRuns', workflowRuns.data);
   put('unresolvedErrors', errors.data);
   put('recentBounces', bounces.data, bounces.data === BOUNCE_LIMIT);
 

@@ -40,7 +40,7 @@ test.describe('Admin flows (mocked API)', () => {
         // trigger, so this navigation path is desktop-only.
         test.skip(testInfo.project.name.includes('Mobile'), 'sidebar is a drawer on mobile');
         await page.goto('/');
-        await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 
         // Located by the attribute only sidebar items carry, not by name. The dashboard also links
         // to /schemas from a "Content types N" stat card, and `exact` only separated the two while
