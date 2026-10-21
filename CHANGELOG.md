@@ -22,7 +22,8 @@ moved. Which API a console works against is stated per release instead.
   settings), a collapsible Modules group with its count, and Dark mode and Sign out in the footer.
   Theme and Style recipes sit under Site settings. Everything else is still in the rail, in Tools,
   Access and System groups that fold, with the same role and capability gating as before. The Dark
-  mode switch is shown off until a dark palette exists.
+  mode switch is shown off until a dark palette exists. A folded group opens when you go to a
+  screen inside it.
 - Motion follows the prototype: cards rise, menus pop, drawers slide in, toasts rise, and attention
   dots pulse. Buttons lift a pixel on hover and shrink on press, icon buttons grow slightly. All of
   it stops under reduced motion.

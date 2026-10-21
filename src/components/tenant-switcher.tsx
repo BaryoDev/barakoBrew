@@ -21,9 +21,10 @@ interface Option {
 
 /** Two letters for the badge: the first of each of the first two words, or the first two of one. */
 export function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+  const words = name.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (words.length === 0) return '?';
-  const letters = words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2);
+  const chars = (w: string) => Array.from(w);
+  const letters = words.length > 1 ? chars(words[0])[0] + chars(words[1])[0] : chars(words[0]).slice(0, 2).join('');
   return letters.toUpperCase();
 }
 
@@ -102,9 +103,9 @@ export function TenantSwitcher() {
   const showHome = matches(home);
   const label = [home, ...memberships].find((o) => o.slug === current)?.name ?? 'Select tenant';
   const isSuperAdmin = !!user?.roles?.includes('SuperAdmin');
-  // The roles the caller holds in the tenant they are in, else the ones on their session.
-  const held = memberships.find((t) => t.slug === current)?.roles?.map((r) => r.name);
-  const role = (held && held.length > 0 ? held : (user?.roles ?? [])).join(', ');
+  // Only what the membership says. The session's roles are for wherever the token was issued, so
+  // showing them against another tenant could name a role the caller does not hold there.
+  const role = (memberships.find((t) => t.slug === current)?.roles ?? []).map((r) => r.name).join(', ');
 
   const pick = (slug: string) => {
     // A manual pick settles the tenant, so the auto-switch effect cannot bounce a deliberate

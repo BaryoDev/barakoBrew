@@ -150,6 +150,7 @@ export function AppSidebar() {
   // Only the destinations that survived filtering get a count fetched for them.
   const visibleHrefs = useMemo(() => hrefsOf(allowed), [allowed]);
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [seenHref, setSeenHref] = useState<string | undefined>(undefined);
   const metrics = useNavMetrics(visibleHrefs);
 
   // Only fetched for a caller the rail already offers Content types to, since the API answers 403
@@ -160,6 +161,13 @@ export function AppSidebar() {
     groups.flatMap((g) => g.items.map((i) => i.href)),
     pathname
   );
+  // Going to a screen opens the group it is in, even one folded by hand. Adjusted during render
+  // rather than in an effect, so the group is open on the first paint of the new screen.
+  if (activeHref !== seenHref) {
+    setSeenHref(activeHref);
+    const holder = groups.find((g) => g.label && g.items.some((i) => i.href === activeHref));
+    if (holder?.label && toggled[holder.label] === false) setToggled({ ...toggled, [holder.label]: true });
+  }
 
   return (
     <Sidebar collapsible="offcanvas" className="border-none">
