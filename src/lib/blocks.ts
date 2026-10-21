@@ -94,6 +94,7 @@ export interface BlockLimits {
     maxDepth?: number;
 }
 
+/** From barakoPress's `theme: { colorSlots, colorAliases, fontRoles }`. */
 export interface BlockTheme {
     colors: string[];
     fonts: string[];
@@ -176,8 +177,8 @@ function parseLimits(raw: unknown): BlockLimits | undefined {
 
 function parseTheme(raw: unknown): BlockTheme | undefined {
     if (!isRecord(raw)) return undefined;
-    const colors = [...new Set(stringList(raw.colors))];
-    const fonts = [...new Set(stringList(raw.fonts))];
+    const colors = [...new Set(stringList(raw.colorSlots))];
+    const fonts = [...new Set(stringList(raw.fontRoles))];
     return colors.length === 0 && fonts.length === 0 ? undefined : { colors, fonts };
 }
 

@@ -10,6 +10,9 @@ import {
   conditionProblem,
   hasFieldSet,
   readConditions,
+  ruleSentence,
+  transitionRule,
+  withTransitionRule,
   type ConditionOperator,
   type ConditionRow,
 } from '@/lib/role-rules';
@@ -43,18 +46,27 @@ export function PermissionDetails({
   permission,
   drafts,
   onDraft,
+  transitionDrafts = {},
+  onTransitionDraft = () => {},
+  roleName = '',
   onPermission,
 }: {
   schema: ContentTypeDefinition;
   permission: ContentTypePermission;
   drafts: Partial<Record<PermissionAction, ConditionDraft>>;
   onDraft: (action: PermissionAction, draft: ConditionDraft) => void;
+  /** Conditions being edited on a transition's rule, by transition name. */
+  transitionDrafts?: Record<string, ConditionDraft>;
+  onTransitionDraft?: (transition: string, draft: ConditionDraft) => void;
+  roleName?: string;
   onPermission: (permission: ContentTypePermission) => void;
 }) {
   const conditionRules = CONDITION_RULES.filter((action) => permission[action].enabled);
   const setRules = FIELD_SET_RULES.filter(({ action }) => permission[action].enabled);
 
-  if (conditionRules.length === 0 && setRules.length === 0) {
+  const transitions = schema.lifecycle?.transitions ?? [];
+
+  if (conditionRules.length === 0 && setRules.length === 0 && transitions.length === 0) {
     return (
       <p className="text-muted-foreground text-xs">
         Allow an action on {schema.displayName} first. Conditions and field limits belong to an action.
@@ -127,6 +139,48 @@ export function PermissionDetails({
           </div>
         );
       })}
+
+      {transitions.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm font-medium">Transitions this role may run</p>
+          {transitions.map((t) => {
+            const rule = transitionRule(permission, t.name);
+            const draft = transitionDrafts[t.name] ?? readConditions(rule.conditions);
+            const id = `${schema.name}-transition-${t.name}`;
+            return (
+              <div key={t.name} className="space-y-2">
+                <label htmlFor={id} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id={id}
+                    aria-label={`Run ${t.name} on ${schema.displayName}`}
+                    checked={rule.enabled}
+                    onCheckedChange={(checked) =>
+                      onPermission(withTransitionRule(permission, t.name, { ...rule, enabled: checked === true }))
+                    }
+                  />
+                  <span className="font-mono">{t.name}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {t.from} to {t.to}
+                  </span>
+                </label>
+                {rule.enabled && (
+                  <div className="pl-6">
+                    <ConditionEditor
+                      id={id}
+                      title={`${t.name} only entries where`}
+                      draft={draft}
+                      onChange={(next) => onTransitionDraft(t.name, next)}
+                    />
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      {ruleSentence(roleName, `run ${t.name} on`, schema.displayName, draft.rows)}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

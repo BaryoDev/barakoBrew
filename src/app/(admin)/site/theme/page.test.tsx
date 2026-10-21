@@ -78,7 +78,7 @@ describe('the Theme screen slots', () => {
         press({
             version: 1,
             blocks: [],
-            theme: { colors: ['accent', 'sand', 'moss'], fonts: ['display', 'text'] },
+            theme: { colorSlots: ['accent', 'sand', 'moss'], colorAliases: {}, fontRoles: ['display', 'text'] },
         });
         renderPage();
 
