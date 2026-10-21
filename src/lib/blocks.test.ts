@@ -593,7 +593,11 @@ describe('the limits and theme a site may publish', () => {
         const parsed = parseBlockSchema({
             ...PUBLISHED,
             limits: { maxBlocks: 200, maxDepth: 6 },
-            theme: { colors: ['accent', 'sand'], fonts: ['display'] },
+            theme: {
+                colorSlots: ['accent', 'sand'],
+                colorAliases: { oldAccent: 'accent' },
+                fontRoles: ['display'],
+            },
         }) as BlockSchema;
         expect(parsed.limits).toEqual({ maxBlocks: 200, maxDepth: 6 });
         expect(parsed.theme).toEqual({ colors: ['accent', 'sand'], fonts: ['display'] });
@@ -614,7 +618,7 @@ describe('the limits and theme a site may publish', () => {
         const parsed = parseBlockSchema({
             ...PUBLISHED,
             limits: { maxBlocks: -3, maxDepth: 'deep', other: 1 },
-            theme: { colors: 'accent', fonts: [1, ''] },
+            theme: { colorSlots: 'accent', fontRoles: [1, ''] },
         }) as BlockSchema;
         expect(parsed).not.toBeNull();
         expect(parsed.blocks.length).toBeGreaterThan(0);

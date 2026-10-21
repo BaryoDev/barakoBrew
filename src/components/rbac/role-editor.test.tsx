@@ -279,3 +279,93 @@ describe('platform capabilities for a caller without manage_platform_roles, agai
         expect(screen.getByRole('checkbox', { name: 'Manage tenants' })).toBeEnabled();
     });
 });
+
+describe('transition permissions', () => {
+    const ABSENCE = {
+        name: 'absence',
+        displayName: 'Absence',
+        fields: [{ name: 'Reason', displayName: 'Reason', type: 'string', isRequired: false }],
+        lifecycle: {
+            states: ['Recorded', 'Explained', 'Approved'],
+            initialState: 'Recorded',
+            transitions: [
+                { name: 'Explain', from: 'Recorded', to: 'Explained' },
+                { name: 'Approve', from: 'Explained', to: 'Approved' },
+            ],
+        },
+    };
+
+    async function openAbsence(initial?: RoleRequest) {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [ABSENCE], page: 1, pageSize: 20, totalItems: 1 } });
+        const onSubmit = vi.fn();
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor initial={initial} submitLabel="Save role" isPending={false} onSubmit={onSubmit} onCancel={() => {}} />
+            </QueryClientProvider>,
+        );
+        await waitFor(() => expect(screen.getByText('Absence')).toBeInTheDocument());
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Teacher' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Conditions and field limits for Absence' }));
+        return onSubmit;
+    }
+
+    it('lets a role run a named transition on rows matching a condition, with no CRUD action on', async () => {
+        const onSubmit = await openAbsence();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Run Explain on Absence' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+        fireEvent.change(screen.getByLabelText('Condition 1 field'), { target: { value: 'CreatedBy' } });
+        fireEvent.change(screen.getByLabelText('Condition 1 value'), { target: { value: '$CURRENT_USER' } });
+        expect(screen.getByText('Teacher can run Explain on Absence where CreatedBy is the current user.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
+        expect(permission.contentTypeSlug).toBe('absence');
+        expect(permission.transitions).toEqual({
+            Explain: { enabled: true, conditions: { CreatedBy: { _eq: '$CURRENT_USER' } } },
+        });
+        expect(permission.read.enabled).toBe(false);
+    });
+
+    it('turns a stored transition off and keeps its other rule', async () => {
+        const onSubmit = await openAbsence({
+            name: 'Head',
+            systemCapabilities: [],
+            permissions: [
+                {
+                    contentTypeSlug: 'absence',
+                    create: { enabled: false },
+                    read: { enabled: true },
+                    update: { enabled: false },
+                    delete: { enabled: false },
+                    transitions: { approve: { enabled: true }, Explain: { enabled: true } },
+                },
+            ],
+        });
+
+        const approve = screen.getByRole('checkbox', { name: 'Run Approve on Absence' });
+        expect(approve).toBeChecked();
+        fireEvent.click(approve);
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
+        expect(permission.transitions).toEqual({ approve: { enabled: false }, Explain: { enabled: true } });
+    });
+
+    it('keeps the condition on a transition whose name holds a pipe', async () => {
+        ABSENCE.lifecycle.transitions.push({ name: 'Sign|Off', from: 'Approved', to: 'Approved' });
+        const onSubmit = await openAbsence();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Run Sign|Off on Absence' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+        fireEvent.change(screen.getByLabelText('Condition 1 field'), { target: { value: 'CreatedBy' } });
+        fireEvent.change(screen.getByLabelText('Condition 1 value'), { target: { value: '$CURRENT_USER' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
+        expect(permission.transitions).toEqual({
+            'Sign|Off': { enabled: true, conditions: { CreatedBy: { _eq: '$CURRENT_USER' } } },
+        });
+    });
+});

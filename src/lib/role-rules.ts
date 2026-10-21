@@ -144,3 +144,35 @@ export function isEmptyPermission(permission: ContentTypePermission): boolean {
     const transitions = permission.transitions ? Object.keys(permission.transitions).length : 0;
     return crudOff && transitions === 0;
 }
+
+/** The key a role stores a transition's rule under: the one it already holds for that name, whatever its case. */
+export function transitionKey(permission: ContentTypePermission, name: string): string {
+    const held = Object.keys(permission.transitions ?? {}).find((k) => k.toLowerCase() === name.toLowerCase());
+    return held ?? name;
+}
+
+/** The rule a role holds for a named transition, or a rule that is off. */
+export function transitionRule(permission: ContentTypePermission, name: string): PermissionRule {
+    return permission.transitions?.[transitionKey(permission, name)] ?? { enabled: false };
+}
+
+/** The permission with one transition's rule replaced. */
+export function withTransitionRule(
+    permission: ContentTypePermission,
+    name: string,
+    rule: PermissionRule,
+): ContentTypePermission {
+    return { ...permission, transitions: { ...permission.transitions, [transitionKey(permission, name)]: rule } };
+}
+
+/** Reads a rule back as a sentence, for example "Teachers can read time entries they created." */
+export function ruleSentence(role: string, verb: string, plural: string, rows: readonly ConditionRow[]): string {
+    const who = role.trim() || 'This role';
+    if (rows.length === 0) return `${who} can ${verb} every ${plural}.`;
+    const parts = rows.map((row) => {
+        const field = row.key.trim() || 'a field';
+        const value = row.value.trim() === '$CURRENT_USER' ? 'the current user' : row.value.trim() || 'a value';
+        return `${field} ${OPERATOR_LABELS[row.operator]} ${value}`;
+    });
+    return `${who} can ${verb} ${plural} where ${parts.join(' and ')}.`;
+}

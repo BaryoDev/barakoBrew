@@ -23,7 +23,7 @@ export interface ContentTypePermission {
     read: PermissionRule;
     update: PermissionRule;
     delete: PermissionRule;
-    /** One rule per named transition of the type's own lifecycle. Not edited here, always sent back. */
+    /** One rule per named transition of the type's own lifecycle. Edited under each content type on the role screen, and always sent back. */
     transitions?: Record<string, PermissionRule>;
 }
 

@@ -35,10 +35,20 @@ export interface SeriesPoint {
   y: number;
 }
 
+export interface PreviousSeries {
+  from: string;
+  to: string;
+  pageviews: SeriesPoint[];
+  sessions: SeriesPoint[];
+}
+
 export interface AnalyticsSeries {
   unit: string;
   pageviews: SeriesPoint[];
   sessions: SeriesPoint[];
+  /** The window of the same length just before this one. Only present when asked for with
+   * `compare=previous` and the API is 5.0 or later. */
+  previous?: PreviousSeries;
 }
 
 export interface MetricRow {
@@ -87,11 +97,20 @@ export function useAnalyticsSummary(websiteId: string | undefined, range: Analyt
   });
 }
 
-export function useAnalyticsSeries(websiteId: string | undefined, range: AnalyticsRange) {
+export function useAnalyticsSeries(
+  websiteId: string | undefined,
+  range: AnalyticsRange,
+  options?: { comparePrevious?: boolean },
+) {
+  const compare = options?.comparePrevious ? 'previous' : undefined;
   return useQuery({
-    queryKey: ['analytics', 'series', websiteId, range],
+    queryKey: ['analytics', 'series', websiteId, range, compare ?? null],
     queryFn: async () =>
-      (await api.get<AnalyticsSeries>(`/api/analytics/${websiteId}/series`, { params: { range } })).data,
+      (
+        await api.get<AnalyticsSeries>(`/api/analytics/${websiteId}/series`, {
+          params: { range, ...(compare ? { compare } : {}) },
+        })
+      ).data,
     enabled: !!websiteId,
   });
 }

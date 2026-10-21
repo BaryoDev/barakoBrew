@@ -192,17 +192,35 @@ function Summary({ websiteId, range }: { websiteId?: string; range: AnalyticsRan
 }
 
 function Trend({ websiteId, range }: { websiteId?: string; range: AnalyticsRange }) {
-  const { data, isLoading } = useAnalyticsSeries(websiteId, range);
+  const { data, isLoading } = useAnalyticsSeries(websiteId, range, { comparePrevious: true });
+  const previous = data?.previous?.pageviews.map((p) => p.y);
+  const hasPrevious = !!previous && previous.length > 0;
   return (
     <Card className="mt-6">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
         <CardTitle className="text-sm font-medium">Pageviews over time</CardTitle>
+        {data && data.pageviews.length > 0 && (
+          <div className="text-muted-foreground flex items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="bg-primary inline-block h-0.5 w-4" aria-hidden />
+              This period
+            </span>
+            {hasPrevious ? (
+              <span className="flex items-center gap-1.5">
+                <span className="border-muted-foreground inline-block w-4 border-t-2 border-dashed" aria-hidden />
+                Previous period
+              </span>
+            ) : (
+              <span>No previous period from this API</span>
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-24 w-full" />
         ) : data && data.pageviews.length > 0 ? (
-          <Sparkline values={data.pageviews.map((p) => p.y)} height={64} />
+          <Sparkline values={data.pageviews.map((p) => p.y)} previous={previous} height={96} />
         ) : (
           <p className="text-muted-foreground text-sm">No visits in this period yet.</p>
         )}
