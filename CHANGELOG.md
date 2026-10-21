@@ -9,6 +9,15 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- Overview is rebuilt: tenant name and greeting with a 7, 30 and 90 day switch, four stat cards
+  (Published, Drafts, Workflow runs, Failures) with a sparkline and change figure, quick actions, a
+  status strip, workflow health and a Needs you card. Every figure comes from one bounded request
+  (newest 100 rows). Live activity says it is not available yet (barakoCMS#677).
+- Sidebar shows counts beside Entries, Workflows and Workflow runs, and a dot on Modules that need
+  attention. Cards and links lift on hover and press, and none of it moves under reduced motion.
+
 ## [1.10.0] - 2026-10-20
 
 **Speaks API contracts 1 to 9, which covers barakoCMS 4.0.1 to 5.1.0.** barakoCMS 5.1.0 moves the
