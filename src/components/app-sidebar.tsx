@@ -42,6 +42,13 @@ import {
  *
  * The screen-reader text is not decoration. "Errors 2" on its own does not say two of what.
  */
+function metricWords(item: NavItem, metric: { value: number; atLeast?: boolean }) {
+  return {
+    text: metric.atLeast ? `${metric.value}+` : `${metric.value}`,
+    why: item.tone === 'danger' ? ' unresolved' : ' bounced in the last 24 hours',
+  };
+}
+
 function NavMetricLabel({ item, metrics, dot }: { item: NavItem; metrics: NavMetrics; dot?: boolean }) {
   const metric = item.metric ? metrics[item.metric] : undefined;
   if (!metric) return null;
@@ -49,8 +56,7 @@ function NavMetricLabel({ item, metrics, dot }: { item: NavItem; metrics: NavMet
   // A tinted pill exists to report a problem. Nothing wrong, nothing shown.
   if (item.tone && metric.value === 0) return null;
 
-  const text = metric.atLeast ? `${metric.value}+` : `${metric.value}`;
-  const why = item.tone === 'danger' ? ' unresolved' : ' bounced in the last 24 hours';
+  const { text, why } = metricWords(item, metric);
 
   if (dot && item.tone) {
     return (
@@ -202,9 +208,16 @@ export function AppSidebar() {
           const holdsActive = group.items.some((item) => item.href === activeHref);
           const open = !group.collapsible || !label || (toggled[label] ?? (group.defaultOpen === true || holdsActive));
           // A folded group still says when something inside it needs a look.
-          const attention =
-            !open &&
-            group.items.some((item) => item.tone && item.metric && (metrics[item.metric]?.value ?? 0) > 0);
+          const flagged = open
+            ? []
+            : group.items.flatMap((item) => {
+                const metric = item.metric ? metrics[item.metric] : undefined;
+                if (!item.tone || !metric || metric.value <= 0) return [];
+                const { text, why } = metricWords(item, metric);
+                return [{ tone: item.tone, label: `${item.title} ${text}${why}` }];
+              });
+          const attentionTone = flagged.some((f) => f.tone === 'danger') ? 'danger' : 'warning';
+          const attentionLabel = flagged.map((f) => f.label).join(', ');
           return (
             <SidebarGroup key={label ?? i} className="p-0 pt-3 first:pt-1">
               {label && group.collapsible ? (
@@ -215,9 +228,12 @@ export function AppSidebar() {
                   className="flex h-6 items-center gap-2 rounded-[9px] px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
                   <span className="flex-1 text-left">{label}</span>
-                  {attention && (
-                    <span className="bg-warning pulse size-[7px] rounded-full">
-                      <span className="sr-only">Needs attention</span>
+                  {flagged.length > 0 && (
+                    <span
+                      className={cn('pulse size-[7px] rounded-full', attentionTone === 'danger' ? 'bg-destructive' : 'bg-warning')}
+                      title={attentionLabel}
+                    >
+                      <span className="sr-only">Needs attention: {attentionLabel}</span>
                     </span>
                   )}
                   <span className="font-mono text-[11px] font-normal tracking-normal">
