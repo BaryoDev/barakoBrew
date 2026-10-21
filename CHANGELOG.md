@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-21
+
+**Speaks API contracts 1 to 9, which covers barakoCMS 4.0.1 to 5.1.0.** No contract change since
+1.10.0, so it runs against the same APIs.
+
 ### Added
 
 - Analytics draws the previous period as a dashed line behind the trend, using `compare=previous` on the series route (barakoCMS 5.0 and later). Against an older API the chart says there is no previous period. (#14)
@@ -23,12 +28,13 @@ moved. Which API a console works against is stated per release instead.
 - Sidebar shows counts beside Entries, Workflows and Workflow runs, and a dot on Modules that need
   attention. Cards and links lift on hover and press, and none of it moves under reduced motion.
 - Sidebar matches the design prototype: a tenant card (initials, name, your role) under the search
-  box, a short core list (Overview, Entries, Content types, Workflows, Workflow runs, Analytics, Site
-  settings), a collapsible Modules group with its count, and Dark mode and Sign out in the footer.
-  Theme and Style recipes sit under Site settings. Everything else is still in the rail, in Tools,
+  box, a short core list (Overview, Entries, Content types, Workflows, Workflow runs, Analytics,
+  Site), a collapsible Modules group with its count, and Dark mode and Sign out in the footer.
+  Theme and Style recipes sit under Site. Everything else is still in the rail, in Tools,
   Access and System groups that fold, with the same role and capability gating as before. The Dark
   mode switch is shown off until a dark palette exists. A folded group opens when you go to a
-  screen inside it.
+  screen inside it, and a folded group shows a dot when something inside needs you, red with the
+  count in its title when Errors has unresolved items.
 - Motion follows the prototype: cards rise, menus pop, drawers slide in, toasts rise, and attention
   dots pulse. Buttons lift a pixel on hover and shrink on press, icon buttons grow slightly. All of
   it stops under reduced motion.
@@ -867,7 +873,8 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.0
 [1.10.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.10.0
 [1.9.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.9.0
 [1.8.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.8.0
