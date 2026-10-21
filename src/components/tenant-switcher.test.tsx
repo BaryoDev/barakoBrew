@@ -86,3 +86,37 @@ describe('TenantSwitcher', () => {
         expect(screen.getByText('Other Place')).toBeTruthy();
     });
 });
+
+describe('the tenant card', () => {
+    beforeEach(() => {
+        memberships = [club, other];
+        current = 'club';
+        roles = ['SessionOnly'];
+    });
+
+    it('shows initials, the tenant name and the role from the membership, not the session', () => {
+        render(<TenantSwitcher />);
+        const card = screen.getByRole('button', { name: 'Switch tenant' });
+        expect(card.textContent).toContain('TC');
+        expect(card.textContent).toContain('The Club');
+        expect(card.textContent).toContain('Registrar');
+        expect(card.textContent).not.toContain('SessionOnly');
+    });
+
+    it('shows no role for a tenant whose membership names none', () => {
+        current = 'other';
+        roles = ['Admin'];
+        render(<TenantSwitcher />);
+        const card = screen.getByRole('button', { name: 'Switch tenant' });
+        expect(card.textContent).toContain('Other Place');
+        expect(card.textContent).not.toContain('Admin');
+    });
+
+    it('takes initials from letters, whole characters and not punctuation', async () => {
+        const { initialsOf } = await import('./tenant-switcher');
+        expect(initialsOf('The Club')).toBe('TC');
+        expect(initialsOf('- (Acme) Co')).toBe('AC');
+        expect(initialsOf('\u{1D4D0}\u{1D4D1}')).toBe('\u{1D4D0}\u{1D4D1}');
+        expect(initialsOf('???')).toBe('?');
+    });
+});

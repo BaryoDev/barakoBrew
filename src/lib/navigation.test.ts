@@ -323,8 +323,8 @@ describe('forms and deliveries in the rail', () => {
         expect(titles(['SuperAdmin'])).toContain('Forms');
         expect(titles(['User'])).not.toContain('Forms');
 
-        const system = NAV_GROUPS.find((g) => g.label === 'System')!;
-        expect(system.items.find((i) => i.title === 'Forms')?.href).toBe('/settings/forms');
+        const modules = NAV_GROUPS.find((g) => g.label === 'Modules')!;
+        expect(modules.items.find((i) => i.title === 'Forms')?.href).toBe('/settings/forms');
     });
 
     it('drops Forms where the Forms module is not running', () => {
@@ -363,7 +363,7 @@ describe('the rail against an API that reports capabilities', () => {
     });
 
     it('offers a custom role only what its capabilities open, plus what every caller may use', () => {
-        expect(seen([])).toEqual(['Overview', 'Health', 'Security', 'Devices']);
+        expect(seen([])).toEqual(['Overview', 'Devices', 'Health', 'Security']);
     });
 
     it('decides by capability rather than by the Admin name', () => {
@@ -387,7 +387,7 @@ describe('the rail against an API that reports capabilities', () => {
         const ungated = NAV_GROUPS.flatMap((g) => g.items)
             .filter((i) => i.roles && i.capability === undefined)
             .map((i) => i.title);
-        expect(ungated).toEqual(['Security', 'Devices']);
+        expect(ungated).toEqual(['Devices', 'Security']);
     });
 
     it('keeps a single-entry type gated like Entries', () => {
@@ -414,12 +414,9 @@ describe('the rail against an API that reports capabilities', () => {
 });
 
 describe('nav glyphs', () => {
-    // Pairs that share a glyph on purpose. The handoff gives Pages and Entries the same one
-    // (ic-content); Connectors and Outbound requests have shared IconWebhook since before round 2.
-    const ALLOWED_REPEATS = [
-        ['Entries', 'Pages'],
-        ['Connectors', 'Outbound requests'],
-    ];
+    // Pairs that share a glyph on purpose. Connectors and Outbound requests have shared IconWebhook
+    // since before round 2.
+    const ALLOWED_REPEATS = [['Connectors', 'Outbound requests']];
 
     it('gives every item in a group its own icon, bar the pairs named above', () => {
         const allowed = new Set(ALLOWED_REPEATS.map((p) => [...p].sort().join('|')));
@@ -440,7 +437,7 @@ describe('nav glyphs', () => {
     });
 
     it('does not let an allowed repeat go stale', () => {
-        expect(ALLOWED_REPEATS).toHaveLength(2);
+        expect(ALLOWED_REPEATS).toHaveLength(1);
         for (const [a, b] of ALLOWED_REPEATS) {
             const group = NAV_GROUPS.find((g) => g.items.some((i) => i.title === a));
             const first = group?.items.find((i) => i.title === a);
@@ -449,5 +446,59 @@ describe('nav glyphs', () => {
             expect(second, `${b} in the same group as ${a}`).toBeDefined();
             expect(first!.icon, `${a} and ${b} still share an icon`).toBe(second!.icon);
         }
+    });
+});
+
+describe('the rail after the prototype match', () => {
+    const A = ['SuperAdmin', 'Admin'];
+    // Every href the rail linked to before the sidebar was regrouped, with the roles that saw it.
+    // undefined is every caller.
+    const BEFORE: [string, readonly string[] | undefined][] = [
+        ['/', undefined], ['/content', A], ['/schemas', A], ['/pages', A], ['/workflows', A],
+        ['/workflow-runs', A], ['/email-templates', A], ['/queries', A],
+        ['/site', A], ['/site/theme', A], ['/site/recipes', A],
+        ['/tenants', A], ['/users', ['SuperAdmin']], ['/roles', ['SuperAdmin']], ['/user-groups', A],
+        ['/api-keys', A], ['/modules', A], ['/accounting', [...A, 'Accountant']], ['/analytics', A],
+        ['/email-events', A], ['/feature-flags', A], ['/files', A], ['/pwa', A],
+        ['/audit', A], ['/errors', A], ['/ops/health', undefined], ['/settings/email', ['SuperAdmin']],
+        ['/settings/storage', A], ['/settings/security', A], ['/settings/devices', [...A, 'User']],
+        ['/settings/portability', A], ['/settings/import', A], ['/settings/connectors', A],
+        ['/settings/requests', A], ['/settings/deliveries', A], ['/settings/forms', A], ['/settings', A],
+    ];
+
+    const reach = (roles: string[]) =>
+        new Set(visibleGroups(NAV_GROUPS, roles).flatMap((g) => g.items.map((i) => i.href)));
+
+    it('still lists every old route for each role that could see it', () => {
+        expect(BEFORE.length).toBeGreaterThan(30);
+        for (const roles of [['SuperAdmin'], ['Admin'], ['Accountant'], ['User']]) {
+            const seen = reach(roles);
+            for (const [href, allowed] of BEFORE) {
+                const could = !allowed || allowed.some((r) => roles.includes(r)) || roles.includes('SuperAdmin');
+                if (could) expect(seen, `${roles[0]} reaches ${href}`).toContain(href);
+            }
+        }
+    });
+
+    it('offers no old route to a role that could not see it before', () => {
+        for (const roles of [['Admin'], ['Accountant'], ['User']]) {
+            const seen = reach(roles);
+            for (const [href, allowed] of BEFORE) {
+                const could = !allowed || allowed.some((r) => roles.includes(r));
+                if (!could) expect(seen, `${roles[0]} must not reach ${href}`).not.toContain(href);
+            }
+        }
+    });
+
+    it('keeps the primary list to the seven the prototype shows', () => {
+        const titles = NAV_GROUPS[0].items.filter((i) => !i.parent).map((i) => i.title);
+        expect(titles).toEqual([
+            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings',
+        ]);
+    });
+
+    it('puts Theme and Style recipes under Site settings', () => {
+        const children = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.parent === '/site');
+        expect(children.map((i) => i.title)).toEqual(['Theme', 'Style recipes']);
     });
 });

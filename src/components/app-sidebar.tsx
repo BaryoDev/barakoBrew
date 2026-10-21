@@ -8,6 +8,7 @@ import { useAllowedGroups, hrefsOf } from '@/hooks/use-visible-hrefs';
 import { BrandMark, BrandWordmark } from '@/components/brand';
 import {
   activeNavHref,
+  isNavItemActive,
   withSingletons,
   type NavGroup,
   type NavItem,
@@ -16,7 +17,7 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { useNavMetrics, type NavMetrics } from '@/hooks/use-nav-metrics';
 import { CommandMenu } from '@/components/command-menu';
 import { TenantSwitcher } from '@/components/tenant-switcher';
-import { IconChevronDown } from '@/components/icons';
+import { IconChevronDown, IconMoon } from '@/components/icons';
 import { AboutDialog } from '@/components/about-dialog';
 import { useApiMeta } from '@/hooks/use-meta';
 import { cn } from '@/lib/utils';
@@ -54,7 +55,7 @@ function NavMetricLabel({ item, metrics, dot }: { item: NavItem; metrics: NavMet
   if (dot && item.tone) {
     return (
       <span
-        className={cn('size-[7px] rounded-full', item.tone === 'danger' ? 'bg-destructive' : 'bg-warning')}
+        className={cn('size-[7px] rounded-full pulse', item.tone === 'danger' ? 'bg-destructive' : 'bg-warning')}
         title={`${text}${why}`}
       >
         <span className="sr-only">{` ${text}${why}`}</span>
@@ -89,8 +90,10 @@ function NavList({
   activeHref,
   metrics,
   dots,
+  pathname,
 }: {
   dots?: boolean;
+  pathname: string;
   group: NavGroup;
   primary: boolean;
   activeHref: string | undefined;
@@ -98,7 +101,10 @@ function NavList({
 }) {
   return (
     <SidebarMenu className="gap-0.5">
-      {group.items.map((item) => {
+      {group.items
+        // A child of an item is only listed while that item, or one of its children, is open.
+        .filter((item) => !item.parent || isNavItemActive(item.parent, pathname))
+        .map((item) => {
         const active = item.href === activeHref;
         return (
           <SidebarMenuItem key={item.href}>
@@ -110,6 +116,7 @@ function NavList({
               className={cn(
                 'gap-2.5 rounded-[10px] px-2.5 font-medium transition-colors',
                 primary ? 'h-9 text-[13.5px] [&>svg]:size-[18px]' : 'h-[34px] text-[13px] [&>svg]:size-[17px]',
+                item.parent && 'ml-5 h-8 w-[calc(100%-1.25rem)] text-[12.5px]',
                 'text-secondary-foreground hover:text-foreground',
                 // Hover is half the sunken tint. The active item takes all of it, a hairline and the
                 // accent icon, as in the round 2 handoff, so the two never look alike.
@@ -142,7 +149,8 @@ export function AppSidebar() {
 
   // Only the destinations that survived filtering get a count fetched for them.
   const visibleHrefs = useMemo(() => hrefsOf(allowed), [allowed]);
-  const [modulesOpen, setModulesOpen] = useState(true);
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [seenHref, setSeenHref] = useState<string | undefined>(undefined);
   const metrics = useNavMetrics(visibleHrefs);
 
   // Only fetched for a caller the rail already offers Content types to, since the API answers 403
@@ -153,6 +161,13 @@ export function AppSidebar() {
     groups.flatMap((g) => g.items.map((i) => i.href)),
     pathname
   );
+  // Going to a screen opens the group it is in, even one folded by hand. Adjusted during render
+  // rather than in an effect, so the group is open on the first paint of the new screen.
+  if (activeHref !== seenHref) {
+    setSeenHref(activeHref);
+    const holder = groups.find((g) => g.label && g.items.some((i) => i.href === activeHref));
+    if (holder?.label && toggled[holder.label] === false) setToggled({ ...toggled, [holder.label]: true });
+  }
 
   return (
     <Sidebar collapsible="offcanvas" className="border-none">
@@ -183,32 +198,52 @@ export function AppSidebar() {
         {groups.map((group, i) => {
           const primary = !group.label;
           const isModules = group.label === 'Modules';
-          const open = !isModules || modulesOpen;
+          const label = group.label;
+          const holdsActive = group.items.some((item) => item.href === activeHref);
+          const open = !group.collapsible || !label || (toggled[label] ?? (group.defaultOpen === true || holdsActive));
+          // A folded group still says when something inside it needs a look.
+          const attention =
+            !open &&
+            group.items.some((item) => item.tone && item.metric && (metrics[item.metric]?.value ?? 0) > 0);
           return (
-            <SidebarGroup key={group.label ?? i} className="p-0 pt-3 first:pt-1">
-              {group.label && isModules ? (
+            <SidebarGroup key={label ?? i} className="p-0 pt-3 first:pt-1">
+              {label && group.collapsible ? (
                 <button
                   type="button"
-                  aria-expanded={modulesOpen}
-                  onClick={() => setModulesOpen((v) => !v)}
+                  aria-expanded={open}
+                  onClick={() => setToggled((t) => ({ ...t, [label]: !open }))}
                   className="flex h-6 items-center gap-2 rounded-[9px] px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
-                  <span className="flex-1 text-left">{group.label}</span>
-                  <span className="font-mono text-[11px] font-normal tracking-normal">{group.items.length}</span>
+                  <span className="flex-1 text-left">{label}</span>
+                  {attention && (
+                    <span className="bg-warning pulse size-[7px] rounded-full">
+                      <span className="sr-only">Needs attention</span>
+                    </span>
+                  )}
+                  <span className="font-mono text-[11px] font-normal tracking-normal">
+                    {group.items.filter((item) => !item.parent).length}
+                  </span>
                   <IconChevronDown
-                    className={cn('size-3.5 transition-transform duration-200', !modulesOpen && '-rotate-90')}
+                    className={cn('size-3.5 transition-transform duration-200', !open && '-rotate-90')}
                   />
                 </button>
               ) : (
-                group.label && (
+                label && (
                   <SidebarGroupLabel className="h-6 px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase">
-                    {group.label}
+                    {label}
                   </SidebarGroupLabel>
                 )
               )}
               {open && (
                 <SidebarGroupContent>
-                  <NavList group={group} primary={primary} activeHref={activeHref} metrics={metrics} dots={isModules} />
+                  <NavList
+                    group={group}
+                    primary={primary}
+                    activeHref={activeHref}
+                    metrics={metrics}
+                    dots={isModules}
+                    pathname={pathname}
+                  />
                 </SidebarGroupContent>
               )}
             </SidebarGroup>
@@ -218,6 +253,24 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-4 pt-2">
         <SidebarMenu>
+          <SidebarMenuItem>
+            {/* The palette is not drawn yet (#407), and layout.tsx pins the theme to light, so the
+                switch is shown, off, and cannot be turned on. */}
+            <SidebarMenuButton
+              role="switch"
+              aria-checked={false}
+              aria-disabled
+              title="Dark mode is not available yet"
+              tooltip="Dark mode"
+              className="h-[34px] cursor-not-allowed gap-2.5 rounded-[9px] px-2.5 text-[13.5px] text-muted-foreground opacity-70 hover:bg-transparent hover:text-muted-foreground"
+            >
+              <IconMoon aria-hidden className="size-4" />
+              <span className="flex-1 truncate">Dark mode</span>
+              <span aria-hidden className="bg-secondary relative h-4 w-7 rounded-full">
+                <span className="bg-card absolute top-0.5 left-0.5 size-3 rounded-full shadow-sm" />
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Sign out"

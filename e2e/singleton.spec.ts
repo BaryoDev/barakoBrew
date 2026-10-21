@@ -71,7 +71,8 @@ test('a single-entry type opens from the rail as one form, and the first save cr
     const posted = await serveEntries(page, false);
 
     await page.goto('/api-keys');
-    await page.locator('[data-slot="sidebar"]').getByRole('link', { name: 'Site settings' }).click();
+    // The rail also has a Site settings item of its own (/site), so this picks the singleton by address.
+    await page.locator('[data-slot="sidebar"] a[href="/content/singleton/sitesettings"]').click();
 
     await page.waitForURL('**/content/singleton/sitesettings');
     await expect(page.getByRole('heading', { name: 'Site settings' })).toBeVisible();

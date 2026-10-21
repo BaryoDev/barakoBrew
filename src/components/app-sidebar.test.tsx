@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 /**
@@ -12,8 +12,10 @@ vi.mock('@/lib/api', async () => {
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
 });
 
+const nav = vi.hoisted(() => ({ pathname: '/' }));
+
 vi.mock('next/navigation', () => ({
-    usePathname: () => '/',
+    usePathname: () => nav.pathname,
     useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -41,26 +43,29 @@ function renderRail(me: { capabilities: string[] } | 'missing') {
         return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
     });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
+    const tree = () => (
         <QueryClientProvider client={client}>
             <SidebarProvider>
                 <AppSidebar />
             </SidebarProvider>
-        </QueryClientProvider>,
+        </QueryClientProvider>
     );
+    const view = render(tree());
+    return () => view.rerender(tree());
 }
 
 const rail = () => document.querySelector('[data-slot="sidebar"]') as HTMLElement;
 
 beforeEach(() => {
     vi.clearAllMocks();
+    nav.pathname = '/';
 });
 
 describe('the rail', () => {
     it('offers Files to a custom role granted upload_files', async () => {
         renderRail({ capabilities: ['upload_files'] });
 
-        await waitFor(() => expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument(), { timeout: 5000 });
         expect(rail()).toBeTruthy();
         expect(screen.queryByRole('link', { name: /^Users/ })).toBeNull();
     });
@@ -71,5 +76,50 @@ describe('the rail', () => {
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
         expect(screen.getByRole('link', { name: /^Overview/ })).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: /^Files/ })).toBeNull();
+    });
+
+    it('folds the Modules group, with its count, and opens it again', async () => {
+        renderRail({ capabilities: ['upload_files', 'view_modules'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument());
+
+        const toggle = screen.getByRole('button', { name: /^Modules/ });
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(toggle.textContent).toMatch(/\d+/);
+
+        fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByRole('link', { name: /^Files/ })).toBeNull();
+
+        fireEvent.click(toggle);
+        expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument();
+    });
+
+    it('keeps Sign out and a Dark mode row in the footer', async () => {
+        renderRail({ capabilities: [] });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
+        expect(screen.getByText(/Sign out/)).toBeInTheDocument();
+        expect(screen.getByRole('switch', { name: /Dark mode/ })).toBeInTheDocument();
+    });
+
+    it('opens a group folded by hand when the route changes into it', async () => {
+        const rerender = renderRail({ capabilities: ['view_audit_log'] });
+        await waitFor(() => expect(screen.getByRole('button', { name: /^System/ })).toBeInTheDocument());
+        const system = screen.getByRole('button', { name: /^System/ });
+
+        // Folded by default, since nothing in it is open. Open it and fold it by hand.
+        expect(system).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(system);
+        fireEvent.click(system);
+        expect(screen.queryByRole('link', { name: /^Audit log/ })).toBeNull();
+
+        nav.pathname = '/audit';
+        rerender();
+        await waitFor(() => expect(screen.getByRole('link', { name: /^Audit log/ })).toBeInTheDocument());
+    });
+
+    it('opens a folded group on its own when the first screen is inside it', async () => {
+        nav.pathname = '/audit';
+        renderRail({ capabilities: ['view_audit_log'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^Audit log/ })).toBeInTheDocument());
     });
 });

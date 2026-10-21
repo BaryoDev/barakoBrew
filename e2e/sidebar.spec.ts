@@ -59,6 +59,11 @@ test('counts and badges show the figures the API reported', async ({ page }) => 
     await expect(nav.getByRole('link', { name: 'Entries 148' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Content types 6' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Workflows 3' })).toBeVisible();
+    // Errors sits in System, which is folded on this screen. The folded heading still flags it.
+    const system = nav.getByRole('button', { name: /^System/ });
+    await expect(system).toHaveAttribute('aria-expanded', 'false');
+    await expect(system.getByText('Needs attention')).toBeAttached();
+    await system.click();
     await expect(nav.getByRole('link', { name: /Errors 4 unresolved/ })).toBeVisible();
     await expect(
         nav.getByRole('link', { name: /Email events 2 bounced in the last 24 hours/ })
