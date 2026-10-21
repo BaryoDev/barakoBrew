@@ -170,7 +170,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // manage_content_types, which GET /api/content-types asks for, since these screens find the
       // site type through it before they read or write the entry. Theme and Style recipes are
       // settings of the site, so they sit under it and show while one of the three is open.
-      { title: 'Site settings', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Site', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Theme', href: '/site/theme', parent: '/site', icon: IconSun, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Style recipes', href: '/site/recipes', parent: '/site', icon: IconPen, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
     ],

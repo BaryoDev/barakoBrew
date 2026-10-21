@@ -207,6 +207,12 @@ describe('single-entry types in the rail', () => {
         expect(titles).not.toContain('Legacy');
     });
 
+    it('never gives two rail items the same title, even for a type named like a static item', () => {
+        const titles = withSingletons(NAV_GROUPS, TYPES).flatMap((g) => g.items.map((i) => i.title));
+        expect(titles).toContain('Site settings');
+        expect(titles.filter((t, i) => titles.indexOf(t) !== i)).toEqual([]);
+    });
+
     it('links each one to its edit screen, gated like Entries', () => {
         const items = withSingletons(NAV_GROUPS, TYPES).flatMap((g) => g.items);
         const entries = items.find((i) => i.href === '/content')!;
@@ -493,11 +499,11 @@ describe('the rail after the prototype match', () => {
     it('keeps the primary list to the seven the prototype shows', () => {
         const titles = NAV_GROUPS[0].items.filter((i) => !i.parent).map((i) => i.title);
         expect(titles).toEqual([
-            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings',
+            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site',
         ]);
     });
 
-    it('puts Theme and Style recipes under Site settings', () => {
+    it('puts Theme and Style recipes under Site', () => {
         const children = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.parent === '/site');
         expect(children.map((i) => i.title)).toEqual(['Theme', 'Style recipes']);
     });

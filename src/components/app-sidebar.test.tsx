@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 /**
@@ -32,7 +32,7 @@ const { SidebarProvider } = await import('@/components/ui/sidebar');
 const notFound = () =>
     Object.assign(new Error('Request failed with status code 404'), { isAxiosError: true, response: { status: 404 } });
 
-function renderRail(me: { capabilities: string[] } | 'missing') {
+function renderRail(me: { capabilities: string[] } | 'missing', errors = 0) {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url === '/api/me') {
             if (me === 'missing') throw notFound();
@@ -40,6 +40,7 @@ function renderRail(me: { capabilities: string[] } | 'missing') {
         }
         // Not readable for this caller, so the rail keeps every module item: see withModules.
         if (url === '/api/modules') throw Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403 } });
+        if (url.startsWith('/api/client-errors')) return { data: { items: [], totalItems: errors, page: 1, pageSize: 1 } };
         return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
     });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -121,5 +122,24 @@ describe('the rail', () => {
         nav.pathname = '/audit';
         renderRail({ capabilities: ['view_audit_log'] });
         await waitFor(() => expect(screen.getByRole('link', { name: /^Audit log/ })).toBeInTheDocument());
+    });
+
+    it('flags a folded System group in red with the count, and drops the flag when it is open', async () => {
+        renderRail({ capabilities: ['manage_client_errors'] }, 4);
+        const system = await screen.findByRole('button', { name: /^System/ });
+        const flag = await within(system).findByText(/Needs attention: Errors 4 unresolved/);
+        expect(flag.parentElement).toHaveAttribute('title', 'Errors 4 unresolved');
+        expect(flag.parentElement).toHaveClass('bg-destructive');
+
+        fireEvent.click(system);
+        expect(system).toHaveAttribute('aria-expanded', 'true');
+        expect(within(system).queryByText(/Needs attention/)).toBeNull();
+    });
+
+    it('shows no flag on a folded System group when nothing is unresolved', async () => {
+        renderRail({ capabilities: ['manage_client_errors'] }, 0);
+        const system = await screen.findByRole('button', { name: /^System/ });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/api/client-errors'), expect.anything()));
+        expect(within(system).queryByText(/Needs attention/)).toBeNull();
     });
 });
