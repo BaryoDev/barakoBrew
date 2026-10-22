@@ -9,6 +9,15 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-10-23
+
+**Security patch. Speaks API contracts 1 to 9, same as 1.11.0.**
+
+### Security
+
+- The image builds on `node:22.23.4-alpine` instead of the floating `node:22-alpine`. Node 22.23.4 fixes 10 CVEs, including a Brotli remote code execution, and a floating tag lets a cached older base layer ship.
+- CodeQL alert `js/xss-through-dom` on `BlobImage` is a false positive and the code is unchanged. The element is an `<img>` fed a `blob:` URL the browser mints, and SVG uploads are refused before a preview is drawn. The reasoning is in the comment above `BlobImage`.
+
 ## [1.11.0] - 2026-10-21
 
 **Speaks API contracts 1 to 9, which covers barakoCMS 4.0.1 to 5.1.0.** No contract change since
@@ -873,7 +882,8 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.1...HEAD
+[1.11.1]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.1
 [1.11.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.0
 [1.10.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.10.0
 [1.9.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.9.0
