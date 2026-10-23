@@ -98,6 +98,7 @@ consumer.
 | 4.7.0, 4.8.0, 4.9.0 | 7 |
 | 5.0.0 | 8 |
 | 5.1.0 | 9 |
+| 5.2.0 | 11 |
 
 No release sent contract 2: 4.1.0 moved from 1 to 3. barakoCMS 4.0.0 sends the header without
 letting a browser read it, so a console served from another origin cannot see it and stops; use
