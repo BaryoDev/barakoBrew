@@ -129,7 +129,7 @@ describe('the Overview', () => {
         renderOverview({ version: '4.2.8', contract: 5 });
         const status = await strip();
         expect(await within(status).findByText('4.2.8')).toBeInTheDocument();
-        expect(within(status).getByText(/5 · console speaks 1 to 11/)).toBeInTheDocument();
+        expect(within(status).getByText(/5 · console speaks 1 to 12/)).toBeInTheDocument();
     });
 
     it('shows database latency and storage health from the health entries', async () => {
