@@ -9,6 +9,16 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.11.4] - 2026-10-27
+
+**Speaks API contracts 1 to 13, which covers barakoCMS 4.0.1 to 5.4.0.** barakoCMS 5.4.0 moves the
+admin contract to 13. A console that stops at 12 reports that API as newer than it supports, so deploy
+this console before or with 5.4.0.
+
+### Fixed
+
+- Admin contract 13 is no longer refused as a newer API. Nothing the console calls changed.
+
 ## [1.11.3] - 2026-10-25
 
 **Speaks API contracts 1 to 12, which covers barakoCMS 4.0.1 to 5.3.0.** barakoCMS 5.3.0 moves the
@@ -902,7 +912,8 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.3...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.4...HEAD
+[1.11.4]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.4
 [1.11.3]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.3
 [1.11.2]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.2
 [1.11.1]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.1
