@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test';
 import { fillSignIn } from './helpers';
 
 test.describe('Runtime Configuration', () => {
+    // In the image, entrypoint.sh writes the runtime API origin into the CSP connect-src along with
+    // env-config.js. `next dev` has no entrypoint, so CSP would block the origin this spec routes to.
+    // What is tested here is the origin the client picks, not the policy.
+    test.use({ bypassCSP: true });
+
     test('routes API calls to the URL from window._env_ (runtime config)', async ({ page }) => {
         // The app populates window._env_ from /env-config.js at load. Overriding that file is the
         // real runtime-config path (injecting _env_ directly is clobbered when env-config.js loads).
