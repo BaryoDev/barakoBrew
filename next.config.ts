@@ -8,7 +8,72 @@ import type { NextConfig } from "next";
 // local `npm run build` and both test packs get.
 const basePath = process.env.NEXT_BASE_PATH || undefined;
 
+// The origin of a URL, or null when it is not an http(s) address.
+function originOf(value: string | undefined): string | null {
+  try {
+    const url = new URL((value ?? "").trim());
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+// Where the browser may send requests, besides this origin. The API address is not known at build
+// time in the published image: window._env_ (public/env-config.js) is written at container start from
+// NEXT_PUBLIC_API_URL, the same variable getApiUrl() reads. So the image is built with a placeholder
+// token in the policy, and entrypoint.sh swaps it for the origins of the runtime
+// NEXT_PUBLIC_API_URL and NEXT_PUBLIC_PRESS_URL, the way it does for the base path. The build-time
+// origin is listed too, so an image built with the API baked in and no runtime override still works.
+// Outside the image there is no placeholder and the build-time values are the whole answer.
+const connectPlaceholder = process.env.BARAKO_CONNECT_PLACEHOLDER || "";
+const connectOrigins = [
+  // The same fallback getApiUrl() uses.
+  originOf(process.env.NEXT_PUBLIC_API_URL) ?? "http://localhost:5005",
+  // The barakoPress site, read with a plain fetch for its block schema (use-block-schema.ts).
+  originOf(process.env.NEXT_PUBLIC_PRESS_URL),
+  connectPlaceholder,
+].filter((value): value is string => Boolean(value));
+
+const isDev = process.env.NODE_ENV !== "production";
+
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  // Next writes inline bootstrap scripts (the flight payload, self.__next_f.push) and there is no
+  // nonce setup, so 'unsafe-inline' is needed or no page hydrates. This weakens script-src: a CSP
+  // here does not stop injected inline script. Moving to nonces needs a proxy that renders every
+  // page dynamically. 'unsafe-eval' is development only, for React Refresh.
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  // Tailwind is compiled to a stylesheet, but React style={{}} props and Radix write inline styles.
+  "style-src 'self' 'unsafe-inline'",
+  // data: for the MFA QR code and inline image fields, blob: for private files shown from object
+  // URLs, http/https for the API's public files and for image URLs an editor types into the site
+  // settings, which can be any host.
+  "img-src 'self' data: blob: http: https:",
+  // Fonts are vendored and served by next/font/local. data: covers inlined font files.
+  "font-src 'self' data:",
+  // The API (XHR and the workflow run stream, both fetch) and the press site. ws: is for the dev
+  // server's hot reload socket.
+  `connect-src 'self' ${connectOrigins.join(" ")}${isDev ? " ws: wss:" : ""}`,
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  // frame-ancestors covers modern browsers, this covers the rest. The email preview iframe is a
+  // child frame with srcDoc, which these do not affect.
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+];
+
 const nextConfig: NextConfig = {
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
   output: "standalone",
   reactCompiler: true,
   // Next's image optimiser is the only thing that wants `sharp`, and sharp's prebuilt libvips

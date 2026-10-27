@@ -33,6 +33,12 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG NEXT_BASE_PATH=/__BARAKO_BASE_PATH__
 ENV NEXT_BASE_PATH=$NEXT_BASE_PATH
 
+# The Content-Security-Policy lists the origins the browser may call. The API and press addresses are
+# chosen at container start, so the image is built with this placeholder in connect-src and
+# entrypoint.sh swaps in the origins of NEXT_PUBLIC_API_URL and NEXT_PUBLIC_PRESS_URL. An ENV and not
+# an ARG, so it is not a build input (scripts/check-dockerfile-args.sh).
+ENV BARAKO_CONNECT_PLACEHOLDER=__BARAKO_CONNECT_ORIGINS__
+
 # The version this image is tagged with, so a running container can say what it is. Without it the
 # only record of what an image holds is the tag on the outside, and package.json says 0.1.0 forever.
 ARG BARAKO_VERSION=0.0.0-dev
