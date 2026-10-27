@@ -20,6 +20,18 @@ test.describe('Runtime Configuration', () => {
             return route.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"x"}' });
         });
 
+        // In the image, entrypoint.sh writes the same origin into the CSP connect-src that it writes
+        // into env-config.js. `next start` has no entrypoint, so add it here the same way.
+        await page.route('**/login', async (r) => {
+            const res = await r.fetch();
+            const headers = res.headers();
+            headers['content-security-policy'] = headers['content-security-policy'].replace(
+                'connect-src ',
+                `connect-src ${CUSTOM_API_URL} `
+            );
+            return r.fulfill({ response: res, headers });
+        });
+
         await page.goto('/login');
         await fillSignIn(page, 'u', 'p');
         await page.getByRole('button', { name: 'Sign in' }).click();
