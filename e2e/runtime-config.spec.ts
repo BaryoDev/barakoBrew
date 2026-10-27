@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test';
 import { fillSignIn } from './helpers';
 
 test.describe('Runtime Configuration', () => {
+    // In the image, entrypoint.sh writes the runtime API origin into the CSP connect-src along with
+    // env-config.js. `next dev` has no entrypoint, so CSP would block the origin this spec routes to.
+    // What is tested here is the origin the client picks, not the policy.
+    test.use({ bypassCSP: true });
+
     test('routes API calls to the URL from window._env_ (runtime config)', async ({ page }) => {
         // The app populates window._env_ from /env-config.js at load. Overriding that file is the
         // real runtime-config path (injecting _env_ directly is clobbered when env-config.js loads).
@@ -18,20 +23,6 @@ test.describe('Runtime Configuration', () => {
         await page.route('**/api/auth/login', (route) => {
             loginOrigin = new URL(route.request().url()).origin;
             return route.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"x"}' });
-        });
-
-        // In the image, entrypoint.sh writes the same origin into the CSP connect-src that it writes
-        // into env-config.js. `next start` has no entrypoint, so add it here the same way.
-        await page.route('**/login', async (r) => {
-            // The glob also matches the API's /api/auth/login; that one is handled above.
-            if (r.request().resourceType() !== 'document') return r.fallback();
-            const res = await r.fetch();
-            const headers = res.headers();
-            headers['content-security-policy'] = headers['content-security-policy'].replace(
-                'connect-src ',
-                `connect-src ${CUSTOM_API_URL} `
-            );
-            return r.fulfill({ response: res, headers });
         });
 
         await page.goto('/login');
