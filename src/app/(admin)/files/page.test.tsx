@@ -388,8 +388,9 @@ describe('previewing before upload', () => {
         const input = await openUpload();
         choose(input, validFile('photo.png', 'image/png'));
 
+        // BlobImage sets src in an effect after the element mounts, so wait for it.
         const preview = await screen.findByRole('img', { name: 'Preview of photo.png' });
-        expect(preview).toHaveAttribute('src', 'blob:mock/1');
+        await waitFor(() => expect(preview).toHaveAttribute('src', 'blob:mock/1'));
         expect(objectUrls.created).toHaveLength(1);
         expect(objectUrls.revoked).toEqual([]);
 
@@ -406,10 +407,8 @@ describe('previewing before upload', () => {
         choose(input, validFile('other.jpg', 'image/jpeg'));
 
         await waitFor(() => expect(objectUrls.revoked).toEqual(['blob:mock/1']));
-        expect(await screen.findByRole('img', { name: 'Preview of other.jpg' })).toHaveAttribute(
-            'src',
-            'blob:mock/2',
-        );
+        const second = await screen.findByRole('img', { name: 'Preview of other.jpg' });
+        await waitFor(() => expect(second).toHaveAttribute('src', 'blob:mock/2'));
     });
 
     it('shows a PDF as its name and size, with no preview', async () => {
@@ -467,7 +466,7 @@ describe('viewing an uploaded image', () => {
             })
         );
         const shown = await within(dialog).findByRole('presentation');
-        expect(shown).toHaveAttribute('src', expect.stringContaining('blob:mock/'));
+        await waitFor(() => expect(shown).toHaveAttribute('src', expect.stringContaining('blob:mock/')));
         // No anonymous route for a private file, and no token anywhere in a URL.
         const urls = vi.mocked(api.get).mock.calls.map((call) => String(call[0]));
         expect(urls.length).toBeGreaterThan(0);
