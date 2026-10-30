@@ -52,6 +52,38 @@ elif [ -n "$base_path" ]; then
   echo "entrypoint: BARAKO_BASE_PATH is set to $base_path but this image has no runtime base path to write it into. It was built with NEXT_BASE_PATH baked in." >&2
 fi
 
+# The Content-Security-Policy is built with a placeholder in connect-src (see next.config.ts), because
+# the API and press addresses are only known now. Each is reduced to its origin, so a path, a query or
+# anything that is not an http(s) address cannot reach the header. Unusable or unset values leave
+# nothing in its place, and the origin baked in at build time stays in the policy.
+CONNECT_PLACEHOLDER="__BARAKO_CONNECT_ORIGINS__"
+connect_origins=$(node -e '
+const origins = [];
+for (const name of ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_PRESS_URL"]) {
+  try {
+    const u = new URL((process.env[name] || "").trim());
+    if (u.protocol === "http:" || u.protocol === "https:") origins.push(u.origin);
+  } catch (e) {}
+}
+process.stdout.write(origins.join(" "));
+')
+if printf '%s' "$connect_origins" | grep -Eq '^[A-Za-z0-9:/. _-]*$'; then
+  csp_files=$(grep -rlF "$CONNECT_PLACEHOLDER" server.js .next 2>/dev/null || true)
+  if [ -n "$csp_files" ]; then
+    printf '%s\n' "$csp_files" | while IFS= read -r file; do
+      sed -i "s|$CONNECT_PLACEHOLDER|$connect_origins|g" "$file"
+    done
+  fi
+else
+  echo "entrypoint: ignoring NEXT_PUBLIC_API_URL and NEXT_PUBLIC_PRESS_URL for the Content-Security-Policy, an origin held an unexpected character" >&2
+  csp_files=$(grep -rlF "$CONNECT_PLACEHOLDER" server.js .next 2>/dev/null || true)
+  if [ -n "$csp_files" ]; then
+    printf '%s\n' "$csp_files" | while IFS= read -r file; do
+      sed -i "s|$CONNECT_PLACEHOLDER||g" "$file"
+    done
+  fi
+fi
+
 # public/env-config.js hands the NEXT_PUBLIC_ variables to the browser as window._env_. Only a name
 # that starts with NEXT_PUBLIC_ is read, never a value, so a secret whose name or value merely
 # contains the prefix stays on the server. Each value is written as a JSON string with "<" escaped,

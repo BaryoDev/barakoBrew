@@ -1,8 +1,1 @@
-[
-    {
-        "id": "GHSA-vfj7-8cjw-p6xm",
-        "package": "braces",
-        "reason": "Stack exhaustion on deeply nested brace patterns. braces reaches the console only through eslint-config-next, at lint time, on the glob patterns in this repository's own config; nothing in the built image or at run time loads it. Every release up to 3.0.3, the latest, is affected, and npm's only offered fix is a downgrade of eslint-config-next to 14. Checked again on 2026-10-20: braces 3.0.3 is still the latest, the advisory still lists no patched version, and eslint-config-next 16.3.4 still pulls it through fast-glob and micromatch.",
-        "expires": "2026-12-04"
-    }
-]
+[]
