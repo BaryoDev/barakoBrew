@@ -107,6 +107,7 @@ describe('RunsPanel', () => {
       render(<RunsPanel workflowId="wf-1" />);
 
       const links = within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link');
+      expect(useWorkflowRuns).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 5, workflowId: 'wf-1' }));
       expect(links).toHaveLength(5);
       expect(links[2]).toHaveAttribute('href', '/workflow-runs?run=r-3');
       expect(links[2]).toHaveTextContent('post entry-3-');

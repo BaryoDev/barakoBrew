@@ -9,7 +9,7 @@ import { formatDuration } from '@/hooks/use-workflow-runs';
  */
 export function HealthTiles({ health, windowDays }: { health: WorkflowHealth | undefined; windowDays?: number }) {
   const tile = healthTile(health);
-  if (!health || tile.kind === 'none') return null;
+  if (!health) return null;
 
   const window = windowDays ? `last ${windowDays} days` : undefined;
   const figures: { label: string; value: string; note?: string }[] = [

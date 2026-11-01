@@ -36,7 +36,7 @@ export function RunsPanel({ workflowId }: { workflowId: string }) {
   const all = runs.data?.items ?? [];
   const matching = all.filter((run) => run.workflowDefinitionId === workflowId);
   const items = matching.slice(0, RECENT_RUNS);
-  // Rows of other workflows mean the filter was ignored, and the page of ten says nothing about
+  // Rows of other workflows mean the filter was ignored, and the page says nothing about
   // this workflow. "Has not run yet" would be a claim the data cannot back, so show the log.
   if (matching.length < all.length) return <DebugLogPanel workflowId={workflowId} />;
   // A failed refetch keeps the last runs that loaded. Say so, as the runs page does.
