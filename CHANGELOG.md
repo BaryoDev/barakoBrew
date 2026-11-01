@@ -21,6 +21,10 @@ this console before or with 5.5.0.
   with a verified custom domain. The console sends the tenant from its token, so that only matters if
   it reaches the API through one tenant's custom domain while working in another tenant.
 
+### Security
+
+- `follow-redirects` 1.16.2, to clear a high advisory the audit gate refuses.
+
 ## [1.11.4] - 2026-10-27
 
 **Speaks API contracts 1 to 13, which covers barakoCMS 4.0.1 to 5.4.0.** barakoCMS 5.4.0 moves the
