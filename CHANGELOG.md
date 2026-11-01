@@ -9,6 +9,10 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- Switching tenant clears the cached data instead of only marking it stale, so a screen no longer shows the previous tenant's entry until it refetches.
+
 ## [1.11.5] - 2026-11-01
 
 **Speaks API contracts 1 to 14, which covers barakoCMS 4.0.1 to 5.5.0.** barakoCMS 5.5.0 moves the
