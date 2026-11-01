@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- Requests to the API time out (30 seconds, 10 minutes for file uploads) instead of waiting forever on a stalled connection.
+- A failed token refresh only signs the tab out when the server refuses it (401 or 403). A timeout or a 5xx keeps the session so the next call can retry.
+
 ## [1.11.5] - 2026-11-01
 
 **Speaks API contracts 1 to 14, which covers barakoCMS 4.0.1 to 5.5.0.** barakoCMS 5.5.0 moves the

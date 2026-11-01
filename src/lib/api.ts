@@ -91,7 +91,11 @@ export function subscribeToAuth(callback: () => void) {
     };
 }
 
+const REQUEST_TIMEOUT_MS = 30_000;
+const UPLOAD_TIMEOUT_MS = 600_000;
+
 export const api = axios.create({
+    timeout: REQUEST_TIMEOUT_MS,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -118,6 +122,7 @@ api.interceptors.request.use((config) => {
     // multipart/form-data with its boundary.
     if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
         config.headers.delete('Content-Type');
+        config.timeout = UPLOAD_TIMEOUT_MS;
     }
     const token = tokenStore.token;
     if (token) {
@@ -153,7 +158,11 @@ async function refreshAccessToken(): Promise<string | null> {
         const response = await axios.post(
             `${getApiUrl()}/api/auth/refresh`,
             {},
-            { withCredentials: true, headers: tenant ? { 'X-Tenant': tenant } : undefined },
+            {
+                withCredentials: true,
+                timeout: REQUEST_TIMEOUT_MS,
+                headers: tenant ? { 'X-Tenant': tenant } : undefined,
+            },
         );
         // This call goes through raw axios rather than the instance, deliberately, so it cannot
         // recurse through the 401 handler below. That also means it misses the interceptor that
@@ -165,7 +174,10 @@ async function refreshAccessToken(): Promise<string | null> {
         if (axios.isAxiosError(error) && error.response) {
             recordContractVersion(error.response.headers?.[CONTRACT_HEADER]);
         }
-        tokenStore.clear();
+        // Only a refusal ends the session. A timeout, a dropped connection or a 5xx says nothing
+        // about the cookie, so the token stays and the next call can try again.
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        if (status === 401 || status === 403) tokenStore.clear();
         return null;
     }
 }
