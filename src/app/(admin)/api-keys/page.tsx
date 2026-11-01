@@ -1,19 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   useApiKeys,
   useCreateApiKey,
   useRevokeApiKey,
   supportsKeyContentTypes,
+  apiKeyKind,
+  supportsKeyRotation,
   API_KEY_SCOPES,
   DESTRUCTIVE_API_KEY_SCOPES,
+  type ApiKey,
   type CreatedApiKey,
 } from '@/hooks/use-api-keys';
 import { apiErrorMessage } from '@/lib/api';
 import { useApiMeta } from '@/hooks/use-meta';
 import { useSchemas } from '@/hooks/use-schemas';
+import { RotateRail } from '@/components/api-keys/rotate-rail';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { RevealOnce } from '@/components/patterns/reveal-once';
@@ -40,11 +44,21 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { IconPlus, IconKey, IconTrash } from '@/components/icons';
+import { IconPlus, IconKey, IconRefresh, IconTrash } from '@/components/icons';
 
 function formatDate(value?: string | null) {
   if (!value) return '—';
   return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** "Overlap - stops in 60 min" for a key that is being rotated out. */
+function overlapLabel(stopsAt: string, now: number) {
+  const left = new Date(stopsAt).getTime() - now;
+  if (left <= 0) return 'Stopped';
+  const minutes = Math.ceil(left / 60_000);
+  if (minutes < 120) return `Overlap - stops in ${minutes} min`;
+  const hours = Math.ceil(minutes / 60);
+  return hours < 48 ? `Overlap - stops in ${hours} h` : `Overlap - stops in ${Math.ceil(hours / 24)} days`;
 }
 
 function CreateApiKeyDialog({
@@ -263,7 +277,16 @@ export default function ApiKeysPage() {
   const revoke = useRevokeApiKey();
   const { data: meta } = useApiMeta();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const limitable = !isLoading && !isError && supportsKeyContentTypes(keys, meta?.version);
+  const [rotating, setRotating] = useState<ApiKey | null>(null);
+  // The API gives no marker for a key on its way out, so the ones rotated here are remembered.
+  const [overlaps, setOverlaps] = useState<Record<string, string>>({});
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const rotatable = supportsKeyRotation(meta?.version);
+  const limitable =!isLoading && !isError && supportsKeyContentTypes(keys, meta?.version);
 
   async function onRevoke(id: string, name: string) {
     if (!window.confirm(`Revoke "${name}"? Callers using it will stop working immediately.`)) return;
@@ -308,12 +331,13 @@ export default function ApiKeysPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Key</TableHead>
+                <TableHead>Kind</TableHead>
                 <TableHead>Scopes</TableHead>
                 {limitable && <TableHead>Content types</TableHead>}
                 <TableHead>Last used</TableHead>
                 <TableHead>Expires</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="w-20" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -321,10 +345,11 @@ export default function ApiKeysPage() {
                 <TableRow key={k.id}>
                   <TableCell className="font-medium">{k.name}</TableCell>
                   <TableCell className="text-muted-foreground font-mono text-xs">{k.prefix}…</TableCell>
+                  <TableCell className="text-xs">{apiKeyKind(k.prefix)}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {k.scopes.map((s) => (
-                        <Badge key={s} variant="secondary" className="text-xs">
+                        <Badge key={s} variant="secondary" className="font-mono text-xs">
                           {s}
                         </Badge>
                       ))}
@@ -348,11 +373,22 @@ export default function ApiKeysPage() {
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.lastUsedAt)}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.expiresAt)}</TableCell>
                   <TableCell>
-                    <Badge variant={k.revoked ? 'secondary' : 'default'}>
-                      {k.revoked ? 'Revoked' : 'Active'}
+                    <Badge variant={k.revoked ? 'secondary' : overlaps[k.id] ? 'outline' : 'default'}>
+                      {k.revoked ? 'Revoked' : overlaps[k.id] ? overlapLabel(overlaps[k.id], now) : 'Active'}
                     </Badge>
                   </TableCell>
                   <TableCell>
+                    {rotatable && !k.revoked && !overlaps[k.id] && !(k.expiresAt && new Date(k.expiresAt).getTime() <= now) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setRotating(k)}
+                        aria-label={`Rotate ${k.name}`}
+                      >
+                        <IconRefresh className="size-3.5" />
+                      </Button>
+                    )}
                     {!k.revoked && (
                       <Button
                         type="button"
@@ -373,6 +409,18 @@ export default function ApiKeysPage() {
         </div>
       )}
 
+      <RotateRail
+        apiKey={rotating}
+        onClose={() => setRotating(null)}
+        onRotated={(id, stopsAt) => {
+          setNow(Date.now());
+          setOverlaps((prev) => ({ ...prev, [id]: stopsAt }));
+        }}
+        onStopped={(id) => {
+          setNow(Date.now());
+          setOverlaps((prev) => ({ ...prev, [id]: new Date().toISOString() }));
+        }}
+      />
       <CreateApiKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} limitable={limitable} />
     </>
   );
