@@ -7,6 +7,8 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { useContents } from '@/hooks/use-contents';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { ContentStatus, type ContentListItem } from '@/types/content';
+import type { ContentTypeIcon } from '@/types/schema';
+import { TypeIcon } from '@/components/icons/type-icon';
 import { STATUS_ORDER, STATUS_VOCABULARY, statusFromParam, statusMeta } from '@/lib/status-vocabulary';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -97,7 +99,7 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
 
 const NO_ROWS: ContentListItem[] = [];
 
-function entryColumns(privateTypes: ReadonlySet<string>) {
+function entryColumns(privateTypes: ReadonlySet<string>, iconByType: ReadonlyMap<string, ContentTypeIcon | null | undefined>) {
   return column.columns([
     column.display({
       id: 'entry',
@@ -111,7 +113,16 @@ function entryColumns(privateTypes: ReadonlySet<string>) {
         </Link>
       ),
     }),
-    column.accessor('contentType', { id: 'type', header: 'Type' }),
+    column.accessor('contentType', {
+      id: 'type',
+      header: 'Type',
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5">
+          <TypeIcon icon={iconByType.get(row.original.contentType)} className="size-3.5 shrink-0" />
+          {row.original.contentType}
+        </span>
+      ),
+    }),
     column.accessor('status', {
       id: 'status',
       header: 'Status',
@@ -266,7 +277,9 @@ function ContentListInner() {
     [schemas]
   );
 
-  const columns = useMemo(() => entryColumns(privateTypes), [privateTypes]);
+  const iconByType = useMemo(() => new Map((schemas ?? []).map((s) => [s.name, s.icon])), [schemas]);
+
+  const columns = useMemo(() => entryColumns(privateTypes, iconByType), [privateTypes, iconByType]);
   const table = useTable({
     features,
     columns,
@@ -358,6 +371,7 @@ function ContentListInner() {
             <SelectItem value={ALL_TYPES}>All content types</SelectItem>
             {schemas?.map((s) => (
               <SelectItem key={s.name} value={s.name}>
+                <TypeIcon icon={s.icon} className="size-4" />
                 {s.displayName}
               </SelectItem>
             ))}

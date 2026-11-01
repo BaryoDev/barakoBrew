@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { NAV_GROUPS } from '@/lib/navigation';
 import { IconPlus, IconSearch } from '@/components/icons';
+import { TypeIcon } from '@/components/icons/type-icon';
+import { entriesHref, singletonHref } from '@/lib/navigation';
+import type { ContentTypeDefinition } from '@/types/schema';
 import { Button } from '@/components/ui/button';
 import {
   CommandDialog,
@@ -15,7 +18,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 
-export function CommandMenu() {
+export function CommandMenu({ types }: { types?: ContentTypeDefinition[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -62,6 +65,25 @@ export function CommandMenu() {
               </CommandItem>
             ))}
           </CommandGroup>
+          {types && types.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Content types">
+                {types.map((type) => (
+                  <CommandItem
+                    key={type.name}
+                    value={`${type.displayName} ${type.name}`}
+                    onSelect={() =>
+                      run(() => router.push(type.isSingleton === true ? singletonHref(type.name) : entriesHref(type.name)))
+                    }
+                  >
+                    <TypeIcon icon={type.icon} />
+                    {type.displayName}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
           <CommandSeparator />
           <CommandGroup heading="Create">
             <CommandItem onSelect={() => run(() => router.push('/schemas/new'))}>

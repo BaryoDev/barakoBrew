@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
 import type {
     ContentTypeDefinition,
+    ContentTypeIcon,
     CreateSchemaRequest,
     FieldOption,
     UniquenessRule,
@@ -138,6 +139,24 @@ export function useSetRouteTemplate(name: string) {
             const response = await api.put<{ name: string; routeTemplate: string | null }>(
                 `${typePath(name)}/route-template`,
                 { routeTemplate },
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+/** Sets or clears the icon a type is drawn with. Null clears it. The API sanitises custom markup. */
+export function useSetTypeIcon(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (icon: ContentTypeIcon | null) => {
+            const response = await api.put<{ name: string; icon: ContentTypeIcon | null }>(
+                `${typePath(name)}/icon`,
+                { icon },
             );
             return response.data;
         },

@@ -197,7 +197,7 @@ export function AppSidebar() {
         </div>
 
         <TenantSwitcher />
-        <CommandMenu />
+        <CommandMenu types={types} />
       </SidebarHeader>
 
       <SidebarContent className="px-4 pb-2">

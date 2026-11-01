@@ -8,6 +8,7 @@ import { CrumbTitleProvider } from '@/components/crumb-title';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { BrandMark } from '@/components/brand';
 import { UploadsProvider } from '@/components/uploads-provider';
+import { CustomIconSprite } from '@/components/icons/type-icon';
 import { UploadTray } from '@/components/upload-tray';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <SidebarProvider style={{ '--sidebar-width': '248px' } as React.CSSProperties}>
       <CrumbTitleProvider>
         <UploadsProvider>
+          <CustomIconSprite />
           <AppSidebar />
           <SidebarInset className="rail:my-4 rail:mr-4 rail:ml-0 rail:h-[calc(100svh-2rem)] rail:overflow-hidden rail:rounded-xl rail:border rail:bg-card rail:shadow-[var(--shadow-card)]">
             <AppHeader />
