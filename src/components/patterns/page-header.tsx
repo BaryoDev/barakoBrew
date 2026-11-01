@@ -11,14 +11,17 @@ interface PageHeaderProps {
    * heading's accessible name, so "Entries" would announce and match as "Entries 148".
    */
   badge?: React.ReactNode;
+  /** Rendered before the title, such as a type's icon button. */
+  leading?: React.ReactNode;
   className?: string;
 }
 
-export function PageHeader({ title, description, actions, badge, className }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, badge, leading, className }: PageHeaderProps) {
   return (
     <div className={cn('mb-6 flex flex-wrap items-start justify-between gap-3', className)}>
       <div className="min-w-0">
         <div className="flex items-center gap-2.5">
+          {leading}
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
           {badge}
         </div>

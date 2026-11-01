@@ -31,6 +31,9 @@ export const FIELD_MASKS: { value: FieldMask; label: string }[] = [
     { value: FieldMask.Last4, label: 'Show last 4 only' },
 ];
 
+/** A sprite glyph by id, or markup the API has sanitised. Never both. Mirrors Models/ContentTypeIcon. */
+export type ContentTypeIcon = { name: string; svg?: undefined } | { svg: string; name?: undefined };
+
 export interface ContentTypeDefinition {
     id?: string;
     name: string;
@@ -50,6 +53,8 @@ export interface ContentTypeDefinition {
     routeTemplate?: string | null;
     /** Values only one entry of this type may hold at a time. Absent or null when there are none. */
     uniqueness?: UniquenessRule[] | null;
+    /** The glyph this type is drawn with. Absent or null when none was chosen. */
+    icon?: ContentTypeIcon | null;
     createdAt?: string;
     updatedAt?: string;
 }

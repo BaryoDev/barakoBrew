@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSchema, useSetPublicDelivery } from '@/hooks/use-schemas';
 import { fieldTypeLabel, resolveFieldType, type FieldDefinition } from '@/types/schema';
 import { isChoiceField, optionLabel } from '@/lib/choice';
+import { IconPicker } from '@/components/schema/icon-picker';
 import { FieldOptionsDialog } from '@/components/schema/field-options-dialog';
 import { FieldPresentationDialog } from '@/components/schema/field-presentation-dialog';
 import { FieldCurrencyDialog } from '@/components/schema/field-currency-dialog';
@@ -59,6 +60,7 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
     <>
       <PageHeader
         title={schema.displayName}
+        leading={<IconPicker schema={schema} />}
         description={schema.description || `API name: ${schema.name}`}
         actions={
           schema.isSingleton ? (
