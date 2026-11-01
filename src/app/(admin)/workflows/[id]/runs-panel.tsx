@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { useWorkflowDebugLogs } from '@/hooks/use-workflows';
-import { toneForRunStatus, useWorkflowRuns } from '@/hooks/use-workflow-runs';
+import { runStatusLabel, toneForRunStatus, useWorkflowRuns } from '@/hooks/use-workflow-runs';
 import { isForbidden, isNotFound } from '@/lib/api';
 
 const RECENT_RUNS = 10;
@@ -71,7 +71,7 @@ export function RunsPanel({ workflowId }: { workflowId: string }) {
             >
               <span className="mr-auto text-sm">{format(new Date(run.createdAt), 'PPp')}</span>
               <span className="text-muted-foreground text-xs">{run.triggerEvent}</span>
-              <StatusBadge tone={toneForRunStatus(run.status)}>{run.status}</StatusBadge>
+              <StatusBadge tone={toneForRunStatus(run.status)}>{runStatusLabel(run.status)}</StatusBadge>
             </Link>
           </li>
         ))}

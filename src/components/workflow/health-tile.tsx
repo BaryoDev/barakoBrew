@@ -2,7 +2,7 @@
 
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { healthTile, type WorkflowHealth } from '@/hooks/use-workflow-health';
-import { toneForRunStatus } from '@/hooks/use-workflow-runs';
+import { runStatusLabel, toneForRunStatus } from '@/hooks/use-workflow-runs';
 
 /**
  * One workflow's health: no runs yet, a rate with the sample it was taken over, or nothing at all
@@ -30,7 +30,7 @@ export function HealthTile({ health, windowDays }: { health: WorkflowHealth | un
           {health.lastOutcomes.slice(0, 5).map((outcome) => (
             <li key={outcome.runId}>
               <StatusBadge tone={toneForRunStatus(outcome.status)} dot={false}>
-                {outcome.status}
+                {runStatusLabel(outcome.status)}
               </StatusBadge>
             </li>
           ))}
