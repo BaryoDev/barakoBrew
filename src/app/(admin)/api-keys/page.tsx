@@ -8,6 +8,7 @@ import {
   useRevokeApiKey,
   supportsKeyContentTypes,
   apiKeyKind,
+  supportsKeyRotation,
   API_KEY_SCOPES,
   DESTRUCTIVE_API_KEY_SCOPES,
   type ApiKey,
@@ -284,7 +285,8 @@ export default function ApiKeysPage() {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
-  const limitable = !isLoading && !isError && supportsKeyContentTypes(keys, meta?.version);
+  const rotatable = supportsKeyRotation(meta?.version);
+  const limitable =!isLoading && !isError && supportsKeyContentTypes(keys, meta?.version);
 
   async function onRevoke(id: string, name: string) {
     if (!window.confirm(`Revoke "${name}"? Callers using it will stop working immediately.`)) return;
@@ -376,7 +378,7 @@ export default function ApiKeysPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {!k.revoked && !overlaps[k.id] && (
+                    {rotatable && !k.revoked && !overlaps[k.id] && !(k.expiresAt && new Date(k.expiresAt).getTime() <= now) && (
                       <Button
                         type="button"
                         variant="ghost"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   DEFAULT_ROTATE_OVERLAP_INDEX,
@@ -33,11 +33,14 @@ function stopTime(old: ApiKey, overlapMinutes: number, now: number): string {
 function RotateForm({
   apiKey,
   onClose,
+  onBusy,
   onRotated,
   onStopped,
 }: {
   apiKey: ApiKey;
   onClose: () => void;
+  /** True while the rotate request is out, when closing would drop the new key unseen. */
+  onBusy: (busy: boolean) => void;
   /** The old key's id and the time it stops, once the new key exists. */
   onRotated: (id: string, stopsAt: string) => void;
   onStopped: (id: string) => void;
@@ -49,6 +52,11 @@ function RotateForm({
   const [issued, setIssued] = useState<{ key: CreatedApiKey; stopsAt: string; immediate: boolean } | null>(null);
   const [stopped, setStopped] = useState(false);
   const overlap = ROTATE_OVERLAPS[stop];
+
+  useEffect(() => {
+    onBusy(rotate.isPending);
+    return () => onBusy(false);
+  }, [rotate.isPending, onBusy]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -157,7 +165,7 @@ function RotateForm({
       </div>
 
       <SheetFooter>
-        <Button type="button" variant="ghost" onClick={onClose}>
+        <Button type="button" variant="ghost" onClick={onClose} disabled={rotate.isPending}>
           Cancel
         </Button>
         <Button type="submit" disabled={rotate.isPending}>
@@ -179,11 +187,19 @@ export function RotateRail({
   onRotated: (id: string, stopsAt: string) => void;
   onStopped: (id: string) => void;
 }) {
+  const [busy, setBusy] = useState(false);
   return (
-    <Sheet open={apiKey !== null} onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={apiKey !== null} onOpenChange={(open) => !open && !busy && onClose()}>
       <SheetContent className="w-[440px] sm:max-w-[440px]">
         {apiKey && (
-          <RotateForm key={apiKey.id} apiKey={apiKey} onClose={onClose} onRotated={onRotated} onStopped={onStopped} />
+          <RotateForm
+            key={apiKey.id}
+            apiKey={apiKey}
+            onClose={onClose}
+            onBusy={setBusy}
+            onRotated={onRotated}
+            onStopped={onStopped}
+          />
         )}
       </SheetContent>
     </Sheet>

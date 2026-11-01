@@ -107,14 +107,25 @@ export const ROTATE_OVERLAPS: { minutes: number; label: string }[] = [
 
 export const DEFAULT_ROTATE_OVERLAP_INDEX = ROTATE_OVERLAPS.findIndex((o) => o.minutes === 60);
 
-const KEY_KINDS: { prefix: string; label: string }[] = [
-  { prefix: 'bcms_ro_', label: 'Read-only' },
-  { prefix: 'bcms_', label: 'Standard' },
+const KEY_KINDS: { pattern: RegExp; label: string }[] = [
+  { pattern: /^bcms_ro_/, label: 'Read-only' },
+  { pattern: /^bcms_[^_]*$/, label: 'Standard' },
 ];
+
+/** The first barakoCMS release with `POST /api/api-keys/{id}/rotate`. */
+const ROTATE_SINCE = [5, 1];
+
+/** Whether the API has the rotate route. An unknown version is taken as no. */
+export function supportsKeyRotation(apiVersion: string | undefined): boolean {
+  const match = /^(\d+)\.(\d+)\./.exec(apiVersion ?? '');
+  if (!match) return false;
+  const [major, minor] = [Number(match[1]), Number(match[2])];
+  return major > ROTATE_SINCE[0] || (major === ROTATE_SINCE[0] && minor >= ROTATE_SINCE[1]);
+}
 
 /** The kind of key from its prefix. A prefix this console does not know is shown as it is. */
 export function apiKeyKind(prefix: string): string {
-  const known = KEY_KINDS.find((k) => prefix.startsWith(k.prefix));
+  const known = KEY_KINDS.find((k) => k.pattern.test(prefix));
   if (known) return known.label;
   return /^[A-Za-z0-9]+_(?:[A-Za-z0-9]+_)?/.exec(prefix)?.[0] ?? prefix;
 }
