@@ -237,7 +237,18 @@ function ContentListInner() {
     status,
   });
 
-
+  // A link or bookmark can name a page the results no longer reach. The server answers with no rows
+  // and the real total, which drew an empty state beside a count and no pager.
+  const lastPage = contents?.totalPages ?? 0;
+  const pastTheEnd =
+    contents !== undefined &&
+    contents.items.length === 0 &&
+    contents.totalItems > 0 &&
+    lastPage > 0 &&
+    page > lastPage;
+  useEffect(() => {
+    if (pastTheEnd) setParams({ page: String(lastPage) });
+  }, [pastTheEnd, lastPage, setParams]);
 
   /**
    * Which content types are not served anonymously, so a row can be marked Private.

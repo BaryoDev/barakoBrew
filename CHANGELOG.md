@@ -13,6 +13,8 @@ moved. Which API a console works against is stated per release instead.
 
 - Requests to the API time out (30 seconds, 10 minutes for file uploads) instead of waiting forever on a stalled connection.
 - A failed token refresh only signs the tab out when the server refuses it (401 or 403). A timeout or a 5xx keeps the session so the next call can retry.
+- Publish and Archive are disabled while the entry form has unsaved edits, so a status change no longer raises a false conflict banner.
+- An entries link with a page past the last one moves to the last page instead of showing an empty table.
 
 ## [1.11.5] - 2026-11-01
 
