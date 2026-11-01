@@ -250,8 +250,6 @@ function ContentListInner() {
     if (pastTheEnd) setParams({ page: String(lastPage) });
   }, [pastTheEnd, lastPage, setParams]);
 
-
-
   /**
    * Which content types are not served anonymously, so a row can be marked Private.
    *

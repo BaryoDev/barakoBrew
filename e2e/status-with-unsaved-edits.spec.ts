@@ -43,4 +43,9 @@ test('Publish and Archive are disabled while the form has unsaved edits', async 
 
     await expect(publish).toBeDisabled();
     await expect(archive).toBeDisabled();
+
+    await page.locator('#Title').fill('A post');
+
+    await expect(publish).toBeEnabled();
+    await expect(archive).toBeEnabled();
 });
