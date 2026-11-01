@@ -64,6 +64,77 @@ describe('checking a pasted SVG', () => {
     });
 });
 
+describe('limits on a pasted SVG', () => {
+    it('refuses markup over 16 KiB and accepts the same markup at the limit', () => {
+        const head = '<svg viewBox="0 0 24 24">';
+        const tail = '</svg>';
+        const pad = (n: number) => `<path d="M0 0h24v24H0z"/>${' '.repeat(n)}`;
+        const limit = 16 * 1024;
+        const fits = head + pad(limit - head.length - tail.length - SHAPE.length) + tail;
+        expect(fits.length).toBe(limit);
+
+        expect(checkCustomSvg(fits).ok).toBe(true);
+        const over = checkCustomSvg(head + pad(limit) + tail);
+        expect(over.ok).toBe(false);
+        if (over.ok) return;
+        expect(over.error).toMatch(/most allowed is 16384/);
+    });
+
+    it('refuses a DOCTYPE and an ENTITY', () => {
+        const doctype = checkCustomSvg(`<!DOCTYPE svg><svg viewBox="0 0 24 24">${SHAPE}</svg>`);
+        const entity = checkCustomSvg(`<!ENTITY x "y"><svg viewBox="0 0 24 24">${SHAPE}</svg>`);
+
+        expect(doctype).toEqual({ ok: false, error: 'A DOCTYPE or entities are not accepted.' });
+        expect(entity).toEqual({ ok: false, error: 'A DOCTYPE or entities are not accepted.' });
+    });
+
+    it('refuses a viewBox that is not four numbers', () => {
+        for (const viewBox of ['0 0 24', '0 0 24 abc', '0 0 24 24 5', 'a b c d']) {
+            const result = checkCustomSvg(`<svg viewBox="${viewBox}">${SHAPE}</svg>`);
+            expect(result.ok).toBe(false);
+            if (result.ok) continue;
+            expect(result.error).toMatch(/four numbers/);
+        }
+    });
+
+    it('keeps a shape nested within the depth limit and drops one nested deeper', () => {
+        const nest = (depth: number) =>
+            `<svg viewBox="0 0 24 24">${'<g>'.repeat(depth)}${SHAPE}${'</g>'.repeat(depth)}</svg>`;
+
+        expect(checkCustomSvg(nest(15)).ok).toBe(true);
+        const deep = checkCustomSvg(nest(40));
+        expect(deep.ok).toBe(false);
+        if (deep.ok) return;
+        expect(deep.error).toMatch(/needs a shape/);
+    });
+
+    it('keeps a shape inside a g and rebuilds the group with only allowed attributes', () => {
+        const result = checkCustomSvg(
+            `<svg viewBox="0 0 24 24"><g transform="translate(1 1)" id="x" onclick="alert(1)">${SHAPE}</g></svg>`,
+        );
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.icon.nodes).toHaveLength(1);
+        expect(result.icon.nodes[0].tag).toBe('g');
+        expect(result.icon.nodes[0].attrs).toEqual({ transform: 'translate(1 1)' });
+        expect(result.icon.nodes[0].children).toHaveLength(1);
+        expect(result.icon.nodes[0].children[0].tag).toBe('path');
+    });
+
+    it('drops an attribute value with url( or a 13 digit token and keeps the shape', () => {
+        const result = checkCustomSvg(
+            `<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z" transform="url(a)" opacity="1234567890123"/><circle cx="1" cy="1" r="1" opacity="0.5"/></svg>`,
+        );
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.icon.nodes).toHaveLength(2);
+        expect(result.icon.nodes[0].attrs).toEqual({ d: 'M0 0h24v24H0z', fill: 'currentColor' });
+        expect(result.icon.nodes[1].attrs.opacity).toBe('0.5');
+    });
+});
+
 describe('registering a custom icon', () => {
     it('hands out one ic-custom id per distinct markup', () => {
         const a = reserveCustomIcon(`<svg viewBox="0 0 24 24">${SHAPE}</svg>`);
