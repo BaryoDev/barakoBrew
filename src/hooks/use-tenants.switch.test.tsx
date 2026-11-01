@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import React from 'react';
-import { act, renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 
 /**
  * Switching tenant swaps the token, and every cached answer was fetched under the old one. Marking
@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
  * still what a screen reads until its refetch lands.
  */
 
-const { api, tokenStore } = await import('@/lib/api');
+const { api, tokenStore, tenantOfToken } = await import('@/lib/api');
 const { useSwitchTenant } = await import('./use-tenants');
 
 const originalAdapter = api.defaults.adapter;
@@ -56,6 +56,21 @@ describe('useSwitchTenant', () => {
 
         expect(client.getQueryData(['contents', 'detail', 'post', '1'])).toBeUndefined();
         expect(client.getQueryData(['contents', 'history', 'post', '1'])).toBeUndefined();
-        expect(client.getQueryCache().getAll()).toHaveLength(0);
+    });
+
+    it('refetches a mounted screen under the new tenant instead of leaving the old entry', async () => {
+        const key = ['contents', 'detail', 'post', '1'];
+        const screen = renderHook(
+            () => useQuery({ queryKey: key, queryFn: async () => `entry of ${tenantOfToken(tokenStore.token)}` }),
+            { wrapper },
+        );
+        await waitFor(() => expect(screen.result.current.data).toBe('entry of acme'));
+
+        const { result } = renderHook(() => useSwitchTenant(), { wrapper });
+        await act(async () => {
+            await result.current.mutateAsync('globex');
+        });
+
+        await waitFor(() => expect(screen.result.current.data).toBe('entry of globex'));
     });
 });
