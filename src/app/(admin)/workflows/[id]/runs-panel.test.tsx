@@ -99,6 +99,27 @@ describe('RunsPanel', () => {
       expect(useWorkflowDebugLogs).not.toHaveBeenCalled();
     });
 
+    it('shows the latest five of eight runs, each with its entry, and opens the run it names', () => {
+      const eight = Array.from({ length: 8 }, (_, i) =>
+        listRun(`r-${i + 1}`, { contentId: `entry-${i + 1}-aaaa`, contentType: 'post' }),
+      );
+      useWorkflowRuns.mockReturnValue({ isLoading: false, isError: false, data: { items: eight } });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      const links = within(screen.getByRole('list', { name: 'Recent runs' })).getAllByRole('link');
+      expect(links).toHaveLength(5);
+      expect(links[2]).toHaveAttribute('href', '/workflow-runs?run=r-3');
+      expect(links[2]).toHaveTextContent('post entry-3-');
+      expect(screen.queryByRole('link', { name: /entry-6-/ })).toBeNull();
+    });
+
+    it('links to the full run list', () => {
+      useWorkflowRuns.mockReturnValue({ isLoading: false, isError: false, data: { items: [listRun('r-1')] } });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      expect(screen.getByRole('link', { name: 'All runs' })).toHaveAttribute('href', '/workflow-runs');
+    });
+
     it('shows the debug log, not the empty message, when the list holds another workflow run', () => {
       useWorkflowRuns.mockReturnValue({
         isLoading: false,

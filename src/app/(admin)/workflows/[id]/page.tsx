@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { RunNowButton } from '@/components/workflow/run-now';
 import { VIEW_RUNS_CAPABILITY, useWorkflowHealth } from '@/hooks/use-workflow-health';
 import { useAccess } from '@/hooks/use-access';
+import { HealthTiles } from '@/components/workflow/health-tiles';
 import { RunsPanel } from './runs-panel';
 
 export default function WorkflowDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -65,6 +66,8 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ id: s
           </div>
         }
       />
+
+      {health.data?.available === true && <HealthTiles health={health.healthOf(id)} windowDays={health.windowDays} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
