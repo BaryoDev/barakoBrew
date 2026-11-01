@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import {
   IconAnalytics,
   IconArchive,
+  IconBolt,
   IconBug,
   IconCoins,
   IconContent,
@@ -151,6 +152,14 @@ export function withModules(groups: NavGroup[], enabled: readonly string[] | und
     .filter((g) => g.items.length > 0);
 }
 
+/** Drops the items at `hidden`, and any group left empty by it. */
+export function withoutHrefs(groups: NavGroup[], hidden: ReadonlySet<string>): NavGroup[] {
+  if (hidden.size === 0) return groups;
+  return groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !hidden.has(i.href)) }))
+    .filter((g) => g.items.length > 0);
+}
+
 /**
  * The first group carries no label on purpose: it is the primary set, the destinations someone works
  * in all day, and a heading over them would only name the app. Every group after it is
@@ -230,6 +239,9 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'System',
     collapsible: true,
     items: [
+      // The same read as the Audit log until the endpoint names a capability of its own. The rail
+      // drops it when GET /api/activity answers 404, see withoutHrefs.
+      { title: 'Activity', href: '/activity', icon: IconBolt, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Audit log', href: '/audit', icon: IconEye, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Errors', href: '/errors', icon: IconBug, metric: 'unresolvedErrors', tone: 'danger', capability: 'manage_client_errors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Health', href: '/ops/health', icon: IconHealth },
@@ -311,6 +323,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   accounting: 'Accounting',
   errors: 'Errors',
   audit: 'Audit log',
+  activity: 'Activity',
   'email-events': 'Email events',
   'feature-flags': 'Feature flags',
   files: 'Files',
