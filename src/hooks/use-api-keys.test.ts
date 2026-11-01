@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { supportsKeyContentTypes, type ApiKey } from './use-api-keys';
+import { supportsKeyContentTypes, supportsKeyRotation, type ApiKey } from './use-api-keys';
 
 const key = (extra: Partial<ApiKey> = {}): ApiKey => ({
     id: 'k',
@@ -32,5 +32,27 @@ describe('whether the API limits a key to content types', () => {
         expect(supportsKeyContentTypes([], undefined)).toBe(false);
         expect(supportsKeyContentTypes(undefined, undefined)).toBe(false);
         expect(supportsKeyContentTypes([], 'not a version')).toBe(false);
+    });
+});
+
+describe('whether the API has the rotate route', () => {
+    it('does from 5.1.0 on, across minor and major versions', () => {
+        expect(supportsKeyRotation('5.1.0')).toBe(true);
+        expect(supportsKeyRotation('5.2.0')).toBe(true);
+        expect(supportsKeyRotation('5.10.3')).toBe(true);
+        expect(supportsKeyRotation('6.0.0')).toBe(true);
+    });
+
+    it('does not before 5.1.0', () => {
+        expect(supportsKeyRotation('5.0.9')).toBe(false);
+        expect(supportsKeyRotation('5.0.0')).toBe(false);
+        expect(supportsKeyRotation('4.9.9')).toBe(false);
+        expect(supportsKeyRotation('4.12.0')).toBe(false);
+    });
+
+    it('does not for a missing or unreadable version', () => {
+        expect(supportsKeyRotation(undefined)).toBe(false);
+        expect(supportsKeyRotation('')).toBe(false);
+        expect(supportsKeyRotation('nightly')).toBe(false);
     });
 });
