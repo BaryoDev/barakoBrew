@@ -74,6 +74,32 @@ describe('the content type icon picker', () => {
         expect(shown[0]).toHaveAccessibleName('Key');
     });
 
+    it('says nothing matches and draws no glyph for a search with no hit', () => {
+        wrap();
+        open();
+
+        fireEvent.change(screen.getByLabelText('Search icons'), { target: { value: 'zzzz-no-such-glyph' } });
+
+        expect(screen.getByText('No icon matches that search.')).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Icons' })).toBeNull();
+    });
+
+    it('keeps Save disabled until the icon differs from the saved one', () => {
+        wrap({ ...TYPE, icon: { name: 'ic-key' } });
+        open();
+        const save = screen.getByRole('button', { name: 'Save icon' });
+        expect(save).toBeDisabled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Key' }));
+        expect(save).toBeDisabled();
+
+        const glyphs = Array.from(screen.getByRole('group', { name: 'Icons' }).querySelectorAll('button'));
+        expect(glyphs).toHaveLength(20);
+        const other = glyphs.find((b) => b.getAttribute('aria-label') !== 'Key');
+        fireEvent.click(other!);
+        expect(save).toBeEnabled();
+    });
+
     it('saves a picked glyph by name', async () => {
         vi.mocked(api.put).mockResolvedValue({ data: { name: 'post', icon: { name: 'ic-key' } } });
         wrap();
