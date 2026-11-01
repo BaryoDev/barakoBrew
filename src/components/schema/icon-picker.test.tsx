@@ -115,17 +115,18 @@ describe('the content type icon picker', () => {
         expect(api.put).not.toHaveBeenCalled();
     });
 
-    it('shows the API refusal for an SVG with a script and keeps the picker open', async () => {
-        vi.mocked(api.put).mockRejectedValue(refused('icon.svg is not accepted: it contains a script.'));
+    // The refusal text is the mock's. What the real API refuses and cleans is in smoke/type-icon.spec.ts.
+    it('shows whatever refusal the API returns for a pasted SVG and keeps the picker open', async () => {
+        vi.mocked(api.put).mockRejectedValue(refused('icon.svg has a viewBox that is not four numbers.'));
         wrap();
         open();
 
         fireEvent.change(screen.getByLabelText('Custom SVG'), {
-            target: { value: '<svg viewBox="0 0 24 24"><script>alert(1)</script><path d="M0 0h24v24H0z"/></svg>' },
+            target: { value: '<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>' },
         });
         fireEvent.click(screen.getByRole('button', { name: 'Save icon' }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('icon.svg is not accepted: it contains a script.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('icon.svg has a viewBox that is not four numbers.');
         expect(screen.getByLabelText('Custom SVG')).toBeInTheDocument();
     });
 

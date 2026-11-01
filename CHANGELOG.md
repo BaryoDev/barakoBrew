@@ -9,6 +9,12 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- A content type has an icon. The type header has an icon button that opens a picker with 20 glyphs
+  and a box for custom SVG. The icon shows in the type list, the Entries type filter and column, and
+  the command menu. Needs barakoCMS 5.4.0 or later: an older API answers 404 when the icon is saved.
+
 ## [1.11.5] - 2026-11-01
 
 **Speaks API contracts 1 to 14, which covers barakoCMS 4.0.1 to 5.5.0.** barakoCMS 5.5.0 moves the
