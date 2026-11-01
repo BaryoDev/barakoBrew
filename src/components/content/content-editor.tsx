@@ -264,11 +264,13 @@ export function ContentEditor({
               />
             ) : (
               <>
+                {/* A status change moves the entry's version. With unsaved edits that reads as
+                    somebody else's change and raises a conflict, so these wait for a save. */}
                 {content.status !== ContentStatus.Published && (
                   <Button
                     size="sm"
                     onClick={() => setStatus(ContentStatus.Published, 'Published')}
-                    disabled={updateStatus.isPending}
+                    disabled={updateStatus.isPending || dirty}
                   >
                     Publish
                   </Button>
@@ -276,7 +278,7 @@ export function ContentEditor({
                 {content.status !== ContentStatus.Archived && (
                   <ConfirmDialog
                     trigger={
-                      <Button variant="outline" size="sm" disabled={updateStatus.isPending}>
+                      <Button variant="outline" size="sm" disabled={updateStatus.isPending || dirty}>
                         <IconArchive className="size-3.5" />
                         Archive
                       </Button>

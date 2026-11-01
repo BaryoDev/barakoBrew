@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- Publish and Archive are disabled while the entry form has unsaved edits, so a status change no longer raises a false conflict banner.
+- An entries link with a page past the last one moves to the last page instead of showing an empty table.
+
 ## [1.11.5] - 2026-11-01
 
 **Speaks API contracts 1 to 14, which covers barakoCMS 4.0.1 to 5.5.0.** barakoCMS 5.5.0 moves the
