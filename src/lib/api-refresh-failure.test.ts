@@ -80,7 +80,35 @@ describe('outbound request timeouts', () => {
         await api.get('/api/content');
         await api.post('/api/files', new FormData());
 
-        expect(seen.get).toBeGreaterThan(0);
-        expect(seen.post).toBeGreaterThan(seen.get as number);
+        expect(seen.get).toBe(30_000);
+        expect(seen.post).toBe(600_000);
+    });
+});
+
+describe('a 401 whose refresh could not be answered', () => {
+    function unauthorised(config: InternalAxiosRequestConfig): never {
+        throw new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config, null, {
+            status: 401,
+            statusText: 'Unauthorized',
+            headers: {},
+            config,
+            data: {},
+        });
+    }
+
+    it('stays on the page when the refresh timed out, and goes to login when it was refused', async () => {
+        const location = { pathname: '/content', href: 'https://example.com/content' };
+        vi.stubGlobal('location', location);
+        api.defaults.adapter = async (config) => unauthorised(config);
+
+        const post = vi.spyOn(axios, 'post').mockRejectedValue(refused(503));
+        await expect(api.get('/api/content')).rejects.toThrow();
+        expect(location.href).toBe('https://example.com/content');
+        expect(tokenStore.token).toBe('live-token');
+
+        post.mockRejectedValue(refused(401));
+        await expect(api.get('/api/content')).rejects.toThrow();
+        expect(location.href).toBe('/login');
+        vi.unstubAllGlobals();
     });
 });

@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { InternalAxiosRequestConfig } from 'axios';
 import { api } from '@/lib/api';
-import { toRecords, useAnalyzeSheet, type SheetPreview } from './use-import';
+import { toRecords, useAnalyzeSheet, useBulkCreate, type SheetPreview } from './use-import';
 
 const originalAdapter = api.defaults.adapter;
 
@@ -38,6 +38,26 @@ describe('useAnalyzeSheet', () => {
         expect(body).toBeInstanceOf(FormData);
         expect(((body as FormData).get('file') as File).name).toBe('posts.csv');
         expect(String(seen[0].headers.getContentType() ?? '')).not.toContain('application/json');
+    });
+});
+
+describe('useBulkCreate', () => {
+    it('sets no client timeout, so a slow bulk write is not retried into duplicates', async () => {
+        const seen: InternalAxiosRequestConfig[] = [];
+        api.defaults.adapter = async (config) => {
+            seen.push(config);
+            return { data: { created: 0, failed: 0, errors: [] }, status: 200, statusText: 'OK', headers: {}, config };
+        };
+        const client = new QueryClient();
+        const { result } = renderHook(() => useBulkCreate(), {
+            wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+        });
+
+        await result.current.mutateAsync({ contentType: 'post', records: [], continueOnError: true, status: 'Draft' });
+
+        expect(seen).toHaveLength(1);
+        expect(seen[0].url).toBe('/api/import/content');
+        expect(seen[0].timeout).toBe(0);
     });
 });
 
