@@ -25,6 +25,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { IconTrash } from '@/components/icons';
 
 // Handle rules mirror the server (TenantHandles): 3-40 chars, lowercase alphanumerics + hyphens,
@@ -92,16 +93,18 @@ function StatusCards({
 function DomainsList({
   domains,
   onChange,
+  draft,
+  setDraft,
   problems,
   clash,
 }: {
   domains: string[];
   onChange: (domains: string[]) => void;
+  draft: string;
+  setDraft: (draft: string) => void;
   problems: string[];
   clash: string | null;
 }) {
-  const [draft, setDraft] = useState('');
-
   function add() {
     const typed = draft.trim();
     if (typed === '') return;
@@ -176,21 +179,32 @@ function EditForm({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
   const [name, setName] = useState(tenant.name);
   const [status, setStatus] = useState<TenantStatus>(from);
   const [domains, setDomains] = useState<string[]>(tenant.domains ?? []);
+  const [draft, setDraft] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const [clash, setClash] = useState<string | null>(null);
 
-  const problems = domainProblems(domains);
+  // A domain typed but not yet added still counts, so Save never drops what is in the box.
+  const pending = draft.trim();
+  const allDomains = pending === '' ? domains : [...domains, pending];
+  const problems = domainProblems(allDomains);
   const canSave = name.trim() !== '' && problems.length === 0 && !update.isPending;
   // An API before contract 8 has only the flag, so it cannot hold Archived.
   const options = tenant.status ? TENANT_STATUSES : TENANT_STATUSES.filter((s) => s !== 'Archived');
+  const takesTenantOffline = status !== from && status !== 'Active';
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSave) return;
+    if (takesTenantOffline) setConfirming(true);
+    else void save();
+  }
+
+  async function save() {
     setClash(null);
     try {
       await update.mutateAsync({
         tenant,
-        changes: { name, status, ...(tenant.domains === undefined ? {} : { domains }) },
+        changes: { name, status, ...(tenant.domains === undefined ? {} : { domains: allDomains }) },
       });
       toast.success(`${name.trim()} saved`, { description: `Status: ${status}.` });
       onDone();
@@ -224,6 +238,8 @@ function EditForm({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
               setDomains(next);
               setClash(null);
             }}
+            draft={draft}
+            setDraft={setDraft}
             problems={problems}
             clash={clash}
           />
@@ -240,6 +256,15 @@ function EditForm({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
           </Button>
         </div>
       </SheetFooter>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={status === 'Archived' ? 'Archive this tenant?' : 'Suspend this tenant?'}
+        description={`${name.trim()} will answer 404 on delivery and 403 to its own signed-in callers until its status is set back to Active.`}
+        confirmLabel={status === 'Archived' ? 'Archive tenant' : 'Suspend tenant'}
+        destructive
+        onConfirm={() => void save()}
+      />
     </form>
   );
 }

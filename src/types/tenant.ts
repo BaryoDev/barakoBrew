@@ -57,7 +57,7 @@ export interface TenantChanges {
  */
 export function tenantUpdateBody(tenant: Tenant, changes: TenantChanges = {}): Record<string, unknown> {
     const read = tenant as Tenant & Record<string, unknown>;
-    const body: Record<string, unknown> = { Handle: tenant.slug, Name: (changes.name ?? tenant.name).trim() };
+    const body: Record<string, unknown> = { Handle: tenant.slug, Name: changes.name === undefined ? tenant.name : changes.name.trim() };
     for (const [answered, sent] of LEGACY_PROFILE) {
         if (answered in read) body[sent] = read[answered] ?? null;
     }
