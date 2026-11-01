@@ -88,5 +88,12 @@ export function relativeTime(value: string, now: number = Date.now()): string {
 
 /** Only a path inside the console is linked. Anything else is shown but not clickable. */
 export function safeRef(ref: string): string | null {
-  return ref.startsWith('/') && !ref.startsWith('//') ? ref : null;
+  if (!ref.startsWith('/') || /[\\\u0000-\u001f\u007f]/.test(ref)) return null;
+  try {
+    const parsed = new URL(ref, 'https://console.invalid');
+    if (parsed.origin !== 'https://console.invalid') return null;
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch {
+    return null;
+  }
 }
