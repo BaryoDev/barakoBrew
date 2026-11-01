@@ -73,4 +73,39 @@ describe('useSwitchTenant', () => {
 
         await waitFor(() => expect(screen.result.current.data).toBe('entry of globex'));
     });
+
+    it('shows no data for a mounted screen while its refetch is pending', async () => {
+        const key = ['contents', 'detail', 'post', '1'];
+        let release: (value: string) => void = () => {};
+        let calls = 0;
+        const screen = renderHook(
+            () =>
+                useQuery({
+                    queryKey: key,
+                    queryFn: () => {
+                        calls += 1;
+                        if (calls === 1) return Promise.resolve('entry of acme');
+                        return new Promise<string>((resolve) => {
+                            release = resolve;
+                        });
+                    },
+                }),
+            { wrapper },
+        );
+        await waitFor(() => expect(screen.result.current.data).toBe('entry of acme'));
+
+        const { result } = renderHook(() => useSwitchTenant(), { wrapper });
+        act(() => {
+            result.current.mutate('globex');
+        });
+
+        await waitFor(() => expect(calls).toBe(2));
+        expect(screen.result.current.fetchStatus).toBe('fetching');
+        expect(screen.result.current.data).toBeUndefined();
+
+        await act(async () => {
+            release('entry of globex');
+        });
+        await waitFor(() => expect(screen.result.current.data).toBe('entry of globex'));
+    });
 });
