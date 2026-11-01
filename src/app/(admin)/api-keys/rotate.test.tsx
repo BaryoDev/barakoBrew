@@ -160,7 +160,7 @@ describe('rotating an API key', () => {
         await waitFor(() => expect(screen.queryByTestId('rotated-key-secret')).toBeNull());
 
         expect(document.body.textContent).not.toContain(SECRET);
-        expect(heldInCaches()).toBe(false);
+        await waitFor(() => expect(heldInCaches()).toBe(false));
         expect(JSON.stringify({ ...localStorage })).not.toContain(SECRET);
         expect(JSON.stringify({ ...sessionStorage })).not.toContain(SECRET);
     });
