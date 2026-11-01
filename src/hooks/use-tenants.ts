@@ -99,9 +99,9 @@ export function useSwitchTenant() {
     },
     onSuccess: async () => {
       // Everything is tenant-scoped. Marking it stale leaves the old tenant's answers readable until
-      // each refetch lands, and some keys carry no tenant, so cancel what is in flight and drop it all.
-      await queryClient.cancelQueries();
-      queryClient.clear();
+      // each refetch lands, and some keys carry no tenant. Reset drops the data, cancels in-flight
+      // work and refetches what a mounted screen is showing.
+      await queryClient.resetQueries();
     },
   });
 }
