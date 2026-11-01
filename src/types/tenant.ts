@@ -40,24 +40,40 @@ const LEGACY_PROFILE = [
     ['contactUrl', 'ContactUrl'],
 ] as const;
 
+/** What the edit rail can change on a tenant. A field left out goes back as it was read. */
+export interface TenantChanges {
+    name?: string;
+    status?: TenantStatus;
+    domains?: readonly string[];
+}
+
 /**
- * The body of `PUT /api/tenants/{handle}` that changes only the domains.
+ * The body of `PUT /api/tenants/{handle}`: handle, name, status and domains.
  *
- * The name and the status (before contract 8, the active flag) go back as they were read. A profile
- * field goes back only when the tenant answer carried it: an API before 4.6 overwrites every profile
- * field with what it is sent, so leaving one out there would blank it, and API 4.6 answers with none
- * of them and keeps what the record holds when they are left out.
+ * Whatever is not changed goes back as it was read. A profile field goes back only when the tenant
+ * answer carried it: an API before 4.6 overwrites every profile field with what it is sent, so
+ * leaving one out there would blank it, and API 4.6 answers with none of them and keeps what the
+ * record holds when they are left out.
  */
-export function tenantDomainsBody(tenant: Tenant, domains: readonly string[]): Record<string, unknown> {
+export function tenantUpdateBody(tenant: Tenant, changes: TenantChanges = {}): Record<string, unknown> {
     const read = tenant as Tenant & Record<string, unknown>;
-    const body: Record<string, unknown> = { Handle: tenant.slug, Name: tenant.name };
+    const body: Record<string, unknown> = { Handle: tenant.slug, Name: changes.name === undefined ? tenant.name : changes.name.trim() };
     for (const [answered, sent] of LEGACY_PROFILE) {
         if (answered in read) body[sent] = read[answered] ?? null;
     }
     // From contract 8 a write naming neither the status nor the flag makes the tenant Active, and the
     // flag is obsolete, so the status goes back as read. An older API reports only the flag.
-    if (tenant.status) body.Status = tenant.status;
-    else body.IsActive = tenant.isActive;
-    body.Domains = domains.map((d) => d.trim());
+    if (tenant.status || changes.status === undefined) {
+        if (tenant.status) body.Status = changes.status ?? tenant.status;
+        else body.IsActive = tenant.isActive;
+    } else body.IsActive = changes.status === 'Active';
+    // An API that does not report domains is not sent any, so a rail save cannot clear what it hides.
+    const domains = changes.domains ?? tenant.domains;
+    if (domains) body.Domains = domains.map((d) => d.trim());
     return body;
+}
+
+/** The body of `PUT /api/tenants/{handle}` that changes only the domains. */
+export function tenantDomainsBody(tenant: Tenant, domains: readonly string[]): Record<string, unknown> {
+    return tenantUpdateBody(tenant, { domains });
 }
