@@ -88,6 +88,48 @@ export function useCreateApiKey() {
   });
 }
 
+export interface RotateApiKeyInput {
+  id: string;
+  /** Minutes the old key keeps working after the new one is issued. 0 to 10080. */
+  overlapMinutes: number;
+}
+
+/** The overlap choices the rotate rail offers, in minutes. The API accepts 0 to 7 days. */
+export const ROTATE_OVERLAPS: { minutes: number; label: string }[] = [
+  { minutes: 0, label: 'None' },
+  { minutes: 15, label: '15 minutes' },
+  { minutes: 60, label: '60 minutes' },
+  { minutes: 6 * 60, label: '6 hours' },
+  { minutes: 24 * 60, label: '24 hours' },
+  { minutes: 3 * 24 * 60, label: '3 days' },
+  { minutes: 7 * 24 * 60, label: '7 days' },
+];
+
+export const DEFAULT_ROTATE_OVERLAP_INDEX = ROTATE_OVERLAPS.findIndex((o) => o.minutes === 60);
+
+const KEY_KINDS: { prefix: string; label: string }[] = [
+  { prefix: 'bcms_ro_', label: 'Read-only' },
+  { prefix: 'bcms_', label: 'Standard' },
+];
+
+/** The kind of key from its prefix. A prefix this console does not know is shown as it is. */
+export function apiKeyKind(prefix: string): string {
+  const known = KEY_KINDS.find((k) => prefix.startsWith(k.prefix));
+  if (known) return known.label;
+  return /^[A-Za-z0-9]+_(?:[A-Za-z0-9]+_)?/.exec(prefix)?.[0] ?? prefix;
+}
+
+/** Issues a replacement key. The result carries the new secret, so it takes `SECRET_MUTATION`. */
+export function useRotateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, overlapMinutes }: RotateApiKeyInput) =>
+      (await api.post<CreatedApiKey>(`/api/api-keys/${id}/rotate`, { overlapMinutes })).data,
+    ...SECRET_MUTATION,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+  });
+}
+
 export function useRevokeApiKey() {
   const queryClient = useQueryClient();
   return useMutation({
