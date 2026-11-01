@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/patterns/status-badge';
 import { ErrorState } from '@/components/patterns/error-state';
 import { useWorkflows } from '@/hooks/use-workflows';
 import { healthTile, useWorkflowHealth, type WorkflowOutcome } from '@/hooks/use-workflow-health';
-import { toneForRunStatus } from '@/hooks/use-workflow-runs';
+import { runStatusLabel, toneForRunStatus } from '@/hooks/use-workflow-runs';
 import { cn } from '@/lib/utils';
 
 const ROWS = 8;
@@ -105,7 +105,7 @@ export function WorkflowHealthCard() {
                   </span>
                   <span className="text-center">
                     {last ? (
-                      <StatusBadge tone={toneForRunStatus(last.status)}>{last.status}</StatusBadge>
+                      <StatusBadge tone={toneForRunStatus(last.status)}>{runStatusLabel(last.status)}</StatusBadge>
                     ) : (
                       <span className="text-muted-foreground text-xs">No runs</span>
                     )}

@@ -138,7 +138,7 @@ test.describe('workflow runs', () => {
 
     const table = page.getByRole('table');
     await expect(table.getByText('Announce a post')).toBeVisible();
-    await expect(table.getByText('PartiallyFailed', { exact: true })).toBeVisible();
+    await expect(table.getByText('Partly failed', { exact: true })).toBeVisible();
     await expect(table.getByText('Succeeded', { exact: true })).toBeVisible();
     await expect(table.getByText('Failed', { exact: true })).toBeVisible();
     await expect(table.getByText('Running', { exact: true })).toBeVisible();

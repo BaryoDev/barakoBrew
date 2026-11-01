@@ -50,6 +50,11 @@ export const RUN_STATUSES = ['Pending', 'Running', 'Succeeded', 'Failed', 'Parti
 
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
+/** A run status in the words people use. An unknown status is shown as the API sent it. */
+export function runStatusLabel(status: string): string {
+  return status === 'PartiallyFailed' ? 'Partly failed' : status;
+}
+
 export interface WorkflowActionAttempt {
   ordinal: number;
   actionType: string;

@@ -29,11 +29,13 @@ import {
   RUN_LEGACY_ROLES,
   RUN_STATUSES,
   parseRunId,
+  runStatusLabel,
   type LivePause,
   isAbandonable,
   isCancellable,
   runAllowsRetry,
   runFailureKind,
+  toneForAttemptStatus,
   toneForRunStatus,
   useAbandonRun,
   useCancelRun,
@@ -98,7 +100,7 @@ function StatusChips({
   const total = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : null;
   const chips: { status: string; label: string; count: number | null }[] = [
     { status: ANY_STATUS, label: 'Every status', count: total },
-    ...RUN_STATUSES.map((status) => ({ status, label: status, count: counts ? (counts[status] ?? 0) : null })),
+    ...RUN_STATUSES.map((status) => ({ status, label: runStatusLabel(status), count: counts ? (counts[status] ?? 0) : null })),
   ];
 
   return (
@@ -147,6 +149,37 @@ function PauseNote({ pause, updatedAt }: { pause: LivePause; updatedAt: number }
       Live updates paused{pause.reason === 'stopped' ? ' (sign in again or ask for access to resume)' : ' (retrying)'}.
       {when && ` Last updated ${when}.`}
     </p>
+  );
+}
+
+const BAR_TONE: Record<string, string> = {
+  success: 'bg-success',
+  destructive: 'bg-destructive',
+  warning: 'bg-warning',
+  accent: 'bg-primary',
+  muted: 'bg-border',
+  subtle: 'bg-border',
+};
+
+/** One bar for each action of a run, coloured by how that action went. */
+function ActionBars({ actions }: { actions: WorkflowRun['actions'] | undefined }) {
+  if (!actions || actions.length === 0) return null;
+
+  return (
+    <span
+      role="img"
+      aria-label={`Actions: ${actions.map((a) => `${a.ordinal} ${a.status}`).join(', ')}`}
+      className="mt-1 flex gap-0.5 font-normal"
+    >
+      {actions.map((attempt) => (
+        <span
+          key={attempt.ordinal}
+          data-testid="action-bar"
+          data-status={attempt.status}
+          className={`h-1 w-4 rounded-full ${BAR_TONE[toneForAttemptStatus(attempt.status)]}`}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -362,7 +395,7 @@ export default function WorkflowRunsPage() {
               description={
                 status === ANY_STATUS
                   ? 'Nothing has fired a workflow yet. A run appears here the moment one does.'
-                  : `No run is currently ${status}. Try another status.`
+                  : `No run is currently ${runStatusLabel(status)}. Try another status.`
               }
             />
           ) : (
@@ -396,12 +429,13 @@ export default function WorkflowRunsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1">
-                          <StatusBadge tone={toneForRunStatus(row.status)}>{row.status}</StatusBadge>
+                          <StatusBadge tone={toneForRunStatus(row.status)}>{runStatusLabel(row.status)}</StatusBadge>
                           <RunFailureKind run={row} />
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-40 truncate text-[13px] font-bold">
-                        {row.workflowName}
+                      <TableCell className="max-w-40 text-[13px] font-bold">
+                        <div className="truncate">{row.workflowName}</div>
+                        <ActionBars actions={row.actions} />
                       </TableCell>
                       <TableCell className="text-muted-foreground max-w-32 truncate font-mono text-[12px]">
                         {row.triggerEvent}
@@ -446,7 +480,7 @@ export default function WorkflowRunsPage() {
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[15px] font-bold">{run.data.workflowName}</h2>
-                <StatusBadge tone={toneForRunStatus(run.data.status)}>{run.data.status}</StatusBadge>
+                <StatusBadge tone={toneForRunStatus(run.data.status)}>{runStatusLabel(run.data.status)}</StatusBadge>
                 {canCancel && isCancellable(run.data) && (
                   <Button
                     className="ml-auto"
@@ -490,6 +524,12 @@ export default function WorkflowRunsPage() {
                     />
                   ))}
                 </ol>
+              )}
+              {run.data.actions.some((attempt) => attempt.status === 'Unknown') && (
+                <p className="text-muted-foreground mt-3 text-[12px]">
+                  Unknown means the request went out and no answer came back, so it may have arrived. Retrying it
+                  sends it again with the same idempotency key, so a receiver that honours the key does the work once.
+                </p>
               )}
             </>
           ) : null}
