@@ -47,7 +47,7 @@ export function useBulkCreate() {
             continueOnError: boolean;
             status: string;
         }) => {
-            const response = await api.post<BulkCreateReport>('/api/import/content', body);
+            const response = await api.post<BulkCreateReport>('/api/import/content', body, { timeout: 0 });
             return response.data;
         },
     });

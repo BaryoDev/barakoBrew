@@ -268,7 +268,9 @@ api.interceptors.response.use(
                 return api(original);
             }
             const login = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/login`;
-            if (!window.location.pathname.startsWith(login)) {
+            // A refresh that could not be answered keeps the token, and a full navigation would
+            // drop it. Only a refused refresh, which clears it, ends at the login page.
+            if (!tokenStore.token && !window.location.pathname.startsWith(login)) {
                 window.location.href = login;
             }
         }

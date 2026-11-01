@@ -111,7 +111,7 @@ export function isForbidden(error: unknown): boolean {
 export function useFileBlob(url: string) {
     return useQuery({
         queryKey: ['files', 'blob', url],
-        queryFn: async () => (await api.get<Blob>(url, { responseType: 'blob' })).data,
+        queryFn: async () => (await api.get<Blob>(url, { responseType: 'blob', timeout: 0 })).data,
         staleTime: Infinity,
     });
 }
