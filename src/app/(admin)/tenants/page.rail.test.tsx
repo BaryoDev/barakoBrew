@@ -162,6 +162,42 @@ describe('the tenant edit rail', () => {
         expect(within(rail).getByText(/like suspended\. kept for the record/i)).toBeInTheDocument();
     });
 
+    it.each([
+        ['Active', /^Served\./],
+        ['Suspended', /reversible\.$/i],
+        ['Archived', /kept for the record\.$/i],
+    ])('puts the %s option on the tenant status and gives each option only its own consequence', async (status, own) => {
+        const tenant = { ...TENANT, status, isActive: status === 'Active' };
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/tenants') return page([tenant]);
+            if (url === '/api/tenants/members') return page([]);
+            if (url === '/api/tenants/members/roles') return page([]);
+            throw new Error(`unexpected GET ${url}`);
+        });
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'North club' }));
+        const rail = await screen.findByRole('dialog');
+
+        const radios = within(rail).getAllByRole('radio');
+        expect(radios).toHaveLength(3);
+        expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
+
+        const options = radios.map((r) => ({
+            label: r.closest('label')!.textContent ?? '',
+            checked: (r as HTMLInputElement).checked,
+        }));
+        const checked = options.find((o) => o.checked)!;
+        expect(checked.label.startsWith(status)).toBe(true);
+        expect(checked.label).toMatch(own);
+
+        const consequences = [/^Served\./, /reversible\.$/i, /kept for the record\.$/i];
+        const labels = options.map((o) => o.label);
+        for (const pattern of consequences) {
+            expect(labels.filter((l) => pattern.test(l.replace(/^(Active|Suspended|Archived)/, '')))).toHaveLength(1);
+        }
+        expect(labels.filter((l) => own.test(l.replace(/^(Active|Suspended|Archived)/, '')))).toEqual([checked.label]);
+    });
+
     it('opens New tenant in the rail with the POST line, not a modal form', async () => {
         await renderPage();
 
