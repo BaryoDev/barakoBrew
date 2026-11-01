@@ -60,6 +60,19 @@ describe('an activity row', () => {
     expect(item).toHaveTextContent('Mara moved a thing Spring menu');
   });
 
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
+    'shows %s as an unknown kind instead of reading it off the kind table',
+    (kind) => {
+      render(<ul><ActivityFeedRow row={row(kind, { text: 'moved a thing' })} now={NOW} /></ul>);
+
+      const item = screen.getByRole('listitem');
+      const name = within(item).getByText(kind);
+      expect(name.tagName).toBe('CODE');
+      expect(item.querySelectorAll('code')).toHaveLength(1);
+      expect(item).toHaveTextContent('Mara moved a thing Spring menu');
+    },
+  );
+
   it('does not link a ref that leaves the console', () => {
     render(<ul><ActivityFeedRow row={row('edited', { ref: 'https://elsewhere.example/x' })} now={NOW} /></ul>);
 
