@@ -97,9 +97,11 @@ export function useSwitchTenant() {
       tokenStore.set(data.token);
       return data;
     },
-    onSuccess: () => {
-      // Everything is tenant-scoped — drop all cached data so it refetches under the new tenant.
-      queryClient.invalidateQueries();
+    onSuccess: async () => {
+      // Everything is tenant-scoped. Marking it stale leaves the old tenant's answers readable until
+      // each refetch lands, and some keys carry no tenant. Reset drops the data, cancels in-flight
+      // work and refetches what a mounted screen is showing.
+      await queryClient.resetQueries();
     },
   });
 }
