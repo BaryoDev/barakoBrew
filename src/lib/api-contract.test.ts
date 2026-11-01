@@ -148,15 +148,15 @@ describe('recording what the last response said', () => {
  * (BaryoDev/barakoCMS#1028), 6 is the release that enforces a field's validation rules
  * (BaryoDev/barakoCMS#927), 7 is 4.7.0, which replays an idempotent retry and refuses credential-named
  * connector settings, 8 is 5.0.0, which gives tenants a status and roles an owner
- * (BaryoDev/barakoCMS#894, BaryoDev/barakoCMS#913), 9 is 5.1.0, which adds the Members sensitivity, 10 and 11 are 5.2.0 (no shape the console reads), 12 is 5.3.0, whose Suite image no longer carries the Accounting routes, 13 is 5.4.0 (nothing the console calls), and a console that speaks only some of them goes
+ * (BaryoDev/barakoCMS#894, BaryoDev/barakoCMS#913), 9 is 5.1.0, which adds the Members sensitivity, 10 and 11 are 5.2.0 (no shape the console reads), 12 is 5.3.0, whose Suite image no longer carries the Accounting routes, 13 is 5.4.0 (nothing the console calls), 14 is 5.5.0, which refuses an X-Tenant that disagrees with a verified custom domain, and a console that speaks only some of them goes
  * blank against the rest.
  *
  * Widening the range is a decision about what this build handles, not a number carried along, so
  * these have to be edited by hand when it moves.
  */
 describe('the contract versions this build speaks', () => {
-    it('speaks 1 to 13', () => {
-        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 13 });
+    it('speaks 1 to 14', () => {
+        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 14 });
     });
 
     it('accepts both of them from a response', () => {
@@ -173,25 +173,26 @@ describe('the contract versions this build speaks', () => {
         expect(classifyContract('11')).toEqual({ kind: 'ok', version: 11 });
         expect(classifyContract('12')).toEqual({ kind: 'ok', version: 12 });
         expect(classifyContract('13')).toEqual({ kind: 'ok', version: 13 });
+        expect(classifyContract('14')).toEqual({ kind: 'ok', version: 14 });
     });
 
-    it('still refuses 0 as too old and 14 as too new', () => {
+    it('still refuses 0 as too old and 15 as too new', () => {
         expect(classifyContract('0')).toEqual({ kind: 'api-older', version: 0 });
-        expect(classifyContract('14')).toEqual({ kind: 'api-newer', version: 14 });
+        expect(classifyContract('15')).toEqual({ kind: 'api-newer', version: 15 });
     });
 });
 
-describe('the supported range after barakoCMS 5.4.0', () => {
+describe('the supported range after barakoCMS 5.5.0', () => {
     // Literal numbers, not the ends of SUPPORTED_CONTRACT, so widening or narrowing it fails here.
-    it('takes contract 13 as ok', () => {
-        expect(classifyContract('13')).toEqual({ kind: 'ok', version: 13 });
+    it('takes contract 14 as ok', () => {
+        expect(classifyContract('14')).toEqual({ kind: 'ok', version: 14 });
     });
 
-    it('calls contract 14 newer', () => {
-        expect(classifyContract('14')).toEqual({ kind: 'api-newer', version: 14 });
+    it('calls contract 15 newer', () => {
+        expect(classifyContract('15')).toEqual({ kind: 'api-newer', version: 15 });
     });
 
-    it('ends the range at 13', () => {
-        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 13 });
+    it('ends the range at 14', () => {
+        expect(SUPPORTED_CONTRACT).toEqual({ min: 1, max: 14 });
     });
 });
