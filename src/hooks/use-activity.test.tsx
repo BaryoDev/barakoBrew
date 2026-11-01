@@ -38,6 +38,18 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
 }
 
+const AVAILABLE_KEY = ['activity', 'available'];
+
+/** A hook render whose client the test can ask whether the probe has settled. */
+function renderProbe() {
+  const client = new QueryClient();
+  const probeWrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const view = renderHook(() => useActivityAvailable(), { wrapper: probeWrapper });
+  return { ...view, client };
+}
+
 beforeEach(() => vi.clearAllMocks());
 
 describe('useActivity', () => {
@@ -82,17 +94,19 @@ describe('the Activity rail item', () => {
 
   it('stays when the endpoint answers', async () => {
     vi.mocked(api.get).mockResolvedValue({ data: { items: [], nextCursor: null } });
-    const { result } = renderHook(() => useActivityAvailable(), { wrapper });
+    const { result, client } = renderProbe();
 
-    await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalled());
-    await waitFor(() => expect(result.current).toBe(true));
+    await waitFor(() => expect(client.getQueryState(AVAILABLE_KEY)?.status).toBe('success'));
+    expect(client.getQueryData(AVAILABLE_KEY)).toBe(true);
+    expect(result.current).toBe(true);
   });
 
   it('stays when the request fails for any other reason', async () => {
     vi.mocked(api.get).mockRejectedValue(httpError(500));
-    const { result } = renderHook(() => useActivityAvailable(), { wrapper });
+    const { result, client } = renderProbe();
 
-    await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalled());
+    await waitFor(() => expect(client.getQueryState(AVAILABLE_KEY)?.status).toBe('success'));
+    expect(client.getQueryData(AVAILABLE_KEY)).toBe(true);
     expect(result.current).toBe(true);
   });
 });

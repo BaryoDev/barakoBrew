@@ -43,8 +43,9 @@ describe('an activity row', () => {
     const item = screen.getByRole('listitem');
     expect(item).toHaveTextContent(`Mara ${sentence} Spring menu`);
     expect(within(item).getByText('5m ago')).toBeInTheDocument();
-    expect(within(item).getByText(kind)).toBeInTheDocument();
-    expect(within(item).getByText(kind).tagName).not.toBe('CODE');
+    const chip = item.querySelector('[data-slot="badge"]');
+    expect(chip).toHaveTextContent(kind);
+    expect(item.querySelector('code')).toBeNull();
     expect(within(item).getByRole('link', { name: 'Spring menu' })).toHaveAttribute('href', '/content/c-1');
     expect(item).toHaveClass('h-12');
   });
@@ -115,5 +116,13 @@ describe('activity helpers', () => {
     expect(safeRef('/content/1')).toBe('/content/1');
     expect(safeRef('//elsewhere.example')).toBeNull();
     expect(safeRef('javascript:void(0)')).toBeNull();
+  });
+
+  it('does not link a path a browser reads as another host', () => {
+    expect(safeRef('/\\evil.example')).toBeNull();
+    expect(safeRef('/\t/evil.example')).toBeNull();
+    expect(safeRef('/\n/evil.example')).toBeNull();
+    expect(safeRef('/%2F%2Fevil.example')).toBe('/%2F%2Fevil.example');
+    expect(safeRef('/content/1?tab=history#top')).toBe('/content/1?tab=history#top');
   });
 });
