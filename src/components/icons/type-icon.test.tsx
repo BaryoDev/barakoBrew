@@ -1,6 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
-import { CustomIconSprite, TYPE_GLYPHS, TypeIcon } from './type-icon';
+
+// The symbol registry in custom-icon.ts is module state, so each test loads a fresh copy.
+let CustomIconSprite: typeof import('./type-icon').CustomIconSprite;
+let TYPE_GLYPHS: typeof import('./type-icon').TYPE_GLYPHS;
+let TypeIcon: typeof import('./type-icon').TypeIcon;
+
+beforeEach(async () => {
+    vi.resetModules();
+    ({ CustomIconSprite, TYPE_GLYPHS, TypeIcon } = await import('./type-icon'));
+});
 
 describe('a content type icon', () => {
     it('offers 20 distinct glyphs', () => {
@@ -50,7 +59,12 @@ describe('a content type icon', () => {
 
         const sprite = container.querySelector('[data-custom-icon-sprite]');
         expect(sprite?.querySelectorAll('symbol')).toHaveLength(1);
-        expect(sprite?.innerHTML).not.toMatch(/script|onload|onclick|alert|red/i);
+        const id = container.querySelector('use')?.getAttribute('href')?.slice(1);
+        const symbol = container.querySelector(`symbol[id="${id}"]`);
+        expect(symbol).not.toBeNull();
+        expect(symbol?.querySelectorAll('path')).toHaveLength(1);
+        expect(symbol?.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
+        expect(symbol?.innerHTML).not.toMatch(/script|onload|onclick|alert|red/i);
     });
 
     it('falls back to the default glyph for stored markup with no shape', () => {
