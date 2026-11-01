@@ -8,7 +8,7 @@ import { useWorkflowDebugLogs } from '@/hooks/use-workflows';
 import { toneForRunStatus, useWorkflowRuns } from '@/hooks/use-workflow-runs';
 import { isForbidden, isNotFound } from '@/lib/api';
 
-const RECENT_RUNS = 10;
+const RECENT_RUNS = 5;
 
 /**
  * The workflow's recent runs from the run list, each linking to the run. An API without the list's
@@ -34,10 +34,11 @@ export function RunsPanel({ workflowId }: { workflowId: string }) {
 
   // An API before barakoCMS#1165 ignores the filter and sends every workflow's runs.
   const all = runs.data?.items ?? [];
-  const items = all.filter((run) => run.workflowDefinitionId === workflowId);
-  // Rows of other workflows mean the filter was ignored, and the page of ten says nothing about
+  const matching = all.filter((run) => run.workflowDefinitionId === workflowId);
+  const items = matching.slice(0, RECENT_RUNS);
+  // Rows of other workflows mean the filter was ignored, and the page says nothing about
   // this workflow. "Has not run yet" would be a claim the data cannot back, so show the log.
-  if (items.length < all.length) return <DebugLogPanel workflowId={workflowId} />;
+  if (matching.length < all.length) return <DebugLogPanel workflowId={workflowId} />;
   // A failed refetch keeps the last runs that loaded. Say so, as the runs page does.
   const stale = runs.isError && (
     <p role="alert" className="text-destructive mb-3 text-[12px]">
@@ -70,12 +71,20 @@ export function RunsPanel({ workflowId }: { workflowId: string }) {
               className="hover:bg-accent flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
             >
               <span className="mr-auto text-sm">{format(new Date(run.createdAt), 'PPp')}</span>
+              <span className="text-muted-foreground font-mono text-xs">
+                {run.contentType} {run.contentId.slice(0, 8)}
+              </span>
               <span className="text-muted-foreground text-xs">{run.triggerEvent}</span>
               <StatusBadge tone={toneForRunStatus(run.status)}>{run.status}</StatusBadge>
             </Link>
           </li>
         ))}
       </ul>
+      <p className="mt-3 text-right text-sm">
+        <Link href="/workflow-runs" className="underline underline-offset-2">
+          All runs
+        </Link>
+      </p>
     </>
   );
 }
