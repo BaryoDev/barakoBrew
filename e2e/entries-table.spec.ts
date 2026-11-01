@@ -77,6 +77,16 @@ test('the next page replaces the rows rather than keeping the first page on scre
     await expect(page.getByRole('link', { name: 'Entry 1' })).toHaveCount(0);
 });
 
+test('a page past the end moves to the last page instead of showing an empty table', async ({ page }) => {
+    await page.goto('/content?page=9');
+
+    await page.waitForURL(/page=2/);
+    await expect(rows(page)).toHaveCount(2);
+    await expect(rows(page).nth(0)).toContainText('Entry 3');
+    await expect(rows(page).nth(1)).toContainText('Entry 4');
+    await expect(page.getByText('No entries yet')).toHaveCount(0);
+});
+
 test('a status filter redraws every cell of every row, the version column included', async ({ page }) => {
     await page.goto('/content');
     await expect(rows(page)).toHaveCount(2);
