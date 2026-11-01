@@ -71,6 +71,8 @@ describe('the tenant edit rail', () => {
 
         fireEvent.click(within(rail).getByRole('radio', { name: /suspended/i }));
         fireEvent.click(within(rail).getByRole('button', { name: 'Save and suspend' }));
+        expect(api.put).not.toHaveBeenCalled();
+        fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Suspend tenant' }));
 
         await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
         expect(vi.mocked(api.put).mock.calls[0]).toEqual([
@@ -122,9 +124,42 @@ describe('the tenant edit rail', () => {
         expect(within(rail).getAllByRole('radio')).toHaveLength(2);
         fireEvent.click(within(rail).getByRole('radio', { name: /suspended/i }));
         fireEvent.click(within(rail).getByRole('button', { name: 'Save and suspend' }));
+        fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Suspend tenant' }));
 
         await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
         expect(vi.mocked(api.put).mock.calls[0][1]).toEqual({ Handle: 'north', Name: 'North club', IsActive: false });
+    });
+
+    it('sends a domain typed but not yet added when Save is pressed', async () => {
+        vi.mocked(api.put).mockResolvedValue({ data: TENANT });
+        await renderPage();
+
+        fireEvent.click(screen.getByRole('button', { name: 'North club' }));
+        const rail = await screen.findByRole('dialog');
+        fireEvent.change(within(rail).getByLabelText('Domains'), { target: { value: 'club.example' } });
+        fireEvent.click(within(rail).getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.put).mock.calls[0][1]).toMatchObject({ Domains: ['north.example', 'club.example'] });
+    });
+
+    it('does not save while a typed domain is not a valid host', async () => {
+        await renderPage();
+
+        fireEvent.click(screen.getByRole('button', { name: 'North club' }));
+        const rail = await screen.findByRole('dialog');
+        fireEvent.change(within(rail).getByLabelText('Domains'), { target: { value: 'https://bad' } });
+
+        expect(within(rail).getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    });
+
+    it('states the consequence of Active and Archived too', async () => {
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: 'North club' }));
+        const rail = await screen.findByRole('dialog');
+
+        expect(within(rail).getByText(/^Served\./)).toBeInTheDocument();
+        expect(within(rail).getByText(/like suspended\. kept for the record/i)).toBeInTheDocument();
     });
 
     it('opens New tenant in the rail with the POST line, not a modal form', async () => {
