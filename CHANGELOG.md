@@ -9,6 +9,18 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.11.5] - 2026-11-01
+
+**Speaks API contracts 1 to 14, which covers barakoCMS 4.0.1 to 5.5.0.** barakoCMS 5.5.0 moves the
+admin contract to 14. A console that stops at 13 reports that API as newer than it supports, so deploy
+this console before or with 5.5.0.
+
+### Fixed
+
+- Admin contract 14 is no longer refused as a newer API. 5.5.0 answers 403 when `X-Tenant` disagrees
+  with a verified custom domain. The console sends the tenant from its token, so that only matters if
+  it reaches the API through one tenant's custom domain while working in another tenant.
+
 ## [1.11.4] - 2026-10-27
 
 **Speaks API contracts 1 to 13, which covers barakoCMS 4.0.1 to 5.4.0.** barakoCMS 5.4.0 moves the
