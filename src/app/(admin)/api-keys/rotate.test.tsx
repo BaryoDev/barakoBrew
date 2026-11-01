@@ -70,6 +70,14 @@ async function openRail() {
     return screen.findByRole('dialog');
 }
 
+async function loaded() {
+    await waitFor(() => {
+        const queries = client.getQueryCache().getAll();
+        expect(queries.length).toBeGreaterThanOrEqual(2);
+        expect(queries.every((q) => q.state.status === 'success')).toBe(true);
+    });
+}
+
 async function rotate() {
     await openRail();
     fireEvent.click(screen.getByRole('button', { name: 'Rotate key' }));
@@ -99,6 +107,7 @@ describe('rotating an API key', () => {
         expect(apiKeyKind('bcms_ab12cd34')).toBe('Standard');
         expect(apiKeyKind('bcms_ro_ab12cd34')).toBe('Read-only');
         expect(apiKeyKind('zzz_ab12cd34')).toBe('zzz_');
+        expect(apiKeyKind('bcms_rw_ab12')).toBe('bcms_rw_');
     });
 
     it('opens a rail with the 60 minute default, what stays the same and the files scope note', async () => {
@@ -154,6 +163,42 @@ describe('rotating an API key', () => {
         expect(heldInCaches()).toBe(false);
         expect(JSON.stringify({ ...localStorage })).not.toContain(SECRET);
         expect(JSON.stringify({ ...sessionStorage })).not.toContain(SECRET);
+    });
+
+    it('cannot be closed while the request is in flight, so the new key is not lost', async () => {
+        let finish: (value: unknown) => void = () => {};
+        vi.mocked(api.post).mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+        await openRail();
+        fireEvent.click(screen.getByRole('button', { name: 'Rotate key' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalled());
+
+        expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+        fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+        finish({ data: NEW });
+        await waitFor(() => expect(screen.getByTestId('rotated-key-secret')).toHaveValue(SECRET));
+    });
+
+    it('offers no rotate button on an API older than 5.1', async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/api-keys') return envelope(listed);
+            if (url === '/api/meta') return { data: { version: '4.7.0', swaggerEnabled: false } };
+            throw new Error(`unexpected GET ${url}`);
+        });
+        render(React.createElement(QueryClientProvider, { client }, React.createElement(ApiKeysPage)));
+        await screen.findByText('CI deploy');
+        await loaded();
+        expect(screen.getByRole('button', { name: 'Revoke CI deploy' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Rotate CI deploy' })).toBeNull();
+    });
+
+    it('offers no rotate button on a key that has already expired', async () => {
+        listed = [{ ...OLD, expiresAt: '2020-01-01T00:00:00Z' }, { ...OLD, id: 'live', name: 'Live key' }];
+        render(React.createElement(QueryClientProvider, { client }, React.createElement(ApiKeysPage)));
+        expect(await screen.findByRole('button', { name: 'Rotate Live key' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Revoke CI deploy' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Rotate CI deploy' })).toBeNull();
     });
 
     it('stops the old key now by revoking it', async () => {
