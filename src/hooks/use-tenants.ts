@@ -4,13 +4,15 @@ import { useSyncExternalStore } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { api, apiErrorMessage, tokenStore, subscribeToAuth, tenantOfToken, type Paginated } from '@/lib/api';
-import { tenantDomainsBody, type Tenant } from '@/types/tenant';
+import { tenantDomainsBody, tenantUpdateBody, type Tenant, type TenantChanges } from '@/types/tenant';
 
 export {
   TENANT_STATUSES,
   tenantDomainsBody,
   tenantStatusLabel,
+  tenantUpdateBody,
   type Tenant,
+  type TenantChanges,
   type TenantStatus,
 } from '@/types/tenant';
 
@@ -172,6 +174,18 @@ export function useUpdateTenantDomains() {
   return useMutation({
     mutationFn: async ({ tenant, domains }: { tenant: Tenant; domains: readonly string[] }) =>
       (await api.put<Tenant>(`/api/tenants/${encodeURIComponent(tenant.slug)}`, tenantDomainsBody(tenant, domains))).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+    },
+  });
+}
+
+/** Save the edit rail: name, status and domains in one `PUT /api/tenants/{handle}`. */
+export function useUpdateTenant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenant, changes }: { tenant: Tenant; changes: TenantChanges }) =>
+      (await api.put<Tenant>(`/api/tenants/${encodeURIComponent(tenant.slug)}`, tenantUpdateBody(tenant, changes))).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenants'] });
     },
