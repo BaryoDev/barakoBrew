@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -14,23 +13,20 @@ const { api } = await import('@/lib/api');
 const { useActivity, activityDelay, isActivityUnavailable, ACTIVITY_POLL_MS } = await import('./use-activity');
 
 function httpError(status: number) {
-    return new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
-        status,
-        statusText: '',
-        data: {},
-        headers: {},
-        config: { headers: new AxiosHeaders() },
-    });
+    return Object.assign(new Error(`Request failed with status code ${status}`), { isAxiosError: true, response: { status } });
 }
 
 function run(live = true) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{children}</QueryClientProvider>
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
     return renderHook(() => useActivity({ live }), { wrapper });
 }
 
-beforeEach(() => vi.mocked(api.get).mockReset());
+beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+});
 
 describe('useActivity', () => {
     it('reads the newest page from GET /api/activity', async () => {
@@ -44,7 +40,7 @@ describe('useActivity', () => {
     });
 
     it('is unavailable on a 404, an API without the feed', async () => {
-        vi.mocked(api.get).mockRejectedValue(httpError(404));
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(404); });
         const { result } = run();
         await waitFor(() => expect(result.current.available).toBe(false));
         expect(result.current.isError).toBe(false);
@@ -52,13 +48,13 @@ describe('useActivity', () => {
     });
 
     it('is unavailable on a 403, a caller who may not read it', async () => {
-        vi.mocked(api.get).mockRejectedValue(httpError(403));
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(403); });
         const { result } = run();
         await waitFor(() => expect(result.current.available).toBe(false));
     });
 
     it('stays available, as an error, after a 500', async () => {
-        vi.mocked(api.get).mockRejectedValue(httpError(500));
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(500); });
         const { result } = run();
         await waitFor(() => expect(result.current.isError).toBe(true));
         expect(result.current.available).toBe(true);

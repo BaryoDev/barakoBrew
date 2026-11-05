@@ -35,7 +35,8 @@ function Row({ item, now }: { item: ActivityItem; now: number }) {
       <span
         className={cn(
           'border-border text-muted-foreground flex-none rounded-full border px-2 py-0.5 text-[11px]',
-          label === null ? 'font-mono' : 'font-semibold',
+          label === null && 'font-mono',
+          label !== null && 'font-semibold',
           item.severity === 'error' && 'text-destructive',
           item.severity === 'warning' && 'text-warning',
         )}

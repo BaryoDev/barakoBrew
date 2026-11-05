@@ -36,12 +36,19 @@ interface Answers {
     workflows?: 'fail';
     contents?: 'fail';
     runList?: 'fail';
+    /** Rows of GET /api/activity, or how it refuses. Left out, it is a 404: an API older than 5.5. */
+    activity?: unknown[] | 'forbidden';
 }
 
 function renderOverview(answers: Answers = {}) {
     const { published = 42, drafts = 5, runs = 318, failed = 2, version = '4.9.1', contract = 7, health, workflowHealth, analytics, workflows } = answers;
     vi.mocked(api.get).mockImplementation(async (url: string, config?: { params?: unknown }) => {
         const status = (config?.params as { status?: unknown } | undefined)?.status;
+        if (url === '/api/activity') {
+            if (answers.activity === 'forbidden') throw fail(403);
+            if (!answers.activity) throw fail(404);
+            return { data: { items: answers.activity, cursor: 'c', hasMore: false } };
+        }
         if (url === '/api/meta') return { data: { version, swaggerEnabled: false, apiContractVersion: contract } };
         if (url === '/api/monitoring/health') {
             if (health === 'fail') throw fail(500);
@@ -121,15 +128,17 @@ describe('the Overview', () => {
         expect(await within(await card('Published')).findByText('31')).toBeInTheDocument();
         expect(await screen.findByText('Workflow health')).toBeInTheDocument();
         const status = await strip();
-        expect(await within(status).findByText('4.9.1')).toBeInTheDocument();
+        expect(await within(status).findByText('up · 4.9.1')).toBeInTheDocument();
         expect(within(status).getAllByText('Unknown')).toHaveLength(2);
     });
 
-    it('says what the console speaks next to the contract the API reports', async () => {
+    it('has no Contract item, and leads the strip with a verdict pill', async () => {
         renderOverview({ version: '4.2.8', contract: 5 });
         const status = await strip();
-        expect(await within(status).findByText('4.2.8')).toBeInTheDocument();
-        expect(within(status).getByText(/5 · console speaks 1 to 14/)).toBeInTheDocument();
+        expect(await within(status).findByText('up · 4.2.8')).toBeInTheDocument();
+        expect(within(status).queryByText('Contract')).toBeNull();
+        expect(status.textContent).not.toMatch(/console speaks/);
+        expect(within(status).getByRole('link', { name: /warning|All systems normal/ })).toBeInTheDocument();
     });
 
     it('shows database latency and storage health from the health entries', async () => {
@@ -169,15 +178,42 @@ describe('the Overview', () => {
         await vi.waitFor(() => expect(screen.queryAllByText('Visitors')).toHaveLength(0));
     });
 
-    it('says plainly that Live activity has no data yet', async () => {
-        renderOverview();
+    it('lists the rows of the activity feed under Live activity', async () => {
+        renderOverview({
+            activity: [
+                { id: 'a1', at: new Date().toISOString(), kind: 'published', severity: 'info', actor: { kind: 'user', name: 'Ana' }, subject: { kind: 'entry', id: 'e1', title: 'New menu' }, text: 'Published an entry.', ref: '/content/e1' },
+            ],
+        });
         const live = (await screen.findByText('Live activity')).closest('section') as HTMLElement;
-        expect(within(live).getByText(/Not available yet/)).toBeInTheDocument();
+        expect(await within(live).findByText('Ana')).toBeInTheDocument();
+        expect(within(live).getByText('New menu')).toBeInTheDocument();
+        expect(within(live).queryByText(/677|Not available yet/)).toBeNull();
     });
 
-    it('lists failed runs under Needs you', async () => {
+    it('falls back to a note and the audit log when the API has no activity feed', async () => {
+        renderOverview();
+        const live = (await screen.findByText('Live activity')).closest('section') as HTMLElement;
+        expect(await within(live).findByRole('link', { name: 'audit log' })).toBeInTheDocument();
+        expect(within(live).queryByText(/677/)).toBeNull();
+    });
+
+    it('lists failed runs under Needs you from the counts when the API has no feed', async () => {
         renderOverview({ failed: 3 });
         const needs = (await screen.findByText('Needs you', { selector: 'h2' })).closest('section') as HTMLElement;
         expect(await within(needs).findByText('3 workflow runs failed')).toBeInTheDocument();
+    });
+
+    it('lists the feed rows marked error or warning under Needs you', async () => {
+        renderOverview({
+            failed: 0,
+            activity: [
+                { id: 'r1', at: new Date().toISOString(), kind: 'run.failed', severity: 'error', actor: { kind: 'system', name: 'System' }, subject: { kind: 'workflow-run', id: 'r1', title: 'Notify Slack' }, text: 'A workflow run failed.', ref: '/workflow-runs?run=r1' },
+                { id: 'p1', at: new Date().toISOString(), kind: 'published', severity: 'info', text: 'Published an entry.' },
+            ],
+        });
+        const needs = (await screen.findByText('Needs you', { selector: 'h2' })).closest('section') as HTMLElement;
+        expect(await within(needs).findByText('A workflow run failed.')).toBeInTheDocument();
+        expect(within(needs).queryByText('Published an entry.')).toBeNull();
+        expect(within(needs).getByRole('link')).toHaveAttribute('href', '/workflow-runs?run=r1');
     });
 });
