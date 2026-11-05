@@ -41,7 +41,7 @@ declare global {
 
 import QueryProvider from "@/components/query-provider";
 import { ContractGate } from "@/components/contract-gate";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider, THEME_STORAGE_KEY } from "@/components/theme-provider";
 import ErrorReporter from "@/components/error-reporter";
 import { Toaster } from "sonner";
 
@@ -74,11 +74,15 @@ export default function RootLayout({
       <body
         className={`${bricolage.variable} ${instrumentSans.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        {/* Pinned to light. Dark mode was deferred with the Signal redesign (#407), so forcing it here
-            is what stops a stored "dark" preference, or an OS setting, from rendering the old Yeti
-            palette against Signal components. Drop forcedTheme and restore enableSystem when a dark
-            palette is actually drawn. */}
-        <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" disableTransitionOnChange>
+        {/* The stored choice in localStorage['bk-brew-theme'], else the OS setting. next-themes writes
+            the class from an inline script before first paint, so there is no flash. */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          storageKey={THEME_STORAGE_KEY}
+          disableTransitionOnChange
+        >
           <QueryProvider>
             <ErrorReporter />
             {/* Outside the routes, so it covers the sign-in page too: the API reports its contract

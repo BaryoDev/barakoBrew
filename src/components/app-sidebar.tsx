@@ -17,7 +17,8 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { useNavMetrics, type NavMetrics } from '@/hooks/use-nav-metrics';
 import { CommandMenu } from '@/components/command-menu';
 import { TenantSwitcher } from '@/components/tenant-switcher';
-import { IconChevronDown, IconMoon } from '@/components/icons';
+import { IconChevronDown } from '@/components/icons';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { AboutDialog } from '@/components/about-dialog';
 import { brewVersion } from '@/hooks/use-meta';
 import { cn } from '@/lib/utils';
@@ -271,22 +272,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 pt-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            {/* The palette is not drawn yet (#407), and layout.tsx pins the theme to light, so the
-                switch is shown, off, and cannot be turned on. */}
-            <SidebarMenuButton
-              role="switch"
-              aria-checked={false}
-              aria-disabled
-              title="Dark mode is not available yet"
-              tooltip="Dark mode"
-              className="h-[34px] cursor-not-allowed gap-2.5 rounded-[9px] px-2.5 text-[13.5px] text-muted-foreground opacity-70 hover:bg-transparent hover:text-muted-foreground"
-            >
-              <IconMoon aria-hidden className="size-4" />
-              <span className="flex-1 truncate">Dark mode</span>
-              <span aria-hidden className="bg-secondary relative h-4 w-7 rounded-full">
-                <span className="bg-card absolute top-0.5 left-0.5 size-3 rounded-full shadow-sm" />
-              </span>
-            </SidebarMenuButton>
+            <ThemeToggle />
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
