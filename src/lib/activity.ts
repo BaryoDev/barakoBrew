@@ -53,12 +53,16 @@ export function kindLabel(kind: string): string | null {
  * match. The path, query and hash of the parse are returned, never the raw string.
  */
 export function safeRef(ref: string | null | undefined): string | null {
-  if (!ref || /[\u0000-\u001F\u007F\s]/.test(ref)) return null;
+  if (!ref || /[\u0000-\u001F\u007F\s\\]/.test(ref)) return null;
+  // A path on this console only: one leading slash, never a scheme or a host.
+  if (!ref.startsWith('/') || ref.startsWith('//')) return null;
   const origin = typeof window === 'undefined' ? 'http://brew.invalid' : window.location.origin;
   try {
     const url = new URL(ref, origin);
     if (url.origin !== origin) return null;
-    return url.pathname + url.search + url.hash;
+    const out = url.pathname + url.search + url.hash;
+    // Dot segments can collapse "/.//host" into "//host", which a browser reads as another host.
+    return out.startsWith('/') && !out.startsWith('//') ? out : null;
   } catch {
     return null;
   }

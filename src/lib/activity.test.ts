@@ -63,6 +63,13 @@ describe('safeRef', () => {
         expect(safeRef('')).toBeNull();
         expect(safeRef(undefined)).toBeNull();
     });
+
+    it('drops a path whose dot segments collapse into another host', () => {
+        expect(safeRef('/.//evil.example')).toBeNull();
+        expect(safeRef('/..//evil.example/x')).toBeNull();
+        expect(safeRef('/a/..//evil.example')).toBeNull();
+        expect(safeRef('relative/path')).toBeNull();
+    });
 });
 
 describe('relativeTime', () => {
