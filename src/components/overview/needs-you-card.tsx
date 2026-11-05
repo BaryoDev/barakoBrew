@@ -1,21 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
 import Link from 'next/link';
-import { useRunSample } from '@/hooks/use-overview';
-import { useNavMetrics } from '@/hooks/use-nav-metrics';
-import { hrefsOf, useAllowedGroups } from '@/hooks/use-visible-hrefs';
+import { useNeedsYou } from '@/hooks/use-needs-you';
 import { cn } from '@/lib/utils';
-
-interface Row {
-  key: string;
-  title: string;
-  detail: string;
-  href: string;
-  dot: string;
-}
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * What is waiting on someone, from the counts the API already gives: failed runs, unresolved client
@@ -23,45 +10,8 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
  * the card says so rather than inventing one.
  */
 export function NeedsYouCard() {
-  const failed = useRunSample('Failed');
-  const allowed = useAllowedGroups();
-  const wanted = useMemo(() => {
-    const visible = hrefsOf(allowed);
-    return new Set(['/errors', '/email-events'].filter((h) => visible.has(h)));
-  }, [allowed]);
-  const metrics = useNavMetrics(wanted);
-
-  const rows: Row[] = [];
-  const failedTotal = failed.data?.totalItems ?? 0;
-  if (failedTotal > 0) {
-    rows.push({
-      key: 'runs',
-      title: plural(failedTotal, 'workflow run failed', 'workflow runs failed'),
-      detail: 'Only a person can decide whether to retry.',
-      href: '/workflow-runs',
-      dot: 'bg-destructive',
-    });
-  }
-  const errors = metrics.unresolvedErrors;
-  if (errors && errors.value > 0) {
-    rows.push({
-      key: 'errors',
-      title: `${errors.value}${errors.atLeast ? '+' : ''} unresolved ${errors.value === 1 ? 'error' : 'errors'}`,
-      detail: 'Reported by the sites and apps using this API.',
-      href: '/errors',
-      dot: 'bg-destructive',
-    });
-  }
-  const bounces = metrics.recentBounces;
-  if (bounces && bounces.value > 0) {
-    rows.push({
-      key: 'bounces',
-      title: `${bounces.value}${bounces.atLeast ? '+' : ''} ${bounces.value === 1 ? 'email' : 'emails'} bounced`,
-      detail: 'In the last 24 hours.',
-      href: '/email-events',
-      dot: 'bg-warning',
-    });
-  }
+  const { rows, isLoading, isError } = useNeedsYou();
+  const failed = { isError, isLoading };
 
   return (
     <section aria-labelledby="overview-needs" className="border-border bg-card rise grid gap-3 rounded-[18px] border p-5">
