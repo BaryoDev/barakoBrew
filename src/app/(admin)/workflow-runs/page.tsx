@@ -10,6 +10,8 @@ import { PaginationControls } from '@/components/patterns/pagination-controls';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { Button } from '@/components/ui/button';
+import { LiveSwitch } from '@/components/patterns/live-switch';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -27,7 +29,6 @@ import {
   FAILURE_KINDS,
   RUN_CAPABILITIES,
   RUN_LEGACY_ROLES,
-  RUN_STATUSES,
   parseRunId,
   type LivePause,
   isAbandonable,
@@ -82,9 +83,22 @@ function RunFacts({ run }: { run: WorkflowRun }) {
 }
 
 /**
- * One chip for each status the API knows, with the count the API gives for it. The count is the
- * server's, taken over every page, so it is right on page 3 and under a filter. An API before
- * barakoCMS#1164 sends none, and then the chips are only filters.
+ * What the filter offers, in the design's words. Pending is not a choice of its own: a run that is
+ * waiting to start reads as Running to the person watching, so the Running segment counts both.
+ * The API takes one status per request, so choosing Running lists the Running runs.
+ */
+export const STATUS_SEGMENTS: { status: string; label: string; counts: readonly string[] }[] = [
+  { status: 'Running', label: 'Running', counts: ['Running', 'Pending'] },
+  { status: 'Failed', label: 'Failed', counts: ['Failed'] },
+  { status: 'PartiallyFailed', label: 'Partly failed', counts: ['PartiallyFailed'] },
+  { status: 'Succeeded', label: 'Succeeded', counts: ['Succeeded'] },
+  { status: 'Cancelled', label: 'Cancelled', counts: ['Cancelled'] },
+];
+
+/**
+ * The status filter as a segmented control, each segment with the count the API gives for it. The
+ * count is the server's, taken over every page, so it is right on page 3 and under a filter. An API
+ * before barakoCMS#1164 sends none, and then the segments are only filters.
  */
 function StatusChips({
   value,
@@ -98,28 +112,42 @@ function StatusChips({
   const total = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : null;
   const chips: { status: string; label: string; count: number | null }[] = [
     { status: ANY_STATUS, label: 'Every status', count: total },
-    ...RUN_STATUSES.map((status) => ({ status, label: status, count: counts ? (counts[status] ?? 0) : null })),
+    ...STATUS_SEGMENTS.map((segment) => ({
+      status: segment.status,
+      label: segment.label,
+      count: counts ? segment.counts.reduce((sum, key) => sum + (counts[key] ?? 0), 0) : null,
+    })),
   ];
 
   return (
-    <div role="group" aria-label="Filter runs by status" className="flex flex-wrap gap-1.5">
-      {chips.map((chip) => (
-        <Button
-          key={chip.status}
-          size="sm"
-          variant={chip.status === value ? 'default' : 'outline'}
-          aria-pressed={chip.status === value}
-          aria-label={chip.count !== null ? `${chip.label}, ${chip.count} ${chip.count === 1 ? 'run' : 'runs'}` : undefined}
-          onClick={() => onChange(chip.status)}
-        >
-          {chip.label}
-          {chip.count !== null && (
-            <span className="font-mono tabular-nums opacity-80" data-testid={`count-${chip.status}`}>
-              {chip.count}
-            </span>
-          )}
-        </Button>
-      ))}
+    <div
+      role="group"
+      aria-label="Filter runs by status"
+      className="bg-secondary flex flex-wrap gap-1 rounded-[11px] p-1"
+    >
+      {chips.map((chip) => {
+        const on = chip.status === value;
+        return (
+          <button
+            key={chip.status}
+            type="button"
+            aria-pressed={on}
+            aria-label={chip.count !== null ? `${chip.label}, ${chip.count} ${chip.count === 1 ? 'run' : 'runs'}` : undefined}
+            onClick={() => onChange(chip.status)}
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
+              on ? 'bg-card text-foreground shadow-[var(--shadow-thumb)]' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {chip.label}
+            {chip.count !== null && (
+              <span className="font-mono text-[11.5px] tabular-nums opacity-80" data-testid={`count-${chip.status}`}>
+                {chip.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -171,6 +199,11 @@ export default function WorkflowRunsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(linked ? parseRunId(linked) : null);
   const [badLink, setBadLink] = useState(!!linked && parseRunId(linked) === null);
   const [refreshing, setRefreshing] = useState(false);
+  // Live or Paused, the person's choice. Paused stops the poll and nothing else: every guard on a
+  // retry, cancel or abandon works the same either way.
+  const [live, setLive] = useState(true);
+  const detail = useRef<HTMLElement | null>(null);
+  const picked = useRef(false);
   // Held here, not inside the run's panel, so a poll that changes the run cannot unmount an open dialog.
   const [confirming, setConfirming] = useState<{ kind: 'cancel' | 'abandon'; id: string; name: string } | null>(null);
   // What the dialog says, kept through its closing animation once `confirming` is cleared.
@@ -212,17 +245,27 @@ export default function WorkflowRunsPage() {
   function select(id: string) {
     setSelectedId(id);
     setBadLink(false);
+    picked.current = true;
     const next = new URLSearchParams(window.location.search);
     next.set('run', id);
     window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}${window.location.hash}`);
   }
+
+  // On one column the detail sits below the list, so a pick scrolls to it. After the render, once
+  // the section holds the run, and not from a timer.
+  useEffect(() => {
+    if (!picked.current || !selectedId) return;
+    picked.current = false;
+    if (typeof window.matchMedia === 'function' && !window.matchMedia('(max-width: 1179px)').matches) return;
+    detail.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [selectedId]);
 
   const access = useAccess();
   const canRetry = access.can(RUN_CAPABILITIES.retry, RUN_LEGACY_ROLES);
   const canAbandon = access.can(RUN_CAPABILITIES.abandon, RUN_LEGACY_ROLES);
   const canCancel = access.can(RUN_CAPABILITIES.cancel, RUN_LEGACY_ROLES);
 
-  const runs = useWorkflowRuns({ page, pageSize: 25, status }, { live: true });
+  const runs = useWorkflowRuns({ page, pageSize: 25, status }, { live });
   const run = useWorkflowRun(selectedId);
   const retry = useRetryAttempt();
   const cancel = useCancelRun();
@@ -296,6 +339,7 @@ export default function WorkflowRunsPage() {
         description="Every firing of a workflow, newest first. Open one to see what each of its actions did."
         actions={
           <div className="flex items-center gap-2">
+            <LiveSwitch live={live} onChange={setLive} stalled={!!runs.pause} label="Live updates" />
             <Button
               variant="outline"
               size="sm"
@@ -314,7 +358,7 @@ export default function WorkflowRunsPage() {
         }
       />
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 grid-cols-1 min-[1180px]:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
         <section className={CARD}>
           <h2 className="text-[15px] font-bold">Runs</h2>
           <div className="mt-3">
@@ -362,7 +406,7 @@ export default function WorkflowRunsPage() {
               description={
                 status === ANY_STATUS
                   ? 'Nothing has fired a workflow yet. A run appears here the moment one does.'
-                  : `No run is currently ${status}. Try another status.`
+                  : `No run is currently ${STATUS_SEGMENTS.find((segment) => segment.status === status)?.label ?? status}. Try another status.`
               }
             />
           ) : (
@@ -419,7 +463,7 @@ export default function WorkflowRunsPage() {
           )}
         </section>
 
-        <section className={CARD}>
+        <section ref={detail} className={cn(CARD, 'scroll-mt-20')}>
           {badLink ? (
             <EmptyState
               icon={IconWorkflows}
