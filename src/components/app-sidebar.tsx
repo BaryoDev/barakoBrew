@@ -19,7 +19,7 @@ import { CommandMenu } from '@/components/command-menu';
 import { TenantSwitcher } from '@/components/tenant-switcher';
 import { IconChevronDown, IconMoon } from '@/components/icons';
 import { AboutDialog } from '@/components/about-dialog';
-import { useApiMeta } from '@/hooks/use-meta';
+import { brewVersion } from '@/hooks/use-meta';
 import { cn } from '@/lib/utils';
 import {
   Sidebar,
@@ -150,7 +150,7 @@ export function AppSidebar() {
 
   // Filtered by role or capability and by the modules the deployment runs, see useAllowedGroups.
   const allowed = useAllowedGroups();
-  const { data: meta } = useApiMeta();
+  const version = brewVersion();
   const [aboutOpen, setAboutOpen] = useState(false);
 
   // Only the destinations that survived filtering get a count fetched for them.
@@ -178,26 +178,27 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="offcanvas" className="border-none">
       <SidebarHeader className="gap-3 p-4 pb-2">
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <Link href="/" className="flex min-w-0 items-center gap-2.5 rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
             <BrandMark className="size-[30px]" />
-            <BrandWordmark />
+            <BrandWordmark className="truncate" />
           </Link>
-          {/* Hidden until the API has answered: a version line reading "unknown" is worse than none. */}
-          {meta?.version && (
+          {/* This console's version, never the API's: that string is long enough to run into the
+              wordmark. The API's version is in the About dialog this opens. */}
+          {version && (
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
-              className="ml-auto rounded-sm font-mono text-[11px] tabular-nums text-(--faint) outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="ml-auto shrink-0 rounded-sm font-mono text-[11px] tabular-nums text-(--faint) outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
             >
-              {meta.version}
+              {version}
               <span className="sr-only"> (about this instance)</span>
             </button>
           )}
         </div>
 
-        <TenantSwitcher />
         <CommandMenu />
+        <TenantSwitcher />
       </SidebarHeader>
 
       <SidebarContent className="px-4 pb-2">

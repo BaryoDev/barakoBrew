@@ -18,9 +18,8 @@ export function BrandMark({ className }: { className?: string }) {
 
 export function BrandWordmark({ className }: { className?: string }) {
   return (
-    <span className={cn('font-display text-lg font-semibold tracking-tight', className)}>
-      Barako
-      <span className="text-muted-foreground font-sans text-sm font-medium align-baseline ml-0.5">CMS</span>
+    <span className={cn('font-display text-[19px] font-semibold tracking-[-0.03em]', className)}>
+      barako<span className="text-primary">Brew</span>
     </span>
   );
 }

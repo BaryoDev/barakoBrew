@@ -15,12 +15,14 @@ const { useNavMetrics } = await import('./use-nav-metrics');
 const TOTALS: Record<string, number> = {
     '/api/contents': 9,
     '/api/workflows': 4,
-    '/api/workflow-runs': 2,
 };
+
+const RUN_COUNTS = { Succeeded: 40, Running: 3, Failed: 2, PartiallyFailed: 1, Cancelled: 5 };
 
 beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.get).mockImplementation(async (url: string) => {
+        if (url === '/api/workflow-runs') return { data: { items: [], totalItems: 51, statusCounts: RUN_COUNTS } };
         if (url in TOTALS) return { data: { items: [], totalItems: TOTALS[url] } };
         throw new Error(`unexpected ${url}`);
     });
@@ -34,12 +36,12 @@ function metricsFor(hrefs: string[]) {
 }
 
 describe('the sidebar counts', () => {
-    it('count Entries, Workflows and Workflow runs from the totals the API reports', async () => {
+    it('count Entries and Workflows from the totals, and Workflow runs from Failed plus Partly failed', async () => {
         const { result } = metricsFor(['/content', '/workflows', '/workflow-runs']);
         await waitFor(() => expect(result.current.workflowRuns).toBeDefined());
         expect(result.current.entries?.value).toBe(9);
         expect(result.current.workflows?.value).toBe(4);
-        expect(result.current.workflowRuns?.value).toBe(2);
+        expect(result.current.workflowRuns?.value).toBe(3);
     });
 
     it('ask for one row each, never the list', async () => {
@@ -50,6 +52,15 @@ describe('the sidebar counts', () => {
         for (const [, config] of calls) {
             expect((config as { params: { pageSize: number } }).params.pageSize).toBe(1);
         }
+    });
+
+    it('show no Workflow runs count when the API sends no status counts', async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) => ({
+            data: { items: [], totalItems: url === '/api/workflow-runs' ? 9 : 1 },
+        }));
+        const { result } = metricsFor(['/content', '/workflow-runs']);
+        await waitFor(() => expect(result.current.entries).toBeDefined());
+        expect(result.current.workflowRuns).toBeUndefined();
     });
 
     it('fetch nothing for a destination the caller is not offered', () => {

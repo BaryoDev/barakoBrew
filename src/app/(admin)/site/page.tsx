@@ -29,7 +29,7 @@ const text = (value: unknown) => (typeof value === 'string' ? value : '');
 export default function SitePage() {
     return (
         <SiteForm
-            title="Site"
+            title="Site settings"
             description="This tenant's name, mode, profile, images, header, footer and social links, read by the site on each request."
             problem={siteProblem}
         >
