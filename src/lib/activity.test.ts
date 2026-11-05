@@ -48,6 +48,8 @@ describe('kindLabel', () => {
 describe('safeRef', () => {
     it('keeps a path inside the console', () => {
         expect(safeRef('/workflow-runs?run=1')).toBe('/workflow-runs?run=1');
+        expect(safeRef('/x?y=1#z')).toBe('/x?y=1#z');
+        expect(safeRef('/workflow-runs/abc')).toBe('/workflow-runs/abc');
     });
 
     it('drops anything that would leave it', () => {
@@ -55,6 +57,9 @@ describe('safeRef', () => {
         expect(safeRef('//evil.example/x')).toBeNull();
         expect(safeRef('/\\evil.example')).toBeNull();
         expect(safeRef('javascript:alert(1)')).toBeNull();
+        expect(safeRef('/\t/evil.example')).toBeNull();
+        expect(safeRef(' /x')).toBeNull();
+        expect(safeRef('/x\n')).toBeNull();
         expect(safeRef('')).toBeNull();
         expect(safeRef(undefined)).toBeNull();
     });

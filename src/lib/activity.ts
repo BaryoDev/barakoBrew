@@ -46,13 +46,22 @@ export function kindLabel(kind: string): string | null {
 }
 
 /**
- * A console path the API gave, or null. `ref` is a path inside this console, so only a single-slash
- * path is followed: anything with a scheme, or a protocol-relative `//host`, would send the browser
- * off the console.
+ * A console path the API gave, or null. `ref` is a path inside this console, so it is parsed the way
+ * a browser would and followed only if it stays on this origin. A string check is not enough:
+ * browsers drop tabs and newlines inside a URL, so "/\t/evil.example" reads as "//evil.example".
+ * Anything with a control character or whitespace is refused outright, then the parsed origin must
+ * match. The path, query and hash of the parse are returned, never the raw string.
  */
 export function safeRef(ref: string | null | undefined): string | null {
-  if (!ref || !ref.startsWith('/') || ref.startsWith('//') || ref.includes('\\')) return null;
-  return ref;
+  if (!ref || /[\u0000-\u001F\u007F\s]/.test(ref)) return null;
+  const origin = typeof window === 'undefined' ? 'http://brew.invalid' : window.location.origin;
+  try {
+    const url = new URL(ref, origin);
+    if (url.origin !== origin) return null;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return null;
+  }
 }
 
 /** "now", "2 min", "1 h", "3 d". Empty when the time does not parse. */
