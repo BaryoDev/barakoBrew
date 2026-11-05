@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { useNeedsYou } from '@/hooks/use-needs-you';
 import { cn } from '@/lib/utils';
 
+const MAX_ROWS = 6;
+
 /**
- * What is waiting on someone, from the counts the API already gives: failed runs, unresolved client
- * errors and recent bounces. A feed of reviews and approvals does not exist yet (barakoCMS#677), and
- * the card says so rather than inventing one.
+ * What is waiting on someone, as useNeedsYou reads it: the activity feed's warnings and errors when
+ * the API has the feed, else the counts of failed runs, unresolved errors and recent bounces.
  */
 export function NeedsYouCard() {
-  const { rows, isLoading, isError } = useNeedsYou();
-  const failed = { isError, isLoading };
+  const { rows, source, isLoading, isError } = useNeedsYou();
 
   return (
     <section aria-labelledby="overview-needs" className="border-border bg-card rise grid gap-3 rounded-[18px] border p-5">
@@ -21,12 +21,12 @@ export function NeedsYouCard() {
         </h2>
         <span className="text-muted-foreground font-mono text-xs">{rows.length}</span>
       </div>
-      {failed.isError && (
+      {isError && (
         <p role="alert" className="text-destructive text-sm">
-          Failed runs could not be loaded.
+          Needs you could not be loaded.
         </p>
       )}
-      {rows.map((row) => (
+      {rows.slice(0, MAX_ROWS).map((row) => (
         <Link
           key={row.key}
           href={row.href}
@@ -40,15 +40,19 @@ export function NeedsYouCard() {
           <span className="border-border bg-card rounded-[9px] border px-3 py-1.5 text-[13px] font-semibold">Open</span>
         </Link>
       ))}
-      {!failed.isError && !failed.isLoading && rows.length === 0 && (
-        <p className="text-muted-foreground border-border rounded-xl border border-dashed p-6 text-center">
-          Nothing from runs, errors or email is waiting on you.
+      {rows.length > MAX_ROWS && (
+        <p className="text-muted-foreground text-[12.5px]">
+          and {rows.length - MAX_ROWS} more.{' '}
+          <Link href="/audit" className="text-accent-foreground font-semibold hover:underline">
+            Open the audit log
+          </Link>
         </p>
       )}
-      <p className="text-muted-foreground text-[12.5px]">
-        Entries waiting for review and other approvals are not available yet. They need a feed the API does not
-        have (barakoCMS#677).
-      </p>
+      {!isError && !isLoading && rows.length === 0 && (
+        <p className="text-muted-foreground border-border rounded-xl border border-dashed p-6 text-center">
+          {source === 'activity' ? 'All clear. Nothing is waiting on you.' : 'Nothing from runs, errors or email is waiting on you.'}
+        </p>
+      )}
     </section>
   );
 }

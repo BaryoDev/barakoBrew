@@ -14,6 +14,7 @@ export function LiveSwitch({
   onChange,
   stalled = false,
   label = 'Live updates',
+  compact = false,
   className,
 }: {
   live: boolean;
@@ -21,6 +22,8 @@ export function LiveSwitch({
   stalled?: boolean;
   /** The accessible name, which says what the switch controls. */
   label?: string;
+  /** The 30px size for a card header, where the page-level switch is 38px. */
+  compact?: boolean;
   className?: string;
 }) {
   const moving = live && !stalled;
@@ -32,7 +35,8 @@ export function LiveSwitch({
       aria-label={label}
       onClick={() => onChange(!live)}
       className={cn(
-        'border-border bg-card text-foreground inline-flex h-[38px] items-center gap-2 rounded-[10px] border px-3.5 text-[13px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
+        'border-border bg-card text-foreground inline-flex items-center rounded-[10px] border font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
+        compact ? 'h-[30px] gap-[7px] rounded-lg px-2.5 text-[12.5px]' : 'h-[38px] gap-2 px-3.5 text-[13px]',
         className,
       )}
     >

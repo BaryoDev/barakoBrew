@@ -26,6 +26,12 @@ describe('the Live / Paused switch', () => {
         expect(screen.getByRole('switch').querySelector('span')?.className).not.toContain('pulse');
     });
 
+    it('has a 30px size for a card header', () => {
+        render(<LiveSwitch live compact onChange={() => {}} />);
+        expect(screen.getByRole('switch').className).toContain('h-[30px]');
+        expect(screen.getByRole('switch').className).not.toContain('h-[38px]');
+    });
+
     it('asks for the opposite state when pressed', () => {
         const onChange = vi.fn();
         render(<LiveSwitch live onChange={onChange} label="Live activity" />);
