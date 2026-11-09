@@ -54,7 +54,7 @@ test.beforeEach(async ({ page }) => {
     await page.route(`**/api/contents/${ID}/history**`, (route) => route.fulfill({ json: pageOf([]) }));
 });
 
-test('a content type opens its entries, an entry opens from there, and both lead back', async ({ page }) => {
+test('a content type opens its entries, an entry opens from there, and both lead back', async ({ page, isMobile }) => {
     await page.goto('/schemas');
 
     // The card is a link, so Enter on it is the whole interaction. A card that needed a mouse would
@@ -71,8 +71,8 @@ test('a content type opens its entries, an entry opens from there, and both lead
     await page.waitForURL(`**/content/${ID}`);
 
     // The screen names the entry, and so does the crumb above it. This is the assertion the raw
-    // uuid used to fail.
-    const crumbs = page.locator('[data-slot="breadcrumb"]');
+    // uuid used to fail. A phone shows "{tenant} / {screen}" in the top bar instead of the crumbs.
+    const crumbs = isMobile ? page.getByLabel('Where you are') : page.locator('[data-slot="breadcrumb"]');
     await expect(crumbs).toContainText('Hello world');
     await expect(crumbs).not.toContainText(ID);
 
