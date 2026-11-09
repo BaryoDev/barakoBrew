@@ -405,8 +405,8 @@ describe('the status chips', () => {
   });
 
   const COUNTS = { Pending: 1, Running: 2, Succeeded: 30, Failed: 4, PartiallyFailed: 6, Cancelled: 5 };
-  // Pending has no segment of its own: Running counts it.
-  const SEGMENT_COUNTS: Record<string, number> = { Running: 3, Succeeded: 30, Failed: 4, PartiallyFailed: 6, Cancelled: 5 };
+  // Pending has no segment of its own, and Running does not count it, since Running lists only Running.
+  const SEGMENT_COUNTS: Record<string, number> = { Running: 2, Succeeded: 30, Failed: 4, PartiallyFailed: 6, Cancelled: 5 };
 
   it('shows a segment for every status with the count the API sent, not the count of the loaded page', async () => {
     renderRuns([run('r1', 'One', 'Failed', []), run('r2', 'Two', 'Succeeded', [])], { statusCounts: COUNTS, totalItems: 48 });
@@ -430,12 +430,12 @@ describe('the status chips', () => {
     expect(within(group).getByRole('button', { name: 'Partly failed, 6 runs' })).toBeInTheDocument();
   });
 
-  it('merges Pending into Running and says Partly failed, with no Pending segment', async () => {
+  it('leaves Pending out of Running and says Partly failed, with no Pending segment', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])], { statusCounts: COUNTS, totalItems: 48 });
     await screen.findByRole('radio', { name: /One/ });
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
-    expect(within(group).getByRole('button', { name: 'Running, 3 runs' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: 'Running, 2 runs' })).toBeInTheDocument();
     expect(within(group).queryByRole('button', { name: /^Pending/ })).toBeNull();
     expect(within(group).queryByRole('button', { name: /^PartiallyFailed/ })).toBeNull();
     expect(within(group).getAllByRole('button').map((b) => b.textContent?.replace(/\d+$/, ''))).toEqual([

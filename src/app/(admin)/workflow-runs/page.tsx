@@ -83,12 +83,12 @@ function RunFacts({ run }: { run: WorkflowRun }) {
 }
 
 /**
- * What the filter offers, in the design's words. Pending is not a choice of its own: a run that is
- * waiting to start reads as Running to the person watching, so the Running segment counts both.
- * The API takes one status per request, so choosing Running lists the Running runs.
+ * What the filter offers, in the design's words. Pending is not a choice of its own. The API takes one
+ * status per request, so Running lists and counts the Running runs only, and a chip never promises
+ * more rows than it opens. Pending runs are under Every status.
  */
 export const STATUS_SEGMENTS: { status: string; label: string; counts: readonly string[] }[] = [
-  { status: 'Running', label: 'Running', counts: ['Running', 'Pending'] },
+  { status: 'Running', label: 'Running', counts: ['Running'] },
   { status: 'Failed', label: 'Failed', counts: ['Failed'] },
   { status: 'PartiallyFailed', label: 'Partly failed', counts: ['PartiallyFailed'] },
   { status: 'Succeeded', label: 'Succeeded', counts: ['Succeeded'] },

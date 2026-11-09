@@ -3,10 +3,13 @@ import { renderHook } from '@testing-library/react';
 
 let feed: { items: unknown[]; available: boolean; isLoading: boolean; isError: boolean };
 let failed: { data?: { totalItems: number }; isLoading: boolean; isError: boolean };
+let partial: { data?: { totalItems: number }; isLoading: boolean; isError: boolean };
 let metrics: Record<string, { value: number; atLeast: boolean }>;
 
 vi.mock('@/hooks/use-activity', () => ({ useActivity: () => feed }));
-vi.mock('@/hooks/use-overview', () => ({ useRunSample: () => failed }));
+vi.mock('@/hooks/use-overview', () => ({
+    useRunSample: (status?: string) => (status === 'PartiallyFailed' ? partial : failed),
+}));
 vi.mock('@/hooks/use-nav-metrics', () => ({ useNavMetrics: () => metrics }));
 vi.mock('@/hooks/use-visible-hrefs', () => ({ useAllowedGroups: () => [], hrefsOf: () => new Set<string>() }));
 
@@ -24,6 +27,7 @@ const row = (id: string, kind: string, severity: string, extra: Record<string, u
 beforeEach(() => {
     feed = { items: [], available: true, isLoading: false, isError: false };
     failed = { data: { totalItems: 0 }, isLoading: false, isError: false };
+    partial = { data: { totalItems: 0 }, isLoading: false, isError: false };
     metrics = {};
 });
 
@@ -65,6 +69,15 @@ describe('useNeedsYou', () => {
         expect(result.current.source).toBe('counts');
         expect(result.current.rows.map((r) => r.key)).toEqual(['runs', 'bounces']);
         expect(result.current.rows[0].title).toBe('2 workflow runs failed');
+    });
+
+    it('counts partly failed runs in the fallback, as the rail badge does', () => {
+        feed = { items: [], available: false, isLoading: false, isError: false };
+        partial = { data: { totalItems: 3 }, isLoading: false, isError: false };
+        const { result } = renderHook(() => useNeedsYou());
+
+        expect(result.current.rows.map((r) => r.key)).toEqual(['runs']);
+        expect(result.current.rows[0].title).toBe('3 workflow runs failed or partly failed');
     });
 
     it('does not list the bounce count as well when the feed already carries the bounce', () => {

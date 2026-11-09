@@ -51,6 +51,8 @@ function rowFromActivity(item: ActivityItem): NeedsRow {
 export function useNeedsYou() {
   const activity = useActivity();
   const failed = useRunSample('Failed');
+  // The rail badge counts partly failed runs as needing a look, so the fallback does too.
+  const partial = useRunSample('PartiallyFailed');
   const allowed = useAllowedGroups();
   const wanted = useMemo(() => {
     const visible = hrefsOf(allowed);
@@ -64,11 +66,13 @@ export function useNeedsYou() {
   if (fromFeed) {
     rows.push(...attentionRows(activity.items).map(rowFromActivity));
   } else {
-    const failedTotal = failed.data?.totalItems ?? 0;
+    const failedTotal = (failed.data?.totalItems ?? 0) + (partial.data?.totalItems ?? 0);
     if (failedTotal > 0) {
       rows.push({
         key: 'runs',
-        title: plural(failedTotal, 'workflow run failed', 'workflow runs failed'),
+        title: partial.data?.totalItems
+          ? plural(failedTotal, 'workflow run failed or partly failed', 'workflow runs failed or partly failed')
+          : plural(failedTotal, 'workflow run failed', 'workflow runs failed'),
         detail: 'Only a person can decide whether to retry.',
         href: '/workflow-runs',
         dot: 'bg-destructive',
@@ -100,7 +104,7 @@ export function useNeedsYou() {
   return {
     rows,
     source: fromFeed ? ('activity' as const) : ('counts' as const),
-    isLoading: fromFeed ? activity.isLoading : failed.isLoading,
-    isError: fromFeed ? activity.isError : failed.isError,
+    isLoading: fromFeed ? activity.isLoading : failed.isLoading || partial.isLoading,
+    isError: fromFeed ? activity.isError : failed.isError || partial.isError,
   };
 }
