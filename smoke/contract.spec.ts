@@ -233,11 +233,24 @@ test('a content status crosses the wire as a name, not a number', async ({ reque
  *
  * Shape only. A fresh smoke database has no installs, so an empty `items` is the expected answer
  * here, and asserting rows would test the seed rather than the contract.
+ *
+ * From barakoCMS 5.5 the Pwa module is not part of core, so an API without it skips, the same way the
+ * console leaves the installs screen out of the rail.
  */
 test('pwa installs are the collection envelope, not a bare array', async ({ request }) => {
     const token = process.env.SMOKE_TOKEN;
     const api = smokeApiUrl();
     expect(token, 'SMOKE_TOKEN must be set by scripts/smoke-check.sh').toBeTruthy();
+
+    const modules = await request.get(`${api}/api/modules?page=1&pageSize=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(modules.ok(), `GET /api/modules returned ${modules.status()}`).toBeTruthy();
+    const list: { name: string; enabled: boolean }[] = (await modules.json()).items;
+    test.skip(
+        !list.some((m) => m.name === MODULE.pwa && m.enabled),
+        'this API does not run the Pwa module (not in core from barakoCMS 5.5)'
+    );
 
     const response = await request.get(`${api}/api/pwa/installs?page=1&pageSize=100`, {
         headers: { Authorization: `Bearer ${token}` },
