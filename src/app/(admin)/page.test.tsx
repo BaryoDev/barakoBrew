@@ -95,6 +95,7 @@ function renderOverview(answers: Answers = {}) {
         if (url === '/api/analytics/websites' && analytics === 'absent') throw fail(404);
         if (url === '/api/workflow-runs') {
             if (answers.runList === 'fail') throw fail(500);
+            if (status === 'PartiallyFailed') return page([], 0);
             return page([], status === 'Failed' ? failed : runs);
         }
         if (url === '/api/contents') {
