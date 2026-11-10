@@ -85,23 +85,34 @@ describe('the stat cards', () => {
         answer({ published: [], drafts: [], runs: [], failed: [daysAgo(1), daysAgo(2)] });
         const first = renderCards(30);
         const failures = await card('Failures');
-        expect(await within(failures).findByText('Needs you')).toBeInTheDocument();
+        expect(await within(failures).findByText('2 for you')).toBeInTheDocument();
         first.unmount();
 
         answer({ published: [], drafts: [], runs: [], failed: [] });
         renderCards(30);
         expect(await within(await card('Failures')).findByText('None')).toBeInTheDocument();
-        expect(screen.queryByText('Needs you')).not.toBeInTheDocument();
+        expect(screen.queryByText(/for you/)).not.toBeInTheDocument();
     });
 
-    it('draw twelve bars and the change against the range before', async () => {
-        // 3 in the last 7 days, 2 in the 7 before: +50%.
-        const published = [daysAgo(1), daysAgo(2), daysAgo(3), daysAgo(8), daysAgo(9)];
+    it('draw twelve bars and the change against the range before, as a sentence', async () => {
+        // 18 in the last 7 days, 12 in the 7 before: +50% vs prior.
+        const published = [
+            ...Array.from({ length: 18 }, (_, i) => daysAgo(1 + (i % 5))),
+            ...Array.from({ length: 12 }, (_, i) => daysAgo(8 + (i % 5))),
+        ];
         answer({ published, drafts: [], runs: [], failed: [] });
         renderCards(7);
         const published_ = await card('Published');
-        expect(await within(published_).findByText('+50%')).toBeInTheDocument();
+        expect(await within(published_).findByText('+50% vs prior')).toBeInTheDocument();
         expect(within(published_).getByTestId('spark').children).toHaveLength(12);
+    });
+
+    it('tell a small change as a count', async () => {
+        // 3 in the last 7 days, 6 in the 7 before.
+        const drafts = [daysAgo(1), daysAgo(2), daysAgo(3), ...[8, 9, 10, 11, 12, 13].map(daysAgo)];
+        answer({ published: [], drafts, runs: [], failed: [] });
+        renderCards(7);
+        expect(await within(await card('Drafts')).findByText('3 fewer')).toBeInTheDocument();
     });
 
     it('leave the change figure out when the sample cannot reach back two ranges', async () => {
@@ -119,7 +130,7 @@ describe('the stat cards', () => {
         renderCards(7);
         const published = await card('Published');
         expect(await within(published).findByText('500')).toBeInTheDocument();
-        expect(within(published).queryByText(/%|new/)).not.toBeInTheDocument();
+        expect(within(published).queryByText(/vs prior|new|more|fewer/)).not.toBeInTheDocument();
     });
 
     it('show an error on the card that failed and leave the others alone', async () => {

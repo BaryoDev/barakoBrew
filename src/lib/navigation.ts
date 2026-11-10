@@ -170,7 +170,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // manage_content_types, which GET /api/content-types asks for, since these screens find the
       // site type through it before they read or write the entry. Theme and Style recipes are
       // settings of the site, so they sit under it and show while one of the three is open.
-      { title: 'Site', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Site settings', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Theme', href: '/site/theme', parent: '/site', icon: IconSun, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Style recipes', href: '/site/recipes', parent: '/site', icon: IconPen, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
     ],
@@ -180,7 +180,6 @@ export const NAV_GROUPS: NavGroup[] = [
     collapsible: true,
     defaultOpen: true,
     items: [
-      { title: 'All modules', href: '/modules', icon: IconCube, capability: 'view_modules', roles: ['SuperAdmin', 'Admin'] },
       // Signed in is enough for GET /api/pages/tree, but the screen lists the types through
       // GET /api/content-types before it can move anything.
       { title: 'Pages', href: '/pages', icon: IconContent, module: MODULE.pages, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
@@ -202,6 +201,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , module: MODULE.import, capability: 'analyze_spreadsheets', roles: ['SuperAdmin', 'Admin'] },
       // manage_forms, which BarakoCMS.Forms seeds to Admin; SuperAdmin passes every gate.
       { title: 'Forms', href: '/settings/forms', icon: IconFieldEdit, module: MODULE.forms, capability: 'manage_forms', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'All modules', href: '/modules', icon: IconCube, capability: 'view_modules', roles: ['SuperAdmin', 'Admin'] },
     ],
   },
   {
@@ -282,13 +282,19 @@ export function withSingletons(
     if (at === -1) return group;
 
     const entries = group.items[at];
-    const added: NavItem[] = singletons.map((t) => ({
-      title: t.displayName || t.name,
-      href: singletonHref(t.name),
-      icon: IconContent,
-      roles: entries.roles,
-      capability: entries.capability,
-    }));
+    // A type named like a static item ("Site settings" is one) keeps its own row, told apart by a
+    // suffix, so the rail never lists two links with the same name.
+    const taken = new Set(groups.flatMap((g) => g.items.map((i) => i.title)));
+    const added: NavItem[] = singletons.map((t) => {
+      const name = t.displayName || t.name;
+      return {
+        title: taken.has(name) ? `${name} (single entry)` : name,
+        href: singletonHref(t.name),
+        icon: IconContent,
+        roles: entries.roles,
+        capability: entries.capability,
+      };
+    });
     return { ...group, items: [...group.items.slice(0, at + 1), ...added, ...group.items.slice(at + 1)] };
   });
 }
@@ -323,7 +329,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   deliveries: 'Deliveries',
   forms: 'Forms',
   settings: 'Settings',
-  site: 'Site',
+  site: 'Site settings',
   theme: 'Theme',
   recipes: 'Style recipes',
   new: 'New',

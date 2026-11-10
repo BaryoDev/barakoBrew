@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countRecentBounces, BOUNCE_LIMIT } from './use-nav-metrics';
+import { countRecentBounces, needsLookCount, BOUNCE_LIMIT } from './use-nav-metrics';
 
 const NOW = Date.parse('2026-09-01T12:00:00Z');
 const hoursAgo = (h: number) => ({ at: new Date(NOW - h * 3600_000).toISOString() });
@@ -29,5 +29,21 @@ describe('recent bounce count', () => {
     // stating an exact figure it cannot know.
     it('caps the query at fifty rows', () => {
         expect(BOUNCE_LIMIT).toBe(50);
+    });
+});
+
+describe('the Workflow runs count', () => {
+    it('adds Failed and PartiallyFailed and nothing else', () => {
+        expect(needsLookCount({ Succeeded: 40, Running: 3, Pending: 2, Failed: 2, PartiallyFailed: 1, Cancelled: 5 })).toBe(3);
+    });
+
+    it('reads keys without regard to case', () => {
+        expect(needsLookCount({ failed: 4, partiallyfailed: 1 })).toBe(5);
+    });
+
+    it('is zero when nothing failed, and absent when the API sent no counts', () => {
+        expect(needsLookCount({ Succeeded: 9 })).toBe(0);
+        expect(needsLookCount(undefined)).toBeNull();
+        expect(needsLookCount(null)).toBeNull();
     });
 });

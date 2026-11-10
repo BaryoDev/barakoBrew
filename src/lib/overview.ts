@@ -12,6 +12,11 @@ export function greeting(hour: number): string {
   return 'Good evening';
 }
 
+/** "Monday, 6 November", the way the design writes the date under the tenant name. */
+export function todayLabel(date: Date): string {
+  return date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 /** `ana_reyes` reads as Ana, `rosa` as Rosa. Empty when there is nothing to call someone. */
 export function firstName(username: string | undefined): string {
   const first = (username ?? '').split(/[^A-Za-z0-9]+/).find(Boolean) ?? '';
@@ -66,23 +71,90 @@ export interface Change {
   direction: 'up' | 'down' | 'flat';
 }
 
+/** Below this many rows in the earlier window a percentage swings too hard to mean anything. */
+const SMALL_WINDOW = 10;
+
 /**
- * The last `range` days against the `range` days before them, or null when the sample cannot say.
- * Nothing in the previous window gives no percentage, only the count that arrived.
+ * The last `range` days against the `range` days before them, worded as a sentence, or null when
+ * the sample cannot say.
+ *
+ * A small earlier window is told as a count ("3 fewer"), since 1 to 3 reading as "+200%" is noise.
+ * A larger one is a percentage, with what it is against ("+12% vs prior"). Nothing in the earlier
+ * window gives the count that arrived.
  */
 export function changeOver(sample: Sample, range: Range, now: number): Change | null {
   if (!coversTwoRanges(sample, range, now)) return null;
   const all = times(sample.rows);
   const current = all.filter((t) => t > now - range * DAY_MS && t <= now).length;
   const previous = all.filter((t) => t > now - 2 * range * DAY_MS && t <= now - range * DAY_MS).length;
-  if (previous === 0) {
-    return current === 0 ? { text: '0%', direction: 'flat' } : { text: `+${current} new`, direction: 'up' };
+  if (current === previous) return { text: 'No change', direction: 'flat' };
+  if (previous === 0) return { text: `${current} new`, direction: 'up' };
+  if (previous <= SMALL_WINDOW) {
+    const gap = Math.abs(current - previous);
+    return current > previous
+      ? { text: `${gap} more`, direction: 'up' }
+      : { text: `${gap} fewer`, direction: 'down' };
   }
   const percent = Math.round(((current - previous) / previous) * 100);
-  if (percent === 0) return { text: '0%', direction: 'flat' };
+  if (percent === 0) return { text: 'No change', direction: 'flat' };
   return percent > 0
-    ? { text: `+${percent}%`, direction: 'up' }
-    : { text: `−${Math.abs(percent)}%`, direction: 'down' };
+    ? { text: `+${percent}% vs prior`, direction: 'up' }
+    : { text: `−${Math.abs(percent)}% vs prior`, direction: 'down' };
+}
+
+export type Tone = 'ok' | 'warn' | 'bad';
+
+/**
+ * Whether the checks the strip reads (database, storage) are all healthy: true when every one that
+ * was reported is, false when any is not, null when none was reported so nothing can be claimed.
+ */
+export function systemOk(statuses: readonly (string | undefined)[]): boolean | null {
+  const known = statuses.filter((status): status is string => !!status);
+  if (known.length === 0) return null;
+  return known.every((status) => status === 'Healthy');
+}
+
+export interface Verdict {
+  text: string;
+  tone: Tone;
+}
+
+/**
+ * The sentence under the greeting, built from what the page has already loaded. `needs` is the
+ * number of rows in Needs you, `decision` whether one of them is a call only a person can make (a
+ * failed run: retrying may send twice), and `systemOk` the result of {@link systemOk}.
+ * "Your site is up" is said only when a check said so.
+ */
+export function verdictFor({ needs, decision, systemOk: ok }: { needs: number; decision: boolean; systemOk: boolean | null }): Verdict {
+  const up = ok === true ? 'Your site is up. ' : '';
+  if (ok === false) {
+    return {
+      text:
+        needs === 0
+          ? 'Part of the system is not healthy.'
+          : `Part of the system is not healthy, and ${needs} ${needs === 1 ? 'thing needs' : 'things need'} you.`,
+      tone: 'bad',
+    };
+  }
+  if (needs === 0) {
+    return { text: ok === true ? 'Your site is up and nothing is waiting on you.' : 'Nothing is waiting on you.', tone: 'ok' };
+  }
+  return {
+    text: `${up}${needs} ${needs === 1 ? 'thing needs' : 'things need'} you${decision ? ', one of them a decision only you can make.' : '.'}`,
+    tone: decision ? 'bad' : 'warn',
+  };
+}
+
+/** "running a workflow" when any of these runs is Running or Pending, else "idle". */
+export function runnerState(rows: readonly { status?: unknown }[]): 'running a workflow' | 'idle' {
+  return rows.some((row) => row.status === 'Running' || row.status === 'Pending') ? 'running a workflow' : 'idle';
+}
+
+/** The pill at the head of the system strip: how many items are off, or that none are. */
+export function systemVerdict(tones: readonly (Tone | 'none')[]): { text: string; tone: Tone } {
+  const off = tones.filter((tone) => tone === 'warn' || tone === 'bad').length;
+  if (off === 0) return { text: 'All systems normal', tone: 'ok' };
+  return { text: `${off} ${off === 1 ? 'warning' : 'warnings'}`, tone: tones.includes('bad') ? 'bad' : 'warn' };
 }
 
 /** "00:00:00.0040000" (a .NET TimeSpan) as milliseconds, or null when it does not read as one. */

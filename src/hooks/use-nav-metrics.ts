@@ -84,6 +84,39 @@ export function countRecentBounces(events: { at: string }[], now = Date.now()): 
   }).length;
 }
 
+/**
+ * Runs that need a person: Failed and PartiallyFailed. The count beside Workflow runs is not the
+ * number of runs, which only ever grows, but the number to go and look at.
+ *
+ * Read from `statusCounts` in the list response (the API sends it on a plain page read). Keys are
+ * matched without regard to case. An API that sends no counts gives null, so the rail shows nothing
+ * rather than the total it used to show under a different meaning.
+ */
+export function needsLookCount(counts: Record<string, number> | null | undefined): number | null {
+  if (!counts || typeof counts !== 'object') return null;
+  let total = 0;
+  for (const [key, value] of Object.entries(counts)) {
+    const status = key.toLowerCase();
+    if ((status === 'failed' || status === 'partiallyfailed') && typeof value === 'number') total += value;
+  }
+  return total;
+}
+
+function useFailedRuns(enabled: boolean) {
+  return useQuery({
+    queryKey: ['nav-metric', 'failedRuns'],
+    queryFn: async () => {
+      const { data } = await api.get<{ statusCounts?: Record<string, number> | null }>('/api/workflow-runs', {
+        params: { page: 1, pageSize: 1 },
+      });
+      return needsLookCount(data?.statusCounts);
+    },
+    enabled,
+    retry: false,
+    staleTime: STALE_MS,
+  });
+}
+
 function useRecentBounces(enabled: boolean) {
   return useQuery({
     queryKey: ['nav-metric', 'recentBounces'],
@@ -105,7 +138,7 @@ export function useNavMetrics(visibleHrefs: ReadonlySet<string>): NavMetrics {
   const entries = useTotalItems('entries', '/api/contents', visibleHrefs.has('/content'));
   const contentTypes = useTotalItems('contentTypes', '/api/content-types', visibleHrefs.has('/schemas'));
   const workflows = useTotalItems('workflows', '/api/workflows', visibleHrefs.has('/workflows'));
-  const workflowRuns = useTotalItems('workflowRuns', '/api/workflow-runs', visibleHrefs.has('/workflow-runs'));
+  const workflowRuns = useFailedRuns(visibleHrefs.has('/workflow-runs'));
   const errors = useTotalItems('unresolvedErrors', '/api/client-errors', visibleHrefs.has('/errors'), {
     resolved: false,
   });

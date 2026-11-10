@@ -17,9 +17,10 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { useNavMetrics, type NavMetrics } from '@/hooks/use-nav-metrics';
 import { CommandMenu } from '@/components/command-menu';
 import { TenantSwitcher } from '@/components/tenant-switcher';
-import { IconChevronDown, IconMoon } from '@/components/icons';
+import { IconChevronDown } from '@/components/icons';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { AboutDialog } from '@/components/about-dialog';
-import { useApiMeta } from '@/hooks/use-meta';
+import { brewVersion } from '@/hooks/use-meta';
 import { cn } from '@/lib/utils';
 import {
   Sidebar,
@@ -150,7 +151,7 @@ export function AppSidebar() {
 
   // Filtered by role or capability and by the modules the deployment runs, see useAllowedGroups.
   const allowed = useAllowedGroups();
-  const { data: meta } = useApiMeta();
+  const version = brewVersion();
   const [aboutOpen, setAboutOpen] = useState(false);
 
   // Only the destinations that survived filtering get a count fetched for them.
@@ -178,26 +179,27 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="offcanvas" className="border-none">
       <SidebarHeader className="gap-3 p-4 pb-2">
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <Link href="/" className="flex min-w-0 items-center gap-2.5 rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
             <BrandMark className="size-[30px]" />
-            <BrandWordmark />
+            <BrandWordmark className="truncate" />
           </Link>
-          {/* Hidden until the API has answered: a version line reading "unknown" is worse than none. */}
-          {meta?.version && (
+          {/* This console's version, never the API's: that string is long enough to run into the
+              wordmark. The API's version is in the About dialog this opens. */}
+          {version && (
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
-              className="ml-auto rounded-sm font-mono text-[11px] tabular-nums text-(--faint) outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="ml-auto shrink-0 rounded-sm font-mono text-[11px] tabular-nums text-(--faint) outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
             >
-              {meta.version}
+              {version}
               <span className="sr-only"> (about this instance)</span>
             </button>
           )}
         </div>
 
-        <TenantSwitcher />
         <CommandMenu />
+        <TenantSwitcher />
       </SidebarHeader>
 
       <SidebarContent className="px-4 pb-2">
@@ -270,22 +272,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 pt-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            {/* The palette is not drawn yet (#407), and layout.tsx pins the theme to light, so the
-                switch is shown, off, and cannot be turned on. */}
-            <SidebarMenuButton
-              role="switch"
-              aria-checked={false}
-              aria-disabled
-              title="Dark mode is not available yet"
-              tooltip="Dark mode"
-              className="h-[34px] cursor-not-allowed gap-2.5 rounded-[9px] px-2.5 text-[13.5px] text-muted-foreground opacity-70 hover:bg-transparent hover:text-muted-foreground"
-            >
-              <IconMoon aria-hidden className="size-4" />
-              <span className="flex-1 truncate">Dark mode</span>
-              <span aria-hidden className="bg-secondary relative h-4 w-7 rounded-full">
-                <span className="bg-card absolute top-0.5 left-0.5 size-3 rounded-full shadow-sm" />
-              </span>
-            </SidebarMenuButton>
+            <ThemeToggle />
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton

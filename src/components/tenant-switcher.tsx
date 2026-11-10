@@ -19,6 +19,22 @@ interface Option {
   roles?: { id: string; name: string }[];
 }
 
+/** Highest first. A role not named here ranks below these, in the order the API listed it. */
+const ROLE_RANK = ['SuperAdmin', 'Admin'];
+
+/**
+ * The one role to show for a membership. A person with several is shown their highest, since the
+ * rest add nothing the highest does not already say.
+ */
+export function highestRole(roles: readonly { name: string }[] | undefined): string {
+  if (!roles || roles.length === 0) return '';
+  const rank = (name: string) => {
+    const at = ROLE_RANK.indexOf(name);
+    return at === -1 ? ROLE_RANK.length : at;
+  };
+  return roles.reduce((best, r) => (rank(r.name) < rank(best.name) ? r : best)).name;
+}
+
 /** Two letters for the badge: the first of each of the first two words, or the first two of one. */
 export function initialsOf(name: string): string {
   const words = name.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
@@ -39,7 +55,7 @@ function TenantRow({
   pending: boolean;
   onPick: (slug: string) => void;
 }) {
-  const roleNames = o.roles?.map((r) => r.name).join(', ');
+  const roleNames = highestRole(o.roles);
   return (
     <button
       type="button"
@@ -105,7 +121,7 @@ export function TenantSwitcher() {
   const isSuperAdmin = !!user?.roles?.includes('SuperAdmin');
   // Only what the membership says. The session's roles are for wherever the token was issued, so
   // showing them against another tenant could name a role the caller does not hold there.
-  const role = (memberships.find((t) => t.slug === current)?.roles ?? []).map((r) => r.name).join(', ');
+  const role = highestRole(memberships.find((t) => t.slug === current)?.roles);
 
   const pick = (slug: string) => {
     // A manual pick settles the tenant, so the auto-switch effect cannot bounce a deliberate

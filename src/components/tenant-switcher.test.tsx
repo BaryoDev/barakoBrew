@@ -16,7 +16,7 @@ vi.mock('@/hooks/use-auth', () => ({
     useAuth: () => ({ user: { userId: 'u1', username: 'r', roles } }),
 }));
 
-const { TenantSwitcher } = await import('./tenant-switcher');
+const { TenantSwitcher, highestRole } = await import('./tenant-switcher');
 
 const club = { slug: 'club', name: 'The Club', roles: [{ id: 'r1', name: 'Registrar' }] };
 const other = { slug: 'other', name: 'Other Place' };
@@ -39,6 +39,23 @@ describe('TenantSwitcher', () => {
         await openPopover();
         expect(screen.getByText('club · Registrar')).toBeTruthy();
         expect(screen.getByText('other')).toBeTruthy();
+    });
+
+    it('shows only the highest role when a membership has several', async () => {
+        memberships = [{ slug: 'club', name: 'The Club', roles: [{ id: 'r1', name: 'Registrar' }, { id: 'r2', name: 'Admin' }, { id: 'r3', name: 'User' }] }, other];
+        render(<TenantSwitcher />);
+        expect(screen.getByRole('button', { name: 'Switch tenant' }).textContent).toContain('Admin');
+        expect(screen.getByRole('button', { name: 'Switch tenant' }).textContent).not.toContain('Registrar');
+        await openPopover();
+        expect(screen.getByText('club · Admin')).toBeTruthy();
+    });
+
+    it('ranks SuperAdmin over Admin over any other role', () => {
+        expect(highestRole([{ name: 'User' }, { name: 'Admin' }, { name: 'SuperAdmin' }])).toBe('SuperAdmin');
+        expect(highestRole([{ name: 'Registrar' }, { name: 'Admin' }])).toBe('Admin');
+        expect(highestRole([{ name: 'Registrar' }, { name: 'Editor' }])).toBe('Registrar');
+        expect(highestRole([])).toBe('');
+        expect(highestRole(undefined)).toBe('');
     });
 
     it('renders nothing when the user has no memberships', () => {

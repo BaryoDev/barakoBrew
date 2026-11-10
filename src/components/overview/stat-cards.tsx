@@ -158,7 +158,7 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
         state={stateOf(failures)}
         value={failures.data?.totalItems}
         bars={fail.bars}
-        caption={failed > 0 ? 'Needs you' : 'None'}
+        caption={failed > 0 ? `${failed} for you` : 'None'}
         tone={failed > 0 ? 'alert' : 'normal'}
       />
     </div>

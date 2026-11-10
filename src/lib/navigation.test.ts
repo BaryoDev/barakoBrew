@@ -176,14 +176,14 @@ describe('the site type in the rail', () => {
     it('marks Theme active on its own screen, not Site as well', () => {
         const hrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
         expect(activeNavHref(hrefs, '/site/theme')).toBe('/site/theme');
-        expect(breadcrumbsFor('/site/theme').map((c) => c.title)).toEqual(['Site', 'Theme']);
+        expect(breadcrumbsFor('/site/theme').map((c) => c.title)).toEqual(['Site settings', 'Theme']);
     });
 
     it('lists Style recipes beside Theme, for the same roles', () => {
         const hrefs = (roles: string[]) => visibleGroups(NAV_GROUPS, roles).flatMap((g) => g.items.map((i) => i.href));
         expect(hrefs(['Admin'])).toContain('/site/recipes');
         expect(hrefs(['User'])).not.toContain('/site/recipes');
-        expect(breadcrumbsFor('/site/recipes').map((c) => c.title)).toEqual(['Site', 'Style recipes']);
+        expect(breadcrumbsFor('/site/recipes').map((c) => c.title)).toEqual(['Site settings', 'Style recipes']);
     });
 });
 
@@ -202,7 +202,7 @@ describe('single-entry types in the rail', () => {
         const at = titles.indexOf('Entries');
 
         expect(at).toBeGreaterThanOrEqual(0);
-        expect(titles.slice(at, at + 4)).toEqual(['Entries', 'Site settings', 'Footer', 'Content types']);
+        expect(titles.slice(at, at + 4)).toEqual(['Entries', 'Site settings (single entry)', 'Footer', 'Content types']);
         expect(titles).not.toContain('Article');
         expect(titles).not.toContain('Legacy');
     });
@@ -210,15 +210,17 @@ describe('single-entry types in the rail', () => {
     it('never gives two rail items the same title, even for a type named like a static item', () => {
         const titles = withSingletons(NAV_GROUPS, TYPES).flatMap((g) => g.items.map((i) => i.title));
         expect(titles).toContain('Site settings');
+        expect(titles).toContain('Site settings (single entry)');
         expect(titles.filter((t, i) => titles.indexOf(t) !== i)).toEqual([]);
     });
 
     it('links each one to its edit screen, gated like Entries', () => {
         const items = withSingletons(NAV_GROUPS, TYPES).flatMap((g) => g.items);
         const entries = items.find((i) => i.href === '/content')!;
-        const site = items.find((i) => i.title === 'Site settings');
+        const site = items.find((i) => i.href === '/content/singleton/sitesettings');
 
         expect(site).toBeDefined();
+        expect(site!.title).toBe('Site settings (single entry)');
         expect(site!.href).toBe('/content/singleton/sitesettings');
         expect(site!.roles).toEqual(entries.roles);
     });
@@ -303,6 +305,11 @@ describe('modules in the rail', () => {
         const modules = groups.find((g) => g.label === 'Modules');
         expect(modules).toBeDefined();
         expect(modules!.items.map((i) => i.title)).toEqual(['All modules']);
+    });
+
+    it('lists All modules last in the Modules group', () => {
+        const group = NAV_GROUPS.find((g) => g.label === 'Modules');
+        expect(group!.items[group!.items.length - 1].title).toBe('All modules');
     });
 
     it('names a module for every item in the Modules group except All modules', () => {
@@ -499,11 +506,11 @@ describe('the rail after the prototype match', () => {
     it('keeps the primary list to the seven the prototype shows', () => {
         const titles = NAV_GROUPS[0].items.filter((i) => !i.parent).map((i) => i.title);
         expect(titles).toEqual([
-            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site',
+            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings',
         ]);
     });
 
-    it('puts Theme and Style recipes under Site', () => {
+    it('puts Theme and Style recipes under Site settings', () => {
         const children = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.parent === '/site');
         expect(children.map((i) => i.title)).toEqual(['Theme', 'Style recipes']);
     });

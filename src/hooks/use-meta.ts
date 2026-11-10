@@ -40,6 +40,15 @@ export function adminVersion(): string | null {
 }
 
 /**
+ * This console's own version, from its package.json, stamped in by next.config.ts. It is what the
+ * sidebar shows beside the wordmark. The API's version is a different, longer string and is shown
+ * in the About dialog.
+ */
+export function brewVersion(): string | null {
+  return process.env.NEXT_PUBLIC_BREW_VERSION || null;
+}
+
+/**
  * The words that make a name read as a credential, from `GET /api/meta/describe` (barakoCMS 4.7 on),
  * or the console's own copy while it loads, when it fails, and for an API that does not send them.
  * Read once and kept, like the version: a deploy is what changes it.

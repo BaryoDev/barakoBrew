@@ -37,6 +37,6 @@ export function useEntrySample(status: 'Published' | 'Draft') {
 }
 
 /** Workflow runs, newest first, optionally only one status. */
-export function useRunSample(status?: 'Failed') {
+export function useRunSample(status?: 'Failed' | 'PartiallyFailed') {
   return useSample(`runs-${status ?? 'all'}`, '/api/workflow-runs', status ? { status } : {});
 }

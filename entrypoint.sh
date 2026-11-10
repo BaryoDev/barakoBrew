@@ -45,7 +45,7 @@ fi
 placeholder_files=$(grep -rlF "$BASE_PATH_PLACEHOLDER" server.js .next 2>/dev/null || true)
 if [ -n "$placeholder_files" ]; then
   printf '%s\n' "$placeholder_files" | while IFS= read -r file; do
-    sed -i "s|$BASE_PATH_PLACEHOLDER|$base_path|g" "$file"
+    sed -i.bak "s|$BASE_PATH_PLACEHOLDER|$base_path|g" "$file" && rm -f "$file.bak"
   done
   echo "entrypoint: serving under ${base_path:-/}"
 elif [ -n "$base_path" ]; then
@@ -71,7 +71,7 @@ if printf '%s' "$connect_origins" | grep -Eq '^[A-Za-z0-9:/. _-]*$'; then
   csp_files=$(grep -rlF "$CONNECT_PLACEHOLDER" server.js .next 2>/dev/null || true)
   if [ -n "$csp_files" ]; then
     printf '%s\n' "$csp_files" | while IFS= read -r file; do
-      sed -i "s|$CONNECT_PLACEHOLDER|$connect_origins|g" "$file"
+      sed -i.bak "s|$CONNECT_PLACEHOLDER|$connect_origins|g" "$file" && rm -f "$file.bak"
     done
   fi
 else
@@ -79,7 +79,7 @@ else
   csp_files=$(grep -rlF "$CONNECT_PLACEHOLDER" server.js .next 2>/dev/null || true)
   if [ -n "$csp_files" ]; then
     printf '%s\n' "$csp_files" | while IFS= read -r file; do
-      sed -i "s|$CONNECT_PLACEHOLDER||g" "$file"
+      sed -i.bak "s|$CONNECT_PLACEHOLDER||g" "$file" && rm -f "$file.bak"
     done
   fi
 fi

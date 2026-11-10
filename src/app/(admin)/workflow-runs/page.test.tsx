@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { setViewportWidth } from '@/test/setup';
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -404,13 +405,15 @@ describe('the status chips', () => {
   });
 
   const COUNTS = { Pending: 1, Running: 2, Succeeded: 30, Failed: 4, PartiallyFailed: 6, Cancelled: 5 };
+  // Pending has no segment of its own, and Running does not count it, since Running lists only Running.
+  const SEGMENT_COUNTS: Record<string, number> = { Running: 2, Succeeded: 30, Failed: 4, PartiallyFailed: 6, Cancelled: 5 };
 
-  it('shows a chip for every status with the count the API sent, not the count of the loaded page', async () => {
+  it('shows a segment for every status with the count the API sent, not the count of the loaded page', async () => {
     renderRuns([run('r1', 'One', 'Failed', []), run('r2', 'Two', 'Succeeded', [])], { statusCounts: COUNTS, totalItems: 48 });
     await screen.findByRole('radio', { name: /One/ });
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
-    for (const [status, count] of Object.entries(COUNTS)) {
+    for (const [status, count] of Object.entries(SEGMENT_COUNTS)) {
       expect(within(group).getByTestId(`count-${status}`)).toHaveTextContent(String(count));
     }
     expect(within(group).getByTestId('count-all')).toHaveTextContent('48');
@@ -424,7 +427,20 @@ describe('the status chips', () => {
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
     expect(within(group).getByRole('button', { name: 'Failed, 4 runs' })).toBeInTheDocument();
-    expect(within(group).getByRole('button', { name: 'Pending, 1 run' })).toBeInTheDocument();
+    expect(within(group).getByRole('button', { name: 'Partly failed, 6 runs' })).toBeInTheDocument();
+  });
+
+  it('leaves Pending out of Running and says Partly failed, with no Pending segment', async () => {
+    renderRuns([run('r1', 'One', 'Failed', [])], { statusCounts: COUNTS, totalItems: 48 });
+    await screen.findByRole('radio', { name: /One/ });
+
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    expect(within(group).getByRole('button', { name: 'Running, 2 runs' })).toBeInTheDocument();
+    expect(within(group).queryByRole('button', { name: /^Pending/ })).toBeNull();
+    expect(within(group).queryByRole('button', { name: /^PartiallyFailed/ })).toBeNull();
+    expect(within(group).getAllByRole('button').map((b) => b.textContent?.replace(/\d+$/, ''))).toEqual([
+      'Every status', 'Running', 'Failed', 'Partly failed', 'Succeeded', 'Cancelled',
+    ]);
   });
 
   it('keeps the table and says so when a refresh fails after the list has loaded', async () => {
@@ -454,7 +470,7 @@ describe('the status chips', () => {
     await screen.findByRole('radio', { name: /One/ });
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
-    expect(within(group).getAllByRole('button')).toHaveLength(7);
+    expect(within(group).getAllByRole('button')).toHaveLength(6);
     expect(within(group).queryByTestId('count-Failed')).toBeNull();
   });
 
@@ -468,6 +484,67 @@ describe('the status chips', () => {
       const asked = vi.mocked(api.get).mock.calls.map(([, config]) => (config as { params?: Record<string, unknown> })?.params);
       expect(asked.some((params) => params?.status === 'Failed' && params?.page === 1)).toBe(true);
     });
+  });
+});
+
+describe('the Live switch', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('starts Live and flips to Paused and back', async () => {
+    renderRuns([run('r1', 'One', 'Failed', [])]);
+    await screen.findByRole('radio', { name: /One/ });
+
+    const live = screen.getByRole('switch', { name: 'Live updates' });
+    expect(live).toHaveAttribute('aria-checked', 'true');
+    expect(live).toHaveTextContent('Live');
+
+    fireEvent.click(live);
+    expect(screen.getByRole('switch', { name: 'Live updates' })).toHaveTextContent('Paused');
+    expect(screen.getByRole('switch', { name: 'Live updates' })).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Live updates' }));
+    expect(screen.getByRole('switch', { name: 'Live updates' })).toHaveTextContent('Live');
+  });
+
+  it('keeps the list readable and the rows selectable while paused', async () => {
+    renderRuns([run('r1', 'One', 'Failed', [])]);
+    await screen.findByRole('radio', { name: /One/ });
+    fireEvent.click(screen.getByRole('switch', { name: 'Live updates' }));
+
+    fireEvent.click(screen.getByRole('radio', { name: /One/ }));
+    expect(await screen.findByRole('heading', { name: 'One' })).toBeInTheDocument();
+  });
+});
+
+describe('picking a run on one column', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('scrolls to the detail below 1180px, after the render', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    setViewportWidth(900);
+    renderRuns([run('r1', 'One', 'Failed', [])]);
+
+    fireEvent.click(await screen.findByRole('radio', { name: /One/ }));
+
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not scroll on two columns', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    renderRuns([run('r1', 'One', 'Failed', [])]);
+
+    fireEvent.click(await screen.findByRole('radio', { name: /One/ }));
+    await screen.findByRole('heading', { name: 'One' });
+
+    expect(scroll).not.toHaveBeenCalled();
   });
 });
 

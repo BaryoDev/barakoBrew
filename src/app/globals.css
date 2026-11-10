@@ -68,9 +68,9 @@
  * Human prose is Instrument Sans. That single distinction is what makes the admin read as a developer
  * tool rather than a dashboard template.
  *
- * Light only. Dark mode was deferred deliberately, so next-themes is pinned to light and the
- * toggles are gone rather than left to set a theme nobody drew. The .dark block below is kept as
- * the starting point for when it is drawn, and nothing reaches it today.
+ * Light and dark. The dark palette is the round 3 handoff's (docs/design/barakobrew-2026-r3), set on
+ * the same variables under .dark. next-themes picks the class: the stored choice in
+ * localStorage['bk-brew-theme'], else the OS setting, written before first paint.
  *
  * Every pair below was measured, not eyeballed. This file has failed WCAG twice before, both
  * recorded underneath, and the axe pass added for #304 gates the build.
@@ -168,46 +168,65 @@
   --shadow-lift: 0 8px 24px -12px rgba(90, 70, 214, 0.22);
 }
 
-/* Not reachable. next-themes is pinned to light in layout.tsx and the two toggles were removed,
-   because dark mode was deferred and a half-drawn one is worse than none. Left as the Yeti values it
-   has always had rather than half-converted: a Signal dark palette is a design job, not an inversion,
-   and #407 records it as the open question. */
+/* The round 3 dark tokens. Every variable :root sets is set again here, so no light value leaks
+   into a dark screen. --faint is 5.1:1 or better on --secondary and the page. */
 .dark {
-  --background: #222222;
-  --foreground: #eeeeee;
-  --card: #2b2b2b;
-  --card-foreground: #eeeeee;
-  --popover: #2b2b2b;
-  --popover-foreground: #eeeeee;
-  --primary: #22aedb;
-  --primary-foreground: #08222b;
-  --secondary: #333333;
-  --secondary-foreground: #eeeeee;
-  --muted: #2e2e2e;
-  --muted-foreground: #adb5bd;
-  --accent: #3a3a3a;
-  --accent-foreground: #ffffff;
-  --destructive: #f0563f;
-  --success: #52c17c;
-  --success-foreground: #08220f;
-  --warning: #f0a52a;
-  --warning-foreground: #241800;
-  --border: rgba(255, 255, 255, 0.14);
-  --input: rgba(255, 255, 255, 0.16);
-  --ring: #22aedb;
-  --chart-1: #22aedb;
-  --chart-2: #52c17c;
-  --chart-3: #5bc0de;
-  --chart-4: #e99002;
-  --chart-5: #f04124;
-  --sidebar: #1c1c1c;
-  --sidebar-foreground: #dddddd;
-  --sidebar-primary: #22aedb;
-  --sidebar-primary-foreground: #08222b;
-  --sidebar-accent: #2e2e2e;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #22aedb;
+  --background: #0b0c16;
+  --foreground: #eeeff8;
+  --card: #14162a;
+  --card-foreground: #eeeff8;
+  --popover: #14162a;
+  --popover-foreground: #eeeff8;
+  --primary: #8e7df5;
+  --primary-foreground: #0b0c16;
+  --secondary: #1c1f36;
+  --secondary-foreground: #d2d4e4;
+  --muted: #1c1f36;
+  --muted-foreground: #a0a4bd;
+  --accent: #25214a;
+  --accent-foreground: #b9aeff;
+  --destructive: #ff8a80;
+  --success: #4fd1b8;
+  --success-foreground: #0b0c16;
+  --warning: #f2c060;
+  --warning-foreground: #0b0c16;
+  --border: #272a45;
+  --input: #272a45;
+  --ring: #8e7df5;
+  --chart-1: #8e7df5;
+  --chart-2: #4fd1b8;
+  --chart-3: #f2c060;
+  --chart-4: #ff8a80;
+  --chart-5: #a0a4bd;
+  --sidebar: #14162a;
+  --sidebar-foreground: #eeeff8;
+  --sidebar-primary: #8e7df5;
+  --sidebar-primary-foreground: #0b0c16;
+  --sidebar-accent: #25214a;
+  --sidebar-accent-foreground: #b9aeff;
+  --sidebar-border: #272a45;
+  --sidebar-ring: #8e7df5;
+
+  --faint: #8d91b0;
+  --disabled: #3a3e5e;
+  --accent-hover: #a394f8;
+  --accent-ink: #b9aeff;
+  --accent-deep: #d9d3ff;
+  --accent-border: #3a3470;
+  --success-soft: #0f2c29;
+  --warning-soft: #2e2410;
+  --danger-soft: #341716;
+
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-raised: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-popover: 0 24px 56px -20px rgba(0, 0, 0, 0.7);
+  --shadow-accent: 0 5px 14px -7px rgba(142, 125, 245, 0.6);
+  --shadow-lift: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
 }
 
 @layer base {

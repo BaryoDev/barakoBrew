@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
 import type { NextConfig } from "next";
+
+// This console's own version, shown in the sidebar. The API reports its own, separately.
+const brewVersion: string = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version;
 
 // The sub-path the console is served under, e.g. "/barakocms" behind a shared reverse proxy.
 // Next resolves basePath and assetPrefix during the build, so this stays a build input and cannot
@@ -104,7 +108,7 @@ const nextConfig: NextConfig = {
   ...(basePath ? { basePath, assetPrefix: basePath } : {}),
   // basePath is applied by the router and Link only. Code that sets window.location itself needs the
   // prefix too, and this inlines it into the client bundle. Not a secret: it is in every URL.
-  env: { NEXT_PUBLIC_BASE_PATH: basePath ?? "" },
+  env: { NEXT_PUBLIC_BASE_PATH: basePath ?? "", NEXT_PUBLIC_BREW_VERSION: brewVersion },
 };
 
 export default nextConfig;

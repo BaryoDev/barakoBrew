@@ -95,6 +95,18 @@ describe('the rail', () => {
         expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument();
     });
 
+    it('shows this console\'s version beside the wordmark, never the API\'s', async () => {
+        vi.stubEnv('NEXT_PUBLIC_BREW_VERSION', '1.11.5');
+        try {
+            renderRail({ capabilities: [] });
+            await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
+            expect(screen.getByText('barako').textContent).toBe('barakoBrew');
+            expect(screen.getByRole('button', { name: /1\.11\.5/ })).toBeInTheDocument();
+        } finally {
+            vi.unstubAllEnvs();
+        }
+    });
+
     it('keeps Sign out and a Dark mode row in the footer', async () => {
         renderRail({ capabilities: [] });
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
