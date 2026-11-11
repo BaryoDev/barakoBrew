@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { NAV_GROUPS } from '@/lib/navigation';
-import { IconPlus, IconSearch } from '@/components/icons';
+import { IconPlus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useIsSidebarDrawer } from '@/hooks/use-mobile';
 import {
@@ -54,19 +54,18 @@ export function CommandMenu({ trigger = 'rail' }: { trigger?: 'rail' | 'bar' }) 
           type="button"
           aria-label="Search"
           onClick={() => setOpen(true)}
-          className="border-border bg-card text-muted-foreground hover:text-foreground size-11 shrink-0 rounded-[11px] border outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="border-border bg-card text-muted-foreground hover:text-foreground size-11 shrink-0 rounded-[11px] border font-mono text-[11px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
         >
-          <IconSearch aria-hidden className="mx-auto size-4" />
+          <span aria-hidden>⌘K</span>
         </button>
       ) : (
         <Button
           variant="outline"
-          className="h-10 w-full justify-start gap-2 rounded-[11px] bg-card px-3 font-normal text-muted-foreground shadow-[var(--shadow-card)] hover:text-foreground"
+          className="bg-background hover:bg-background h-[38px] w-full justify-start gap-2.5 rounded-[10px] px-3 font-normal text-muted-foreground shadow-none hover:border-primary hover:text-muted-foreground"
           onClick={() => setOpen(true)}
         >
-          <IconSearch className="size-3.5" />
-          <span className="flex-1 text-left text-[13px]">Search or jump to</span>
-          <kbd className="bg-secondary text-(--faint) pointer-events-none rounded-[6px] px-1.5 py-0.5 font-mono text-[10px]">
+          <span className="flex-1 text-left text-[13.5px]">Search or jump to</span>
+          <kbd className="bg-secondary pointer-events-none rounded-[5px] px-1.5 py-0.5 font-mono text-[10.5px]">
             ⌘K
           </kbd>
         </Button>
