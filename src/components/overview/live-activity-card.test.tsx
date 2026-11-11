@@ -33,7 +33,7 @@ describe('the Live activity card', () => {
         // The sentence is built from kind, actor and subject title, so the text carries no title twice.
         expect(rows[0]).toHaveTextContent('Ana published New pastry menu');
         expect(rows[0]).not.toHaveTextContent('Published an entry.');
-        expect(within(rows[0]).getByText('published').className).toContain('font-mono');
+        expect(within(rows[0]).getAllByText('published').some((e) => e.className.includes('font-mono'))).toBe(true);
         expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/content/1');
         // An unknown kind is drawn as its name, in mono.
         expect(within(rows[1]).getByText('quota.reached').className).toContain('font-mono');

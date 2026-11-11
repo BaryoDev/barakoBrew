@@ -130,7 +130,7 @@ export function timeLeft(expiresAt: string | null | undefined, now: number): str
   if (!Number.isFinite(at)) return null;
   const minutes = Math.ceil((at - now) / 60_000);
   if (minutes <= 0) return 'already stopped';
-  if (minutes < 60) return `in ${minutes} min`;
+  if (minutes <= 60) return `in ${minutes} min`;
   const hours = Math.round(minutes / 60);
   if (hours < 48) return `in ${hours} h`;
   return `in ${Math.round(hours / 24)} days`;

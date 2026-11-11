@@ -503,10 +503,10 @@ describe('the rail after the prototype match', () => {
         }
     });
 
-    it('keeps the primary list to the seven the prototype shows', () => {
+    it('keeps the primary list to the prototype\'s: the seven, then Activity', () => {
         const titles = NAV_GROUPS[0].items.filter((i) => !i.parent).map((i) => i.title);
         expect(titles).toEqual([
-            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings',
+            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings', 'Activity',
         ]);
     });
 

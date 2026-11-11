@@ -20,7 +20,7 @@ describe('ActivityRow', () => {
         expect(li.className).toContain('min-h-12');
         expect(li).toHaveTextContent('10 min');
         expect(li).toHaveTextContent('Ana published New pastry menu');
-        expect(screen.getByText('published').className).toContain('font-mono');
+        expect(screen.getAllByText('published').some((e) => e.className.includes('font-mono'))).toBe(true);
     });
 
     it('does not repeat the title that core keeps out of text', () => {

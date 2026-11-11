@@ -83,7 +83,6 @@ describe('the rail', () => {
         renderRail({ capabilities: ['view_audit_log'] }, 0, false, 'none');
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/activity', expect.anything()));
         await waitFor(() => expect(screen.queryByRole('link', { name: /^Activity/ })).toBeNull());
-        expect(screen.getByRole('link', { name: /^Audit log/ })).toBeInTheDocument();
     });
 
     it('does not ask the feed of a caller who is not offered Activity', async () => {

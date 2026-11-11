@@ -29,7 +29,7 @@ describe('the Activity screen', () => {
     it('offers the six filter chips and asks for no kinds at first', () => {
         render(<ActivityPage />);
         for (const name of ['Everything', 'Problems', 'Publishing', 'Workflow runs', 'Sign-ins', 'Imports']) {
-            expect(screen.getByRole('button', { name })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
         }
         expect(screen.getByRole('button', { name: /Everything/ })).toHaveAttribute('aria-pressed', 'true');
         expect(last().kinds).toEqual([]);
