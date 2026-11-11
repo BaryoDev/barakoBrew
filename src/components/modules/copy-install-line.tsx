@@ -23,7 +23,7 @@ export function CopyInstallLine({ module }: { module: Pick<ModuleSummary, 'packa
                 try {
                     await navigator.clipboard.writeText(line);
                     setCopied(true);
-                    toast.success(`Copied: ${line}. Restart the API and its screen appears.`);
+                    toast.success(`Copied: ${line}. Restart the API, then enable it for the tenant.`);
                 } catch {
                     setCopied(false);
                     toast.error('Could not copy. Select the line and copy it by hand.');
