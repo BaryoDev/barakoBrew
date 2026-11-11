@@ -23,7 +23,7 @@ const get = vi.mocked(api.get);
 const fetchMock = vi.fn();
 
 const base = { contractVersion: 1, schemaState: 'ready', schemaChanges: [] as string[] };
-const INSTALLED = [{ ...base, name: 'Files', enabled: true, package: 'BarakoCMS.Files', version: '5.1.0' }];
+const INSTALLED = [{ ...base, name: 'Files', enabled: true, packageId: 'BarakoCMS.Files', packageVersion: '5.1.0' }];
 
 const cardId = (card: HTMLElement) => within(card).getByRole('heading').textContent ?? '';
 

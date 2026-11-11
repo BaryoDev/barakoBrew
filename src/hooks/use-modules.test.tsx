@@ -50,8 +50,8 @@ describe('useModules optional text fields', () => {
         vi.mocked(api.get).mockResolvedValue({
             data: {
                 items: [
-                    { ...summary('Files'), category: { x: 1 }, package: 7, description: ['a'] },
-                    { ...summary('Forms'), category: 'Content', package: 'BarakoCMS.Forms', description: 'Forms.' },
+                    { ...summary('Files'), category: { x: 1 }, packageId: 7, description: ['a'] },
+                    { ...summary('Forms'), category: 'Content', packageId: 'BarakoCMS.Forms', description: 'Forms.' },
                 ],
             },
         });
@@ -60,10 +60,34 @@ describe('useModules optional text fields', () => {
         const modules = result.current.data?.kind === 'modules' ? result.current.data.modules : [];
         expect(modules).toHaveLength(2);
         expect(modules[0].category).toBeUndefined();
-        expect(modules[0].package).toBeUndefined();
+        expect(modules[0].packageId).toBeUndefined();
         expect(modules[0].description).toBeUndefined();
         expect(modules[1].category).toBe('Content');
-        expect(modules[1].package).toBe('BarakoCMS.Forms');
+        expect(modules[1].packageId).toBe('BarakoCMS.Forms');
+    });
+});
+
+describe('useModules packageVersion and glyph', () => {
+    it('drops a packageVersion or glyph that is not a string and keeps string ones', async () => {
+        vi.mocked(api.get).mockResolvedValue({
+            data: {
+                items: [
+                    { ...summary('Files'), packageVersion: 5, glyph: { x: 1 } },
+                    { ...summary('Forms'), packageVersion: '5.1.0', glyph: 'form' },
+                    { ...summary('Pwa'), packageVersion: null, glyph: null },
+                ],
+            },
+        });
+        const { result } = renderHook(() => useModules(), { wrapper: wrapper() });
+        await waitFor(() => expect(result.current.data?.kind).toBe('modules'));
+        const modules = result.current.data?.kind === 'modules' ? result.current.data.modules : [];
+        expect(modules).toHaveLength(3);
+        expect(modules[0].packageVersion).toBeUndefined();
+        expect(modules[0].glyph).toBeUndefined();
+        expect(modules[1].packageVersion).toBe('5.1.0');
+        expect(modules[1].glyph).toBe('form');
+        expect(modules[2].packageVersion).toBeUndefined();
+        expect(modules[2].glyph).toBeUndefined();
     });
 });
 

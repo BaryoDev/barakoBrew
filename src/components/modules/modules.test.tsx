@@ -26,9 +26,9 @@ const get = vi.mocked(api.get);
 
 const base = { contractVersion: 1, schemaState: 'ready', schemaChanges: [] as string[] };
 const MODULES = [
-    { ...base, name: 'Files', enabled: true, package: 'BarakoCMS.Files', version: '5.1.0', category: 'content', description: 'Uploads.' },
-    { ...base, name: 'Forms', enabled: false, package: 'BarakoCMS.Forms', version: '5.1.0', category: 'Content', description: 'Form builder.' },
-    { ...base, name: 'Pwa', enabled: false, installed: false, package: 'BarakoCMS.Pwa', version: '5.1.0', category: 'Platform', description: 'Installable site.' },
+    { ...base, name: 'Files', enabled: true, packageId: 'BarakoCMS.Files', packageVersion: '5.1.0', category: 'content', description: 'Uploads.' },
+    { ...base, name: 'Forms', enabled: false, packageId: 'BarakoCMS.Forms', packageVersion: '5.1.0', category: 'Content', description: 'Form builder.' },
+    { ...base, name: 'Pwa', enabled: false, installed: false, packageId: 'BarakoCMS.Pwa', packageVersion: '5.1.0', category: 'Platform', description: 'Installable site.' },
 ];
 
 function wrap(ui: ReactNode) {
@@ -61,7 +61,7 @@ describe('All modules page', () => {
         expect(within(files).queryByRole('button', { name: 'Copy install' })).toBeNull();
         expect(within(byState('installed')[0]).getByText('Installed, not enabled')).toBeTruthy();
 
-        const pwa = byState('not-installed').find((c) => within(c).queryByText('Pwa'))!;
+        const pwa = byState('not-installed').find((c) => within(c).queryByText('PWA'))!;
         expect(within(pwa).getByText('Not installed')).toBeTruthy();
         expect(within(pwa).getByText('dotnet add package BarakoCMS.Pwa')).toBeTruthy();
         expect(within(pwa).getByRole('button', { name: 'Copy install' })).toBeTruthy();
@@ -99,7 +99,7 @@ describe('All modules page', () => {
         get.mockResolvedValue({ data: { items: MODULES } });
         wrap(<ModulesPage />);
         const cards = await screen.findAllByTestId('module-card');
-        const pwa = cards.find((c) => within(c).queryByText('Pwa'))!;
+        const pwa = cards.find((c) => within(c).queryByText('PWA'))!;
         await userEvent.click(within(pwa).getByRole('button', { name: 'Copy install' }));
         expect(writeText).toHaveBeenCalledWith('dotnet add package BarakoCMS.Pwa');
         expect(toastSuccess).toHaveBeenCalledWith(
@@ -126,7 +126,7 @@ describe('All modules page', () => {
         await userEvent.click(screen.getByRole('radio', { name: /^Access/ }));
         const cards = screen.getAllByTestId('module-card');
         expect(cards).toHaveLength(2);
-        expect(cards.map((c) => within(c).getByRole('heading').textContent).sort()).toEqual(['DeviceTrust', 'ExternalAuth']);
+        expect(cards.map((c) => within(c).getByRole('heading').textContent).sort()).toEqual(['Device trust', 'External sign-in']);
     });
 
     it('lists a module the API sends that the catalog does not know, with its own category', async () => {
@@ -142,6 +142,26 @@ describe('All modules page', () => {
         get.mockRejectedValue(Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403 } }));
         wrap(<ModulesPage />);
         expect(await screen.findByText('The module list is not available to you.')).toBeTruthy();
+    });
+});
+
+describe('module contract from GET /api/modules', () => {
+    it('shows the packageVersion the API sent on the card', async () => {
+        get.mockResolvedValue({
+            data: { items: [{ ...base, name: 'Files', enabled: true, packageId: 'BarakoCMS.Files', packageVersion: '5.1.0' }] },
+        });
+        wrap(<ModulesPage />);
+
+        const files = (await screen.findAllByTestId('module-card')).find((c) => within(c).queryByText('Files'))!;
+        expect(within(files).getByText('BarakoCMS.Files 5.1.0')).toBeTruthy();
+    });
+
+    it('shows the design display name on the card', async () => {
+        get.mockResolvedValue({
+            data: { items: [{ ...base, name: 'DeviceTrust', enabled: true, packageId: 'BarakoCMS.DeviceTrust', packageVersion: '5.1.0' }] },
+        });
+        wrap(<ModulesPage />);
+        expect(await screen.findByRole('link', { name: 'Open Device trust' })).toBeTruthy();
     });
 });
 

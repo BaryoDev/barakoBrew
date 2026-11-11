@@ -10,7 +10,7 @@ import type { ModuleSummary } from '@/types/modules';
  * Copies `dotnet add package <id>`. Renders nothing for a module whose package is not known. It
  * copies a line and nothing else: the console cannot add a package to a running deployment.
  */
-export function CopyInstallLine({ module }: { module: Pick<ModuleSummary, 'package'> }) {
+export function CopyInstallLine({ module }: { module: Pick<ModuleSummary, 'packageId'> }) {
     const [copied, setCopied] = useState(false);
     const line = installLine(module);
     if (!line) return null;

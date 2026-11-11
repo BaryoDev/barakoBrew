@@ -27,7 +27,7 @@ function categoryOf(pkg: NugetPackage): string {
 function stateByPackage(listed: readonly import('@/types/modules').ModuleSummary[]): Map<string, ModuleState> {
     const map = new Map<string, ModuleState>();
     for (const m of withFirstParty(listed)) {
-        if (m.package) map.set(m.package.toLowerCase(), moduleState(m));
+        if (m.packageId) map.set(m.packageId.toLowerCase(), moduleState(m));
     }
     return map;
 }
