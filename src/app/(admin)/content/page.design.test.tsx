@@ -51,6 +51,10 @@ const SCHEMAS = [
   {
     name: 'article',
     displayName: 'Articles',
+    // A circle, which none of the built-in glyphs draw, so it can only come from this icon.
+    icon: {
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="8"/></svg>',
+    },
     isSingleton: false,
     isPubliclyDeliverable: true,
     fields: [],
@@ -84,6 +88,8 @@ function row(
 }
 
 let rows: ReturnType<typeof row>[];
+// Deliberately unlike the rows on the page: the counts are the type's, not the page's.
+let counts: { total: number; draft: number; published: number; archived: number; scheduled: number };
 
 function lastListParams() {
   const calls = vi.mocked(api.get).mock.calls.filter((call) => call[0] === '/api/contents');
@@ -95,6 +101,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   replace.mockImplementation(navigate);
   searchParams = new URLSearchParams();
+  counts = { total: 148, draft: 60, published: 70, archived: 11, scheduled: 7 };
   rows = [
     row('a', 'Alpha', ContentStatus.Published),
     row('b', 'Beta', ContentStatus.Draft),
@@ -117,6 +124,9 @@ beforeEach(() => {
           hasPreviousPage: false,
         },
       };
+    }
+    if (url === '/api/contents/counts') {
+      return { data: counts };
     }
     throw new Error(`unexpected GET ${url}`);
   });
@@ -166,32 +176,70 @@ describe('the content type tabs', () => {
   });
 });
 
+describe('the type icon', () => {
+  it('is drawn on the tab of a type that has one and not on a type without', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(screen.getByRole('tab', { name: 'Articles' }).querySelector('circle')).not.toBeNull();
+    expect(screen.getByRole('tab', { name: 'Pages' }).querySelector('circle')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Pages' }).querySelector('svg')).not.toBeNull();
+  });
+
+  it('is drawn in the type column of a row', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    const cells = within(bodyRows()[0]).getAllByRole('cell');
+    expect(cells.some((cell) => cell.textContent === 'article' && cell.querySelector('circle'))).toBe(true);
+  });
+});
+
 describe('the status chips', () => {
-  it('are toggle buttons whose names carry the counts of the rows on this page, in the visible text', async () => {
+  it('carry the counts GET /api/contents/counts gave, in the visible text', async () => {
     renderList();
     await screen.findByText('Alpha');
 
     const group = screen.getByRole('group', { name: 'Filter by status' });
-    const all = within(group).getByRole('button', { name: 'All 3' });
+    const all = await within(group).findByRole('button', { name: 'All 148' });
     expect(all.getAttribute('aria-pressed')).toBe('true');
-    expect(within(group).getByRole('button', { name: 'Draft 2' })).toBeTruthy();
-    expect(within(group).getByRole('button', { name: 'Published 1' })).toBeTruthy();
-    // No row is Archived or Scheduled, so those are tallied as none, not left unsaid.
-    expect(within(group).getByRole('button', { name: 'Archived' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Draft 60' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Scheduled 7' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Published 70' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Archived 11' })).toBeTruthy();
   });
 
-  it('never use the server total as a status count, and say the counts are for the page', async () => {
+  it('are not a tally of the rows on the page, and no longer say they are', async () => {
     renderList();
     await screen.findByText('Alpha');
 
-    // totalItems is 148 in the fixture. A chip reading 148 would be the whole collection counted
-    // as one status.
-    expect(screen.queryByRole('button', { name: /148/ })).toBeNull();
-    expect(
-      within(screen.getByRole('group', { name: 'Filter by status' })).getByText(
-        'Counts on this page'
-      )
-    ).toBeTruthy();
+    // Three rows are loaded. A chip reading 3 or 2 would be this page counted.
+    await screen.findByRole('button', { name: 'Draft 60' });
+    expect(screen.queryByRole('button', { name: 'Draft 2' })).toBeNull();
+    expect(screen.queryByText('Counts on this page')).toBeNull();
+    expect(screen.queryByText(/showing .* only/i)).toBeNull();
+  });
+
+  it('ask for the counts of the chosen type', async () => {
+    searchParams = new URLSearchParams('type=page');
+    renderList();
+    await screen.findByText('Alpha');
+
+    await screen.findByRole('button', { name: 'All 148' });
+    const call = vi.mocked(api.get).mock.calls.find((c) => c[0] === '/api/contents/counts')!;
+    expect((call[1] as { params: { contentType: string } }).params.contentType).toBe('page');
+  });
+
+  it('show no number until the counts arrive, and none if they cannot be had', async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url === '/api/content-types') return { data: { items: SCHEMAS, page: 1, pageSize: 20, totalItems: 3 } };
+      if (url === '/api/contents') return { data: { items: rows, page: 1, pageSize: 20, totalItems: 3, totalPages: 1 } };
+      throw new Error('counts unavailable');
+    });
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(screen.getByRole('button', { name: 'Draft' })).toBeTruthy();
   });
 
   it('show no In review chip, because the API sends no such status', async () => {
@@ -200,34 +248,18 @@ describe('the status chips', () => {
     expect(screen.queryByRole('button', { name: /^In review/ })).toBeNull();
   });
 
-  it('count only the chosen status once the server has narrowed the list', async () => {
+  it('keep every count when a status is chosen, so chips can still be compared', async () => {
     const user = userEvent.setup();
     renderList();
     await screen.findByText('Alpha');
     rows = [row('b', 'Beta', ContentStatus.Draft), row('c', 'Gamma', ContentStatus.Draft)];
 
-    await user.click(screen.getByRole('button', { name: /^Draft/ }));
+    await user.click(await screen.findByRole('button', { name: /^Draft/ }));
 
     await waitFor(() => expect(lastListParams().status).toBe(ContentStatus.Draft));
-    const draft = await screen.findByRole('button', { name: 'Draft 2' });
+    const draft = await screen.findByRole('button', { name: 'Draft 60' });
     expect(draft.getAttribute('aria-pressed')).toBe('true');
-    // Published would read zero, which is a claim about entries the filter hid.
-    expect(screen.getByRole('button', { name: 'Published' })).toBeTruthy();
-  });
-
-  it('show a count on the chosen chip only, and say the list is showing that status only', async () => {
-    searchParams = new URLSearchParams('status=Draft');
-    rows = [row('b', 'Beta', ContentStatus.Draft), row('c', 'Gamma', ContentStatus.Draft)];
-    renderList();
-    await screen.findByText('Beta');
-
-    const group = screen.getByRole('group', { name: 'Filter by status' });
-    const counted = within(group)
-      .getAllByRole('button')
-      .filter((button) => /\d/.test(button.textContent ?? ''));
-    expect(counted.map((button) => button.textContent)).toEqual(['Draft 2']);
-    expect(within(group).getByText('Showing Draft only')).toBeTruthy();
-    expect(within(group).queryByText('Counts on this page')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Published 70' })).toBeTruthy();
   });
 
   it('go back to All when the pressed chip is pressed again', async () => {

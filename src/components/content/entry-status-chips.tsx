@@ -11,13 +11,12 @@ export interface StatusChip {
 /**
  * The status chips, as toggle buttons with their counts in the accessible name.
  *
- * `counts` is whatever the caller could honestly tally. A chip with no entry in it shows no number
- * rather than a zero: the list reply carries no per-status counts, so a number here is a tally of
- * the page that was loaded, and the group says so beside the chips and in each name.
+ * `counts` comes from GET /api/contents/counts, so a number is the type's total in that status and
+ * not a tally of the page loaded. A chip with no entry in it shows no number rather than a zero,
+ * which is how the chips read while the counts load or if they cannot be had.
  *
  * The name is the visible text, label then count with a space between, so it always contains what is
- * on screen (axe label-content-name-mismatch fails an aria-label that rewrites it). The group is
- * described by the "Counts on this page" note.
+ * on screen (axe label-content-name-mismatch fails an aria-label that rewrites it).
  */
 export function EntryStatusChips({
   chips,
@@ -30,13 +29,10 @@ export function EntryStatusChips({
   counts: Record<string, number>;
   onChange: (value: string | undefined) => void;
 }) {
-  const hasCounts = Object.keys(counts).length > 0;
-
   return (
     <div
       role="group"
       aria-label="Filter by status"
-      aria-describedby={hasCounts ? 'entry-status-note' : undefined}
       className="flex flex-wrap items-center gap-1.5"
     >
       {chips.map((chip) => {
@@ -67,13 +63,6 @@ export function EntryStatusChips({
           </button>
         );
       })}
-      {hasCounts && (
-        <span id="entry-status-note" className="text-muted-foreground text-[11px]">
-          {value === undefined
-            ? 'Counts on this page'
-            : `Showing ${chips.find((chip) => chip.value === value)?.label ?? value} only`}
-        </span>
-      )}
     </div>
   );
 }

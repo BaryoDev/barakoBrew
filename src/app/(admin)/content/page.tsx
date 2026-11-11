@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
-import { useContents } from '@/hooks/use-contents';
+import { useContents, useContentCounts } from '@/hooks/use-contents';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { ContentStatus, type ContentListItem } from '@/types/content';
 import {
@@ -33,6 +33,8 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { IconContent, IconLock, IconPlus } from '@/components/icons';
+import { TypeIcon } from '@/components/schema/type-icon';
+import type { ContentTypeIcon } from '@/types/schema';
 import { useDebounced } from '@/hooks/use-debounced';
 import { exactTime, relativeTime } from '@/lib/relative-time';
 import { contentTitle } from '@/lib/content-title';
@@ -97,7 +99,10 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
 
 const NO_ROWS: ContentListItem[] = [];
 
-function entryColumns(privateTypes: ReadonlySet<string>) {
+function entryColumns(
+  privateTypes: ReadonlySet<string>,
+  typeIcons: ReadonlyMap<string, ContentTypeIcon | null | undefined>
+) {
   return column.columns([
     column.display({
       id: 'entry',
@@ -116,7 +121,7 @@ function entryColumns(privateTypes: ReadonlySet<string>) {
       header: 'Type',
       cell: ({ getValue }) => (
         <span className="inline-flex items-center gap-1.5">
-          <IconContent aria-hidden className="size-3.5" />
+          <TypeIcon icon={typeIcons.get(getValue())} aria-hidden className="size-3.5" />
           {getValue()}
         </span>
       ),
@@ -265,7 +270,12 @@ function ContentListInner() {
     [schemas]
   );
 
-  const columns = useMemo(() => entryColumns(privateTypes), [privateTypes]);
+  const typeIcons = useMemo(
+    () => new Map((schemas ?? []).map((s) => [s.name, s.icon] as const)),
+    [schemas]
+  );
+
+  const columns = useMemo(() => entryColumns(privateTypes, typeIcons), [privateTypes, typeIcons]);
   const table = useTable({
     features,
     columns,
@@ -283,21 +293,22 @@ function ContentListInner() {
   const tabTypes = (schemas ?? []).filter((s) => s.isSingleton !== true);
 
   /**
-   * What each chip can say, from the rows loaded.
+   * What each chip says, from GET /api/contents/counts for the chosen type.
    *
-   * The list reply carries no per-status counts, and a request per status is the round trip this
-   * screen refuses to make. So these are a tally of this page and are labelled that way. With a
-   * status chosen the page holds only that status, so only its own chip has a number worth showing;
-   * the others would read zero, which is a claim about entries nobody asked for.
+   * Counts are the type's, not the page's and not the search's: they do not move when a status is
+   * chosen or a title typed, which is what lets one chip be compared with another. They are empty
+   * until the reply arrives, and chips show no number rather than a zero while they are.
    */
-  const statusCounts = (() => {
-    const items = contents?.items ?? NO_ROWS;
-    if (!contents) return {};
-    if (status !== undefined) return { [status]: items.length };
-    const tally: Record<string, number> = { all: items.length };
-    for (const item of items) tally[item.status] = (tally[item.status] ?? 0) + 1;
-    return tally;
-  })();
+  const { data: counts } = useContentCounts(contentType);
+  const statusCounts: Record<string, number> = counts
+    ? {
+        all: counts.total,
+        [ContentStatus.Draft]: counts.draft,
+        [ContentStatus.Published]: counts.published,
+        [ContentStatus.Archived]: counts.archived,
+        [ContentStatus.Scheduled]: counts.scheduled,
+      }
+    : {};
 
   return (
     <Tabs value={contentType ?? ALL_TYPES} onValueChange={setType} className="gap-0">

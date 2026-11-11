@@ -31,6 +31,34 @@ export function useContents(
     });
 }
 
+export interface ContentCounts {
+    total: number;
+    draft: number;
+    published: number;
+    archived: number;
+    scheduled: number;
+    /** Types the caller reads some of that the API could not count. Left out of every number. */
+    uncountedTypes?: string[];
+}
+
+/**
+ * How many entries the caller may read, by status, for one type or all of them. One request however
+ * many entries there are, and the same permission rules the list pages with, so the numbers are
+ * what the list would show. Under the ['contents'] prefix so a write refreshes it.
+ */
+export function useContentCounts(contentType?: string) {
+    const tenant = useCurrentTenant();
+    return useQuery({
+        queryKey: ['contents', 'counts', contentType ?? null, tenant],
+        queryFn: async () => {
+            const response = await api.get<ContentCounts>('/api/contents/counts', {
+                params: contentType ? { contentType } : undefined,
+            });
+            return response.data;
+        },
+    });
+}
+
 // enabled is for a caller that already has the entry and only needs this when it does not, such as
 // a reference picker resolving an id it has not listed. The default is every existing caller's
 // behaviour.
