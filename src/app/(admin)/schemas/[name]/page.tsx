@@ -230,7 +230,7 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
                   )}
                 </TableCell>
                 <TableCell>
-                  <FieldSensitivityChip typeName={schema.name} field={field} />
+                  <FieldSensitivityChip schema={schema} field={field} />
                 </TableCell>
                 <TableCell className="text-muted-foreground text-right text-sm">
                   {field.isRequired ? 'Yes' : '—'}

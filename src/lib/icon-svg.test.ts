@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { checkSvg, registerIcon, registeredIcon, serialiseIcon } from './icon-svg';
 
 const VALID =
@@ -57,6 +57,36 @@ describe('the custom icon check', () => {
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.svg).not.toContain('javascript');
+    });
+});
+
+describe('markup with a document type', () => {
+    it('refuses a DOCTYPE and an ENTITY before parsing', () => {
+        const bomb =
+            '<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "aaaa">]><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M1 1"/></svg>';
+        expect(checkSvg(bomb).ok).toBe(false);
+        expect(
+            checkSvg('<!entity x "y"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><path d="M1 1"/></svg>').ok
+        ).toBe(false);
+    });
+
+    it('does not parse the same markup twice', () => {
+        const spy = vi.spyOn(DOMParser.prototype, 'parseFromString');
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 9"><path d="M2 2"/></svg>';
+        const first = checkSvg(svg);
+        const second = checkSvg(svg);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(second).toBe(first);
+        spy.mockRestore();
+    });
+
+    it('does not tell people that only outlines survive, because fills do, in the text colour', () => {
+        const refused = checkSvg('<div/>');
+        expect(refused.ok).toBe(false);
+        if (!refused.ok) {
+            expect(refused.error).not.toMatch(/outline/i);
+            expect(refused.error).toMatch(/text colour/);
+        }
     });
 });
 

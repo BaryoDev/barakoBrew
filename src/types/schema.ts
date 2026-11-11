@@ -55,6 +55,8 @@ export interface ContentTypeDefinition {
      * API refuses a second create. Absent from an API older than the flag, which reads as false.
      */
     isSingleton?: boolean;
+    /** The entry stream is this type's source of truth, so its fields have to stay Public. Absent before the API sent it. */
+    eventSourced?: boolean;
     /** The icon this type is drawn with. Absent or null when it has none. */
     icon?: ContentTypeIcon | null;
     /** Where an entry lives on the site, such as `/blog/{slug}`. Absent or null when none is declared. */

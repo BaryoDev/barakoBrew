@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { __resetContractForTests, recordContractVersion } from '@/lib/api-contract';
-import { SensitivityLevel, type FieldDefinition } from '@/types/schema';
+import { FieldMask, SensitivityLevel, type ContentTypeDefinition, type FieldDefinition } from '@/types/schema';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -23,11 +23,13 @@ const field = (sensitivity?: SensitivityLevel): FieldDefinition => ({
     sensitivity,
 });
 
-function renderChip(f: FieldDefinition) {
+type TypeFacts = Pick<ContentTypeDefinition, 'name' | 'eventSourced' | 'uniqueness'>;
+
+function renderChip(f: FieldDefinition, facts: Partial<TypeFacts> = {}) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
         <QueryClientProvider client={client}>
-            <FieldSensitivityChip typeName="staff" field={f} />
+            <FieldSensitivityChip schema={{ name: 'staff', ...facts }} field={f} />
         </QueryClientProvider>,
     );
 }
@@ -83,6 +85,7 @@ describe('the sensitivity chip', () => {
         expect(vi.mocked(api.put).mock.calls[0][1]).toEqual({
             sensitivity: 'Members',
             acknowledgeDisclosure: false,
+            visibleToRoles: [],
         });
     });
 
@@ -98,6 +101,7 @@ describe('the sensitivity chip', () => {
         expect(vi.mocked(api.put).mock.calls[0][1]).toEqual({
             sensitivity: 'Public',
             acknowledgeDisclosure: true,
+            visibleToRoles: [],
         });
     });
 
@@ -119,5 +123,102 @@ describe('the sensitivity chip', () => {
         await user.click(screen.getByRole('button', { name: /sensitivity: Public/ }));
 
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    });
+});
+
+describe('the chip keeps what the field already has', () => {
+    it('sends the current roles and mask back, since the API replaces them with what it is sent', async () => {
+        const user = userEvent.setup();
+        renderChip({
+            ...field(SensitivityLevel.Sensitive),
+            visibleToRoles: ['HR', 'Finance'],
+            mask: FieldMask.Last4,
+        });
+
+        await user.click(screen.getByRole('button', { name: /sensitivity: Sensitive/ }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalled());
+        expect(vi.mocked(api.put).mock.calls[0][1]).toEqual({
+            sensitivity: 'Hidden',
+            acknowledgeDisclosure: false,
+            visibleToRoles: ['HR', 'Finance'],
+            mask: 'Last4',
+        });
+    });
+
+    it('sends no roles or mask on the way to Public, which refuses both', async () => {
+        const user = userEvent.setup();
+        renderChip({ ...field(SensitivityLevel.Hidden), visibleToRoles: ['HR'], mask: FieldMask.Redact });
+
+        await user.click(screen.getByRole('button', { name: /sensitivity: Hidden/ }));
+        await user.click(await screen.findByRole('button', { name: 'Make Public' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalled());
+        expect(vi.mocked(api.put).mock.calls[0][1]).toEqual({
+            sensitivity: 'Public',
+            acknowledgeDisclosure: true,
+            visibleToRoles: [],
+        });
+    });
+});
+
+describe('the chip never walks into a level the API refuses', () => {
+    it('skips Members on a token field', async () => {
+        const user = userEvent.setup();
+        renderChip({ ...field(SensitivityLevel.Public), type: 'token' });
+
+        await user.click(screen.getByRole('button', { name: /Change to Sensitive/ }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalled());
+        expect(vi.mocked(api.put).mock.calls[0][1]).toMatchObject({ sensitivity: 'Sensitive' });
+    });
+
+    it('is not pressable on a field a uniqueness rule names, and says why', () => {
+        renderChip(field(SensitivityLevel.Public), {
+            uniqueness: [{ name: 'one-per-salary', fields: ['salary'] }],
+        });
+        const chip = screen.getByRole('button', { name: /uniqueness rule/ }) as HTMLButtonElement;
+        expect(chip.disabled).toBe(true);
+        expect(chip.title).toMatch(/uniqueness rule/);
+    });
+
+    it('is not pressable on an event sourced type, and says why', () => {
+        renderChip(field(SensitivityLevel.Public), { eventSourced: true });
+        const chip = screen.getByRole('button', { name: /event sourced/ }) as HTMLButtonElement;
+        expect(chip.disabled).toBe(true);
+    });
+
+    it('still lets a non-Public field on an event sourced type go back to Public', async () => {
+        const user = userEvent.setup();
+        renderChip(field(SensitivityLevel.Sensitive), { eventSourced: true });
+
+        await user.click(screen.getByRole('button', { name: /Change to Public/ }));
+        await user.click(await screen.findByRole('button', { name: 'Make Public' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalled());
+    });
+});
+
+describe('the toast after a change', () => {
+    it('says it is applying when the change is still running on the type', async () => {
+        const user = userEvent.setup();
+        vi.mocked(api.put).mockResolvedValue({ data: { change: { status: 'Running' } } });
+        renderChip(field(SensitivityLevel.Public));
+
+        await user.click(screen.getByRole('button', { name: /sensitivity: Public/ }));
+
+        await waitFor(() => expect(toast.success).toHaveBeenCalled());
+        expect(vi.mocked(toast.success).mock.calls[0][0]).toMatch(/applying/);
+    });
+
+    it('says it is now the new level when the change completed', async () => {
+        const user = userEvent.setup();
+        vi.mocked(api.put).mockResolvedValue({ data: { change: { status: 'Completed' } } });
+        renderChip(field(SensitivityLevel.Public));
+
+        await user.click(screen.getByRole('button', { name: /sensitivity: Public/ }));
+
+        await waitFor(() => expect(toast.success).toHaveBeenCalled());
+        expect(vi.mocked(toast.success).mock.calls[0][0]).toBe('Salary is now Members');
     });
 });

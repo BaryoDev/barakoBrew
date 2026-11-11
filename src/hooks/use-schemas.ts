@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
+import { useCurrentTenant } from '@/hooks/use-tenants';
 import type {
     ContentTypeDefinition,
     ContentTypeIcon,
@@ -11,8 +12,12 @@ import type {
 // enabled is for chrome that only needs the list when the caller may read it. The default is every
 // existing caller's behaviour.
 export function useSchemas(enabled = true) {
+    // The tenant is in the key, so another tenant's types never sit on screen while the new
+    // tenant's load. A tenant switch only invalidates, which keeps showing the old data until the
+    // new answer lands. After the 'schemas' prefix the mutations invalidate on.
+    const tenant = useCurrentTenant();
     return useQuery({
-        queryKey: ['schemas'],
+        queryKey: ['schemas', 'list', tenant],
         queryFn: async () => {
             const response = await api.get<Paginated<ContentTypeDefinition>>('/api/content-types');
             // The envelope stops here. Every caller wants the list, and unwrapping once in the hook
@@ -305,14 +310,21 @@ export function useSetFieldSensitivity(name: string) {
             field,
             sensitivity,
             acknowledgeDisclosure,
+            visibleToRoles,
+            mask,
         }: {
             field: string;
             sensitivity: string;
             acknowledgeDisclosure: boolean;
+            /** Sent with every change: the API replaces the field's list with what it is given. */
+            visibleToRoles: string[];
+            mask?: string;
         }) => {
             const response = await api.put<SetFieldSensitivityResult>(`${fieldPath(name, field)}/sensitivity`, {
                 sensitivity,
                 acknowledgeDisclosure,
+                visibleToRoles,
+                ...(mask ? { mask } : {}),
             });
             return response.data;
         },

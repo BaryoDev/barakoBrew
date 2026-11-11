@@ -44,7 +44,7 @@ const VIEW_BOX = /^\s*-?\d+(\.\d+)?[\s,]+-?\d+(\.\d+)?[\s,]+\d+(\.\d+)?[\s,]+\d+
 const VALUE = /^[A-Za-z0-9\s.,+\-()%]*$/;
 
 export const NOT_AN_ICON =
-    'That is not an SVG with a viewBox and at least one path, circle, rect or polygon. Scripts, styles, images and event attributes are stripped, so only outlines survive.';
+    'That is not an SVG with a viewBox and at least one path, circle, rect or polygon. Scripts, styles, images and event attributes are stripped, and every shape is drawn in the text colour.';
 
 function clean(el: Element, depth: number): IconNode | null {
     const tag = el.localName.toLowerCase();
@@ -88,8 +88,24 @@ export function serialiseIcon(symbol: IconSymbol): string {
  * because only allowlisted elements and attributes are copied.
  */
 export function checkSvg(raw: string): IconCheck {
+    const known = checked.get(raw);
+    if (known) return known;
+    const result = parseSvg(raw);
+    // A bounded memo: a list of types re-checks the same stored markup on every render.
+    if (checked.size >= 200) checked.clear();
+    checked.set(raw, result);
+    return result;
+}
+
+const checked = new Map<string, IconCheck>();
+
+// A DTD has no place in an icon and is what an entity expansion needs, so it is refused before the
+// parser sees it, whatever the parser would have done with it.
+const DTD = /<!\s*(doctype|entity)/i;
+
+function parseSvg(raw: string): IconCheck {
     const text = raw.trim();
-    if (!text || text.length > MAX_SVG_LENGTH) return { ok: false, error: NOT_AN_ICON };
+    if (!text || text.length > MAX_SVG_LENGTH || DTD.test(text)) return { ok: false, error: NOT_AN_ICON };
 
     const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
     const root = doc.documentElement;
