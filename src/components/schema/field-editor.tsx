@@ -349,7 +349,7 @@ function FieldRow({
     const formId = `${listId}-field-${index}`;
 
     return (
-        <li ref={rowRef} data-field-key={field.name} className={cn('relative', dragging && 'opacity-50')}>
+        <li ref={rowRef} data-field-key={field.name} className={cn('relative scroll-mt-20', dragging && 'opacity-50')}>
             {edge && (
                 <div
                     aria-hidden="true"
