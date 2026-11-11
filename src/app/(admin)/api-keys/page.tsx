@@ -7,6 +7,9 @@ import {
   useCreateApiKey,
   useRevokeApiKey,
   supportsKeyContentTypes,
+  inOverlap,
+  timeLeft,
+  type ApiKey,
   API_KEY_SCOPES,
   DESTRUCTIVE_API_KEY_SCOPES,
   type CreatedApiKey,
@@ -21,6 +24,8 @@ import { ErrorState } from '@/components/patterns/error-state';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/patterns/status-badge';
+import { RotateRail } from './rotate-rail';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,6 +50,27 @@ import { IconPlus, IconKey, IconTrash } from '@/components/icons';
 function formatDate(value?: string | null) {
   if (!value) return '—';
   return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function isExpired(k: ApiKey, now: number) {
+  return !!k.expiresAt && Date.parse(k.expiresAt) <= now;
+}
+
+/** Active, Overlap with its time left, Expired or Revoked. Overlap needs the rotation marker. */
+function KeyState({ apiKey: k, now }: { apiKey: ApiKey; now: number }) {
+  if (k.revoked) return <StatusBadge tone="muted">Revoked</StatusBadge>;
+  if (isExpired(k, now)) return <StatusBadge tone="muted">Expired</StatusBadge>;
+  if (inOverlap(k, now)) {
+    return (
+      <div className="grid gap-0.5">
+        <StatusBadge tone="warning" className="justify-self-start">
+          Overlap
+        </StatusBadge>
+        <span className="text-muted-foreground text-[11.5px]">stops {timeLeft(k.expiresAt, now)}</span>
+      </div>
+    );
+  }
+  return <StatusBadge tone="success">Active</StatusBadge>;
 }
 
 function CreateApiKeyDialog({
@@ -263,6 +289,8 @@ export default function ApiKeysPage() {
   const revoke = useRevokeApiKey();
   const { data: meta } = useApiMeta();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [rotating, setRotating] = useState<ApiKey | null>(null);
+  const [now] = useState(() => Date.now());
   const limitable = !isLoading && !isError && supportsKeyContentTypes(keys, meta?.version);
 
   async function onRevoke(id: string, name: string) {
@@ -313,7 +341,7 @@ export default function ApiKeysPage() {
                 <TableHead>Last used</TableHead>
                 <TableHead>Expires</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="w-32" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -324,7 +352,7 @@ export default function ApiKeysPage() {
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {k.scopes.map((s) => (
-                        <Badge key={s} variant="secondary" className="text-xs">
+                        <Badge key={s} variant="secondary" className="font-mono text-[11px]">
                           {s}
                         </Badge>
                       ))}
@@ -348,11 +376,15 @@ export default function ApiKeysPage() {
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.lastUsedAt)}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.expiresAt)}</TableCell>
                   <TableCell>
-                    <Badge variant={k.revoked ? 'secondary' : 'default'}>
-                      {k.revoked ? 'Revoked' : 'Active'}
-                    </Badge>
+                    <KeyState apiKey={k} now={now} />
                   </TableCell>
                   <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                    {!k.revoked && !isExpired(k, now) && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setRotating(k)} aria-label={`Rotate ${k.name}`}>
+                        Rotate
+                      </Button>
+                    )}
                     {!k.revoked && (
                       <Button
                         type="button"
@@ -365,6 +397,7 @@ export default function ApiKeysPage() {
                         <IconTrash className="size-3.5" />
                       </Button>
                     )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -373,6 +406,7 @@ export default function ApiKeysPage() {
         </div>
       )}
 
+      <RotateRail target={rotating} onClose={() => setRotating(null)} />
       <CreateApiKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} limitable={limitable} />
     </>
   );
