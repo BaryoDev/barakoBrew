@@ -20,7 +20,7 @@ export function QuickActions() {
     { title: 'New entry', href: '/content/new', icon: IconPlus },
     { title: 'Fire a workflow', href: '/workflows', icon: IconPlay },
     ...(files === false ? [] : [{ title: 'Upload a file', href: '/files', icon: IconArchive }]),
-    { title: 'Site settings', href: '/settings', icon: IconSettings },
+    { title: 'Site settings', href: '/site', icon: IconSettings },
   ];
 
   return (
