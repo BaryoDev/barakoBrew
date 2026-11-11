@@ -245,14 +245,6 @@
   body {
     @apply bg-background text-foreground;
   }
-  /* Below 1000px the sticky top bar (about 65px) sits over the top of the page. Anything scrolled
-     into view, by a link to an anchor or by a drag that needs its target on screen, stops below it
-     rather than under it. */
-  @media (max-width: 999.98px) {
-    html {
-      scroll-padding-top: 5rem;
-    }
-  }
   /* Signal: Bricolage Grotesque at 600, tightened. Yeti's 300-weight headings were the single biggest reason the
      admin read as a template rather than a tool. */
   h1, h2, h3, h4, h5, h6 {

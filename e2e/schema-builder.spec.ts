@@ -56,6 +56,11 @@ test('a field dragged by its handle onto the top of the first row becomes the fi
     await expect.poll(() => rowNames(page)).toEqual(['Headline', 'Body', 'Author']);
 
     const rows = page.getByRole('list', { name: 'Fields' }).getByRole('listitem');
+    // Adding the fields leaves the page scrolled to its foot, and below 1000px the page's 64px
+    // bottom padding puts the first row under the sticky top bar there. Bring it into the clear
+    // first, as a person would: the drop must not need a scroll, because WebKit ends the drag when
+    // the page scrolls in the middle of one and the drop never fires.
+    await rows.nth(0).evaluate((row) => row.scrollIntoView({ block: 'center' }));
     const first = await rows.nth(0).boundingBox();
     if (!first) throw new Error('the first row has no box');
     await rows.nth(2).locator('[data-drag-handle]').dragTo(rows.nth(0), {
