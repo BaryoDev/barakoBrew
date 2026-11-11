@@ -9,6 +9,12 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Fixed
+
+- The console now reads `packageId`, `packageVersion` and `glyph` from `GET /api/modules`, which is what
+  core sends. Module cards show the installed version, and the API glyph is used when it names a known
+  one. Older cores that sent `package` and `version` show no version.
+
 ## [1.11.5] - 2026-11-01
 
 **Speaks API contracts 1 to 14, which covers barakoCMS 4.0.1 to 5.5.0.** barakoCMS 5.5.0 moves the

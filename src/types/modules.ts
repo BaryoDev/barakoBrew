@@ -12,11 +12,14 @@ export interface ModuleSummary {
     /** `ready`, `needs-migration`, or `unknown` when the preflight did not run for it. */
     schemaState: string;
     schemaChanges: string[];
-    /** NuGet package id. Not sent by every API; the card shows what it is given. */
-    package?: string;
-    version?: string;
+    /** NuGet package id (`packageId` on the wire). Null or absent when the module states none. */
+    packageId?: string | null;
+    /** Installed package version (`packageVersion` on the wire). */
+    packageVersion?: string | null;
     category?: string;
     description?: string;
+    /** An icon name from the console's icon set. Used only when it names a known glyph. */
+    glyph?: string | null;
     /**
      * False for a module the API knows of and the deployment does not carry. An API that omits it
      * is saying nothing, which is read as installed, because `/api/modules` lists only what it saw.

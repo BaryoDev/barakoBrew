@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CATEGORY_ORDER, FIRST_PARTY, normaliseCategory, withFirstParty } from './module-catalog';
+import { CATEGORY_ORDER, FIRST_PARTY, moduleDisplayName, moduleGlyph, normaliseCategory, withFirstParty } from './module-catalog';
 import { categoryCounts, moduleState } from './module-state';
 import type { ModuleSummary } from '@/types/modules';
 
@@ -77,7 +77,7 @@ describe('first-party catalog', () => {
     });
 
     it('does not add a second card for a module listed under its package id casing', () => {
-        const all = withFirstParty([m('files', { package: 'barakocms.files' })]);
+        const all = withFirstParty([m('files', { packageId: 'barakocms.files' })]);
         expect(all.filter((x) => x.name.toLowerCase() === 'files')).toHaveLength(1);
     });
 
@@ -87,6 +87,28 @@ describe('first-party catalog', () => {
         expect(mine.category).toBeUndefined();
         expect(mine.description).toBe('Mine.');
         expect(all).toHaveLength(17);
+    });
+
+    it('shows the design display names for first-party modules', () => {
+        const names = (n: string) => moduleDisplayName({ name: n });
+        expect(names('Files.S3')).toBe('Files · S3');
+        expect(names('Email.Resend')).toBe('Email · Resend');
+        expect(names('Email.Smtp')).toBe('Email · Smtp');
+        expect(names('ExternalAuth')).toBe('External sign-in');
+        expect(names('DeviceTrust')).toBe('Device trust');
+        expect(names('FeatureFlags')).toBe('Feature flags');
+        expect(names('Pwa')).toBe('PWA');
+        expect(names('Analytics.Umami')).toBe('Analytics · Umami');
+        expect(names('AI')).toBe('AI');
+        expect(names('Community.Thing')).toBe('Community.Thing');
+    });
+
+    it('takes the glyph from the API when it names a known one, else the catalog, else the cube', () => {
+        expect(moduleGlyph({ name: 'Files', glyph: 'flag' })).toBe('flag');
+        expect(moduleGlyph({ name: 'Files', glyph: 'not-a-glyph' })).toBe('archive');
+        expect(moduleGlyph({ name: 'Files', glyph: null })).toBe('archive');
+        expect(moduleGlyph({ name: 'Community.Thing', glyph: 'bug' })).toBe('bug');
+        expect(moduleGlyph({ name: 'Community.Thing' })).toBe('cube');
     });
 
     it('lets the API category win over the catalog one', () => {
