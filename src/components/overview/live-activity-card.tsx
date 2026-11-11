@@ -4,48 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { LiveSwitch } from '@/components/patterns/live-switch';
 import { useActivity } from '@/hooks/use-activity';
-import { kindLabel, relativeTime, safeRef, type ActivityItem } from '@/lib/activity';
-import { cn } from '@/lib/utils';
+import { ActivityRow } from '@/components/activity/activity-row';
+import type { ActivityItem } from '@/lib/activity';
 
 const SHOWN = 8;
-
-function Row({ item, now }: { item: ActivityItem; now: number }) {
-  const href = safeRef(item.ref);
-  const label = kindLabel(item.kind);
-  const who = item.actor?.name || 'System';
-  const title = item.subject?.title;
-  const body = (
-    <>
-      <b className="text-foreground font-semibold">{who}</b> {item.text || ''}
-      {title ? <> <span className="text-foreground font-medium">{title}</span></> : null}
-    </>
-  );
-  return (
-    <li className="border-border rise flex items-baseline gap-3 border-t py-2 first:border-t-0">
-      <span className="text-muted-foreground w-[52px] flex-none font-mono text-[11.5px]">{relativeTime(item.at, now)}</span>
-      <span className="text-secondary-foreground min-w-0 flex-1 text-sm leading-[1.45]">
-        {href ? (
-          <Link href={href} className="hover:text-foreground rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
-            {body}
-          </Link>
-        ) : (
-          body
-        )}
-      </span>
-      <span
-        className={cn(
-          'border-border text-muted-foreground flex-none rounded-full border px-2 py-0.5 text-[11px]',
-          label === null && 'font-mono',
-          label !== null && 'font-semibold',
-          item.severity === 'error' && 'text-destructive',
-          item.severity === 'warning' && 'text-warning',
-        )}
-      >
-        {label ?? item.kind}
-      </span>
-    </li>
-  );
-}
 
 /**
  * Who did what, as it happens, from GET /api/activity. Polled like the workflow runs list, with a
@@ -104,7 +66,7 @@ export function LiveActivityCard() {
       ) : (
         <ul aria-label="Recent activity">
           {shown.map((item) => (
-            <Row key={`${item.id}:${item.kind}`} item={item} now={now} />
+            <ActivityRow key={`${item.id}:${item.kind}`} item={item} now={now} />
           ))}
         </ul>
       )}

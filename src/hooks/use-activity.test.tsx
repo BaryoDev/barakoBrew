@@ -39,6 +39,35 @@ describe('useActivity', () => {
         expect(result.current.available).toBe(true);
     });
 
+    it('sends the kinds it was asked for, and none when there are none', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [], cursor: 'c', hasMore: false } });
+        const client = new QueryClient();
+        const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+        renderHook(() => useActivity({ kinds: ['run.failed', 'bounced'] }), { wrapper });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/activity', { params: { pageSize: 50, kinds: 'run.failed,bounced' } }));
+    });
+
+    it('does not ask while disabled', async () => {
+        const { result } = renderHook(() => useActivity({ enabled: false }), {
+            wrapper: ({ children }: { children: React.ReactNode }) => (
+                <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+            ),
+        });
+        await new Promise((r) => setTimeout(r, 10));
+        expect(api.get).not.toHaveBeenCalled();
+        expect(result.current.missing).toBe(false);
+    });
+
+    it('says missing only for a 404', async () => {
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(404); });
+        const missing = run();
+        await waitFor(() => expect(missing.result.current.missing).toBe(true));
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(403); });
+        const refused = run();
+        await waitFor(() => expect(refused.result.current.available).toBe(false));
+        expect(refused.result.current.missing).toBe(false);
+    });
+
     it('is unavailable on a 404, an API without the feed', async () => {
         vi.mocked(api.get).mockImplementation(async () => { throw httpError(404); });
         const { result } = run();

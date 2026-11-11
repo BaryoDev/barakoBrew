@@ -39,13 +39,21 @@ export function activityDelay(failures: number): number {
  * `available` is false only for that answer. While loading and after a transient error it is true,
  * so a slow network does not flash the fallback.
  */
-export function useActivity({ live = true }: { live?: boolean } = {}) {
+export function useActivity({
+  live = true,
+  kinds,
+  enabled = true,
+}: { live?: boolean; kinds?: readonly string[]; enabled?: boolean } = {}) {
   const tenant = useCurrentTenant();
+  const kindList = kinds?.join(',') ?? '';
 
   const query = useQuery({
-    queryKey: ['activity', tenant],
+    queryKey: ['activity', tenant, kindList],
+    enabled,
     queryFn: async (): Promise<ActivityPage> => {
-      const response = await api.get<unknown>('/api/activity', { params: { pageSize: ACTIVITY_PAGE_SIZE } });
+      const response = await api.get<unknown>('/api/activity', {
+        params: { pageSize: ACTIVITY_PAGE_SIZE, ...(kindList ? { kinds: kindList } : {}) },
+      });
       return parseResponse(activityPageSchema, response.data, 'GET /api/activity');
     },
     retry: false,
@@ -59,6 +67,8 @@ export function useActivity({ live = true }: { live?: boolean } = {}) {
   return {
     items: query.data?.items ?? [],
     available: !unavailable,
+    /** True when the API answered 404: it has no feed at all, so the nav item is left out. */
+    missing: statusOf(query.error) === 404,
     isLoading: query.isLoading,
     isError: query.isError && !unavailable,
     dataUpdatedAt: query.dataUpdatedAt,

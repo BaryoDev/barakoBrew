@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import {
   IconAnalytics,
   IconArchive,
+  IconBolt,
   IconBug,
   IconCoins,
   IconContent,
@@ -173,6 +174,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: 'Site settings', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Theme', href: '/site/theme', parent: '/site', icon: IconSun, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Style recipes', href: '/site/recipes', parent: '/site', icon: IconPen, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      // GET /api/activity asks for view_audit_log. The rail drops this item when the API answers 404.
+      { title: 'Activity', href: '/activity', icon: IconBolt, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
     ],
   },
   {
@@ -329,6 +332,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   deliveries: 'Deliveries',
   forms: 'Forms',
   settings: 'Settings',
+  activity: 'Activity',
   site: 'Site settings',
   theme: 'Theme',
   recipes: 'Style recipes',

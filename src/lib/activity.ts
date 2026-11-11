@@ -101,3 +101,65 @@ export function attentionRows(items: readonly ActivityItem[]): ActivityItem[] {
   }
   return out;
 }
+
+/** The filter chips on the Activity screen, each a set of kinds sent as `kinds`. Empty is every kind. */
+export const ACTIVITY_FILTERS: readonly { id: string; label: string; kinds: readonly string[] }[] = [
+  { id: 'all', label: 'Everything', kinds: [] },
+  { id: 'problems', label: 'Problems', kinds: ['run.failed', 'bounced'] },
+  { id: 'publishing', label: 'Publishing', kinds: ['published', 'scheduled'] },
+  { id: 'runs', label: 'Workflow runs', kinds: ['run.succeeded', 'run.failed'] },
+  { id: 'signins', label: 'Sign-ins', kinds: ['signin'] },
+  { id: 'imports', label: 'Imports', kinds: ['imported'] },
+];
+
+/** The words between the actor and the subject for each kind. Core's `text` never carries the title. */
+const VERBS: Record<string, string> = {
+  published: 'published',
+  scheduled: 'scheduled',
+  edited: 'edited',
+  'run.succeeded': 'finished for',
+  'run.failed': 'failed on',
+  bounced: 'could not deliver to',
+  signin: 'signed in',
+  imported: 'brought in',
+  'type.changed': 'changed',
+};
+
+export interface ActivitySentence {
+  actor: string;
+  /** Empty for a kind this console does not know, which is drawn from the API's own `text`. */
+  verb: string;
+  subject: string;
+}
+
+/**
+ * The row's sentence: actor, what they did, and what it was done to. Built from kind, actor name and
+ * subject title, because the API's `text` is fixed wording with no title in it. A kind this console
+ * has no verb for falls back to that `text`, so a row is never blank.
+ */
+export function activitySentence(item: Pick<ActivityItem, 'kind' | 'actor' | 'subject' | 'text'>): ActivitySentence {
+  return {
+    actor: item.actor?.name || 'System',
+    verb: VERBS[item.kind] ?? item.text ?? '',
+    subject: item.subject?.title || '',
+  };
+}
+
+export type ActivityTone = 'ok' | 'accent' | 'muted' | 'bad' | 'warn';
+
+const TONES: Record<string, ActivityTone> = {
+  published: 'ok',
+  scheduled: 'accent',
+  edited: 'muted',
+  'run.succeeded': 'ok',
+  'run.failed': 'bad',
+  bounced: 'warn',
+  signin: 'accent',
+  imported: 'ok',
+  'type.changed': 'muted',
+};
+
+/** The tint of a kind's tile. An unknown kind is muted. */
+export function kindTone(kind: string): ActivityTone {
+  return TONES[kind] ?? 'muted';
+}

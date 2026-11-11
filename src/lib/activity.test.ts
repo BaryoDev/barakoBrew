@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activityPageSchema, attentionRows, kindLabel, needsAttention, relativeTime, safeRef } from './activity';
+import { ACTIVITY_FILTERS, activitySentence, kindTone, activityPageSchema, attentionRows, kindLabel, needsAttention, relativeTime, safeRef } from './activity';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 const ago = (seconds: number) => new Date(NOW - seconds * 1000).toISOString();
@@ -99,5 +99,47 @@ describe('what needs a person', () => {
     it('takes the newest row of an id, so a run that was retried and passed drops out', () => {
         const rows = attentionRows([row('r1', 'info'), row('r1', 'error'), row('r2', 'error'), row('r3', 'warning')]);
         expect(rows.map((r) => r.id)).toEqual(['r2', 'r3']);
+    });
+});
+
+describe('the activity filter chips', () => {
+    it('are Everything, Problems, Publishing, Workflow runs, Sign-ins and Imports, in that order', () => {
+        expect(ACTIVITY_FILTERS.map((f) => f.label)).toEqual(['Everything', 'Problems', 'Publishing', 'Workflow runs', 'Sign-ins', 'Imports']);
+    });
+
+    it('send the kinds core filters by, and Everything sends none', () => {
+        const kinds = (id: string) => ACTIVITY_FILTERS.find((f) => f.id === id)?.kinds;
+        expect(kinds('all')).toEqual([]);
+        expect(kinds('problems')).toEqual(['run.failed', 'bounced']);
+        expect(kinds('publishing')).toEqual(['published', 'scheduled']);
+        expect(kinds('runs')).toEqual(['run.succeeded', 'run.failed']);
+        expect(kinds('signins')).toEqual(['signin']);
+        expect(kinds('imports')).toEqual(['imported']);
+    });
+});
+
+describe('activitySentence', () => {
+    it('builds the sentence from kind, actor and subject title, not from text', () => {
+        expect(
+            activitySentence({ kind: 'published', actor: { name: 'Ana' }, subject: { title: 'New pastry menu' }, text: 'Published an entry.' }),
+        ).toEqual({ actor: 'Ana', verb: 'published', subject: 'New pastry menu' });
+    });
+
+    it('names the actor System when none came', () => {
+        expect(activitySentence({ kind: 'run.failed', subject: { title: 'Sunday hours' } }).actor).toBe('System');
+        expect(activitySentence({ kind: 'run.failed' }).verb).toBe('failed on');
+    });
+
+    it('falls back to the API text for a kind it has no verb for', () => {
+        expect(activitySentence({ kind: 'quota.reached', actor: { name: 'System' }, text: 'Something happened.' }).verb).toBe('Something happened.');
+    });
+});
+
+describe('kindTone', () => {
+    it('tints failures bad, bounces warn and an unknown kind muted', () => {
+        expect(kindTone('run.failed')).toBe('bad');
+        expect(kindTone('bounced')).toBe('warn');
+        expect(kindTone('published')).toBe('ok');
+        expect(kindTone('quota.reached')).toBe('muted');
     });
 });

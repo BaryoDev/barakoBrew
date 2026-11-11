@@ -515,3 +515,15 @@ describe('the rail after the prototype match', () => {
         expect(children.map((i) => i.title)).toEqual(['Theme', 'Style recipes']);
     });
 });
+
+describe('the Activity item', () => {
+    it('sits after Site settings and its children, for the audit log capability', () => {
+        const items = NAV_GROUPS.flatMap((g) => g.items);
+        const titles = items.map((i) => i.title);
+        expect(titles.indexOf('Activity')).toBeGreaterThan(titles.indexOf('Style recipes'));
+        const activity = items.find((i) => i.title === 'Activity');
+        expect(activity?.href).toBe('/activity');
+        expect(activity?.capability).toBe('view_audit_log');
+        expect(breadcrumbsFor('/activity').map((c) => c.title)).toEqual(['Activity']);
+    });
+});
