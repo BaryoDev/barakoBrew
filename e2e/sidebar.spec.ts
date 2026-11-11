@@ -190,7 +190,7 @@ test('a rail that cannot read the module list keeps every item', async ({ page }
 /**
  * The drawer. Below 1000px the rail is the Radix sheet, closed until the trigger is pressed; at
  * 1000px and above it is the rail. 768 used to be the line, which left a 768 to 999 tablet with a
- * 248px rail eating a quarter of the screen.
+ * 236px rail eating a quarter of the screen.
  */
 test.describe('at 900px', () => {
     test.use({ viewport: { width: 900, height: 800 } });
