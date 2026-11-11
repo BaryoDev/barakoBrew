@@ -1,5 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Sidebar, SidebarContent, SidebarProvider } from '@/components/ui/sidebar';
 import { setViewportWidth } from '@/test/setup';
 
@@ -78,12 +79,9 @@ describe('the top bar below 1000px', () => {
         const scrim = document.querySelector('[data-slot="sheet-overlay"]') as HTMLElement;
         expect(scrim.className).toContain('--scrim');
 
-        // Radix registers its outside-pointerdown listener in a setTimeout(0) after the layer
-        // mounts, so a tap in the same tick as the open is not heard. A real tap never is.
-        await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-        fireEvent.pointerDown(scrim);
+        // A modal Radix dialog arms dismissal on pointerdown and closes on the click that
+        // follows (deferPointerDownOutside), so tap the scrim the way a browser does.
+        await userEvent.setup().click(scrim);
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 
