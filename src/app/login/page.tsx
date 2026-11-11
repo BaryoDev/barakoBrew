@@ -220,7 +220,14 @@ export default function LoginPage() {
                         </TabsTrigger>
                       ))}
                     </TabsList>
-                    <TabsContent value={activeTab.id} className="mt-3">
+                    {/* Radix names the panel after its tab, which gave a screen reader two things called
+                        "Password" (the panel and the field). The panel is named for what it is. */}
+                    <TabsContent
+                      value={activeTab.id}
+                      aria-labelledby={undefined}
+                      aria-label={`${activeTab.label} sign in`}
+                      className="mt-3"
+                    >
                       <activeTab.Panel flow={flow} />
                     </TabsContent>
                   </Tabs>
