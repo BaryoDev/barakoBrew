@@ -126,7 +126,7 @@ describe('All modules page', () => {
         await userEvent.click(screen.getByRole('radio', { name: /^Access/ }));
         const cards = screen.getAllByTestId('module-card');
         expect(cards).toHaveLength(2);
-        expect(cards.map((c) => within(c).getByRole('heading').textContent).sort()).toEqual(['DeviceTrust', 'ExternalAuth']);
+        expect(cards.map((c) => within(c).getByRole('heading').textContent).sort()).toEqual(['Device trust', 'External sign-in']);
     });
 
     it('lists a module the API sends that the catalog does not know, with its own category', async () => {
