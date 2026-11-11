@@ -121,9 +121,9 @@
   --chart-4: #a3261f;
   --chart-5: #4a4e66;
 
-  /* The sidebar sits ON the page background rather than in a panel of its own: the content panel is
-     inset with a margin, so the nav reads as a rail. That is why sidebar and background match. */
-  --sidebar: #f7f7fa;
+  /* The sidebar is the design's --surface: white, full height, a hairline on its right edge. The
+     content sits directly on the page background beside it, with no panel of its own. */
+  --sidebar: #ffffff;
   --sidebar-foreground: #101223;
   --sidebar-primary: #5a46d6;
   --sidebar-primary-foreground: #ffffff;
@@ -153,11 +153,17 @@
   --warning-soft: #fff4db;
   --danger-soft: #fdecec;
 
+  /* The handoff's --code and --code-ink: the dark block that holds code, curl lines and logs. */
+  --code: #14162a;
+  --code-ink: #e6e7f2;
+
   /* Elevation. Flat and layered rather than shadcn's single shadow-sm. */
   /* The overlay behind the sidebar drawer. */
   --scrim: rgba(16, 18, 35, 0.3);
 
   --shadow-card: 0 1px 2px rgba(16, 18, 35, 0.04);
+  /* The handoff's single shadow, for a drawer or a raised panel. */
+  --shadow: 0 1px 2px rgba(16, 18, 35, 0.05), 0 12px 32px -14px rgba(16, 18, 35, 0.18);
   /* The active thumb of a segmented control, sitting on the sunken --secondary track. Twice
      the card's opacity at the same offset: a card lifts off the page, a thumb lifts out of a
      well that is already darker than the page, so the softer value disappears. */
@@ -216,10 +222,13 @@
   --success-soft: #0f2c29;
   --warning-soft: #2e2410;
   --danger-soft: #341716;
+  --code: #090a14;
+  --code-ink: #e6e7f2;
 
   --scrim: rgba(0, 0, 0, 0.55);
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -14px rgba(0, 0, 0, 0.6);
   --shadow-thumb: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-raised: 0 1px 3px rgba(0, 0, 0, 0.35);
   --shadow-popover: 0 24px 56px -20px rgba(0, 0, 0, 0.7);
@@ -290,6 +299,25 @@
   }
   to {
     transform: none;
+  }
+}
+
+/* The sidebar drawer below 1000px: out to translateX(-105%), the shadow stays with it. */
+@keyframes drawer-in {
+  from {
+    transform: translateX(-105%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes drawer-out {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateX(-105%);
   }
 }
 
