@@ -12,15 +12,8 @@ import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { Button } from '@/components/ui/button';
 import { LiveSwitch } from '@/components/patterns/live-switch';
 import { cn } from '@/lib/utils';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { IconRefresh, IconWorkflows } from '@/components/icons';
+import { IconWorkflows } from '@/components/icons';
+import { RunProgressStrip } from '@/components/workflow/run-progress';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { apiErrorMessage, isNotFound } from '@/lib/api';
 import { useAccess } from '@/hooks/use-access';
@@ -35,7 +28,9 @@ import {
   isCancellable,
   runAllowsRetry,
   runFailureKind,
+  runStatusLabel,
   toneForRunStatus,
+  triggerLabel,
   useAbandonRun,
   useCancelRun,
   useRetryAttempt,
@@ -45,6 +40,7 @@ import {
   type WorkflowRunList,
 } from '@/hooks/use-workflow-runs';
 import { AttemptCard } from './attempt-card';
+import { RunNote } from './run-note';
 
 const CARD = 'min-w-0 bg-card rounded-xl border p-6 shadow-[var(--shadow-card)]';
 
@@ -56,7 +52,7 @@ function formatMoment(value: string | null | undefined): string {
 
 function RunFacts({ run }: { run: WorkflowRun }) {
   const facts: { label: string; value: string }[] = [
-    { label: 'Trigger', value: run.triggerEvent },
+    { label: 'Trigger', value: triggerLabel(run.triggerEvent) },
     { label: 'Content type', value: run.contentType },
     { label: 'Content', value: run.contentId },
     { label: 'Started', value: formatMoment(run.createdAt) },
@@ -68,14 +64,15 @@ function RunFacts({ run }: { run: WorkflowRun }) {
   const abandoned = formatMoment(run.abandonedAt);
   if (abandoned) facts.push({ label: 'Abandoned', value: abandoned });
   if (run.compensation) facts.push({ label: 'Rollback', value: run.compensation });
-  if (run.executor) facts.push({ label: 'Runs on', value: run.executor });
+  facts.push({ label: 'Runs on', value: run.executor || 'built-in runner' });
+  facts.push({ label: 'Run', value: run.id });
 
   return (
     <dl className="mt-4 grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
       {facts.map((fact) => (
-        <div key={fact.label} className="flex justify-between gap-3">
+        <div key={fact.label} className="border-border flex justify-between gap-3 border-b pb-1.5">
           <dt className="text-muted-foreground shrink-0">{fact.label}</dt>
-          <dd className="truncate font-mono">{fact.value}</dd>
+          <dd className="min-w-0 text-right font-mono break-words">{fact.value}</dd>
         </div>
       ))}
     </dl>
@@ -123,7 +120,7 @@ function StatusChips({
     <div
       role="group"
       aria-label="Filter runs by status"
-      className="bg-secondary flex flex-wrap gap-1 rounded-[11px] p-1"
+      className="bg-secondary flex w-fit max-w-full flex-nowrap gap-1 overflow-x-auto rounded-[11px] p-1"
     >
       {chips.map((chip) => {
         const on = chip.status === value;
@@ -135,7 +132,7 @@ function StatusChips({
             aria-label={chip.count !== null ? `${chip.label}, ${chip.count} ${chip.count === 1 ? 'run' : 'runs'}` : undefined}
             onClick={() => onChange(chip.status)}
             className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
+              'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-3 text-[13px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
               on ? 'bg-card text-foreground shadow-[var(--shadow-thumb)]' : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -189,6 +186,40 @@ function RunFailureKind({ run }: { run: WorkflowRun }) {
   );
 }
 
+/**
+ * One run in the list, as a button. A click and the Enter and Space keys all pick it, which a row
+ * that only answered a mouse, or a radio inside a table cell, did not give a screen reader.
+ */
+function RunRow({ row, selected, onSelect }: { row: WorkflowRun; selected: boolean; onSelect: (id: string) => void }) {
+  const entry = `${row.contentType} ${row.contentId.slice(0, 8)}`;
+
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={() => onSelect(row.id)}
+      className={cn(
+        'grid w-full gap-1.5 rounded-xl border p-3 text-left outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/50',
+        selected ? 'border-primary bg-accent' : 'hover:bg-secondary',
+      )}
+    >
+      <span className="flex flex-wrap items-center gap-1.5">
+        <StatusBadge tone={toneForRunStatus(row.status)}>{runStatusLabel(row.status)}</StatusBadge>
+        <RunFailureKind run={row} />
+        <span className="text-muted-foreground ml-auto text-[12px] whitespace-nowrap">{formatMoment(row.createdAt)}</span>
+      </span>
+      <span className="min-w-0 text-[13.5px]">
+        <span className="font-bold">{row.workflowName}</span>
+        <span className="text-muted-foreground"> · {entry}</span>
+      </span>
+      <span className="flex items-center justify-between gap-3">
+        <span className="text-muted-foreground min-w-0 font-mono text-[12px] break-words">{triggerLabel(row.triggerEvent)}</span>
+        <RunProgressStrip actions={row.actions} />
+      </span>
+    </button>
+  );
+}
+
 export default function WorkflowRunsPage() {
   const [status, setStatus] = useState<string>(ANY_STATUS);
   const [page, setPage] = useState(1);
@@ -198,7 +229,6 @@ export default function WorkflowRunsPage() {
   // API would answer 400 to it, and there is nothing to ask.
   const [selectedId, setSelectedId] = useState<string | null>(linked ? parseRunId(linked) : null);
   const [badLink, setBadLink] = useState(!!linked && parseRunId(linked) === null);
-  const [refreshing, setRefreshing] = useState(false);
   // Live or Paused, the person's choice. Paused stops the poll and nothing else: every guard on a
   // retry, cancel or abandon works the same either way.
   const [live, setLive] = useState(true);
@@ -340,43 +370,29 @@ export default function WorkflowRunsPage() {
         actions={
           <div className="flex items-center gap-2">
             <LiveSwitch live={live} onChange={setLive} stalled={!!runs.pause} label="Live updates" />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={refreshing}
-              onClick={() => {
-                setRefreshing(true);
-                void Promise.all([runs.refetch(), selectedId ? run.refetch() : null]).finally(() =>
-                  setRefreshing(false),
-                );
-              }}
-            >
-              <IconRefresh />
-              Refresh
-            </Button>
           </div>
         }
       />
 
+      <div>
+        <StatusChips
+          value={status}
+          counts={runs.data?.statusCounts}
+          onChange={(next) => {
+            setStatus(next);
+            // Page 3 of "everything" is rarely page 3 of one status, and staying there shows an
+            // empty list for a filter that has matches.
+            setPage(1);
+          }}
+        />
+        <div aria-live="polite" className="min-h-6">
+          {runs.countsBehind && <p className="text-muted-foreground pt-2 text-[12px]">Counts update within a minute</p>}
+        </div>
+      </div>
+
       <div className="grid items-start gap-4 grid-cols-1 min-[1180px]:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
         <section className={CARD}>
           <h2 className="text-[15px] font-bold">Runs</h2>
-          <div className="mt-3">
-            <StatusChips
-              value={status}
-              counts={runs.data?.statusCounts}
-              onChange={(next) => {
-                setStatus(next);
-                // Page 3 of "everything" is rarely page 3 of one status, and staying there shows an
-                // empty list for a filter that has matches.
-                setPage(1);
-              }}
-            />
-          </div>
-          <div aria-live="polite" className="min-h-6">
-            {runs.countsBehind && <p className="text-muted-foreground pt-2 text-[12px]">Counts update within a minute</p>}
-          </div>
-
           {runs.pause && <PauseNote pause={runs.pause} updatedAt={runs.dataUpdatedAt} />}
           {runs.isError && runs.data && (
             <p role="alert" className="text-destructive mt-3 text-[12px]">
@@ -411,52 +427,13 @@ export default function WorkflowRunsPage() {
             />
           ) : (
             <>
-              <Table className="mt-4">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-0">
-                      <span className="sr-only">Open</span>
-                    </TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Workflow</TableHead>
-                    <TableHead>Trigger</TableHead>
-                    <TableHead>Started</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={row.id} className={row.id === selectedId ? 'bg-accent' : undefined}>
-                      <TableCell>
-                        {/* A radio rather than a click on the row. The choice is one run out of
-                            several, and a row that only answers a mouse cannot be opened from the
-                            keyboard. */}
-                        <input
-                          type="radio"
-                          name="run"
-                          aria-label={`Open the ${row.workflowName} run started ${formatMoment(row.createdAt)}`}
-                          checked={row.id === selectedId}
-                          onChange={() => select(row.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-1">
-                          <StatusBadge tone={toneForRunStatus(row.status)}>{row.status}</StatusBadge>
-                          <RunFailureKind run={row} />
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-40 truncate text-[13px] font-bold">
-                        {row.workflowName}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground max-w-32 truncate font-mono text-[12px]">
-                        {row.triggerEvent}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-[12px] whitespace-nowrap">
-                        {formatMoment(row.createdAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ul aria-label="Runs" className="mt-4 grid gap-2">
+                {rows.map((row) => (
+                  <li key={row.id}>
+                    <RunRow row={row} selected={row.id === selectedId} onSelect={select} />
+                  </li>
+                ))}
+              </ul>
               {runs.data && <PaginationControls page={runs.data} onPageChange={setPage} />}
               {runs.data && <RetentionNote list={runs.data} />}
             </>
@@ -490,7 +467,7 @@ export default function WorkflowRunsPage() {
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[15px] font-bold">{run.data.workflowName}</h2>
-                <StatusBadge tone={toneForRunStatus(run.data.status)}>{run.data.status}</StatusBadge>
+                <StatusBadge tone={toneForRunStatus(run.data.status)}>{runStatusLabel(run.data.status)}</StatusBadge>
                 {canCancel && isCancellable(run.data) && (
                   <Button
                     className="ml-auto"
@@ -535,6 +512,8 @@ export default function WorkflowRunsPage() {
                   ))}
                 </ol>
               )}
+
+              <RunNote run={run.data} />
             </>
           ) : null}
         </section>

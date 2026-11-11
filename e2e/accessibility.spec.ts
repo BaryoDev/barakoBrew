@@ -486,7 +486,7 @@ test.describe('accessibility', () => {
 
         // Opened, so the scan sees the action list, the error block and the retry button rather than
         // an empty panel. Every badge tone this screen can draw is on the page at once.
-        await page.getByRole('radio', { name: /Announce a post/ }).check();
+        await page.getByRole('button', { name: /Announce a post/ }).click();
         await expect(page.getByRole('button', { name: /Retry action 2/ })).toBeVisible();
         await expect(page.getByRole('list', { name: 'Actions' }).getByText('Permanent', { exact: true })).toBeVisible();
         await scan(page);

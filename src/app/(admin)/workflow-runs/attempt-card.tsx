@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
 import { IconRefresh } from '@/components/icons';
+import { cn } from '@/lib/utils';
 import {
   FAILURE_KINDS,
   failureKind,
@@ -113,54 +114,81 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
   }
 
   return (
-    <li className="rounded-lg border p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-muted-foreground font-mono text-[12px] font-medium tabular-nums">
+    <li className="group grid grid-cols-[28px_minmax(0,1fr)] gap-3">
+      <div aria-hidden className="flex flex-col items-center">
+        <span
+          data-testid="timeline-node"
+          className={cn(
+            'grid size-7 shrink-0 place-items-center rounded-full font-mono text-[12px] font-semibold tabular-nums',
+            nodeTone(attempt),
+          )}
+        >
           {attempt.ordinal}
         </span>
-        <span className="font-mono text-[13px] font-medium">{attempt.actionType}</span>
-        <StatusBadge tone={toneForAttemptStatus(attempt.status)}>{attempt.status}</StatusBadge>
-
-        {kind && (
-          <StatusBadge tone={FAILURE_KINDS[kind].tone} dot={false}>
-            {FAILURE_KINDS[kind].label}
-          </StatusBadge>
-        )}
-
-        {canRetry && isRetryable(attempt) &&
-          (kind === 'permanent' ? (
-            <ConfirmDialog
-              trigger={<RetryButton attempt={attempt} retrying={retrying} onClick={onAsk} />}
-              title={`Retry action ${attempt.ordinal}, ${attempt.actionType}?`}
-              description="This failure will not fix itself by retrying. Retry anyway?"
-              confirmLabel="Retry anyway"
-              onConfirm={onConfirmed}
-            />
-          ) : (
-            <RetryButton attempt={attempt} retrying={retrying} onClick={() => onRetry(attempt.ordinal)} />
-          ))}
+        <span className="bg-border mt-1 w-0.5 flex-1 group-last:hidden" />
       </div>
+      <div className="mb-3 min-w-0 rounded-xl border p-4 group-last:mb-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-primary font-mono text-[12px] font-medium">{attempt.actionType}</span>
+          <StatusBadge tone={toneForAttemptStatus(attempt.status)}>{attempt.status}</StatusBadge>
 
-      <dl className="mt-3 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
-        {facts.map((fact) => (
-          <div key={fact.label} className="flex justify-between gap-3">
-            <dt className="text-muted-foreground">{fact.label}</dt>
-            <dd className="font-mono tabular-nums">{fact.value}</dd>
-          </div>
-        ))}
-      </dl>
+          {kind && (
+            <StatusBadge tone={FAILURE_KINDS[kind].tone} dot={false}>
+              {FAILURE_KINDS[kind].label}
+            </StatusBadge>
+          )}
 
-      {showsHistory(attempt) ? (
-        <TryList attempt={attempt} />
-      ) : (
-        attempt.error && (
-          <pre className="bg-muted mt-3 max-h-40 overflow-auto rounded-md p-3 text-[12px] whitespace-pre-wrap">
-            {attempt.error}
-          </pre>
-        )
-      )}
+          {canRetry && isRetryable(attempt) &&
+            (kind === 'permanent' ? (
+              <ConfirmDialog
+                trigger={<RetryButton attempt={attempt} retrying={retrying} onClick={onAsk} />}
+                title={`Retry action ${attempt.ordinal}, ${attempt.actionType}?`}
+                description="This failure will not fix itself by retrying. Retry anyway?"
+                confirmLabel="Retry anyway"
+                onConfirm={onConfirmed}
+              />
+            ) : (
+              <RetryButton attempt={attempt} retrying={retrying} onClick={() => onRetry(attempt.ordinal)} />
+            ))}
+        </div>
+
+        <dl className="mt-3 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
+          {facts.map((fact) => (
+            <div key={fact.label} className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">{fact.label}</dt>
+              <dd className="font-mono tabular-nums">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {showsHistory(attempt) ? (
+          <TryList attempt={attempt} />
+        ) : (
+          attempt.error && (
+            <pre className="bg-muted mt-3 max-h-40 overflow-auto rounded-md p-3 text-[12px] whitespace-pre-wrap">
+              {attempt.error}
+            </pre>
+          )
+        )}
+      </div>
     </li>
   );
+}
+
+/** The tint of an action's numbered node on the timeline. The number carries the order, the tint the outcome. */
+function nodeTone(attempt: Pick<WorkflowActionAttempt, 'status' | 'nextAttemptAt'>): string {
+  switch (attempt.status) {
+    case 'Succeeded':
+      return 'bg-success text-white';
+    case 'Failed':
+      return attempt.nextAttemptAt ? 'bg-[var(--warning-soft)] text-warning border border-warning' : 'bg-destructive text-white';
+    case 'Unknown':
+      return 'bg-[var(--warning-soft)] text-warning border border-warning';
+    case 'Running':
+      return 'bg-primary text-primary-foreground pulse';
+    default:
+      return 'bg-secondary text-muted-foreground';
+  }
 }
 
 /** How this action's undoing went: what undid it and how, or that nothing undoes it, with any error. */
