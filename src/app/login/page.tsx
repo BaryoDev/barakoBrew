@@ -234,7 +234,7 @@ export default function LoginPage() {
                   ? 'Signing in with a provider matches the verified email on your account. '
                   : ''}
                 Need an account? Ask an Owner of this instance to invite you. Five failed attempts
-                locks the account for 15 minutes.
+                lock the account for 15 minutes.
               </p>
             </>
           ) : (

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { IconArrowRight, IconEye, IconEyeSlash } from '@/components/icons';
+import { IconArrowRight } from '@/components/icons';
 import { FieldError } from './field-error';
 import { FIELD, SubmitButton } from './parts';
 import type { SignInPanelProps } from './types';
