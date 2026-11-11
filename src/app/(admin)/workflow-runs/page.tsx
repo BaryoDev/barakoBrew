@@ -55,7 +55,7 @@ function RunFacts({ run }: { run: WorkflowRun }) {
     { label: 'Trigger', value: triggerLabel(run.triggerEvent) },
     { label: 'Content type', value: run.contentType },
     { label: 'Content', value: run.contentId },
-    { label: 'Started', value: formatMoment(run.createdAt) },
+    { label: 'Started', value: formatMoment(run.createdAt) || 'n/a' },
   ];
 
   const completed = formatMoment(run.completedAt);
@@ -206,7 +206,7 @@ function RunRow({ row, selected, onSelect }: { row: WorkflowRun; selected: boole
       <span className="flex flex-wrap items-center gap-1.5">
         <StatusBadge tone={toneForRunStatus(row.status)}>{runStatusLabel(row.status)}</StatusBadge>
         <RunFailureKind run={row} />
-        <span className="text-muted-foreground ml-auto text-[12px] whitespace-nowrap">{formatMoment(row.createdAt)}</span>
+        <span className="text-muted-foreground ml-auto text-[12px] whitespace-nowrap">{formatMoment(row.createdAt) || 'n/a'}</span>
       </span>
       <span className="min-w-0 text-[13.5px]">
         <span className="font-bold">{row.workflowName}</span>

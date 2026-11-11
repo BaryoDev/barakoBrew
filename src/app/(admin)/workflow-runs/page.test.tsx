@@ -1113,3 +1113,99 @@ describe('the open run across the poll', () => {
     expect(screen.getByRole('list', { name: 'Actions', hidden: true })).toBeInTheDocument();
   });
 });
+
+describe('the open run after a poll that changes it', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('keeps the same row node selected and focused, and its detail shown, when a refetch changes its status', async () => {
+    let current = { ...run('r-poll', 'Charge the card', 'Running', [action(1, 'Running')]), abandonedAt: null };
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf([current]) };
+      return { data: current };
+    }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+    const row = await screen.findByRole('button', { name: /Charge the card/ });
+    fireEvent.click(row);
+    await screen.findByRole('list', { name: 'Actions' });
+    row.focus();
+    expect(within(row).getByText('Running')).toBeInTheDocument();
+
+    current = { ...current, status: 'Succeeded', actions: [action(1, 'Succeeded')] };
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+      await client.refetchQueries({ queryKey: ['workflow-run'] });
+    });
+
+    // The status changed, so the refetch really landed.
+    await waitFor(() => expect(within(row).getByText('Succeeded')).toBeInTheDocument());
+    const after = screen.getByRole('button', { name: /Charge the card/ });
+    expect(after).toBe(row);
+    expect(after).toHaveAttribute('aria-pressed', 'true');
+    expect(after).toHaveFocus();
+    expect(screen.getByRole('list', { name: 'Actions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Charge the card' })).toBeInTheDocument();
+  });
+});
+
+describe('the note under the timeline on a run that cannot be retried', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('says rolled back, and does not invite a retry, on an abandoned PartiallyFailed run', async () => {
+    const abandoned = {
+      ...run('r-ab', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Unknown')]),
+      abandonedAt: '2026-09-03T10:00:09Z',
+      compensation: 'Compensated',
+    };
+    renderRuns([abandoned]);
+    fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
+    await screen.findByRole('list', { name: 'Actions' });
+
+    const note = screen.getByTestId('run-note');
+    expect(note).toHaveTextContent('Rolled back or abandoned. Its actions are not retried.');
+    expect(note).not.toHaveTextContent(/idempotency key/);
+    expect(note).not.toHaveTextContent(/Retrying the failed action/);
+  });
+
+  it('says cancelled on a cancelled Failed run, with no permanent-failure advice', async () => {
+    const cancelled = {
+      ...run('r-can', 'Send the invoice', 'Failed', [action(1, 'Failed', { retryable: false })]),
+      cancelledAt: '2026-09-03T10:00:03Z',
+    };
+    renderRuns([cancelled]);
+    fireEvent.click(await screen.findByRole('button', { name: /Send the invoice/ }));
+    await screen.findByRole('list', { name: 'Actions' });
+
+    const note = screen.getByTestId('run-note');
+    expect(note).toHaveTextContent('A cancelled run cannot be retried.');
+    expect(note).not.toHaveTextContent(/A retry then asks you to confirm/);
+  });
+});
+
+describe('a run with no usable start time', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('says n/a in the row and in the Started fact when createdAt is garbage', async () => {
+    renderRuns([{ ...run('r-bad', 'Charge the card', 'Failed', [action(1, 'Failed')]), createdAt: 'garbage' }]);
+    const row = await screen.findByRole('button', { name: /Charge the card/ });
+
+    expect(within(row).getByText('n/a')).toBeInTheDocument();
+    fireEvent.click(row);
+    await screen.findByRole('list', { name: 'Actions' });
+
+    expect(screen.getByText('Started', { selector: 'dt' }).nextElementSibling).toHaveTextContent('n/a');
+  });
+});

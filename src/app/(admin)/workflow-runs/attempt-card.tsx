@@ -154,9 +154,9 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
 
         <dl className="mt-3 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
           {facts.map((fact) => (
-            <div key={fact.label} className="flex justify-between gap-3">
+            <div key={fact.label} className="flex min-w-0 justify-between gap-3">
               <dt className="text-muted-foreground">{fact.label}</dt>
-              <dd className="font-mono tabular-nums">{fact.value}</dd>
+              <dd className="min-w-0 text-right font-mono tabular-nums break-words">{fact.value}</dd>
             </div>
           ))}
         </dl>
