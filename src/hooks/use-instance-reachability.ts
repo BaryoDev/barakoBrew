@@ -11,11 +11,22 @@ export interface Reachability {
 }
 
 /**
+ * Whether an HTTP status means the API itself answered.
+ *
+ * A 502, 503 or 504 is what a proxy says when nothing is behind it, so those three are not the API
+ * answering. Anything else is, including a 500 or a 401. The API's own 503 from /health when it is
+ * unhealthy looks the same as a proxy's, so it reads as unreachable too, which is the honest side to
+ * err on for a sign-in page.
+ */
+export function isReachableStatus(status: number): boolean {
+    return status !== 502 && status !== 503 && status !== 504;
+}
+
+/**
  * Whether the API answers, and how fast. The only thing the pre-auth card may know.
  *
- * Any HTTP answer counts as reachable, including a 503 from an unhealthy instance: the question is
- * whether the console can talk to it, not whether it is well. Plain axios, so a refusal cannot go
- * through the session refresh handler on a page that has no session.
+ * Plain axios, so a refusal cannot go through the session refresh handler on a page that has no
+ * session.
  */
 export function useInstanceReachability() {
     return useQuery({
@@ -23,7 +34,11 @@ export function useInstanceReachability() {
         queryFn: async (): Promise<Reachability> => {
             const started = performance.now();
             try {
-                await axios.get(`${getApiUrl()}/health`, { timeout: 5000, validateStatus: () => true });
+                const response = await axios.get(`${getApiUrl()}/health`, {
+                    timeout: 5000,
+                    validateStatus: () => true,
+                });
+                if (!isReachableStatus(response.status)) return { reachable: false, ms: null };
                 return { reachable: true, ms: Math.round(performance.now() - started) };
             } catch {
                 return { reachable: false, ms: null };
