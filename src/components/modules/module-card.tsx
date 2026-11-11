@@ -1,44 +1,54 @@
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { moduleHref, moduleState } from '@/lib/module-state';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { installLine, moduleCategory, moduleHref, moduleState } from '@/lib/module-state';
+import { cn } from '@/lib/utils';
 import type { ModuleSummary } from '@/types/modules';
 import { CopyInstallLine } from './copy-install-line';
 import { ModuleStateBadge } from './module-state-badge';
+import { ModuleTile } from './module-tile';
 
 /**
- * One module on the All modules page. A module that is not installed has no screen to open, so its
- * name is not a link. Installed but not enabled does open, to read what it would run with.
+ * One module on the All modules page. A module that is not installed has no screen to open, so it
+ * gets the install line instead of an Open button. Installed but not enabled does open, to read
+ * what it would run with.
  */
 export function ModuleCard({ module }: { module: ModuleSummary }) {
     const state = moduleState(module);
+    const missing = state === 'not-installed';
+    const meta = missing
+        ? installLine(module)
+        : [module.package, module.version].filter(Boolean).join(' ');
 
     return (
-        <Card data-testid="module-card" data-state={state} className="gap-3 py-4">
-            <CardHeader className="gap-1">
-                <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="min-w-0 truncate text-sm">
-                        {state === 'not-installed' ? (
-                            module.name
-                        ) : (
-                            <Link href={moduleHref(module.name)} className="hover:underline">
-                                {module.name}
-                            </Link>
-                        )}
-                    </CardTitle>
-                    <ModuleStateBadge state={state} />
+        <Card
+            data-testid="module-card"
+            data-state={state}
+            className={cn('gap-3 p-[18px] transition-transform hover:-translate-y-0.5', missing && 'opacity-[.78]')}
+        >
+            <div className="flex items-center gap-3">
+                <ModuleTile module={module} muted={missing} />
+                <div className="grid min-w-0 flex-1 gap-0.5">
+                    <h2 className="truncate text-[15px] font-semibold">{module.name}</h2>
+                    <span className="text-muted-foreground text-[12.5px]">{moduleCategory(module)}</span>
                 </div>
-                {(module.package || module.version) && (
-                    <p className="text-muted-foreground font-mono text-xs">
-                        {[module.package, module.version].filter(Boolean).join(' ')}
-                    </p>
+                <ModuleStateBadge state={state} />
+            </div>
+            {module.description && <p className="text-muted-foreground text-[13.5px] leading-normal">{module.description}</p>}
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground min-w-0 flex-1 truncate font-mono text-xs" title={meta || undefined}>
+                    {meta}
+                </span>
+                {missing ? (
+                    <CopyInstallLine module={module} />
+                ) : (
+                    <Button asChild size="sm">
+                        <Link href={moduleHref(module.name)} aria-label={`Open ${module.name}`}>
+                            Open
+                        </Link>
+                    </Button>
                 )}
-            </CardHeader>
-            <CardContent className="space-y-3">
-                {module.description && (
-                    <p className="text-muted-foreground text-sm">{module.description}</p>
-                )}
-                {state === 'not-installed' && <CopyInstallLine module={module} />}
-            </CardContent>
+            </div>
         </Card>
     );
 }

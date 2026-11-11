@@ -28,9 +28,20 @@ const STALE_MS = 5 * 60 * 1000;
 /** The whole list in one page. The endpoint caps a page at 100 and nothing runs that many. */
 const PAGE_SIZE = 100;
 
+const OPTIONAL_TEXT = ['category', 'package', 'description'] as const;
+
 function isSummary(value: unknown): value is ModuleSummary {
     const m = value as ModuleSummary | null;
     return !!m && typeof m.name === 'string' && typeof m.enabled === 'boolean';
+}
+
+/** The three optional text fields are kept only when they are strings; a number or object there is dropped. */
+function cleanSummary(m: ModuleSummary): ModuleSummary {
+    const copy: ModuleSummary = { ...m };
+    for (const key of OPTIONAL_TEXT) {
+        if (copy[key] !== undefined && typeof copy[key] !== 'string') delete copy[key];
+    }
+    return copy;
 }
 
 /**
@@ -48,7 +59,7 @@ function readInventory(data: unknown): readonly ModuleSummary[] | null {
           ? (data as Paginated<ModuleSummary>).items
           : null;
     if (items === null) return null;
-    return items.every(isSummary) ? items : null;
+    return items.every(isSummary) ? items.map(cleanSummary) : null;
 }
 
 async function fetchModules(): Promise<ModuleReport> {
