@@ -9,6 +9,7 @@ import { FieldOptionsDialog } from '@/components/schema/field-options-dialog';
 import { FieldPresentationDialog } from '@/components/schema/field-presentation-dialog';
 import { FieldCurrencyDialog } from '@/components/schema/field-currency-dialog';
 import { RouteTemplatePanel } from '@/components/schema/route-template-panel';
+import { TypeIconPicker } from '@/components/schema/type-icon-picker';
 import { LifecycleDiagram } from '@/components/schema/lifecycle-diagram';
 import { UniquenessPanel } from '@/components/schema/uniqueness-panel';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -86,6 +87,8 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
           )
         }
       />
+
+      <TypeIconPicker typeName={schema.name} displayName={schema.displayName} icon={schema.icon} />
 
       <div className="text-muted-foreground mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm">
         <IconInfo className="mt-0.5 size-4 shrink-0" />
