@@ -1,5 +1,5 @@
 import type { ModuleSummary } from '@/types/modules';
-import { CATEGORY_ORDER, FIRST_PARTY, catalogEntry } from '@/lib/module-catalog';
+import { CATEGORY_ORDER, FIRST_PARTY, catalogEntry, normaliseCategory } from '@/lib/module-catalog';
 
 /**
  * The three states a module card shows. Not two: a module the deployment carries but this tenant
@@ -61,7 +61,7 @@ export function moduleHref(name: string): string {
 
 /** The category the card and the filter use: the API's, then the catalog's, else "Other". */
 export function moduleCategory(m: ModuleSummary): string {
-    return m.category?.trim() || catalogEntry(m)?.category || UNCATEGORISED;
+    return normaliseCategory(m.category) ?? catalogEntry(m)?.category ?? UNCATEGORISED;
 }
 
 function categoryRank(category: string): number {

@@ -9,9 +9,10 @@ import type { ModuleSummary } from '@/types/modules';
  * package an older API leaves out.
  *
  * Names are the `Name` each module returns from IBarakoModule and packages are the csproj
- * `PackageId`, both read from the barakoCMS source, except Email.Resend, whose source is not in that
- * tree: its name is the one `MODULE.emailEvents` already carries and its package is on nuget.org.
- * Only modules published publicly under the barakocms-module tag are listed. A module the API lists that is not here is drawn from what the
+ * `PackageId`, both read from the barakoCMS source, except Email.Resend, whose source is not in the
+ * working tree: its name is read from the published 4.7.0 package and the 5.1.0 source commit.
+ * Categories are each module's `Category` in the core source; Email.Resend sets none there, so it is
+ * filed with Email.Smtp under Comms. Only modules published publicly under the barakocms-module tag are listed. A module the API lists that is not here is drawn from what the
  * API sent, so a new module needs no entry for its card to appear.
  */
 export interface CatalogEntry {
@@ -40,26 +41,29 @@ export type ModuleGlyph =
     | 'ai'
     | 'coins';
 
-/** The category order the design's filter uses. Categories the API sends beyond these come after. */
-export const CATEGORY_ORDER = ['Content', 'Storage', 'Email', 'Auth', 'Ops', 'Analytics', 'Domain'] as const;
+/**
+ * The core's `ModuleCategory` constants, in the design's order. Categories the API sends beyond these
+ * come after, and a category is compared case-insensitively and shown in this casing.
+ */
+export const CATEGORY_ORDER = ['Content', 'Comms', 'Access', 'Platform', 'Insight', 'Business'] as const;
 
 export const FIRST_PARTY: readonly CatalogEntry[] = [
     { name: 'Pages', package: 'BarakoCMS.Pages', category: 'Content', glyph: 'content', description: 'A page tree with nested navigation, paths and breadcrumbs, for barakoPress to render.' },
     { name: 'Forms', package: 'BarakoCMS.Forms', category: 'Content', glyph: 'form', description: 'Public form submissions, validated and stored as Sensitive entries, with a honeypot and a rate limit.' },
-    { name: 'Files', package: 'BarakoCMS.Files', category: 'Storage', glyph: 'archive', description: 'Uploads and serves files, stored in Postgres. Files · S3 moves them to a bucket.' },
-    { name: 'Files.S3', package: 'BarakoCMS.Files.S3', category: 'Storage', glyph: 'database', description: 'Keeps Files in AWS S3, Cloudflare R2 or any S3-compatible store.' },
+    { name: 'Files', package: 'BarakoCMS.Files', category: 'Content', glyph: 'archive', description: 'Uploads and serves files, stored in Postgres. Files · S3 moves them to a bucket.' },
+    { name: 'Files.S3', package: 'BarakoCMS.Files.S3', category: 'Platform', glyph: 'database', description: 'Keeps Files in AWS S3, Cloudflare R2 or any S3-compatible store.' },
     { name: 'Import', package: 'BarakoCMS.Import', category: 'Content', glyph: 'table', description: 'Bulk-creates entries from .xlsx or CSV uploads, mapped to a content type.' },
-    { name: 'Portability', package: 'BarakoCMS.Portability', category: 'Ops', glyph: 'cube', description: 'Exports content types and their entries as a JSON bundle, and imports it into another instance.' },
-    { name: 'Email.Resend', package: 'BarakoCMS.Email.Resend', category: 'Email', glyph: 'send', description: 'Sends mail through Resend and records bounces and complaints.' },
-    { name: 'Email.Smtp', package: 'BarakoCMS.Email.Smtp', category: 'Email', glyph: 'envelope', description: 'Sends mail through any SMTP relay.' },
-    { name: 'ExternalAuth', package: 'BarakoCMS.ExternalAuth', category: 'Auth', glyph: 'key', description: 'Continue with Google, GitHub, LinkedIn or Facebook, matched by verified email.' },
-    { name: 'DeviceTrust', package: 'BarakoCMS.DeviceTrust', category: 'Auth', glyph: 'shield', description: 'Binds sessions to devices and can require OTP approval for a new one.' },
-    { name: 'FeatureFlags', package: 'BarakoCMS.FeatureFlags', category: 'Ops', glyph: 'flag', description: 'Turns a feature on by tenant, by user or by percentage rollout.' },
-    { name: 'Diagnostics', package: 'BarakoCMS.Diagnostics', category: 'Ops', glyph: 'bug', description: 'Collects browser errors from your apps, grouped by fingerprint with a count.' },
-    { name: 'Pwa', package: 'BarakoCMS.Pwa', category: 'Analytics', glyph: 'mobile', description: 'Records installs to the home screen, anonymous or per signed-in user.' },
-    { name: 'Analytics.Umami', package: 'BarakoCMS.Analytics.Umami', category: 'Analytics', glyph: 'analytics', description: 'Shows Umami traffic in barakoBrew through a server-side proxy.' },
-    { name: 'AI', package: 'BarakoCMS.AI', category: 'Content', glyph: 'ai', description: 'Semantic search over published, Public entries with a self-hosted model. No third-party key.' },
-    { name: 'Accounting', package: 'BarakoCMS.Accounting', category: 'Domain', glyph: 'coins', description: 'Double-entry accounts, balanced journal entries and reports.' },
+    { name: 'Portability', package: 'BarakoCMS.Portability', category: 'Platform', glyph: 'cube', description: 'Exports content types and their entries as a JSON bundle, and imports it into another instance.' },
+    { name: 'Email.Resend', package: 'BarakoCMS.Email.Resend', category: 'Comms', glyph: 'send', description: 'Sends mail through Resend and records bounces and complaints.' },
+    { name: 'Email.Smtp', package: 'BarakoCMS.Email.Smtp', category: 'Comms', glyph: 'envelope', description: 'Sends mail through any SMTP relay.' },
+    { name: 'ExternalAuth', package: 'BarakoCMS.ExternalAuth', category: 'Access', glyph: 'key', description: 'Continue with Google, GitHub, LinkedIn or Facebook, matched by verified email.' },
+    { name: 'DeviceTrust', package: 'BarakoCMS.DeviceTrust', category: 'Access', glyph: 'shield', description: 'Binds sessions to devices and can require OTP approval for a new one.' },
+    { name: 'FeatureFlags', package: 'BarakoCMS.FeatureFlags', category: 'Platform', glyph: 'flag', description: 'Turns a feature on by tenant, by user or by percentage rollout.' },
+    { name: 'Diagnostics', package: 'BarakoCMS.Diagnostics', category: 'Platform', glyph: 'bug', description: 'Collects browser errors from your apps, grouped by fingerprint with a count.' },
+    { name: 'Pwa', package: 'BarakoCMS.Pwa', category: 'Platform', glyph: 'mobile', description: 'Records installs to the home screen, anonymous or per signed-in user.' },
+    { name: 'Analytics.Umami', package: 'BarakoCMS.Analytics.Umami', category: 'Insight', glyph: 'analytics', description: 'Shows Umami traffic in barakoBrew through a server-side proxy.' },
+    { name: 'AI', package: 'BarakoCMS.AI', category: 'Insight', glyph: 'ai', description: 'Semantic search over published, Public entries with a self-hosted model. No third-party key.' },
+    { name: 'Accounting', package: 'BarakoCMS.Accounting', category: 'Business', glyph: 'coins', description: 'Double-entry accounts, balanced journal entries and reports.' },
 ];
 
 const norm = (s: string | undefined) => (s ?? '').trim().toLowerCase();
@@ -75,6 +79,13 @@ export function catalogEntry(m: Pick<ModuleSummary, 'name' | 'package'>): Catalo
  * The module list the All modules page draws: what the API listed, with gaps filled from the
  * catalog, then every catalog module the API did not list as a card that is not installed.
  */
+/** The category in CATEGORY_ORDER casing when it matches one ignoring case, else the text as sent. */
+export function normaliseCategory(value: string | undefined): string | undefined {
+    const v = value?.trim();
+    if (!v) return undefined;
+    return CATEGORY_ORDER.find((c) => c.toLowerCase() === v.toLowerCase()) ?? v;
+}
+
 export function withFirstParty(listed: readonly ModuleSummary[]): ModuleSummary[] {
     const merged = listed.map((m) => {
         const entry = catalogEntry(m);
@@ -82,7 +93,7 @@ export function withFirstParty(listed: readonly ModuleSummary[]): ModuleSummary[
         return {
             ...m,
             package: m.package || entry.package,
-            category: m.category?.trim() || entry.category,
+            category: normaliseCategory(m.category) ?? entry.category,
             description: m.description || entry.description,
         };
     });

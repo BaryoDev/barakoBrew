@@ -26,9 +26,9 @@ const get = vi.mocked(api.get);
 
 const base = { contractVersion: 1, schemaState: 'ready', schemaChanges: [] as string[] };
 const MODULES = [
-    { ...base, name: 'Files', enabled: true, package: 'BarakoCMS.Files', version: '5.1.0', category: 'Storage', description: 'Uploads.' },
+    { ...base, name: 'Files', enabled: true, package: 'BarakoCMS.Files', version: '5.1.0', category: 'content', description: 'Uploads.' },
     { ...base, name: 'Forms', enabled: false, package: 'BarakoCMS.Forms', version: '5.1.0', category: 'Content', description: 'Form builder.' },
-    { ...base, name: 'Pwa', enabled: false, installed: false, package: 'BarakoCMS.Pwa', version: '5.1.0', category: 'Analytics', description: 'Installable site.' },
+    { ...base, name: 'Pwa', enabled: false, installed: false, package: 'BarakoCMS.Pwa', version: '5.1.0', category: 'Platform', description: 'Installable site.' },
 ];
 
 function wrap(ui: ReactNode) {
@@ -69,6 +69,13 @@ describe('All modules page', () => {
         expect(pwa.className).toContain('opacity-[.78]');
     });
 
+    it('titles the page All modules, like the sidebar and breadcrumb', async () => {
+        get.mockResolvedValue({ data: { items: MODULES } });
+        wrap(<ModulesPage />);
+        await screen.findAllByTestId('module-card');
+        expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('All modules');
+    });
+
     it('shows a 44px icon tile on every card', async () => {
         get.mockResolvedValue({ data: { items: MODULES } });
         wrap(<ModulesPage />);
@@ -95,7 +102,9 @@ describe('All modules page', () => {
         const pwa = cards.find((c) => within(c).queryByText('Pwa'))!;
         await userEvent.click(within(pwa).getByRole('button', { name: 'Copy install' }));
         expect(writeText).toHaveBeenCalledWith('dotnet add package BarakoCMS.Pwa');
-        expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('Restart the API and its screen appears.'));
+        expect(toastSuccess).toHaveBeenCalledWith(
+            'Copied: dotnet add package BarakoCMS.Pwa. Restart the API, then enable it for the tenant.',
+        );
     });
 
     it('groups first-party modules under the design categories, not all under Other', async () => {
@@ -105,7 +114,7 @@ describe('All modules page', () => {
 
         const filter = screen.getByRole('radiogroup', { name: 'Filter by category' });
         const names = within(filter).getAllByRole('radio').map((r) => r.textContent);
-        expect(names).toEqual(['All16', 'Content4', 'Storage2', 'Email2', 'Auth2', 'Ops3', 'Analytics2', 'Domain1']);
+        expect(names).toEqual(['All16', 'Content4', 'Comms2', 'Access2', 'Platform5', 'Insight2', 'Business1']);
         expect(within(filter).queryByRole('radio', { name: /Other/ })).toBeNull();
     });
 
@@ -114,7 +123,7 @@ describe('All modules page', () => {
         wrap(<ModulesPage />);
         await screen.findAllByTestId('module-card');
 
-        await userEvent.click(screen.getByRole('radio', { name: /^Auth/ }));
+        await userEvent.click(screen.getByRole('radio', { name: /^Access/ }));
         const cards = screen.getAllByTestId('module-card');
         expect(cards).toHaveLength(2);
         expect(cards.map((c) => within(c).getByRole('heading').textContent).sort()).toEqual(['DeviceTrust', 'ExternalAuth']);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FIRST_PARTY, withFirstParty } from './module-catalog';
+import { CATEGORY_ORDER, FIRST_PARTY, normaliseCategory, withFirstParty } from './module-catalog';
 import { categoryCounts, moduleState } from './module-state';
 import type { ModuleSummary } from '@/types/modules';
 
@@ -37,6 +37,28 @@ const PUBLISHED = [
 ];
 
 describe('first-party catalog', () => {
+    it('files every module under one of the core ModuleCategory constants', () => {
+        expect(CATEGORY_ORDER).toEqual(['Content', 'Comms', 'Access', 'Platform', 'Insight', 'Business']);
+        for (const e of FIRST_PARTY) expect(CATEGORY_ORDER, e.name).toContain(e.category);
+    });
+
+    it('uses the category each module sets in the core source', () => {
+        const by = Object.fromEntries(FIRST_PARTY.map((e) => [e.name, e.category]));
+        expect(by).toMatchObject({
+            Files: 'Content', 'Files.S3': 'Platform', Portability: 'Platform', 'Email.Smtp': 'Comms',
+            ExternalAuth: 'Access', DeviceTrust: 'Access', Pwa: 'Platform', AI: 'Insight', Accounting: 'Business',
+        });
+    });
+
+    it('compares categories ignoring case and shows them in the constants casing', () => {
+        expect(normaliseCategory('platform')).toBe('Platform');
+        expect(normaliseCategory(' COMMS ')).toBe('Comms');
+        expect(normaliseCategory('Beta')).toBe('Beta');
+        expect(normaliseCategory('')).toBeUndefined();
+        const all = withFirstParty([m('Files', { category: 'ACCESS' })]);
+        expect(all.find((x) => x.name === 'Files')!.category).toBe('Access');
+    });
+
     it('names only packages published on nuget.org under the module tag', () => {
         expect(FIRST_PARTY.length).toBeGreaterThan(0);
         for (const e of FIRST_PARTY) expect(PUBLISHED, e.package).toContain(e.package);
@@ -74,6 +96,6 @@ describe('first-party catalog', () => {
 
     it('counts categories in the design order with Other last', () => {
         const counts = categoryCounts([m('Zed'), m('Pages'), m('Accounting'), m('Mystery', { category: 'Beta' })]);
-        expect(counts.map((c) => c.category)).toEqual(['Content', 'Domain', 'Beta', 'Other']);
+        expect(counts.map((c) => c.category)).toEqual(['Content', 'Business', 'Beta', 'Other']);
     });
 });

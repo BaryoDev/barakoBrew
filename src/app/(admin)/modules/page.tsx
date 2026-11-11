@@ -18,7 +18,7 @@ export default function ModulesPage() {
     return (
         <>
             <PageHeader
-                title="Modules"
+                title="All modules"
                 description="barakoBrew finds modules by asking the API what it runs. A module that is installed gets its screen; one that is not shows how to add it."
                 actions={
                     counts && (
