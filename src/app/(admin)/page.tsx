@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { IconArrowRight, IconContent } from '@/components/icons';
 import { OverviewHeader } from '@/components/overview/overview-header';
+import { OverviewCardSlot } from '@/components/overview/overview-card-slot';
+import { GlanceCard } from '@/components/overview/glance-card';
+import { useSlot } from '@/hooks/use-slots';
 import { StatCards } from '@/components/overview/stat-cards';
 import { QuickActions } from '@/components/overview/quick-actions';
 import { SystemStrip } from '@/components/overview/system-strip';
@@ -21,11 +24,15 @@ import type { Range } from '@/lib/overview';
 
 export default function DashboardPage() {
   const [range, setRange] = useState<Range>(30);
+  const extensionCards = useSlot('overview-card');
   const { data: contents, isLoading: contentsLoading } = useContents({ pageSize: 5 });
 
   return (
     <div className="rise grid max-w-[1240px] gap-6">
       <OverviewHeader range={range} onRange={setRange} />
+      {/* The first card: an extension's when one is registered, else the plain glance from the API. */}
+      <OverviewCardSlot />
+      {extensionCards.length === 0 && <GlanceCard />}
       <StatCards range={range} />
       <div className="flex flex-wrap items-center gap-2">
         <QuickActions />
