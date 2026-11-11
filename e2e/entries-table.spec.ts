@@ -81,7 +81,7 @@ test('a status filter redraws every cell of every row, the version column includ
     await page.goto('/content');
     await expect(rows(page)).toHaveCount(2);
 
-    await page.getByRole('radio', { name: 'Published' }).click();
+    await page.getByRole('button', { name: /^Published/ }).click();
     await page.waitForURL(/status=Published/);
 
     await expect(rows(page)).toHaveCount(2);
@@ -93,5 +93,9 @@ test('a status filter redraws every cell of every row, the version column includ
     }
     // The version column is display:none below md, so it is out of the accessibility tree on a phone
     // project; the cell is still rendered, and it is the rendered cell that has to be redrawn.
-    await expect(rows(page).nth(1).locator('td').nth(3)).toHaveText('4');
+    // Found by its header, so a column added or moved does not silently point this at another one.
+    const headers = await page.locator('thead th').allTextContents();
+    const versionColumn = headers.findIndex((text) => text.trim() === 'V');
+    expect(versionColumn, 'the V column header was not found').toBeGreaterThan(-1);
+    await expect(rows(page).nth(1).locator('td').nth(versionColumn)).toHaveText('4');
 });

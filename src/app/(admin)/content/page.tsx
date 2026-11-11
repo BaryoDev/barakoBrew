@@ -7,7 +7,12 @@ import { useSchemas } from '@/hooks/use-schemas';
 import { useContents } from '@/hooks/use-contents';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { ContentStatus, type ContentListItem } from '@/types/content';
-import { STATUS_ORDER, STATUS_VOCABULARY, statusFromParam, statusMeta } from '@/lib/status-vocabulary';
+import {
+  STATUS_ORDER,
+  STATUS_VOCABULARY,
+  statusFromParam,
+  statusMeta,
+} from '@/lib/status-vocabulary';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { StatusBadge } from '@/components/patterns/status-badge';
@@ -15,13 +20,9 @@ import { ErrorState } from '@/components/patterns/error-state';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { PaginationControls } from '@/components/patterns/pagination-controls';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { EntryTypeTabs, ALL_TYPES } from '@/components/content/entry-type-tabs';
+import { EntryStatusChips } from '@/components/content/entry-status-chips';
 import {
   Table,
   TableBody,
@@ -31,16 +32,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { SegmentedControl, SegmentedControlItem } from '@/components/ui/segmented-control';
 import { IconContent, IconLock, IconPlus } from '@/components/icons';
 import { useDebounced } from '@/hooks/use-debounced';
-import { formatDistanceToNowStrict } from 'date-fns';
+import { exactTime, relativeTime } from '@/lib/relative-time';
 import { contentTitle } from '@/lib/content-title';
 import { singletonHref } from '@/lib/navigation';
 import { IconChevronLeft } from '@/components/icons';
-
-const ALL_TYPES = 'all';
-const ALL_STATUSES = 'all';
 
 /** Where a new entry of a type is written. Encoded, the way every other generated link here is. */
 function newEntryHref(contentType?: string): string {
@@ -88,7 +85,10 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
   entry: { head: `${HEAD} pl-6`, cell: 'max-w-md py-3.5 pl-6' },
   type: { head: HEAD, cell: `${META} py-3.5` },
   status: { head: HEAD, cell: 'py-3.5' },
-  version: { head: `${HEAD} hidden text-right md:table-cell`, cell: `${META} hidden py-3.5 text-right md:table-cell` },
+  version: {
+    head: `${HEAD} hidden text-right md:table-cell`,
+    cell: `${META} hidden py-3.5 text-right md:table-cell`,
+  },
   updated: {
     head: `${HEAD} hidden pr-6 text-right sm:table-cell`,
     cell: `${META} hidden py-3.5 pr-6 text-right sm:table-cell`,
@@ -111,7 +111,16 @@ function entryColumns(privateTypes: ReadonlySet<string>) {
         </Link>
       ),
     }),
-    column.accessor('contentType', { id: 'type', header: 'Type' }),
+    column.accessor('contentType', {
+      id: 'type',
+      header: 'Type',
+      cell: ({ getValue }) => (
+        <span className="inline-flex items-center gap-1.5">
+          <IconContent aria-hidden className="size-3.5" />
+          {getValue()}
+        </span>
+      ),
+    }),
     column.accessor('status', {
       id: 'status',
       header: 'Status',
@@ -144,7 +153,12 @@ function entryColumns(privateTypes: ReadonlySet<string>) {
     column.accessor('updatedAt', {
       id: 'updated',
       header: 'Updated',
-      cell: ({ getValue }) => formatDistanceToNowStrict(new Date(getValue()), { addSuffix: true }),
+      // The exact time rides in the title, so "3h ago" is never the only thing a reader gets.
+      cell: ({ getValue }) => (
+        <time dateTime={getValue()} title={exactTime(getValue())}>
+          {relativeTime(getValue())}
+        </time>
+      ),
     }),
   ]);
 }
@@ -237,8 +251,6 @@ function ContentListInner() {
     status,
   });
 
-
-
   /**
    * Which content types are not served anonymously, so a row can be marked Private.
    *
@@ -249,9 +261,7 @@ function ContentListInner() {
    */
   const privateTypes = useMemo(
     () =>
-      new Set(
-        (schemas ?? []).filter((s) => s.isPubliclyDeliverable === false).map((s) => s.name)
-      ),
+      new Set((schemas ?? []).filter((s) => s.isPubliclyDeliverable === false).map((s) => s.name)),
     [schemas]
   );
 
@@ -269,8 +279,28 @@ function ContentListInner() {
 
   const schema = schemas?.find((s) => s.name === contentType);
 
+  // A single-entry type has no list, so it has no tab either.
+  const tabTypes = (schemas ?? []).filter((s) => s.isSingleton !== true);
+
+  /**
+   * What each chip can say, from the rows loaded.
+   *
+   * The list reply carries no per-status counts, and a request per status is the round trip this
+   * screen refuses to make. So these are a tally of this page and are labelled that way. With a
+   * status chosen the page holds only that status, so only its own chip has a number worth showing;
+   * the others would read zero, which is a claim about entries nobody asked for.
+   */
+  const statusCounts = (() => {
+    const items = contents?.items ?? NO_ROWS;
+    if (!contents) return {};
+    if (status !== undefined) return { [status]: items.length };
+    const tally: Record<string, number> = { all: items.length };
+    for (const item of items) tally[item.status] = (tally[item.status] ?? 0) + 1;
+    return tally;
+  })();
+
   return (
-    <>
+    <Tabs value={contentType ?? ALL_TYPES} onValueChange={setType} className="gap-0">
       {/* The way back to where the type was chosen. The header crumb says Entries, which is the
           route; this says which type's entries these are and how to get out of them. */}
       {contentType && (
@@ -309,121 +339,109 @@ function ContentListInner() {
       />
 
       {/*
-        All three controls filter server side. Filtering the twenty rows this page happens to hold
+        Every control filters server side. Filtering the twenty rows this page happens to hold
         while showing the server's total would be a control that lies about what it searched, which
         is why these waited for #440 rather than shipping against the old endpoint.
       */}
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
+        <EntryTypeTabs types={tabTypes} />
+        <EntryStatusChips
+          chips={STATUS_FILTERS.map((f) => ({
+            label: f.label,
+            value: f.value,
+          }))}
+          value={status}
+          counts={statusCounts}
+          onChange={(v) => changeStatus(v as ContentStatus | undefined)}
+        />
         <Input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search entries"
+          placeholder="Filter by title"
           aria-label="Search entries"
-          className="h-[38px] w-full sm:w-[280px]"
+          className="h-[38px] w-full sm:ml-auto sm:w-[260px]"
         />
-
-        <SegmentedControl
-          aria-label="Filter by status"
-          className="h-[38px]"
-          value={status ?? ALL_STATUSES}
-          onValueChange={(v) => changeStatus(v === ALL_STATUSES ? undefined : (v as ContentStatus))}
-        >
-          {STATUS_FILTERS.map((option) => (
-            <SegmentedControlItem key={option.label} value={option.value ?? ALL_STATUSES}>
-              {option.label}
-            </SegmentedControlItem>
-          ))}
-        </SegmentedControl>
-
-        <Select value={contentType ?? ALL_TYPES} onValueChange={setType}>
-          {/* No visible label by design, so the name has to come from aria-label. The placeholder
-              is not one: it disappears the moment a value is selected, and renders as nothing while
-              the schema list is still loading, which is when axe caught this. */}
-          <SelectTrigger className="h-[38px] w-56" aria-label="Filter by content type">
-            <SelectValue placeholder="All content types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_TYPES}>All content types</SelectItem>
-            {schemas?.map((s) => (
-              <SelectItem key={s.name} value={s.name}>
-                {s.displayName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
-      {isLoading ? (
-        <TableSkeleton />
-      ) : isError ? (
-        <ErrorState entity="content" onRetry={() => refetch()} />
-      ) : !contents?.items.length ? (
-        <EmptyState
-          icon={IconContent}
-          title={
-            filtered
-              ? 'No entries match'
-              : contentType
-                ? `No ${contentType} entries yet`
-                : 'No entries yet'
-          }
-          description={
-            filtered
-              ? 'Nothing here matches the search or status filter. Clearing them brings the rest back.'
-              : 'Entries hold your actual content, each one following the fields of its content type.'
-          }
-          action={
-            <Button asChild size="sm">
-              <Link href={newEntryHref(contentType)}>
-                <IconPlus />
-                New entry
-              </Link>
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <div className="bg-card overflow-hidden rounded-xl border shadow-[var(--shadow-card)]">
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((group) => (
-                  <TableRow key={group.id} className="hover:bg-background">
-                    {group.headers.map((header) => (
-                      <TableHead key={header.id} className={COLUMN_CLASSES[header.column.id]?.head}>
-                        {header.isPlaceholder ? null : <table.FlexRender header={header} />}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className="hover:bg-background cursor-pointer"
-                    onClick={(e) => {
-                      // The title is a real link, so keyboard users have a focusable target and
-                      // the row is a convenience for the mouse. Without this guard a click on the
-                      // link navigates twice.
-                      if ((e.target as HTMLElement).closest('a')) return;
-                      router.push(`/content/${row.original.id}`);
-                    }}
-                  >
-                    {row.getAllCells().map((cell) => (
-                      <TableCell key={cell.id} className={COLUMN_CLASSES[cell.column.id]?.cell}>
-                        <table.FlexRender cell={cell} />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <PaginationControls page={contents} onPageChange={(n) => setParams({ page: String(n) })} />
-        </>
-      )}
-    </>
+      <TabsContent value={contentType ?? ALL_TYPES}>
+        {isLoading ? (
+          <TableSkeleton />
+        ) : isError ? (
+          <ErrorState entity="content" onRetry={() => refetch()} />
+        ) : !contents?.items.length ? (
+          <EmptyState
+            icon={IconContent}
+            title={
+              filtered
+                ? 'No entries match'
+                : contentType
+                  ? `No ${contentType} entries yet`
+                  : 'No entries yet'
+            }
+            description={
+              filtered
+                ? 'Nothing here matches the search or status filter. Clearing them brings the rest back.'
+                : 'Entries hold your actual content, each one following the fields of its content type.'
+            }
+            action={
+              <Button asChild size="sm">
+                <Link href={newEntryHref(contentType)}>
+                  <IconPlus />
+                  New entry
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            <div className="bg-card overflow-hidden rounded-xl border shadow-[var(--shadow-card)]">
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map((group) => (
+                    <TableRow key={group.id} className="hover:bg-background">
+                      {group.headers.map((header) => (
+                        <TableHead
+                          key={header.id}
+                          className={COLUMN_CLASSES[header.column.id]?.head}
+                        >
+                          {header.isPlaceholder ? null : <table.FlexRender header={header} />}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className="hover:bg-background cursor-pointer"
+                      onClick={(e) => {
+                        // The title is a real link, so keyboard users have a focusable target and
+                        // the row is a convenience for the mouse. Without this guard a click on the
+                        // link navigates twice.
+                        if ((e.target as HTMLElement).closest('a')) return;
+                        router.push(`/content/${row.original.id}`);
+                      }}
+                    >
+                      {row.getAllCells().map((cell) => (
+                        <TableCell key={cell.id} className={COLUMN_CLASSES[cell.column.id]?.cell}>
+                          <table.FlexRender cell={cell} />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <PaginationControls
+              page={contents}
+              onPageChange={(n) => setParams({ page: String(n) })}
+            />
+          </>
+        )}
+      </TabsContent>
+    </Tabs>
   );
 }
 
