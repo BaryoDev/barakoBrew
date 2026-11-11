@@ -389,7 +389,7 @@ function ContentListInner() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter by title or author"
+          placeholder="Filter by title"
           aria-label="Search entries"
           className="h-[38px] w-full sm:ml-auto sm:w-[260px]"
         />

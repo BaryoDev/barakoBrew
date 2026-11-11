@@ -168,15 +168,15 @@ describe('the content type tabs', () => {
 });
 
 describe('the status chips', () => {
-  it('are toggle buttons whose names carry the counts of the rows on this page', async () => {
+  it('are toggle buttons whose names carry the counts of the rows on this page, in the visible text', async () => {
     renderList();
     await screen.findByText('Alpha');
 
     const group = screen.getByRole('group', { name: 'Filter by status' });
-    const all = within(group).getByRole('button', { name: 'All, 3 on this page' });
+    const all = within(group).getByRole('button', { name: 'All 3' });
     expect(all.getAttribute('aria-pressed')).toBe('true');
-    expect(within(group).getByRole('button', { name: 'Draft, 2 on this page' })).toBeTruthy();
-    expect(within(group).getByRole('button', { name: 'Published, 1 on this page' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Draft 2' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Published 1' })).toBeTruthy();
     // No row is Archived or Scheduled, so those are tallied as none, not left unsaid.
     expect(within(group).getByRole('button', { name: 'Archived' })).toBeTruthy();
   });
@@ -208,7 +208,7 @@ describe('the status chips', () => {
     await user.click(screen.getByRole('button', { name: /^Draft/ }));
 
     await waitFor(() => expect(lastListParams().status).toBe(ContentStatus.Draft));
-    const draft = await screen.findByRole('button', { name: 'Draft, 2 on this page' });
+    const draft = await screen.findByRole('button', { name: 'Draft 2' });
     expect(draft.getAttribute('aria-pressed')).toBe('true');
     // Published would read zero, which is a claim about entries the filter hid.
     expect(screen.getByRole('button', { name: 'Published' })).toBeTruthy();
@@ -228,13 +228,13 @@ describe('the status chips', () => {
 });
 
 describe('the search and the Author column', () => {
-  it('is worded for title and author, and sends what is typed to the server', async () => {
+  it('is worded for title only, which is all the server matches, and sends what is typed to the server', async () => {
     const user = userEvent.setup();
     renderList();
     await screen.findByText('Alpha');
 
     const box = screen.getByRole('searchbox', { name: /search entries/i });
-    expect(box.getAttribute('placeholder')).toBe('Filter by title or author');
+    expect(box.getAttribute('placeholder')).toBe('Filter by title');
 
     await user.type(box, 'marco');
     await waitFor(() => expect(lastListParams().search).toBe('marco'));

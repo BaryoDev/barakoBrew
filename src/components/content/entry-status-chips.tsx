@@ -15,8 +15,9 @@ export interface StatusChip {
  * rather than a zero: the list reply carries no per-status counts, so a number here is a tally of
  * the page that was loaded, and the group says so beside the chips and in each name.
  *
- * The name is an aria-label, not a visible label plus a hidden span, because the two run together
- * in some readers ("Draft2").
+ * The name is the visible text, label then count with a space between, so it always contains what is
+ * on screen (axe label-content-name-mismatch fails an aria-label that rewrites it). The group is
+ * described by the "Counts on this page" note.
  */
 export function EntryStatusChips({
   chips,
@@ -32,7 +33,11 @@ export function EntryStatusChips({
   const hasCounts = Object.keys(counts).length > 0;
 
   return (
-    <div role="group" aria-label="Filter by status" className="flex flex-wrap items-center gap-1.5">
+    <div
+      role="group"
+      aria-label="Filter by status"
+      aria-describedby={hasCounts ? 'entry-status-note' : undefined}
+      className="flex flex-wrap items-center gap-1.5">
       {chips.map((chip) => {
         const key = chip.value ?? 'all';
         const count = counts[key];
@@ -42,7 +47,6 @@ export function EntryStatusChips({
             key={key}
             type="button"
             aria-pressed={pressed}
-            aria-label={count === undefined ? chip.label : `${chip.label}, ${count} on this page`}
             // Pressing the one that is on goes back to All, so a chip is a toggle and not a radio.
             onClick={() => onChange(pressed ? undefined : chip.value)}
             className={cn(
@@ -54,14 +58,17 @@ export function EntryStatusChips({
           >
             {chip.label}
             {count !== undefined && (
-              <span aria-hidden className="font-mono text-[11px] tabular-nums opacity-70">
-                {count}
-              </span>
+              <>
+                {' '}
+                <span className="font-mono text-[11px] tabular-nums opacity-70">{count}</span>
+              </>
             )}
           </button>
         );
       })}
-      {hasCounts && <span className="text-muted-foreground text-[11px]">on this page</span>}
+      {hasCounts && <span id="entry-status-note" className="text-muted-foreground text-[11px]">
+          Counts on this page
+        </span>}
     </div>
   );
 }
