@@ -50,7 +50,7 @@ export function OverviewHeader({ range, onRange }: { range: Range; onRange: (ran
   // is waiting" while it loads.
   const verdict = overview.summary
     ? verdictFromCore(overview.summary)
-    : overview.isLoading || !overview.unavailable || needs.isLoading || needs.isError
+    : overview.isLoading || !(overview.unavailable || overview.isError) || needs.isLoading || needs.isError
       ? null
       : verdictFor({
         needs: needs.rows.length,
