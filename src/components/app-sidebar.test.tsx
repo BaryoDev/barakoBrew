@@ -27,12 +27,13 @@ vi.mock('@/components/command-menu', () => ({ CommandMenu: () => null }));
 
 const { api } = await import('@/lib/api');
 const { AppSidebar } = await import('./app-sidebar');
-const { SidebarProvider } = await import('@/components/ui/sidebar');
+const { SidebarProvider, SidebarTrigger } = await import('@/components/ui/sidebar');
+const { setViewportWidth } = await import('@/test/setup');
 
 const notFound = () =>
     Object.assign(new Error('Request failed with status code 404'), { isAxiosError: true, response: { status: 404 } });
 
-function renderRail(me: { capabilities: string[] } | 'missing', errors = 0) {
+function renderRail(me: { capabilities: string[] } | 'missing', errors = 0, withTrigger = false) {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url === '/api/me') {
             if (me === 'missing') throw notFound();
@@ -48,6 +49,7 @@ function renderRail(me: { capabilities: string[] } | 'missing', errors = 0) {
         <QueryClientProvider client={client}>
             <SidebarProvider>
                 <AppSidebar />
+                {withTrigger && <SidebarTrigger />}
             </SidebarProvider>
         </QueryClientProvider>
     );
@@ -128,8 +130,38 @@ describe('the rail', () => {
         renderRail({ capabilities: ['view_modules'] });
         await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
 
-        expect(screen.getByRole('link', { name: /^Overview/ }).className).toContain('h-9');
-        expect(screen.getByRole('link', { name: /^All modules/ }).className).toContain('h-[34px]');
+        const overview = screen.getByRole('link', { name: /^Overview/ }).className;
+        expect(overview).toContain('h-9 text-[14px]');
+        expect(overview).toContain('rounded-[9px]');
+        expect(overview).toContain('data-[active=true]:font-semibold');
+        expect(overview).not.toContain('inset_0_0_0_1px');
+        const modules = screen.getByRole('link', { name: /^All modules/ }).className;
+        expect(modules).toContain('h-[34px] text-[13.5px]');
+    });
+
+    it('keeps What\'s new in the rail, beside the version', async () => {
+        renderRail({ capabilities: [] });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
+        const button = within(rail()).getByRole('button', { name: "What's new" });
+        expect(button.className).toContain('size-7');
+    });
+
+    it('keeps What\'s new in the drawer too', async () => {
+        setViewportWidth(800);
+        try {
+            renderRail({ capabilities: [] }, 0, true);
+            fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+            expect(within(screen.getByRole('dialog')).getByRole('button', { name: "What's new" })).toBeInTheDocument();
+        } finally {
+            setViewportWidth(1280);
+        }
+    });
+
+    it('makes Sign out a 44px target below 1000px', async () => {
+        renderRail({ capabilities: [] });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
+        expect(screen.getByRole('button', { name: /Sign out/ }).className).toContain('max-rail:h-11');
+        expect(screen.getByRole('button', { name: 'Dark mode' }).className).toContain('max-rail:h-11');
     });
 
     it('opens a group folded by hand when the route changes into it', async () => {

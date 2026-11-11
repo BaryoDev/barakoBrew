@@ -193,7 +193,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) gap-0 bg-sidebar p-0 text-sidebar-foreground shadow-(--shadow) data-[state=closed]:animate-[drawer-out_.3s_cubic-bezier(.2,.8,.2,1)_forwards]! data-[state=open]:animate-[drawer-in_.3s_cubic-bezier(.2,.8,.2,1)]! [&>button]:hidden"
+          className="w-(--sidebar-width) gap-0 bg-sidebar p-0 text-sidebar-foreground shadow-(--shadow) data-[state=closed]:animate-[drawer-out_.3s_cubic-bezier(.2,.8,.2,1)_forwards]! data-[state=open]:animate-[drawer-in_.3s_cubic-bezier(.2,.8,.2,1)]! motion-reduce:data-[state=closed]:animate-none! motion-reduce:data-[state=open]:animate-none! [&>button]:hidden"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,

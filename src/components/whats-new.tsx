@@ -106,7 +106,7 @@ export function WhatsNew({ className }: { className?: string }) {
             >
                 <IconBolt className="size-4" />
                 {unseen && (
-                    <span className="bg-primary absolute right-1.5 top-1.5 size-2 rounded-full" aria-hidden />
+                    <span className="bg-primary absolute top-0.5 right-0.5 size-1.5 rounded-full" aria-hidden />
                 )}
             </Button>
 

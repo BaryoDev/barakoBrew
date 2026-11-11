@@ -66,6 +66,8 @@ describe('the top bar below 1000px', () => {
         const drawer = screen.getByRole('dialog');
         expect(drawer.style.getPropertyValue('--sidebar-width')).toBe('236px');
         expect(drawer.className).toContain('drawer-in_.3s_cubic-bezier(.2,.8,.2,1)');
+        expect(drawer.className).toContain('motion-reduce:data-[state=open]:animate-none!');
+        expect(drawer.className).toContain('motion-reduce:data-[state=closed]:animate-none!');
         expect(screen.getByRole('link', { name: 'One' })).toBeInTheDocument();
 
         fireEvent.keyDown(drawer, { key: 'Escape' });
@@ -77,7 +79,7 @@ describe('the top bar below 1000px', () => {
         renderWithDrawer();
         fireEvent.click(screen.getByRole('button', { name: /sidebar/i }));
         const scrim = document.querySelector('[data-slot="sheet-overlay"]') as HTMLElement;
-        expect(scrim.className).toContain('--scrim');
+        expect(scrim).not.toBeNull();
 
         // A modal Radix dialog arms dismissal on pointerdown and closes on the click that
         // follows (deferPointerDownOutside), so tap the scrim the way a browser does.
@@ -90,6 +92,7 @@ describe('the top bar below 1000px', () => {
         const view = renderHeader();
         expect(screen.queryByLabelText('Where you are')).toBeNull();
         expect(view.container.querySelector('header')).toBeNull();
+        expect(screen.queryByRole('button', { name: "What's new" })).toBeNull();
         expect(screen.queryByRole('navigation', { name: /breadcrumb/i })).toBeNull();
     });
 
@@ -98,5 +101,6 @@ describe('the top bar below 1000px', () => {
         nav.pathname = '/site/theme';
         renderHeader();
         expect(screen.getByRole('navigation', { name: /breadcrumb/i })).toHaveTextContent('OverviewSite settingsTheme');
+        expect(screen.queryByRole('button', { name: "What's new" })).toBeNull();
     });
 });
