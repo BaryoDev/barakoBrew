@@ -17,19 +17,20 @@ import {
   type ApiKey,
   type CreatedApiKey,
 } from '@/hooks/use-api-keys';
-import { apiErrorMessage } from '@/lib/api';
+import { ResponseShapeError, apiErrorMessage } from '@/lib/api';
 
 /** What core says for the refusals the design does not draw. */
 export function rotateRefusal(error: unknown): string {
   const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-  if (status === 403) return 'Only the key’s owner or a SuperAdmin can rotate it.';
+  if (status === 403) return 'You may not rotate this key.';
+  if (error instanceof ResponseShapeError) return 'The key was issued but could not be shown. Revoke it in the list and rotate again.';
   if (status === 409) return 'The key changed while you were rotating it. Close this and try again.';
   return apiErrorMessage(error, 'Could not rotate the key.');
 }
 
 const mono = 'font-mono text-xs';
 
-function Body({ target, onClose }: { target: ApiKey; onClose: () => void }) {
+function Body({ target, onClose, onPending }: { target: ApiKey; onClose: () => void; onPending: (p: boolean) => void }) {
   const rotate = useRotateApiKey();
   const revoke = useRevokeApiKey();
   const [index, setIndex] = useState(DEFAULT_OVERLAP_INDEX);
@@ -41,6 +42,7 @@ function Body({ target, onClose }: { target: ApiKey; onClose: () => void }) {
 
   async function issue() {
     setRefused('');
+    onPending(true);
     try {
       const created = await rotate.mutateAsync({ id: target.id, overlapMinutes: minutes });
       // Core shortens the old key's expiry to the end of the window, or keeps an earlier one.
@@ -50,10 +52,13 @@ function Body({ target, onClose }: { target: ApiKey; onClose: () => void }) {
       rotate.reset(); // the response carries the key, so drop it from the mutation cache now
     } catch (err) {
       setRefused(rotateRefusal(err));
+    } finally {
+      onPending(false);
     }
   }
 
   async function stopOldNow() {
+    if (!window.confirm(`Stop "${target.name}" (${target.prefix}) now? Anything still using it gets 401 at once.`)) return;
     try {
       await revoke.mutateAsync(target.id);
       setStoppedNow(true);
@@ -181,7 +186,7 @@ function Body({ target, onClose }: { target: ApiKey; onClose: () => void }) {
         <span className="text-muted-foreground flex-1 font-mono text-[11px]">POST /api/api-keys/{target.id}/rotate</span>
         {!issued ? (
           <>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={rotate.isPending}>
               Cancel
             </Button>
             <Button type="button" onClick={() => void issue()} disabled={rotate.isPending}>
@@ -200,14 +205,19 @@ function Body({ target, onClose }: { target: ApiKey; onClose: () => void }) {
 
 /** The 440px rail that rotates a key. Closing it unmounts the body, which is where the new secret lives. */
 export function RotateRail({ target, onClose }: { target: ApiKey | null; onClose: () => void }) {
+  // While the POST is out the key may already be issued, and closing would lose the only copy of it.
+  const [pending, setPending] = useState(false);
   return (
-    <Sheet open={target !== null} onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={target !== null} onOpenChange={(open) => !open && !pending && onClose()}>
       <SheetContent
         aria-label="Rotate key"
-        showCloseButton
+        showCloseButton={!pending}
+        onEscapeKeyDown={(e) => pending && e.preventDefault()}
+        onPointerDownOutside={(e) => pending && e.preventDefault()}
+        onInteractOutside={(e) => pending && e.preventDefault()}
         className="w-[min(440px,100%)] gap-0 p-0 sm:max-w-[440px]"
       >
-        {target && <Body key={target.id} target={target} onClose={onClose} />}
+        {target && <Body key={target.id} target={target} onClose={onClose} onPending={setPending} />}
       </SheetContent>
     </Sheet>
   );

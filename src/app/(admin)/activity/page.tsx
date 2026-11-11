@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/patterns/page-header';
 import { LiveSwitch } from '@/components/patterns/live-switch';
 import { ErrorState } from '@/components/patterns/error-state';
 import { ActivityRow } from '@/components/activity/activity-row';
-import { useActivity } from '@/hooks/use-activity';
+import { ACTIVITY_MAX_PAGE_SIZE, ACTIVITY_PAGE_SIZE, useActivity } from '@/hooks/use-activity';
 import { ACTIVITY_FILTERS } from '@/lib/activity';
 import { cn } from '@/lib/utils';
 
@@ -18,8 +18,9 @@ import { cn } from '@/lib/utils';
 export default function ActivityPage() {
   const [filterId, setFilterId] = useState('all');
   const [live, setLive] = useState(true);
+  const [pageSize, setPageSize] = useState(ACTIVITY_PAGE_SIZE);
   const filter = ACTIVITY_FILTERS.find((f) => f.id === filterId) ?? ACTIVITY_FILTERS[0];
-  const { items, available, isLoading, isError, dataUpdatedAt, refetch } = useActivity({ live, kinds: filter.kinds });
+  const { items, available, isLoading, isError, dataUpdatedAt, refetch } = useActivity({ live, kinds: filter.kinds, pageSize });
   const [mountedAt] = useState(() => Date.now());
   const now = dataUpdatedAt || mountedAt;
 
@@ -60,7 +61,6 @@ export default function ActivityPage() {
                   )}
                 >
                   {f.label}
-                  {on && !isLoading && <span className="font-mono text-[11px] opacity-70">{items.length}</span>}
                 </button>
               );
             })}
@@ -84,6 +84,17 @@ export default function ActivityPage() {
                 <ActivityRow key={`${item.id}:${item.kind}`} item={item} now={now} />
               ))}
             </ul>
+          )}
+          {items.length >= pageSize && pageSize < ACTIVITY_MAX_PAGE_SIZE && (
+            <div className="border-border border-t p-3 text-center">
+              <button
+                type="button"
+                className="text-accent-foreground text-[13px] font-semibold hover:underline"
+                onClick={() => setPageSize(ACTIVITY_MAX_PAGE_SIZE)}
+              >
+                Show older
+              </button>
+            </div>
           )}
         </section>
       )}

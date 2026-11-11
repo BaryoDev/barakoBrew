@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useAccess } from '@/hooks/use-access';
 import { useEnabledModules } from '@/hooks/use-modules';
-import { useActivity } from '@/hooks/use-activity';
+import { useActivityGone } from '@/hooks/use-activity';
 import { NAV_GROUPS, visibleGroups, withModules, type NavGroup } from '@/lib/navigation';
 
 /**
@@ -22,7 +22,7 @@ export function useAllowedGroups(): NavGroup[] {
   // Ask the feed once, and only for a caller who is offered it, so an API older than 5.5 loses the
   // Activity item instead of leaving a link to a 404.
   const wantsActivity = hrefsOf(offered).has('/activity');
-  const { missing } = useActivity({ live: false, enabled: wantsActivity });
+  const missing = useActivityGone(wantsActivity);
   return useMemo(
     () => (missing ? offered.map((g) => ({ ...g, items: g.items.filter((i) => i.href !== '/activity') })) : offered),
     [offered, missing],

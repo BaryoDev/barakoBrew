@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ACTIVITY_FILTERS, activitySentence, kindTone, activityPageSchema, attentionRows, kindLabel, needsAttention, relativeTime, safeRef } from './activity';
+import { activityHref, ACTIVITY_FILTERS, activitySentence, kindTone, activityPageSchema, attentionRows, kindLabel, needsAttention, relativeTime, safeRef } from './activity';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 const ago = (seconds: number) => new Date(NOW - seconds * 1000).toISOString();
@@ -141,5 +141,36 @@ describe('kindTone', () => {
         expect(kindTone('bounced')).toBe('warn');
         expect(kindTone('published')).toBe('ok');
         expect(kindTone('quota.reached')).toBe('muted');
+    });
+});
+
+describe('activityHref', () => {
+    it('maps an entry to Brew\'s /content/{id}', () => {
+        expect(activityHref('/content/article/abc-1')).toBe('/content/abc-1');
+    });
+    it('maps a run to the runs list opened on it', () => {
+        expect(activityHref('/workflows/runs/run-9')).toBe('/workflow-runs?run=run-9');
+    });
+    it('maps a content type to /schemas/{name}', () => {
+        expect(activityHref('/content-types/article')).toBe('/schemas/article');
+    });
+    it('passes through the audit log, the runs list and mail settings', () => {
+        expect(activityHref('/audit?action=auth.login.succeeded')).toBe('/audit?action=auth.login.succeeded');
+        expect(activityHref('/workflow-runs?run=r1')).toBe('/workflow-runs?run=r1');
+        expect(activityHref('/settings/email')).toBe('/settings/email');
+    });
+    it('gives null for a ref with no screen, an empty one and one that leaves the console', () => {
+        expect(activityHref('/something/else/entirely')).toBeNull();
+        expect(activityHref('/content/article')).toBeNull();
+        expect(activityHref('')).toBeNull();
+        expect(activityHref('//evil.example/content/a/b')).toBeNull();
+    });
+});
+
+describe('activitySentence bidi', () => {
+    it('strips bidi control characters from actor and subject', () => {
+        const s = activitySentence({ kind: 'edited', actor: { name: 'A‮na' }, subject: { title: 'T⁦itle‏' } });
+        expect(s.actor).toBe('Ana');
+        expect(s.subject).toBe('Title');
     });
 });

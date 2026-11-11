@@ -125,6 +125,35 @@ const VERBS: Record<string, string> = {
   'type.changed': 'changed',
 };
 
+/**
+ * Bidirectional control characters. A title or a name carrying them can reorder the text around it,
+ * so they are dropped before the sentence is built.
+ */
+const BIDI = /[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g;
+const plain = (s: string | null | undefined) => (s ?? '').replace(BIDI, '');
+
+/**
+ * Where a core `ref` opens in this console, or null. Core's refs are its own paths, which are not
+ * all Brew's routes: an entry is /content/{type}/{id} there and /content/{id} here, a run is
+ * /workflows/runs/{id} there and /workflow-runs?run={id} here, a type is /content-types/{type} there
+ * and /schemas/{type} here. The two that already match pass through. Anything else has no screen,
+ * so it is null and the row renders without a link.
+ */
+export function activityHref(ref: string | null | undefined): string | null {
+  const safe = safeRef(ref);
+  if (!safe) return null;
+  const path = safe.split(/[?#]/)[0];
+  const parts = path.split('/').filter(Boolean);
+  const [a, b, c] = parts;
+  const seg = (s: string) => /^[^/\s]+$/.test(s);
+  if (a === 'content' && parts.length === 3 && seg(b) && seg(c)) return `/content/${c}`;
+  if (a === 'workflows' && b === 'runs' && parts.length === 3 && seg(c)) return `/workflow-runs?run=${c}`;
+  if (a === 'content-types' && parts.length === 2 && seg(b)) return `/schemas/${b}`;
+  if (parts.length === 1 && (a === 'audit' || a === 'workflow-runs')) return safe;
+  if (a === 'settings' && b === 'email' && parts.length === 2) return safe;
+  return null;
+}
+
 export interface ActivitySentence {
   actor: string;
   /** Empty for a kind this console does not know, which is drawn from the API's own `text`. */
@@ -139,9 +168,9 @@ export interface ActivitySentence {
  */
 export function activitySentence(item: Pick<ActivityItem, 'kind' | 'actor' | 'subject' | 'text'>): ActivitySentence {
   return {
-    actor: item.actor?.name || 'System',
-    verb: VERBS[item.kind] ?? item.text ?? '',
-    subject: item.subject?.title || '',
+    actor: plain(item.actor?.name) || 'System',
+    verb: VERBS[item.kind] ?? plain(item.text),
+    subject: plain(item.subject?.title),
   };
 }
 

@@ -5,11 +5,13 @@ type Item = { id: string; at: string; kind: string; severity?: string; actor?: {
 
 const feed = vi.hoisted(() => ({
     value: { items: [] as Item[], available: true, missing: false, isLoading: false, isError: false, dataUpdatedAt: 0, refetch: () => {} },
-    calls: [] as { live?: boolean; kinds?: readonly string[] }[],
+    calls: [] as { live?: boolean; kinds?: readonly string[]; pageSize?: number }[],
 }));
 
 vi.mock('@/hooks/use-activity', () => ({
-    useActivity: (opts: { live?: boolean; kinds?: readonly string[] }) => {
+    ACTIVITY_PAGE_SIZE: 50,
+    ACTIVITY_MAX_PAGE_SIZE: 100,
+    useActivity: (opts: { live?: boolean; kinds?: readonly string[]; pageSize?: number }) => {
         feed.calls.push(opts);
         return feed.value;
     },
@@ -29,9 +31,9 @@ describe('the Activity screen', () => {
     it('offers the six filter chips and asks for no kinds at first', () => {
         render(<ActivityPage />);
         for (const name of ['Everything', 'Problems', 'Publishing', 'Workflow runs', 'Sign-ins', 'Imports']) {
-            expect(screen.getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name })).toBeInTheDocument();
         }
-        expect(screen.getByRole('button', { name: /Everything/ })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'Everything' })).toHaveAttribute('aria-pressed', 'true');
         expect(last().kinds).toEqual([]);
     });
 
@@ -63,6 +65,26 @@ describe('the Activity screen', () => {
         const rows = within(screen.getByRole('list', { name: 'Activity' })).getAllByRole('listitem');
         expect(rows[0]).toHaveTextContent('Ana published New pastry menu');
         expect(within(rows[1]).getByText('quota.reached').className).toContain('font-mono');
+    });
+
+    it('shows no count on a chip, since the rows loaded are not a total', () => {
+        feed.value = { ...feed.value, items: [{ id: 'a', at: at(5), kind: 'published', actor: { name: 'Ana' } }] };
+        render(<ActivityPage />);
+        expect(screen.getByRole('button', { name: 'Everything' })).toBeInTheDocument();
+    });
+
+    it('offers Show older when the page is full, and asks for 100 rows', () => {
+        feed.value = { ...feed.value, items: Array.from({ length: 50 }, (_, i) => ({ id: `r${i}`, at: at(i), kind: 'edited', actor: { name: 'Ana' } })) };
+        render(<ActivityPage />);
+        expect(last().pageSize).toBe(50);
+        fireEvent.click(screen.getByRole('button', { name: 'Show older' }));
+        expect(last().pageSize).toBe(100);
+    });
+
+    it('does not offer Show older on a short page', () => {
+        feed.value = { ...feed.value, items: [{ id: 'a', at: at(5), kind: 'edited', actor: { name: 'Ana' } }] };
+        render(<ActivityPage />);
+        expect(screen.queryByRole('button', { name: 'Show older' })).toBeNull();
     });
 
     it('points at the audit log when the API has no feed', () => {

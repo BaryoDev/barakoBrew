@@ -11,6 +11,8 @@ export const ACTIVITY_POLL_MS = 5_000;
 const MAX_BACKOFF_MS = 60_000;
 /** Rows read per poll. The cards show fewer; the rest are what Needs you looks through. */
 export const ACTIVITY_PAGE_SIZE = 50;
+/** The most core returns in one page. Its cursor only moves forward, so older rows come from a larger page. */
+export const ACTIVITY_MAX_PAGE_SIZE = 100;
 
 function statusOf(error: unknown): number | undefined {
   return axios.isAxiosError(error) ? error.response?.status : undefined;
@@ -43,16 +45,17 @@ export function useActivity({
   live = true,
   kinds,
   enabled = true,
-}: { live?: boolean; kinds?: readonly string[]; enabled?: boolean } = {}) {
+  pageSize = ACTIVITY_PAGE_SIZE,
+}: { live?: boolean; kinds?: readonly string[]; enabled?: boolean; pageSize?: number } = {}) {
   const tenant = useCurrentTenant();
   const kindList = kinds?.join(',') ?? '';
 
   const query = useQuery({
-    queryKey: ['activity', tenant, kindList],
+    queryKey: ['activity', tenant, kindList, pageSize],
     enabled,
     queryFn: async (): Promise<ActivityPage> => {
       const response = await api.get<unknown>('/api/activity', {
-        params: { pageSize: ACTIVITY_PAGE_SIZE, ...(kindList ? { kinds: kindList } : {}) },
+        params: { pageSize, ...(kindList ? { kinds: kindList } : {}) },
       });
       return parseResponse(activityPageSchema, response.data, 'GET /api/activity');
     },
@@ -74,4 +77,30 @@ export function useActivity({
     dataUpdatedAt: query.dataUpdatedAt,
     refetch: query.refetch,
   };
+}
+
+/**
+ * Whether the rail should leave Activity out: one row asked once per tenant, on its own key. A 404
+ * (an API before 5.5) and a 403 (a caller without the audit log) are answered as data and kept for
+ * good, so the answer is not asked again; any other failure is an error and is retried as usual.
+ */
+export function useActivityGone(enabled: boolean): boolean {
+  const tenant = useCurrentTenant();
+  const { data } = useQuery({
+    queryKey: ['activity-probe', tenant],
+    enabled,
+    staleTime: Infinity,
+    retry: false,
+    queryFn: async (): Promise<{ gone: boolean }> => {
+      try {
+        await api.get('/api/activity', { params: { pageSize: 1 } });
+        return { gone: false };
+      } catch (error) {
+        const status = statusOf(error);
+        if (status === 404 || status === 403) return { gone: true };
+        throw error;
+      }
+    },
+  });
+  return data?.gone === true;
 }

@@ -7,6 +7,11 @@ vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } };
 });
+const tenantNow = vi.hoisted(() => ({ value: 'cafe' as string | null }));
+vi.mock('@/hooks/use-tenants', async () => {
+    const actual = await vi.importActual<typeof import('@/hooks/use-tenants')>('@/hooks/use-tenants');
+    return { ...actual, useCurrentTenant: () => tenantNow.value };
+});
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 globalThis.ResizeObserver ??= class {
@@ -35,8 +40,9 @@ function serve(items: unknown[]) {
 
 function renderPage() {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(React.createElement(QueryClientProvider, { client }, React.createElement(ApiKeysPage)));
-    return client;
+    const tree = () => React.createElement(QueryClientProvider, { client }, React.createElement(ApiKeysPage));
+    const view = render(tree());
+    return Object.assign(client, { rerenderPage: () => view.rerender(tree()) });
 }
 
 async function openRail() {
@@ -46,6 +52,7 @@ async function openRail() {
 }
 
 beforeEach(() => {
+    tenantNow.value = 'cafe';
     vi.mocked(api.post).mockReset();
     vi.mocked(api.delete).mockReset();
     vi.mocked(toast.success).mockReset();
@@ -150,6 +157,7 @@ describe('the rotate rail', () => {
     it('stops the old key now with DELETE', async () => {
         vi.mocked(api.post).mockResolvedValue({ data: { ...ACTIVE, id: 'k2', key: SECRET } });
         vi.mocked(api.delete).mockResolvedValue({ data: undefined });
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
         const rail = await openRail();
         fireEvent.click(within(rail).getByRole('button', { name: 'Issue new key' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Stop the old key now' }));
@@ -162,10 +170,96 @@ describe('the rotate rail', () => {
         vi.mocked(api.post).mockRejectedValueOnce(refuse(403));
         const rail = await openRail();
         fireEvent.click(within(rail).getByRole('button', { name: 'Issue new key' }));
-        expect(await within(rail).findByRole('alert')).toHaveTextContent('Only the key’s owner or a SuperAdmin can rotate it.');
+        expect(await within(rail).findByRole('alert')).toHaveTextContent('You may not rotate this key.');
 
         vi.mocked(api.post).mockRejectedValueOnce(refuse(409));
         fireEvent.click(within(rail).getByRole('button', { name: 'Issue new key' }));
         await waitFor(() => expect(within(rail).getByRole('alert')).toHaveTextContent('changed while you were rotating'));
+    });
+});
+
+describe('the rail while the rotate is in flight', () => {
+    function deferred() {
+        let resolve!: (v: unknown) => void;
+        const promise = new Promise((r) => (resolve = r));
+        return { promise, resolve };
+    }
+
+    it('cannot be closed by Cancel or Escape, and shows the key when the reply lands', async () => {
+        const d = deferred();
+        vi.mocked(api.post).mockReturnValue(d.promise as never);
+        const rail = await openRail();
+        fireEvent.click(within(rail).getByRole('button', { name: 'Issue new key' }));
+        await waitFor(() => expect(within(rail).getByRole('button', { name: 'Cancel' })).toBeDisabled());
+        fireEvent.keyDown(rail, { key: 'Escape' });
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        d.resolve({ data: { ...ACTIVE, id: 'k2', key: SECRET } });
+        expect(await screen.findByTestId('rotated-key-secret')).toHaveValue(SECRET);
+    });
+});
+
+describe('stopping the old key', () => {
+    it('sends no DELETE when the confirm is declined, and sends it when accepted', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: { ...ACTIVE, id: 'k2', key: SECRET } });
+        vi.mocked(api.delete).mockResolvedValue({ data: undefined });
+        const rail = await openRail();
+        fireEvent.click(within(rail).getByRole('button', { name: 'Issue new key' }));
+        const stop = await screen.findByRole('button', { name: 'Stop the old key now' });
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+        fireEvent.click(stop);
+        expect(confirm).toHaveBeenCalled();
+        expect(api.delete).not.toHaveBeenCalled();
+        confirm.mockReturnValue(true);
+        fireEvent.click(stop);
+        await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/api/api-keys/k1'));
+        confirm.mockRestore();
+    });
+});
+
+describe('a reply that cannot be read', () => {
+    it('says the key was issued but could not be shown, and reads the list again', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: { id: 'k2' } });
+        const rail = await openRail();
+        const before = vi.mocked(api.get).mock.calls.length;
+        fireEvent.click(within(rail).getByRole('button', { name: 'Issue new key' }));
+        expect(await within(rail).findByRole('alert')).toHaveTextContent('issued but could not be shown');
+        expect(screen.queryByTestId('rotated-key-secret')).toBeNull();
+        await waitFor(() => expect(vi.mocked(api.get).mock.calls.length).toBeGreaterThan(before));
+    });
+
+    it('treats an empty key as unreadable', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: { id: 'k2', key: '' } });
+        const rail = await openRail();
+        fireEvent.click(within(rail).getByRole('button', { name: 'Issue new key' }));
+        expect(await within(rail).findByRole('alert')).toHaveTextContent('issued but could not be shown');
+    });
+});
+
+describe('a tenant switch', () => {
+    it('closes the rail and reads the list under the new tenant', async () => {
+        const client = renderPage();
+        fireEvent.click(await screen.findByRole('button', { name: 'Rotate CI deploy' }));
+        await screen.findByRole('dialog');
+        expect(client.getQueryCache().find({ queryKey: ['api-keys', 'cafe'] })).toBeTruthy();
+        tenantNow.value = 'bakery';
+        client.rerenderPage();
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(client.getQueryCache().find({ queryKey: ['api-keys', 'bakery'] })).toBeTruthy();
+    });
+});
+
+describe('time passing on the list', () => {
+    it('ages Overlap and drops Rotate once the expiry passes, on a 30 second tick', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            serve([{ ...ACTIVE, expiresAt: inMinutes(1) }]);
+            renderPage();
+            expect(await screen.findByRole('button', { name: 'Rotate CI deploy' })).toBeInTheDocument();
+            await vi.advanceTimersByTimeAsync(90_000);
+            await waitFor(() => expect(screen.queryByRole('button', { name: 'Rotate CI deploy' })).toBeNull());
+            expect(screen.getByText('Expired')).toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

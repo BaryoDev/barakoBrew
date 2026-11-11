@@ -15,7 +15,7 @@ import {
   activitySentence,
   kindTone,
   relativeTime,
-  safeRef,
+  activityHref,
   type ActivityItem,
   type ActivityTone,
 } from '@/lib/activity';
@@ -49,7 +49,7 @@ const TILE: Record<ActivityTone, string> = {
  * The title is set as text, never markup. The row opens `ref` only when it stays on this console.
  */
 export function ActivityRow({ item, now }: { item: ActivityItem; now: number }) {
-  const href = safeRef(item.ref);
+  const href = activityHref(item.ref);
   const Glyph = GLYPHS[item.kind] ?? IconBolt;
   const { actor, verb, subject } = activitySentence(item);
   const body = (
@@ -69,7 +69,7 @@ export function ActivityRow({ item, now }: { item: ActivityItem; now: number }) 
         <Glyph className="size-[15px]" />
       </span>
       <span className="text-muted-foreground font-mono text-[11.5px]">{relativeTime(item.at, now)}</span>
-      <span className="text-secondary-foreground min-w-0 text-sm leading-[1.45]">
+      <span className="text-secondary-foreground min-w-0 text-sm [overflow-wrap:anywhere] leading-[1.45]">
         {href ? (
           <Link href={href} className="hover:text-foreground rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
             {body}

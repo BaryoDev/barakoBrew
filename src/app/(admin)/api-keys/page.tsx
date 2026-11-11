@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useCurrentTenant } from '@/hooks/use-tenants';
 import { toast } from 'sonner';
 import {
   useApiKeys,
@@ -289,8 +290,15 @@ export default function ApiKeysPage() {
   const revoke = useRevokeApiKey();
   const { data: meta } = useApiMeta();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [rotating, setRotating] = useState<ApiKey | null>(null);
-  const [now] = useState(() => Date.now());
+  const tenant = useCurrentTenant();
+  const [rotatingIn, setRotatingIn] = useState<{ tenant: string | null; key: ApiKey } | null>(null);
+  // A rail opened in another tenant is closed: its key and any secret it holds belong to that tenant.
+  const rotating = rotatingIn && rotatingIn.tenant === tenant ? rotatingIn.key : null;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const limitable = !isLoading && !isError && supportsKeyContentTypes(keys, meta?.version);
 
   async function onRevoke(id: string, name: string) {
@@ -381,7 +389,7 @@ export default function ApiKeysPage() {
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
                     {!k.revoked && !isExpired(k, now) && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => setRotating(k)} aria-label={`Rotate ${k.name}`}>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setRotatingIn({ tenant, key: k })} aria-label={`Rotate ${k.name}`}>
                         Rotate
                       </Button>
                     )}
@@ -406,7 +414,7 @@ export default function ApiKeysPage() {
         </div>
       )}
 
-      <RotateRail target={rotating} onClose={() => setRotating(null)} />
+      <RotateRail target={rotating} onClose={() => setRotatingIn(null)} />
       <CreateApiKeyDialog open={dialogOpen} onOpenChange={setDialogOpen} limitable={limitable} />
     </>
   );

@@ -39,9 +39,16 @@ describe('ActivityRow', () => {
         expect(screen.getByText('bounced').className).toContain('text-warning');
     });
 
+    it('breaks a long unbroken title instead of overflowing, and drops bidi controls', () => {
+        renderRow(row({ actor: { name: 'A\u202Ena' }, subject: { title: 'x'.repeat(200) + '\u2067' } }));
+        const li = screen.getByRole('listitem');
+        expect(li.innerHTML).toContain('overflow-wrap:anywhere');
+        expect(li.textContent).not.toMatch(/[\u202A-\u202E\u2066-\u2069]/);
+    });
+
     it('links only a ref that stays on the console', () => {
-        const { unmount } = renderRow(row({ ref: '/content/1' }));
-        expect(screen.getByRole('link')).toHaveAttribute('href', '/content/1');
+        const { unmount } = renderRow(row({ ref: '/content/article/abc' }));
+        expect(screen.getByRole('link')).toHaveAttribute('href', '/content/abc');
         unmount();
         renderRow(row({ ref: '//evil.example' }));
         expect(screen.queryByRole('link')).toBeNull();

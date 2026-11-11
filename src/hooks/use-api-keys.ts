@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { api, type Paginated } from '@/lib/api';
+import { useCurrentTenant } from '@/hooks/use-tenants';
+import { api, parseResponse, type Paginated } from '@/lib/api';
 import { SECRET_MUTATION } from '@/lib/secrets';
 
 export interface ApiKey {
@@ -94,8 +95,9 @@ export const apiKeyRotationSchema = z.looseObject({
 });
 
 export function useApiKeys() {
+  const tenant = useCurrentTenant();
   return useQuery({
-    queryKey: ['api-keys'],
+    queryKey: ['api-keys', tenant],
     queryFn: async () => {
       const items = (await api.get<Paginated<ApiKey>>('/api/api-keys')).data.items;
       return items.map((k): ApiKey => {
@@ -151,14 +153,22 @@ export interface RotateApiKeyInput {
   overlapMinutes: number;
 }
 
+/** The reply of a rotate: the secret has to be a string that says something. */
+export const rotatedKeySchema = z.looseObject({ id: z.string(), key: z.string().min(1) });
+
 /** POST /api/api-keys/{id}/rotate. Answers like create, with the new key's secret once. */
 export function useRotateApiKey() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, overlapMinutes }: RotateApiKeyInput) =>
-      (await api.post<CreatedApiKey>(`/api/api-keys/${id}/rotate`, { overlapMinutes })).data,
+      parseResponse(
+        rotatedKeySchema,
+        (await api.post<unknown>(`/api/api-keys/${id}/rotate`, { overlapMinutes })).data,
+        'POST /api/api-keys/{id}/rotate',
+      ) as unknown as CreatedApiKey,
     ...SECRET_MUTATION,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+    // On failure too: a reply that cannot be read may still have issued a key, so the list is read again.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   });
 }
 
