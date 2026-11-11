@@ -3,8 +3,9 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useCurrentTenant, useMyTenants } from '@/hooks/use-tenants';
 import { useHealthStatus } from '@/hooks/use-monitoring';
+import { useOverviewSummary } from '@/hooks/use-overview-summary';
 import { useNeedsYou } from '@/hooks/use-needs-you';
-import { RANGES, firstName, greeting, systemOk, todayLabel, verdictFor, type Range } from '@/lib/overview';
+import { RANGES, firstName, greeting, systemOk, todayLabel, verdictFor, verdictFromCore, type Range } from '@/lib/overview';
 import { findHealthEntry, DATABASE_WORDS, STORAGE_WORDS } from '@/components/overview/system-strip';
 import { cn } from '@/lib/utils';
 
@@ -38,15 +39,20 @@ export function OverviewHeader({ range, onRange }: { range: Range; onRange: (ran
   const tenants = useMyTenants();
   const needs = useNeedsYou();
   const health = useHealthStatus();
+  const overview = useOverviewSummary();
   const tenant = tenants.data?.find((t) => t.slug === slug)?.name ?? slug;
   const name = firstName(user?.username);
   const now = new Date();
   const hello = greeting(now.getHours());
 
-  // Said once Needs you has answered, so the line never claims "nothing is waiting" while it loads.
-  const verdict = needs.isLoading || needs.isError
-    ? null
-    : verdictFor({
+  // The server's verdict when GET /api/overview answers. Against a core without the route the line
+  // is built from what the page loaded, once Needs you has answered, so it never claims "nothing
+  // is waiting" while it loads.
+  const verdict = overview.summary
+    ? verdictFromCore(overview.summary, needs.rows.length)
+    : overview.isLoading || !(overview.unavailable || overview.isError) || needs.isLoading || needs.isError
+      ? null
+      : verdictFor({
         needs: needs.rows.length,
         decision: needs.rows.some((row) => row.decision),
         systemOk: systemOk([

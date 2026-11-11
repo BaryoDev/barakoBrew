@@ -6,6 +6,7 @@ import { useApiMeta } from '@/hooks/use-meta';
 import { useHealthStatus } from '@/hooks/use-monitoring';
 import { useNavMetrics } from '@/hooks/use-nav-metrics';
 import { useRunSample } from '@/hooks/use-overview';
+import { useOverviewSummary, type OverviewStripItem } from '@/hooks/use-overview-summary';
 import { hrefsOf, useAllowedGroups } from '@/hooks/use-visible-hrefs';
 import { durationMs, runnerState, systemVerdict, type Tone } from '@/lib/overview';
 import { cn } from '@/lib/utils';
@@ -75,6 +76,21 @@ function Item({ item }: { item: StripItem }) {
   );
 }
 
+const STRIP_HREF: Record<string, string> = {
+  API: '/ops/health',
+  Database: '/ops/health',
+  Storage: '/settings/storage',
+  Mail: '/email-events',
+  Runner: '/workflow-runs',
+};
+
+/** The plain words of one cell from GET /api/overview: its own detail, else a short fact. */
+function coreWords(item: OverviewStripItem): string {
+  if (item.name === 'API') return item.version ? `up · ${item.version}` : 'up';
+  if (item.name === 'Database' && item.ms != null) return item.detail ? `${item.detail} · ${item.ms} ms` : `${item.ms} ms`;
+  return item.detail ?? (item.status === 'ok' ? 'ok' : item.status === 'warn' ? 'warning' : 'problem');
+}
+
 /**
  * A verdict pill, then API, Database, Storage, Mail and Runner. Each part shows a dash or Unknown
  * when its own call failed or the API does not send it, so one failing read never blanks the strip.
@@ -88,6 +104,7 @@ export function SystemStrip() {
   const visible = useMemo(() => hrefsOf(allowed), [allowed]);
   const metrics = useNavMetrics(useMemo(() => new Set(['/email-events'].filter((h) => visible.has(h))), [visible]));
   const runs = useRunSample();
+  const overview = useOverviewSummary();
   const database = findHealthEntry(health.data?.entries, DATABASE_WORDS);
   const storage = findHealthEntry(health.data?.entries, STORAGE_WORDS);
   const latency = durationMs(database?.duration);
@@ -146,7 +163,23 @@ export function SystemStrip() {
     });
   }
 
-  const verdict = systemVerdict(items.map((item) => (item.dot === 'accent' ? 'ok' : item.dot)));
+  // When GET /api/overview answers, its strip, its verdict and its headline replace everything
+  // above, so the pill and the cells are the server's and cannot disagree with the verdict line.
+  const core = overview.summary?.health;
+  const coreItems: StripItem[] | undefined = core?.items.map((item) => ({
+    key: item.name,
+    label: item.name,
+    dot: item.status,
+    value: <span className={item.name === 'API' || item.ms != null ? 'font-mono text-xs' : undefined}>{coreWords(item)}</span>,
+    tip: item.detail ?? undefined,
+    href: link(STRIP_HREF[item.name] ?? '') ?? (item.name === 'API' || item.name === 'Database' ? '/ops/health' : undefined),
+  }));
+  const shown = coreItems ?? items;
+  const verdict =
+    core && overview.summary
+      ? { text: overview.summary.headline, tone: overview.summary.verdict }
+      : systemVerdict(items.map((item) => (item.dot === 'accent' ? 'ok' : item.dot)));
+  const mailOff = core ? core.items.some((i) => i.name === 'Mail' && i.status !== 'ok') : !!bounces && bounces.value > 0;
 
   return (
     <div
@@ -155,7 +188,7 @@ export function SystemStrip() {
       className="bg-secondary flex flex-wrap items-center gap-x-3.5 gap-y-1 rounded-full py-1.5 pr-3.5 pl-1.5"
     >
       <Link
-        href={bounces && bounces.value > 0 && visible.has('/email-events') ? '/email-events' : '/ops/health'}
+        href={mailOff && visible.has('/email-events') ? '/email-events' : '/ops/health'}
         className={cn(
           'flex h-7 items-center gap-[7px] rounded-full px-[11px] text-[12.5px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
           PILL[verdict.tone],
@@ -164,7 +197,7 @@ export function SystemStrip() {
         <span aria-hidden className="size-[7px] rounded-full bg-current" />
         {verdict.text}
       </Link>
-      {items.map((item) => (
+      {shown.map((item) => (
         <Item key={item.key} item={item} />
       ))}
     </div>

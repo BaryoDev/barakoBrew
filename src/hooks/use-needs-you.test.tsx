@@ -6,6 +6,10 @@ let failed: { data?: { totalItems: number }; isLoading: boolean; isError: boolea
 let partial: { data?: { totalItems: number }; isLoading: boolean; isError: boolean };
 let metrics: Record<string, { value: number; atLeast: boolean }>;
 
+let core: unknown;
+vi.mock('@/hooks/use-overview-summary', () => ({
+    useOverviewSummary: () => ({ summary: core, unavailable: !core, isLoading: false, isError: false }),
+}));
 vi.mock('@/hooks/use-activity', () => ({ useActivity: () => feed }));
 vi.mock('@/hooks/use-overview', () => ({
     useRunSample: (status?: string) => (status === 'PartiallyFailed' ? partial : failed),
@@ -25,6 +29,7 @@ const row = (id: string, kind: string, severity: string, extra: Record<string, u
 });
 
 beforeEach(() => {
+    core = undefined;
     feed = { items: [], available: true, isLoading: false, isError: false };
     failed = { data: { totalItems: 0 }, isLoading: false, isError: false };
     partial = { data: { totalItems: 0 }, isLoading: false, isError: false };
@@ -87,3 +92,47 @@ describe('useNeedsYou', () => {
         expect(result.current.rows.map((r) => r.key)).toEqual(['b1']);
     });
 });
+
+describe('useNeedsYou from GET /api/overview', () => {
+    const item = (id: string, kind: string, extra: Record<string, unknown> = {}, resolvable = false) => ({
+        id,
+        severity: 'warn',
+        text: `Text ${id}`,
+        ref: { kind, ...extra },
+        resolvable,
+    });
+
+    it('uses the core list over the feed and marks only resolvable rows', () => {
+        feed.items = [row('r1', 'run.failed', 'error')];
+        core = {
+            verdict: 'warn',
+            headline: '2 warnings',
+            needsYou: [item('mail.bounces', 'mailBounces', {}, true), item('workflows.failing', 'workflowRuns', { id: 'run-9' })],
+        };
+        const { result } = renderHook(() => useNeedsYou());
+        expect(result.current.rows.map((r) => r.key)).toEqual(['mail.bounces', 'workflows.failing']);
+        expect(result.current.rows[0].resolveId).toBe('mail.bounces');
+        expect(result.current.rows[1].resolveId).toBeUndefined();
+    });
+
+    it('gives each row its CTA word and deep link', () => {
+        core = {
+            verdict: 'warn',
+            headline: '3 warnings',
+            needsYou: [
+                item('mail.bounces', 'mailBounces', {}, true),
+                item('workflows.failing', 'workflowRuns', { id: 'run-9' }),
+                item('content.overdue', 'content'),
+                item('runner.stalled', 'runner'),
+            ],
+        };
+        const { result } = renderHook(() => useNeedsYou());
+        expect(result.current.rows.map((r) => [r.cta, r.href])).toEqual([
+            ['Review', '/email-events'],
+            ['Review', '/workflow-runs?run=run-9'],
+            ['Open', '/content?status=Scheduled'],
+            ['Open', '/ops/health'],
+        ]);
+    });
+});
+
