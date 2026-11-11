@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
@@ -11,7 +12,8 @@ import {
   type BulkStatusChange,
 } from '@/hooks/use-contents';
 import { toast } from 'sonner';
-import { apiErrorMessage } from '@/lib/api';
+import { apiErrorMessage, tenantOfToken, tokenStore } from '@/lib/api';
+import { useCurrentTenant } from '@/hooks/use-tenants';
 import { Checkbox } from '@/components/ui/checkbox';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { ContentStatus, type ContentListItem } from '@/types/content';
@@ -222,7 +224,10 @@ function ContentListInner() {
   // longer there would act on entries nobody can see. Read as empty rather than cleared in an
   // effect, so there is no render where the old ticks sit over the new rows.
   const scope = searchParams.toString();
-  const [ticked, setTicked] = useState<{ scope: string; ids: ReadonlySet<string> }>({
+  const [ticked, setTicked] = useState<{
+    scope: string;
+    ids: ReadonlySet<string>;
+  }>({
     scope,
     ids: NO_IDS,
   });
@@ -231,7 +236,10 @@ function ContentListInner() {
     (next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) =>
       setTicked((prev) => {
         const current = prev.scope === scope ? prev.ids : NO_IDS;
-        return { scope, ids: typeof next === 'function' ? next(current) : next };
+        return {
+          scope,
+          ids: typeof next === 'function' ? next(current) : next,
+        };
       }),
     [scope]
   );
@@ -364,44 +372,118 @@ function ContentListInner() {
   const bulk = useBulkContentStatus();
 
   /**
-   * Moves the ticked entries to a status with the per-entry status route, then offers to put each
-   * back as it was. Entries already there are left out. One refused (a type with its own lifecycle
-   * does not take a plain status) does not stop the others, and the toast says how many were.
+   * What the bulk actions leave out of the selection, and why.
+   *
+   * A Scheduled entry is left out because the status route clears its publish time, so undoing
+   * the change would put it back to Scheduled with nothing to publish at. An entry of a type with
+   * its own lifecycle is left out because the plain status route refuses it. Both are said in the
+   * bar, so the count of what will move is never a surprise.
    */
-  const moveSelected = (target: ContentStatus, done: string) => {
-    const before = new Map(selectedItems.map((item) => [item.id, item.status]));
-    const changes: BulkStatusChange[] = selectedItems
+  const lifecycleTypes = useMemo(
+    () =>
+      new Set(
+        (schemas ?? []).filter((s) => (s.lifecycle?.states.length ?? 0) > 0).map((s) => s.name)
+      ),
+    [schemas]
+  );
+  const leftOutScheduled = selectedItems.filter((i) => i.status === ContentStatus.Scheduled);
+  const leftOutLifecycle = selectedItems.filter(
+    (i) => i.status !== ContentStatus.Scheduled && lifecycleTypes.has(i.contentType)
+  );
+  const eligible = selectedItems.filter(
+    (i) => !leftOutScheduled.includes(i) && !leftOutLifecycle.includes(i)
+  );
+
+  // Toasts this screen raised, so a tenant switch takes them down: an Undo that outlived it would
+  // write to another tenant's entries.
+  const tenant = useCurrentTenant();
+  const toastIds = useRef<(string | number)[]>([]);
+  useEffect(
+    () => () => {
+      toastIds.current.forEach((id) => toast.dismiss(id));
+      toastIds.current = [];
+    },
+    [tenant]
+  );
+
+  /** One line for what the API refused: conflicts as a refresh, anything else in its own words. */
+  const report = (failed: { error: unknown }[], total: number) => {
+    if (failed.length === 0) return;
+    const conflicts = failed.filter(
+      (f) => axios.isAxiosError(f.error) && f.error.response?.status === 409
+    );
+    const others = failed.filter((f) => !conflicts.includes(f));
+    toast.error(
+      [
+        `${failed.length} of ${total} could not be changed.`,
+        conflicts.length > 0 && `${conflicts.length} changed by someone else, refresh.`,
+        others.length > 0 && apiErrorMessage(others[0].error, 'The API refused it.'),
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+  };
+
+  /**
+   * Moves the eligible ticked entries to a status with the per-entry status route, then offers to
+   * put each back as it was. Entries already there are left out. One refused does not stop the
+   * others. The undo works once, and moves back only the entries still in the status this change
+   * gave them, read again first, so it never overwrites somebody else's edit.
+   */
+  const moveSelected = async (target: ContentStatus, done: string) => {
+    const before = new Map(eligible.map((item) => [item.id, item.status]));
+    const changes: BulkStatusChange[] = eligible
       .filter((item) => item.status !== target)
       .map((item) => ({ id: item.id, status: target }));
     if (changes.length === 0) {
       setSelected(new Set());
       return;
     }
-    const report = (failed: { error: unknown }[]) => {
-      if (failed.length > 0) {
-        toast.error(
-          `${failed.length} of ${changes.length} could not be changed. ${apiErrorMessage(failed[0].error, 'The API refused it.')}`
-        );
-      }
-    };
-    bulk.mutate(changes, {
-      onSuccess: (result) => {
-        setSelected(new Set());
-        report(result.failed);
-        if (result.done.length === 0) return;
-        toast(`${result.done.length} ${result.done.length === 1 ? 'entry' : 'entries'} ${done}`, {
-          duration: 8000,
-          action: {
-            label: 'Undo',
-            onClick: () =>
-              bulk.mutate(
-                result.done.map((id) => ({ id, status: before.get(id) as ContentStatus })),
-                { onSuccess: (undone) => report(undone.failed) }
-              ),
+    const startedIn = tenantOfToken(tokenStore.token);
+    let result;
+    try {
+      result = await bulk.mutateAsync(changes);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'The entries could not be changed.'));
+      return;
+    }
+    setSelected(new Set());
+    report(result.failed, changes.length);
+    if (result.done.length === 0) return;
+
+    let undone = false;
+    const toastId = toast(
+      `${result.done.length} ${result.done.length === 1 ? 'entry' : 'entries'} ${done}`,
+      {
+        duration: 8000,
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            if (undone || tenantOfToken(tokenStore.token) !== startedIn) return;
+            undone = true;
+            toast.dismiss(toastId);
+            try {
+              const back = await bulk.mutateAsync(
+                result.done.map((id) => ({
+                  id,
+                  status: before.get(id) as ContentStatus,
+                  onlyIfCurrently: target,
+                }))
+              );
+              report(back.failed, result.done.length);
+              if (back.skipped.length > 0) {
+                toast(
+                  `${back.skipped.length} ${back.skipped.length === 1 ? 'entry was' : 'entries were'} changed since and left as they are.`
+                );
+              }
+            } catch (error) {
+              toast.error(apiErrorMessage(error, 'The change could not be undone.'));
+            }
           },
-        });
-      },
-    });
+        },
+      }
+    );
+    toastIds.current.push(toastId);
   };
 
   const setType = (value: string) => {
@@ -502,11 +584,23 @@ function ContentListInner() {
           aria-label="Bulk actions"
           className="bg-foreground text-background mb-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
         >
-          <span className="flex-1 text-sm font-semibold">{selectedItems.length} selected</span>
+          <span className="flex-1 text-sm font-semibold">
+            {selectedItems.length} selected
+            {leftOutScheduled.length > 0 && (
+              <span className="ml-2 text-xs font-normal opacity-80">
+                {leftOutScheduled.length} scheduled left out
+              </span>
+            )}
+            {leftOutLifecycle.length > 0 && (
+              <span className="ml-2 text-xs font-normal opacity-80">
+                {leftOutLifecycle.length} left out, their type has its own lifecycle
+              </span>
+            )}
+          </span>
           <Button
             type="button"
             size="sm"
-            disabled={bulk.isPending}
+            disabled={bulk.isPending || eligible.length === 0}
             onClick={() => moveSelected(ContentStatus.Published, 'published')}
           >
             Publish
@@ -516,7 +610,7 @@ function ContentListInner() {
             size="sm"
             variant="outline"
             className="border-background/40 text-background hover:bg-background/10 hover:text-background bg-transparent"
-            disabled={bulk.isPending}
+            disabled={bulk.isPending || eligible.length === 0}
             onClick={() => moveSelected(ContentStatus.Archived, 'archived')}
           >
             Archive
@@ -531,6 +625,14 @@ function ContentListInner() {
             Clear
           </Button>
         </div>
+      )}
+
+      {(counts?.uncountedTypes?.length ?? 0) > 0 && (
+        <p className="text-muted-foreground -mt-2 mb-4 text-[11px]">
+          Excludes {counts!.uncountedTypes!.length}{' '}
+          {counts!.uncountedTypes!.length === 1 ? 'type' : 'types'} from these counts, because their
+          read rules need a check on each entry.
+        </p>
       )}
 
       <TabsContent value={contentType ?? ALL_TYPES}>
@@ -589,12 +691,18 @@ function ContentListInner() {
                         // The title is a real link, so keyboard users have a focusable target and
                         // the row is a convenience for the mouse. Without this guard a click on the
                         // link navigates twice.
-                        if ((e.target as HTMLElement).closest('a, button')) return;
+                        // The select cell is all checkbox as far as a click goes, padding included.
+                        if ((e.target as HTMLElement).closest('a, button, [data-cell="select"]'))
+                          return;
                         router.push(`/content/${row.original.id}`);
                       }}
                     >
                       {row.getAllCells().map((cell) => (
-                        <TableCell key={cell.id} className={COLUMN_CLASSES[cell.column.id]?.cell}>
+                        <TableCell
+                          key={cell.id}
+                          data-cell={cell.column.id}
+                          className={COLUMN_CLASSES[cell.column.id]?.cell}
+                        >
                           <table.FlexRender cell={cell} />
                         </TableCell>
                       ))}

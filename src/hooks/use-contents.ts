@@ -184,10 +184,17 @@ export function useUpdateContentStatus() {
 export interface BulkStatusChange {
     id: string;
     status: ContentStatus;
+    /**
+     * Only move the entry if it is in this status right now, read again first. An undo sets this to
+     * the status the bulk change gave, so an entry someone has changed since is left as it is.
+     */
+    onlyIfCurrently?: ContentStatus;
 }
 
 export interface BulkStatusResult {
     done: string[];
+    /** Left alone because they were no longer in the status the change expected. */
+    skipped: string[];
     /** The entries the API refused, with its reason, so a partial change can say what is left. */
     failed: { id: string; error: unknown }[];
 }
@@ -195,7 +202,10 @@ export interface BulkStatusResult {
 /**
  * Moves several entries to a status, one existing PUT /api/contents/{id}/status each. There is no
  * bulk route, and a type with its own lifecycle refuses a plain status, so one entry failing does
- * not stop the rest: the caller gets which went through and which did not.
+ * not stop the rest: the caller gets which went through, which were left and which did not.
+ *
+ * Callers use mutateAsync and read the result from the promise. A per-call callback on mutate is
+ * dropped when a newer mutation starts on the same hook, and an undo is exactly that.
  */
 export function useBulkContentStatus() {
     const queryClient = useQueryClient();
@@ -203,14 +213,20 @@ export function useBulkContentStatus() {
     return useMutation({
         mutationFn: async (changes: BulkStatusChange[]): Promise<BulkStatusResult> => {
             const settled = await Promise.allSettled(
-                changes.map(({ id, status }) =>
-                    api.put<{ message: string }>(`/api/contents/${id}/status`, { id, newStatus: status }),
-                ),
+                changes.map(async ({ id, status, onlyIfCurrently }) => {
+                    if (onlyIfCurrently !== undefined) {
+                        const now = await api.get<ContentDetail>(`/api/contents/${id}`);
+                        if (now.data.status !== onlyIfCurrently) return 'skipped' as const;
+                    }
+                    await api.put<{ message: string }>(`/api/contents/${id}/status`, { id, newStatus: status });
+                    return 'done' as const;
+                }),
             );
-            const result: BulkStatusResult = { done: [], failed: [] };
+            const result: BulkStatusResult = { done: [], skipped: [], failed: [] };
             settled.forEach((outcome, i) => {
-                if (outcome.status === 'fulfilled') result.done.push(changes[i].id);
-                else result.failed.push({ id: changes[i].id, error: outcome.reason });
+                if (outcome.status === 'rejected') result.failed.push({ id: changes[i].id, error: outcome.reason });
+                else if (outcome.value === 'skipped') result.skipped.push(changes[i].id);
+                else result.done.push(changes[i].id);
             });
             return result;
         },

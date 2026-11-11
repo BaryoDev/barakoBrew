@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AxiosError, type AxiosResponse } from 'axios';
 import { ContentStatus, SensitivityLevel } from '@/types/content';
 
 /**
@@ -22,7 +23,9 @@ const navigate = (url: string) => {
   paramListeners.forEach((notify) => notify());
 };
 
-const toastFn = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
+const toastFn = vi.hoisted(() =>
+  Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), dismiss: vi.fn() })
+);
 vi.mock('sonner', () => ({ toast: toastFn }));
 
 vi.mock('next/navigation', async () => {
@@ -65,6 +68,11 @@ const SCHEMAS = [
   {
     name: 'page',
     displayName: 'Pages',
+    lifecycle: {
+      states: ['Draft', 'Live'],
+      initialState: 'Draft',
+      transitions: [{ name: 'go-live', from: 'Draft', to: 'Live' }],
+    },
     isSingleton: false,
     isPubliclyDeliverable: true,
     fields: [],
@@ -92,7 +100,16 @@ function row(
 
 let rows: ReturnType<typeof row>[];
 // Deliberately unlike the rows on the page: the counts are the type's, not the page's.
-let counts: { total: number; draft: number; published: number; archived: number; scheduled: number };
+let counts: {
+  total: number;
+  draft: number;
+  published: number;
+  archived: number;
+  scheduled: number;
+  uncountedTypes?: string[];
+};
+// What the entries are in right now, for the read an undo makes before it moves anything.
+let statusNow: Record<string, string>;
 
 function lastListParams() {
   const calls = vi.mocked(api.get).mock.calls.filter((call) => call[0] === '/api/contents');
@@ -104,6 +121,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   replace.mockImplementation(navigate);
   searchParams = new URLSearchParams();
+  statusNow = {};
   counts = { total: 148, draft: 60, published: 70, archived: 11, scheduled: 7 };
   rows = [
     row('a', 'Alpha', ContentStatus.Published),
@@ -131,6 +149,8 @@ beforeEach(() => {
     if (url === '/api/contents/counts') {
       return { data: counts };
     }
+    const detail = /^\/api\/contents\/([^/]+)$/.exec(url);
+    if (detail) return { data: { ...rows.find((r) => r.id === detail[1]), status: statusNow[detail[1]] } };
     throw new Error(`unexpected GET ${url}`);
   });
 });
@@ -408,6 +428,7 @@ describe('the selection column and bulk bar', () => {
 
     await waitFor(() => expect(toastFn).toHaveBeenCalled());
     expect(toastFn.mock.calls[0][0]).toBe('2 entries archived');
+    statusNow = { a: ContentStatus.Archived, b: ContentStatus.Archived };
     const action = (toastFn.mock.calls[0][1] as { action: { label: string; onClick: () => void } }).action;
     expect(action.label).toBe('Undo');
     vi.mocked(api.put).mockClear();
@@ -462,5 +483,162 @@ describe('the selection column and bulk bar', () => {
     await tick(user, 'Alpha');
 
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it('leaves a Scheduled entry out of a bulk change and says so, because undo cannot restore its time', async () => {
+    const user = userEvent.setup();
+    rows = [row('a', 'Alpha', ContentStatus.Scheduled), row('b', 'Beta', ContentStatus.Draft)];
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Alpha');
+    await tick(user, 'Beta');
+    const bar = screen.getByRole('region', { name: 'Bulk actions' });
+    expect(within(bar).getByText('1 scheduled left out')).toBeTruthy();
+    await user.click(within(bar).getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.put).mock.calls[0][0]).toBe('/api/contents/b/status');
+  });
+
+  it('disables the actions when everything ticked is Scheduled', async () => {
+    const user = userEvent.setup();
+    rows = [row('a', 'Alpha', ContentStatus.Scheduled)];
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Alpha');
+
+    expect((screen.getByRole('button', { name: 'Publish' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Archive' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('leaves out an entry whose type has its own lifecycle, and says why', async () => {
+    const user = userEvent.setup();
+    rows = [
+      row('a', 'Alpha', ContentStatus.Draft, { contentType: 'page' }),
+      row('b', 'Beta', ContentStatus.Draft),
+    ];
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Alpha');
+    await tick(user, 'Beta');
+    const bar = screen.getByRole('region', { name: 'Bulk actions' });
+    expect(within(bar).getByText(/1 left out, their type has its own lifecycle/)).toBeTruthy();
+    await user.click(within(bar).getByRole('button', { name: 'Publish' }));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.put).mock.calls[0][0]).toBe('/api/contents/b/status');
+  });
+
+  it('works once: a second press of Undo sends nothing more', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+    await tick(user, 'Beta');
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    statusNow = { b: ContentStatus.Archived };
+    const action = (toastFn.mock.calls[0][1] as { action: { onClick: () => void } }).action;
+    vi.mocked(api.put).mockClear();
+
+    action.onClick();
+    action.onClick();
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(api.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('undoes only entries still in the status the change gave them', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+    await tick(user, 'Beta');
+    await tick(user, 'Gamma');
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    // Somebody published Gamma again in the meantime.
+    statusNow = { b: ContentStatus.Archived, c: ContentStatus.Published };
+    const action = (toastFn.mock.calls[0][1] as { action: { onClick: () => void } }).action;
+    vi.mocked(api.put).mockClear();
+
+    action.onClick();
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.put).mock.calls[0][0]).toBe('/api/contents/b/status');
+    await waitFor(() =>
+      expect(toastFn.mock.calls.some((c) => /1 entry was changed since/.test(c[0] as string))).toBe(true)
+    );
+  });
+
+  it('reports a 409 as changed by someone else', async () => {
+    const user = userEvent.setup();
+    const conflict = new AxiosError('conflict', '409', undefined, undefined, {
+      status: 409,
+      data: {},
+    } as AxiosResponse);
+    vi.mocked(api.put).mockImplementation(async (url: string) => {
+      if (url === '/api/contents/c/status') throw conflict;
+      return { data: { message: 'ok' } };
+    });
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Beta');
+    await tick(user, 'Gamma');
+    await user.click(screen.getByRole('button', { name: 'Publish' }));
+
+    await waitFor(() => expect(toastFn.error).toHaveBeenCalled());
+    expect(toastFn.error.mock.calls[0][0]).toBe(
+      '1 of 2 could not be changed. 1 changed by someone else, refresh.'
+    );
+  });
+
+  it('does not open the entry when the padding of the select cell is clicked', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    const cell = bodyRows()[0].querySelector('td[data-cell="select"]') as HTMLElement;
+    await user.click(cell);
+
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('takes its toasts down when the tenant changes', async () => {
+    const user = userEvent.setup();
+    toastFn.mockReturnValue('bulk-toast');
+    renderList();
+    await screen.findByText('Alpha');
+    await tick(user, 'Beta');
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    toastFn.dismiss.mockClear();
+
+    const { tokenStore } = await import('@/lib/api');
+    const token = `eyJhbGciOiJub25lIn0.${btoa(JSON.stringify({ sub: 'u1', tenant: 'globex' }))}.sig`;
+    act(() => tokenStore.set(token));
+
+    await waitFor(() => expect(toastFn.dismiss).toHaveBeenCalledWith('bulk-toast'));
+    tokenStore.clear();
+  });
+});
+
+describe('counts that leave types out', () => {
+  it('says how many types the counts exclude', async () => {
+    counts = { ...counts, uncountedTypes: ['payroll', 'tickets'] };
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(await screen.findByText(/Excludes 2 types from these counts/)).toBeTruthy();
+  });
+
+  it('says nothing when none are left out', async () => {
+    renderList();
+    await screen.findByRole('button', { name: 'All 148' });
+
+    expect(screen.queryByText(/Excludes/)).toBeNull();
   });
 });
