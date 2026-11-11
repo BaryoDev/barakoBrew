@@ -26,6 +26,8 @@ vi.mock('@/hooks/use-instance-reachability', () => ({
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn() } }));
 
 const { default: LoginPage } = await import('./page');
+const { getApiUrl } = await import('@/lib/api');
+const { REMEMBERED_KEY } = await import('@/lib/remembered-instance');
 const { registerSignInMethod, SIGN_IN_METHODS } = await import('@/components/sign-in/registry');
 
 describe('sign-in method tabs', () => {
@@ -165,5 +167,56 @@ describe('the pre-auth instance card on the login page', () => {
         const card = screen.getByTestId('instance-card');
         expect(card).toHaveTextContent('Reachable · 42 ms');
         expect(card.textContent).not.toMatch(/module|barakoCMS\s*\d|\d+\.\d+\.\d+/i);
+    });
+});
+
+describe('the instance card remembers a sign-in, like a remembered login', () => {
+    const origin = new URL(getApiUrl()).origin;
+    const seen = (over: object = {}) =>
+        JSON.stringify({ origin, name: 'Kapé Ana', version: '5.1.0', modules: 16, seenAt: new Date().toISOString(), ...over });
+
+    beforeEach(() => {
+        listed = ['password', 'email-code'];
+        localStorage.clear();
+        loginMutate.mockReset();
+    });
+
+    it('shows no name, version or module count on a first visit', () => {
+        render(<LoginPage />);
+        expect(screen.getByTestId('instance-card').textContent).not.toMatch(/Kapé|last seen|forget/i);
+    });
+
+    it('shows them with a Last seen time after a stored sign-in to this host', () => {
+        localStorage.setItem(REMEMBERED_KEY, seen());
+        render(<LoginPage />);
+        const card = screen.getByTestId('instance-card');
+        expect(card).toHaveTextContent('Kapé Ana');
+        expect(card).toHaveTextContent('barakoCMS 5.1.0 · 16 modules');
+        expect(card).toHaveTextContent('Last seen just now');
+    });
+
+    it('clears them on Forget this browser', () => {
+        localStorage.setItem(REMEMBERED_KEY, seen());
+        render(<LoginPage />);
+        fireEvent.click(screen.getByRole('button', { name: 'Forget this browser' }));
+        expect(localStorage.getItem(REMEMBERED_KEY)).toBeNull();
+        expect(screen.getByTestId('instance-card').textContent).not.toMatch(/Kapé|last seen/i);
+    });
+
+    it('clears them, and shows none, when they were kept for another origin', () => {
+        localStorage.setItem(REMEMBERED_KEY, seen({ origin: 'https://api.elsewhere.example' }));
+        render(<LoginPage />);
+        expect(screen.getByTestId('instance-card').textContent).not.toMatch(/Kapé|last seen/i);
+        expect(localStorage.getItem(REMEMBERED_KEY)).toBeNull();
+    });
+
+    it('marks the password field and shows a banner on a failed attempt', () => {
+        loginMutate.mockImplementation((_creds, opts) => opts.onError(new Error('nope')));
+        render(<LoginPage />);
+        fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ana' } });
+        fireEvent.change(screen.getByLabelText('Password', { exact: true }), { target: { value: 'wrong-password' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByLabelText('Password', { exact: true })).toHaveAttribute('aria-invalid', 'true');
     });
 });

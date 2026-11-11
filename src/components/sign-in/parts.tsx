@@ -18,7 +18,7 @@ export function SubmitButton({
         <Button
             type="submit"
             disabled={pending || disabled}
-            className="h-11 w-full text-[14.5px] font-bold shadow-[var(--shadow-accent)]"
+            className="h-12 w-full text-[14.5px] font-bold shadow-[var(--shadow-accent)] transition-transform hover:-translate-y-px"
         >
             {pending ? pendingLabel : children}
         </Button>

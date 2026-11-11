@@ -33,6 +33,7 @@ export function EmailCodePanel({ flow, form, autoFocusField }: SignInPanelProps)
 
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {error ? <FieldError id={errorId} message={error} /> : null}
             <div className="flex flex-col gap-1.5">
                 <Label htmlFor="email" className="text-secondary-foreground text-[12.5px] font-bold">
                     Email address
@@ -50,14 +51,13 @@ export function EmailCodePanel({ flow, form, autoFocusField }: SignInPanelProps)
                     onChange={(e) => setEmail(e.target.value)}
                     className={FIELD}
                 />
-                <p className="text-[var(--faint)] text-xs">
-                    The address on your account, not your username. We answer the same way whether or
-                    not it is registered.
-                </p>
-                {error ? <FieldError id={errorId} message={error} /> : null}
             </div>
+            <p className="text-muted-foreground text-[13.5px] leading-relaxed">
+                No password needed. We email a 6-digit code that works once. If you have an
+                authenticator app enrolled, you can use that instead on the next step.
+            </p>
             <SubmitButton pending={requestCode.isPending} pendingLabel="Sending…">
-                Send the code
+                Email me a code
             </SubmitButton>
         </form>
     );

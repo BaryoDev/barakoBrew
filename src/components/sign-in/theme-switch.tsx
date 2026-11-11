@@ -25,13 +25,11 @@ export function ThemeSwitch() {
             type="button"
             variant="outline"
             size="sm"
-            role="switch"
-            aria-checked={dark}
             onClick={() => setTheme(dark ? 'light' : 'dark')}
-            className="text-muted-foreground h-8 gap-2 text-[12.5px] font-semibold"
+            className="text-muted-foreground h-[34px] gap-2 max-[999px]:h-11 text-[12.5px] font-semibold"
         >
             <Icon aria-hidden className="size-3.5" />
-            Dark mode
+            {dark ? 'Light mode' : 'Dark mode'}
         </Button>
     );
 }

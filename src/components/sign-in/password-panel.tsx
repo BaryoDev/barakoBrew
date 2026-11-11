@@ -6,7 +6,6 @@ import { apiErrorMessage } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { IconArrowRight } from '@/components/icons';
 import { FieldError } from './field-error';
 import { FIELD, SubmitButton } from './parts';
 import type { SignInPanelProps } from './types';
@@ -48,6 +47,13 @@ export function PasswordPanel({ flow, form }: SignInPanelProps) {
 
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {error ? (
+                <FieldError
+                    id={errorId}
+                    message={error}
+                    hint="After 5 failed tries the account locks for 15 minutes."
+                />
+            ) : null}
             <div className="flex flex-col gap-1.5">
                 <Label htmlFor="username" className="text-secondary-foreground text-[12.5px] font-bold">
                     Username
@@ -106,13 +112,6 @@ export function PasswordPanel({ flow, form }: SignInPanelProps) {
                         <span className="sr-only"> password</span>
                     </Button>
                 </div>
-                {error ? (
-                    <FieldError
-                        id={errorId}
-                        message={error}
-                        hint="After 5 failed tries the account locks for 15 minutes."
-                    />
-                ) : null}
             </div>
 
             {/* A note, not a control: the server trusts the browser on every verified emailed code
@@ -123,7 +122,6 @@ export function PasswordPanel({ flow, form }: SignInPanelProps) {
 
             <SubmitButton pending={login.isPending} pendingLabel="Signing in…">
                 Sign in
-                <IconArrowRight className="size-3.5" />
             </SubmitButton>
         </form>
     );

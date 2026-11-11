@@ -6,8 +6,10 @@ import { toast } from 'sonner';
 import { useAuth, useRequestSignInCode, useVerifyDeviceCode, useVerifyMfa } from '@/hooks/use-auth';
 import { useAuthProviders } from '@/hooks/use-auth-providers';
 import { useInstanceReachability } from '@/hooks/use-instance-reachability';
+import { useRememberedInstance } from '@/hooks/use-remembered-instance';
 import { useSignInMethods } from '@/hooks/use-sign-in-methods';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
+import { wrongCode } from '@/lib/sign-in-errors';
 import { signInErrorFromQuery } from '@/lib/social-callback';
 import { DEFAULT_METHOD_IDS, tabsFor } from '@/lib/sign-in-methods';
 import { BrandBean, BrandWordmark } from '@/components/brand';
@@ -20,6 +22,16 @@ import { ThemeSwitch } from '@/components/sign-in/theme-switch';
 import type { SignInFlow } from '@/components/sign-in/types';
 
 const emptySubscribe = () => () => {};
+
+const WRONG_EMAIL_CODE = 'That code did not match. Check the newest email; older codes stop working when a new one is sent.';
+
+function apiOriginSnapshot(): string | null {
+  try {
+    return new URL(getApiUrl()).origin;
+  } catch {
+    return null;
+  }
+}
 
 function apiHostSnapshot(): string | null {
   try {
@@ -75,6 +87,8 @@ export default function LoginPage() {
   // differs between the two renders is a hydration mismatch. The server snapshot is null, matching
   // what layout.tsx already does for the session token.
   const apiHost = useSyncExternalStore(emptySubscribe, apiHostSnapshot, () => null);
+  const apiOrigin = useSyncExternalStore(emptySubscribe, apiOriginSnapshot, () => null);
+  const { remembered, forget } = useRememberedInstance(apiOrigin);
   const externalError = useSyncExternalStore(emptySubscribe, signInErrorSnapshot, () => null);
 
   useEffect(() => {
@@ -139,7 +153,7 @@ export default function LoginPage() {
         onSuccess: () => router.push('/'),
         onError: (error) =>
           setCodeError(
-            apiErrorMessage(error, 'That code was not accepted. Codes rotate every 30 seconds, try the current one.')
+            wrongCode(error, 'That code did not match. Codes change every 30 seconds, so try the one showing now.')
           ),
       }
     );
@@ -161,18 +175,18 @@ export default function LoginPage() {
           router.push('/');
         },
         onError: (error) =>
-          setCodeError(apiErrorMessage(error, 'That code was not accepted. Check the most recent email.')),
+          setCodeError(wrongCode(error, WRONG_EMAIL_CODE)),
       }
     );
   };
 
-  const handleResend = (onSent?: () => void) => {
+  const handleResend = (onSent?: () => void, quiet = false) => {
     if (!email) return;
     requestCode.mutate(
       { email },
       {
         onSuccess: (data) => {
-          toast.info(data.message ?? 'If that email is registered, a new code has been sent.');
+          toast.info(quiet ? 'If that email is registered, a new code is on its way.' : (data.message ?? 'If that email is registered, a new code has been sent.'));
           onSent?.();
         },
         onError: (error) => toast.error(apiErrorMessage(error, 'Could not send a new code.')),
@@ -193,23 +207,23 @@ export default function LoginPage() {
 
   return (
     <div className="bg-background flex min-h-svh">
-      <BrandPanel host={apiHost} reachability={reachability} />
+      <BrandPanel host={apiHost} reachability={reachability} remembered={remembered} onForget={forget} />
 
       <main className="relative flex min-h-svh flex-1 flex-col items-center justify-center overflow-hidden px-6 py-10">
         <div className="w-full max-w-[400px]">
           {/* Below 900px the panel is gone, so the wordmark and the host it would have carried sit here. */}
           <div className="mb-8 flex items-center gap-3 min-[900px]:hidden">
-            <BrandBean className="size-9" />
-            <div>
-              <BrandWordmark />
-              <p className="text-muted-foreground font-mono text-xs tabular-nums">{apiHost ?? ' '}</p>
-            </div>
+            <BrandBean className="size-7" />
+            <BrandWordmark />
+            <p className="text-muted-foreground ml-auto min-w-0 truncate font-mono text-xs tabular-nums">
+              {apiHost ?? ' '}
+            </p>
           </div>
 
           {step === 'form' ? (
             <>
-              <h1 className="font-display text-[28px] font-semibold tracking-[-0.03em]">Welcome back</h1>
-              <p className="text-muted-foreground mt-1.5 text-[13.5px] leading-snug">
+              <h1 className="font-display text-[30px] font-semibold tracking-[-0.03em]">Welcome back</h1>
+              <p className="text-muted-foreground mt-1.5 text-[14.5px] leading-snug">
                 Use the account you have on this instance. Your role here is set by its Owner.
               </p>
 
@@ -279,7 +293,7 @@ export default function LoginPage() {
               error={codeError}
               onSubmit={step === 'mfa' ? handleMfa : handleEmailCode}
               onBack={startOver}
-              onResend={() => handleResend()}
+              onResend={(sent) => handleResend(sent, true)}
               resending={requestCode.isPending}
               onSwap={step === 'mfa' ? swapToEmail : swapToAuthenticator}
             />
