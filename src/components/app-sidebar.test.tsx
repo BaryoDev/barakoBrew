@@ -111,7 +111,25 @@ describe('the rail', () => {
         renderRail({ capabilities: [] });
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
         expect(screen.getByText(/Sign out/)).toBeInTheDocument();
-        expect(screen.getByRole('switch', { name: /Dark mode/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Dark mode' })).toBeInTheDocument();
+    });
+
+    it('sets the Modules label at 12px 600 and styles All modules in the accent text', async () => {
+        renderRail({ capabilities: ['view_modules'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
+
+        expect(screen.getByRole('button', { name: /^Modules/ }).className).toMatch(/text-\[12px\].*font-semibold/);
+        const all = screen.getByRole('link', { name: /^All modules/ });
+        expect(all.className).toContain('text-(--accent-ink)');
+        expect(all.className).toContain('font-semibold');
+    });
+
+    it('sizes the main nav to 36px rows and the module rows to 34px', async () => {
+        renderRail({ capabilities: ['view_modules'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
+
+        expect(screen.getByRole('link', { name: /^Overview/ }).className).toContain('h-9');
+        expect(screen.getByRole('link', { name: /^All modules/ }).className).toContain('h-[34px]');
     });
 
     it('opens a group folded by hand when the route changes into it', async () => {

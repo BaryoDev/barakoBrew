@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { IconBolt } from '@/components/icons';
 import { CHANGE_META, RELEASES } from '@/lib/whats-new';
 import { useApiMeta } from '@/hooks/use-meta';
@@ -53,7 +54,7 @@ export function requestOpenWhatsNew() {
     openRequests.forEach((f) => f());
 }
 
-export function WhatsNew() {
+export function WhatsNew({ className }: { className?: string }) {
     const [open, setOpen] = useState(false);
     const seen = useSyncExternalStore(subscribeSeen, seenSnapshot, seenServerSnapshot);
     const { data: meta } = useApiMeta();
@@ -96,7 +97,7 @@ export function WhatsNew() {
             <Button
                 variant="ghost"
                 size="icon"
-                className="relative"
+                className={cn('relative', className)}
                 aria-label="What's new"
                 onClick={() => {
                     setOpen(true);
