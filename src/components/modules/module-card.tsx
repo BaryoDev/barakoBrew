@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { moduleDisplayName } from '@/lib/module-catalog';
 import { installLine, moduleCategory, moduleHref, moduleState } from '@/lib/module-state';
 import { cn } from '@/lib/utils';
 import type { ModuleSummary } from '@/types/modules';
@@ -18,7 +19,7 @@ export function ModuleCard({ module }: { module: ModuleSummary }) {
     const missing = state === 'not-installed';
     const meta = missing
         ? installLine(module)
-        : [module.package, module.version].filter(Boolean).join(' ');
+        : [module.packageId, module.packageVersion].filter(Boolean).join(' ');
 
     return (
         <Card
@@ -29,7 +30,7 @@ export function ModuleCard({ module }: { module: ModuleSummary }) {
             <div className="flex items-center gap-3">
                 <ModuleTile module={module} muted={missing} />
                 <div className="grid min-w-0 flex-1 gap-0.5">
-                    <h2 className="truncate text-[15px] font-semibold">{module.name}</h2>
+                    <h2 className="truncate text-[15px] font-semibold">{moduleDisplayName(module)}</h2>
                     <span className="text-muted-foreground text-[12.5px]">{moduleCategory(module)}</span>
                 </div>
                 <ModuleStateBadge state={state} />
@@ -43,7 +44,7 @@ export function ModuleCard({ module }: { module: ModuleSummary }) {
                     <CopyInstallLine module={module} />
                 ) : (
                     <Button asChild size="sm">
-                        <Link href={moduleHref(module.name)} aria-label={`Open ${module.name}`}>
+                        <Link href={moduleHref(module.name)} aria-label={`Open ${moduleDisplayName(module)}`}>
                             Open
                         </Link>
                     </Button>

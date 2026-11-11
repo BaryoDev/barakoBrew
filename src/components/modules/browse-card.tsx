@@ -44,9 +44,9 @@ export function BrowseCard({ pkg, state }: { pkg: NugetPackage; state: ModuleSta
                 {pkg.version && ` ${pkg.version}`}
                 {pkg.downloads !== null && ` · ${downloadsFormat.format(pkg.downloads)} downloads`}
             </p>
-            {!installed && installLine({ package: pkg.id }) && (
+            {!installed && installLine({ packageId: pkg.id }) && (
                 <code className="bg-secondary text-muted-foreground rounded-md px-2 py-1 font-mono text-xs break-all">
-                    {installLine({ package: pkg.id })}
+                    {installLine({ packageId: pkg.id })}
                 </code>
             )}
             <div className="flex flex-wrap items-center gap-3 text-[13px]">
@@ -70,7 +70,7 @@ export function BrowseCard({ pkg, state }: { pkg: NugetPackage; state: ModuleSta
                         Project site
                     </a>
                 )}
-                {!installed && <span className="ml-auto"><CopyInstallLine module={{ package: pkg.id }} /></span>}
+                {!installed && <span className="ml-auto"><CopyInstallLine module={{ packageId: pkg.id }} /></span>}
             </div>
         </Card>
     );

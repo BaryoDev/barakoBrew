@@ -109,6 +109,11 @@ export function IconRollback(props: IconProps) {
   return <svg {...base(props)}><path d="M 16 3 C 12 3 8.4 4.7992187 6 7.6992188 L 6 4 L 4 4 L 4 12 L 12 12 L 12 10 L 6.8007812 10 C 8.8007812 7 12.1 5 16 5 C 22.1 5 27 9.9 27 16 C 27 22.1 22.1 27 16 27 C 9.9 27 5 22.1 5 16 L 3 16 C 3 23.2 8.8 29 16 29 C 23.2 29 29 23.2 29 16 C 29 8.8 23.2 3 16 3 z"/></svg>;
 }
 
+/** The nine-dot AI mark (design sprite id ic-ai-mark). */
+export function IconAiMark(props: IconProps) {
+  return <svg {...base(props)}><circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="8" r="1.5"/><circle cx="24" cy="8" r="2.6"/><circle cx="8" cy="16" r="1.5"/><circle cx="16" cy="16" r="3.6"/><circle cx="24" cy="16" r="1.5"/><circle cx="8" cy="24" r="2.6"/><circle cx="16" cy="24" r="1.5"/><circle cx="24" cy="24" r="1.5"/></svg>;
+}
+
 export function IconBolt(props: IconProps) {
   return <svg {...base(props)}><path d="M 16 6 L 16 15 L 20 16 L 16.101563 26 L 16 26 L 16 17.96875 L 12 16.96875 L 15.898438 6 L 16 6 M 18 4 L 14.488281 4 L 14.015625 5.328125 L 10.113281 16.300781 L 9.378906 18.375 L 11.515625 18.910156 L 14 19.53125 L 14 28 L 17.46875 28 L 17.964844 26.726563 L 21.863281 16.726563 L 22.6875 14.609375 L 18 13.4375 Z"/></svg>;
 }

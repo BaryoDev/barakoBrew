@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { moduleDisplayName } from '@/lib/module-catalog';
 import { moduleState } from '@/lib/module-state';
 import type { ModuleSummary } from '@/types/modules';
 import { ModuleConfigurationCard } from './module-configuration-card';
@@ -18,7 +19,7 @@ export function ModuleScreen({ module, children }: { module: ModuleSummary; chil
     return (
         <>
             <PageHeader
-                title={module.name}
+                title={moduleDisplayName(module)}
                 description={module.description}
                 badge={<ModuleStateBadge state={state} />}
             />
