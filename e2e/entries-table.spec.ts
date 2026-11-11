@@ -81,7 +81,7 @@ test('a status filter redraws every cell of every row, the version column includ
     await page.goto('/content');
     await expect(rows(page)).toHaveCount(2);
 
-    await page.getByRole('radio', { name: 'Published' }).click();
+    await page.getByRole('button', { name: /^Published/ }).click();
     await page.waitForURL(/status=Published/);
 
     await expect(rows(page)).toHaveCount(2);

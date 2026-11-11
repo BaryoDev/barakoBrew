@@ -152,7 +152,7 @@ describe('the entries filter bar', () => {
         await screen.findByText('Alpha');
         expect(lastListParams().status).toBeUndefined();
 
-        fireEvent.click(screen.getByRole('radio', { name: 'Draft' }));
+        fireEvent.click(screen.getByRole('button', { name: /^Draft/ }));
 
         await waitFor(() => expect(lastListParams().status).toBe(ContentStatus.Draft));
         expect(lastListParams().page).toBe(1);
@@ -166,10 +166,10 @@ describe('the entries filter bar', () => {
         renderList();
         await screen.findByText('Alpha');
 
-        fireEvent.click(screen.getByRole('radio', { name: 'Draft' }));
+        fireEvent.click(screen.getByRole('button', { name: /^Draft/ }));
         await waitFor(() => expect(lastListParams().status).toBe(ContentStatus.Draft));
 
-        fireEvent.click(screen.getByRole('radio', { name: 'All' }));
+        fireEvent.click(screen.getByRole('button', { name: /^All/ }));
         await waitFor(() => expect(lastListParams().status).toBeUndefined());
         expect(Object.keys(lastListParams())).not.toContain('all');
     });
