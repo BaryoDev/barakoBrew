@@ -25,6 +25,8 @@ const fetchMock = vi.fn();
 const base = { contractVersion: 1, schemaState: 'ready', schemaChanges: [] as string[] };
 const INSTALLED = [{ ...base, name: 'Files', enabled: true, package: 'BarakoCMS.Files', version: '5.1.0' }];
 
+const cardId = (card: HTMLElement) => within(card).getByRole('heading').textContent ?? '';
+
 const row = (id: string, extra: Record<string, unknown> = {}) => ({
     id,
     version: '2.0.0',
@@ -109,7 +111,7 @@ describe('Browse view', () => {
         for (const card of cards) {
             expect(within(card).getByTestId('module-tile')).toBeTruthy();
             expect(within(card).getByText(/downloads/)).toBeTruthy();
-            expect(within(card).getByRole('link', { name: /NuGet page/ })).toBeTruthy();
+            expect(within(card).getByRole('link', { name: `NuGet page for ${cardId(card)}` })).toBeTruthy();
         }
         const community = cards.find((c) => within(c).queryByText('Somebody Else'))!;
         expect(community.querySelector('img')).toBeNull();
@@ -147,10 +149,10 @@ describe('Browse view', () => {
         const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href') ?? '');
         expect(hrefs.length).toBeGreaterThan(0);
         expect(hrefs.some((h) => h.startsWith('javascript:'))).toBe(false);
-        const project = screen.getAllByRole('link', { name: /Project site/ });
+        const project = screen.getAllByRole('link', { name: 'Project site for A.Good' });
         expect(project).toHaveLength(1);
         expect(project[0].getAttribute('href')).toBe('https://example.com/site');
-        for (const a of [...project, ...screen.getAllByRole('link', { name: /NuGet page/ })]) {
+        for (const a of [...project, ...[screen.getByRole('link', { name: 'NuGet page for A.Bad' }), screen.getByRole('link', { name: 'NuGet page for A.Good' })]]) {
             expect(a.getAttribute('rel')).toContain('noopener');
             expect(a.getAttribute('href')!.startsWith('https://')).toBe(true);
         }

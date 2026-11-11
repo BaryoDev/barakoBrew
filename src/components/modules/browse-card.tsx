@@ -50,12 +50,24 @@ export function BrowseCard({ pkg, state }: { pkg: NugetPackage; state: ModuleSta
                 </code>
             )}
             <div className="flex flex-wrap items-center gap-3 text-[13px]">
-                <a href={pkg.nugetUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">
-                    NuGet page<span className="sr-only"> for {pkg.id}</span>
+                <a
+                    href={pkg.nugetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`NuGet page for ${pkg.id}`}
+                    className="text-primary font-medium hover:underline"
+                >
+                    NuGet page
                 </a>
                 {pkg.projectUrl && (
-                    <a href={pkg.projectUrl} target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">
-                        Project site<span className="sr-only"> for {pkg.id}</span>
+                    <a
+                        href={pkg.projectUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Project site for ${pkg.id}`}
+                        className="text-primary font-medium hover:underline"
+                    >
+                        Project site
                     </a>
                 )}
                 {!installed && <span className="ml-auto"><CopyInstallLine module={{ package: pkg.id }} /></span>}
