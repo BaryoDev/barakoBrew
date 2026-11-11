@@ -149,7 +149,7 @@ export function CodeStep({
                 </p>
             )}
 
-            <Button type="button" variant="ghost" className="h-10 w-full" onClick={onBack}>
+            <Button type="button" variant="ghost" className="h-10 w-full" onClick={onBack} disabled={pending}>
                 Not you? Go back
             </Button>
         </form>

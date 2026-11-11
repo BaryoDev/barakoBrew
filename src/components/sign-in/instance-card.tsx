@@ -1,10 +1,13 @@
 import type { Reachability } from '@/hooks/use-instance-reachability';
 
-/** The words for the reachability line. Pure, so the three states are cheap to pin. */
-export function reachabilityLabel(state: Reachability | undefined): string {
-    if (!state) return 'Checking…';
-    if (!state.reachable) return 'Unreachable';
-    return state.ms === null ? 'Reachable' : `Reachable · ${state.ms} ms`;
+/**
+ * The words for the reachability line, split so only the state word is announced. The time changes
+ * on every 30 second recheck and would be read out each time if it were live.
+ */
+export function reachabilityLabel(state: Reachability | undefined): { word: string; detail: string } {
+    if (!state) return { word: 'Checking…', detail: '' };
+    if (!state.reachable) return { word: 'Unreachable', detail: '' };
+    return { word: 'Reachable', detail: state.ms === null ? '' : ` · ${state.ms} ms` };
 }
 
 /** Two letters for the tile, from the first label of the host. */
@@ -24,6 +27,7 @@ export function hostInitials(host: string | null): string {
 export function InstanceCard({ host, reachability }: { host: string | null; reachability: Reachability | undefined }) {
     const up = reachability?.reachable === true;
     const down = reachability?.reachable === false;
+    const label = reachabilityLabel(reachability);
     return (
         <div
             data-testid="instance-card"
@@ -48,7 +52,10 @@ export function InstanceCard({ host, reachability }: { host: string | null; reac
                             (up ? 'bg-[#4fd1b4]' : down ? 'bg-[#ff8a80]' : 'bg-[#8d91b0]')
                         }
                     />
-                    <span role="status">{reachabilityLabel(reachability)}</span>
+                    <span>
+                        <span role="status">{label.word}</span>
+                        {label.detail}
+                    </span>
                 </span>
             </div>
         </div>

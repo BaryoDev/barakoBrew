@@ -7,7 +7,7 @@ describe('InstanceCard before sign in', () => {
         const { container } = render(<InstanceCard host="api.cafe.example" reachability={{ reachable: true, ms: 42 }} />);
 
         expect(screen.getByText('api.cafe.example')).toBeInTheDocument();
-        expect(screen.getByText('Reachable · 42 ms')).toBeInTheDocument();
+        expect(container).toHaveTextContent('Reachable · 42 ms');
 
         const text = container.textContent ?? '';
         expect(text).not.toMatch(/barakoCMS\s*\d/i);
@@ -29,7 +29,20 @@ describe('InstanceCard before sign in', () => {
 
 describe('reachabilityLabel', () => {
     it('leaves the time out when there is none', () => {
-        expect(reachabilityLabel({ reachable: true, ms: null })).toBe('Reachable');
+        expect(reachabilityLabel({ reachable: true, ms: null })).toEqual({ word: 'Reachable', detail: '' });
+    });
+
+    it('keeps the time apart from the state word', () => {
+        expect(reachabilityLabel({ reachable: true, ms: 42 })).toEqual({ word: 'Reachable', detail: ' · 42 ms' });
+    });
+});
+
+describe('the live region', () => {
+    it('holds the state word only, so a changing time is not announced every recheck', () => {
+        render(<InstanceCard host="api.cafe.example" reachability={{ reachable: true, ms: 42 }} />);
+        const status = screen.getByRole('status');
+        expect(status).toHaveTextContent(/^Reachable$/);
+        expect(status.textContent).not.toMatch(/ms/);
     });
 });
 
