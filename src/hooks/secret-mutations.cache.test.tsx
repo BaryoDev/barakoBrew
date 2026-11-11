@@ -9,7 +9,7 @@ vi.mock('@/lib/api', async () => {
 });
 
 const { api } = await import('@/lib/api');
-const { useCreateApiKey } = await import('./use-api-keys');
+const { useCreateApiKey, useRotateApiKey } = await import('./use-api-keys');
 const { useMfaSetup, useMfaEnable } = await import('./use-mfa');
 const { useCreateShareLink, useCreatePreviewToken } = await import('./use-share-links');
 const { siteShareScope } = await import('@/lib/site-mode');
@@ -32,6 +32,13 @@ const CASES: {
         response: { id: 'k1', name: 'CI', prefix: 'bcms_ab12', scopes: ['content:read'], key: 'bcms_FULLSECRET' },
         use: () => useCreateApiKey() as never,
         variables: { name: 'CI', scopes: ['content:read'] },
+    },
+    {
+        name: 'the rotated API key',
+        secret: 'bcms_ROTATEDSECRET',
+        response: { id: 'k2', name: 'CI', prefix: 'bcms_cd34', scopes: ['content:read'], key: 'bcms_ROTATEDSECRET' },
+        use: () => useRotateApiKey() as never,
+        variables: { id: 'k1', overlapMinutes: 60 },
     },
     {
         name: 'the MFA setup secret',
