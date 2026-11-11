@@ -249,3 +249,75 @@ export function useSetIcon(name: string) {
         },
     });
 }
+
+/** What a field is sent with when it is added to a type that already exists. */
+export interface AddFieldRequest {
+    fieldName: string;
+    displayName: string;
+    type: string;
+    isRequired: boolean;
+    referenceType?: string;
+    options?: FieldOption[];
+    itemType?: string;
+}
+
+/**
+ * Adds one field to a type that already exists, POST /api/content-types/{name}/fields. The API
+ * refuses a name the type has, a required field with no default on a type that holds entries, and
+ * anything the create validator would, and says why; the message is the caller's to show.
+ */
+export function useAddField(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (field: AddFieldRequest) => {
+            const response = await api.post<{ contentType: string; added: string; fields: string[] }>(
+                `${typePath(name)}/fields`,
+                field,
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+export interface SetFieldSensitivityResult {
+    name: string;
+    field: string;
+    from: string;
+    to: string;
+    /** Present when the change is still applying to entries in the background. */
+    change?: { status?: string } | null;
+}
+
+/**
+ * Sets a field's sensitivity, PUT .../fields/{field}/sensitivity. Lowering it makes values already
+ * written readable to more callers, so the API refuses unless `acknowledgeDisclosure` is set and
+ * says how many entries are affected.
+ */
+export function useSetFieldSensitivity(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            field,
+            sensitivity,
+            acknowledgeDisclosure,
+        }: {
+            field: string;
+            sensitivity: string;
+            acknowledgeDisclosure: boolean;
+        }) => {
+            const response = await api.put<SetFieldSensitivityResult>(`${fieldPath(name, field)}/sensitivity`, {
+                sensitivity,
+                acknowledgeDisclosure,
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}

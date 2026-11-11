@@ -2,13 +2,15 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { useSchema, useSetPublicDelivery } from '@/hooks/use-schemas';
+import { useSchema, useSchemas, useSetPublicDelivery } from '@/hooks/use-schemas';
 import { fieldTypeLabel, resolveFieldType, type FieldDefinition } from '@/types/schema';
 import { isChoiceField, optionLabel } from '@/lib/choice';
 import { FieldOptionsDialog } from '@/components/schema/field-options-dialog';
 import { FieldPresentationDialog } from '@/components/schema/field-presentation-dialog';
 import { FieldCurrencyDialog } from '@/components/schema/field-currency-dialog';
 import { RouteTemplatePanel } from '@/components/schema/route-template-panel';
+import { AddFieldPanel } from '@/components/schema/add-field-panel';
+import { FieldSensitivityChip } from '@/components/schema/field-sensitivity-chip';
 import { TypeIconPicker } from '@/components/schema/type-icon-picker';
 import { LifecycleDiagram } from '@/components/schema/lifecycle-diagram';
 import { UniquenessPanel } from '@/components/schema/uniqueness-panel';
@@ -29,11 +31,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { IconContent, IconContentTypes, IconInfo, IconPlus } from '@/components/icons';
+import { IconContent, IconContentTypes, IconPlus } from '@/components/icons';
 
 export default function SchemaDetailPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = use(params);
   const { data: schema, isLoading } = useSchema(name);
+  const { data: allTypes } = useSchemas();
   const setPublicDelivery = useSetPublicDelivery(name);
   const [editingOptions, setEditingOptions] = useState<FieldDefinition | null>(null);
   const [editingPresentation, setEditingPresentation] = useState<FieldDefinition | null>(null);
@@ -89,16 +92,6 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
       />
 
       <TypeIconPicker typeName={schema.name} displayName={schema.displayName} icon={schema.icon} />
-
-      <div className="text-muted-foreground mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm">
-        <IconInfo className="mt-0.5 size-4 shrink-0" />
-        <p>
-          A content type&rsquo;s fields are permanent: the API has no update or delete for them. To
-          change the shape, create a new type and migrate entries. What you can change afterwards: public
-          delivery, the path on the site, uniqueness rules, how each field is edited, the options of a
-          choice field and the currency of a money field.
-        </p>
-      </div>
 
       <div className="mb-6 flex items-start justify-between gap-6 rounded-lg border p-4">
         <div className="space-y-1">
@@ -177,6 +170,12 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
         </p>
       </section>
 
+      <AddFieldPanel
+        typeName={schema.name}
+        fields={schema.fields}
+        contentTypes={(allTypes ?? []).map((t) => ({ name: t.name, displayName: t.displayName }))}
+      />
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
@@ -184,6 +183,7 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
               <TableHead>Field</TableHead>
               <TableHead>API name</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Sensitivity</TableHead>
               <TableHead className="text-right">Required</TableHead>
               <TableHead className="sr-only">Actions</TableHead>
             </TableRow>
@@ -228,6 +228,9 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
                       </Button>
                     </div>
                   )}
+                </TableCell>
+                <TableCell>
+                  <FieldSensitivityChip typeName={schema.name} field={field} />
                 </TableCell>
                 <TableCell className="text-muted-foreground text-right text-sm">
                   {field.isRequired ? 'Yes' : '—'}
