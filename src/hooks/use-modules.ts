@@ -28,14 +28,14 @@ const STALE_MS = 5 * 60 * 1000;
 /** The whole list in one page. The endpoint caps a page at 100 and nothing runs that many. */
 const PAGE_SIZE = 100;
 
-const OPTIONAL_TEXT = ['category', 'package', 'description'] as const;
+const OPTIONAL_TEXT = ['category', 'packageId', 'packageVersion', 'description', 'glyph'] as const;
 
 function isSummary(value: unknown): value is ModuleSummary {
     const m = value as ModuleSummary | null;
     return !!m && typeof m.name === 'string' && typeof m.enabled === 'boolean';
 }
 
-/** The three optional text fields are kept only when they are strings; a number or object there is dropped. */
+/** The optional text fields are kept only when they are strings; a number or object there is dropped. */
 function cleanSummary(m: ModuleSummary): ModuleSummary {
     const copy: ModuleSummary = { ...m };
     for (const key of OPTIONAL_TEXT) {
