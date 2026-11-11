@@ -146,9 +146,11 @@ describe('Browse view', () => {
         await openBrowse();
         await screen.findAllByTestId('browse-card');
 
-        const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href') ?? '');
-        expect(hrefs.length).toBeGreaterThan(0);
-        expect(hrefs.some((h) => h.startsWith('javascript:'))).toBe(false);
+        const projectLinks = screen.getAllByRole('link', { name: /^Project site for / });
+        expect(projectLinks).toHaveLength(1);
+        for (const a of projectLinks) expect(a.getAttribute('href')).toMatch(/^https:\/\//);
+        expect(screen.queryByRole('link', { name: 'Project site for A.Bad' })).toBeNull();
+
         const project = screen.getAllByRole('link', { name: 'Project site for A.Good' });
         expect(project).toHaveLength(1);
         expect(project[0].getAttribute('href')).toBe('https://example.com/site');
