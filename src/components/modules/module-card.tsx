@@ -43,8 +43,8 @@ export function ModuleCard({ module }: { module: ModuleSummary }) {
                     <CopyInstallLine module={module} />
                 ) : (
                     <Button asChild size="sm">
-                        <Link href={moduleHref(module.name)}>
-                            Open<span className="sr-only"> {module.name}</span>
+                        <Link href={moduleHref(module.name)} aria-label={`Open ${module.name}`}>
+                            Open
                         </Link>
                     </Button>
                 )}
