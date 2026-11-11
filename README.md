@@ -142,6 +142,16 @@ module's screen only when `GET /api/modules` reports that module running.
 | Modules | Accounting, Analytics, Email events, Feature flags, Files (uploads in the background, image preview and viewer), PWA installs |
 | System | Audit log, Errors, Workflow runs, Health, Email, Security (two-factor), Devices, Export and import, Import a spreadsheet, Connectors, Outbound requests, Settings |
 
+The Modules page has two views. This deployment lists every first-party module as Enabled,
+Installed (not enabled) or Not installed, from `GET /api/modules`, with a category filter and a
+Copy install button for a module the API did not list. Browse lists every NuGet package tagged
+`barakocms-module`, ours and the community's the same way, with a search box and publisher and
+category filters, and the install line for any package this deployment does not have. Browse calls
+`azuresearch-usnc.nuget.org` from the browser (one origin added to the CSP `connect-src`) and shows
+"unavailable" when it cannot, such as on an offline deployment. It shows text and links only: no
+package icons are loaded, only `https:` links are kept, and the list is capped at 200 packages. The
+console cannot install a package, so there is no Install button.
+
 Sessions ride the API's rotating refresh tokens: the 15-minute access token renews automatically,
 and a single in-flight refresh is shared across concurrent requests so the backend's replay
 detection is never tripped. The access token lives in memory, not in local storage.

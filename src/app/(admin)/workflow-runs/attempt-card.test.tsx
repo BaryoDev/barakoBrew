@@ -271,4 +271,12 @@ describe('undoText', () => {
       'Webhook, Failed: refund refused',
     );
   });
+
+  it('lets a long fact value wrap inside the card instead of widening it', () => {
+    renderCard(attempt({ status: 'Skipped', error: null, compensation: { status: 'Failed', attempts: 1, error: 'x'.repeat(200) } }));
+
+    const dd = screen.getByText(/xxxxxxxx/);
+    expect(dd).toHaveClass('min-w-0', 'break-words', 'text-right');
+    expect(dd.parentElement).toHaveClass('min-w-0');
+  });
 });

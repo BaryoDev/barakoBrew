@@ -1,38 +1,50 @@
 'use client';
 
+import { useState } from 'react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ModuleCard } from '@/components/modules/module-card';
+import { SegmentedControl, SegmentedControlItem } from '@/components/ui/segmented-control';
+import { BrowseModules } from '@/components/modules/browse-modules';
+import { ModulesList, installedCount } from '@/components/modules/modules-list';
 import { useModules } from '@/hooks/use-modules';
-import { groupByCategory } from '@/lib/module-state';
+
+type View = 'deployment' | 'browse';
 
 export default function ModulesPage() {
     const { data, isLoading, isError } = useModules();
+    const [view, setView] = useState<View>('deployment');
+    const counts = data?.kind === 'modules' ? installedCount(data.modules) : null;
 
     return (
         <>
-            <PageHeader title="All modules" description="What this deployment carries and what is switched on." />
-            {isLoading ? (
+            <PageHeader
+                title="All modules"
+                description="barakoBrew finds modules by asking the API what it runs. A module that is installed gets its screen; one that is not shows how to add it."
+                actions={
+                    counts && (
+                        <code className="bg-secondary text-muted-foreground rounded-[10px] px-3 py-2 font-mono text-[12.5px]">
+                            GET /api/modules · {counts.installed} of {counts.total}
+                        </code>
+                    )
+                }
+            />
+            <SegmentedControl
+                value={view}
+                onValueChange={(v) => setView(v as View)}
+                aria-label="Modules view"
+                className="mb-4"
+            >
+                <SegmentedControlItem value="deployment">This deployment</SegmentedControlItem>
+                <SegmentedControlItem value="browse">Browse</SegmentedControlItem>
+            </SegmentedControl>
+            {view === 'browse' ? (
+                <BrowseModules />
+            ) : isLoading ? (
                 <Skeleton className="h-32 w-full" />
             ) : isError || data?.kind !== 'modules' ? (
                 <p className="text-muted-foreground text-sm">The module list is not available to you.</p>
-            ) : data.modules.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No modules.</p>
             ) : (
-                <div className="space-y-6">
-                    {groupByCategory(data.modules).map((group) => (
-                        <section key={group.category} aria-label={group.category}>
-                            <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
-                                {group.category}
-                            </h2>
-                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                                {group.modules.map((m) => (
-                                    <ModuleCard key={m.name} module={m} />
-                                ))}
-                            </div>
-                        </section>
-                    ))}
-                </div>
+                <ModulesList listed={data.modules} />
             )}
         </>
     );

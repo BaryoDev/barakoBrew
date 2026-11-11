@@ -423,6 +423,16 @@ export function toneForRunStatus(status: string): Tone {
   }
 }
 
+/** A run status in the words people use. The enum name `PartiallyFailed` is never shown. */
+export function runStatusLabel(status: string): string {
+  return status === 'PartiallyFailed' ? 'Partly failed' : status;
+}
+
+/** A trigger as text with no arrow glyph: "Article to In review". */
+export function triggerLabel(trigger: string): string {
+  return trigger.replace(/\s*(?:→|->)\s*/g, ' to ');
+}
+
 /** The badge tint for one action. Unknown is warning: it is neither a success nor a proven failure. */
 export function toneForAttemptStatus(status: string): Tone {
   switch (status) {

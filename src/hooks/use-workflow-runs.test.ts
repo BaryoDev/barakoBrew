@@ -12,6 +12,8 @@ import {
   runAllowsRetry,
   runFailureKind,
   runListParams,
+  runStatusLabel,
+  triggerLabel,
   workflowRunSchema,
   toneForAttemptStatus,
   toneForRunStatus,
@@ -433,5 +435,22 @@ describe('a run with a status this console does not know', () => {
     });
 
     expect(parsed.status).toBe('Abandoned');
+  });
+});
+
+describe('runStatusLabel', () => {
+  it('says Partly failed for PartiallyFailed and leaves every other status as it is', () => {
+    expect(runStatusLabel('PartiallyFailed')).toBe('Partly failed');
+    for (const status of ['Pending', 'Running', 'Succeeded', 'Failed', 'Cancelled', 'Abandoned']) {
+      expect(runStatusLabel(status)).toBe(status);
+    }
+  });
+});
+
+describe('triggerLabel', () => {
+  it('writes an arrow as the word to', () => {
+    expect(triggerLabel('Article → In review')).toBe('Article to In review');
+    expect(triggerLabel('Article->In review')).toBe('Article to In review');
+    expect(triggerLabel('ContentPublished')).toBe('ContentPublished');
   });
 });
