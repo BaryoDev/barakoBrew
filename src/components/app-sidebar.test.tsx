@@ -139,6 +139,15 @@ describe('the rail', () => {
         expect(modules).toContain('h-[34px] text-[13.5px]');
     });
 
+    it('draws the main nav as one navigation landmark on a wide screen', async () => {
+        renderRail({ capabilities: [] });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
+        const landmarks = screen.getAllByRole('navigation');
+        expect(landmarks).toHaveLength(1);
+        expect(landmarks[0]).toHaveAccessibleName('Main');
+        expect(within(landmarks[0]).getByRole('link', { name: /^Overview/ })).toBeInTheDocument();
+    });
+
     it('keeps What\'s new in the rail, beside the version', async () => {
         renderRail({ capabilities: [] });
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));

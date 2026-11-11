@@ -208,6 +208,7 @@ export function AppSidebar() {
         <TenantSwitcher />
       </SidebarHeader>
 
+      <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col">
       <SidebarContent className="gap-0 px-3.5 pt-3.5 pb-2">
         {groups.map((group, i) => {
           const primary = !group.label;
@@ -274,6 +275,7 @@ export function AppSidebar() {
           );
         })}
       </SidebarContent>
+      </nav>
 
       <SidebarFooter className="gap-0 border-t px-3.5 pt-3 pb-4">
         <SidebarMenu className="gap-1.5">
