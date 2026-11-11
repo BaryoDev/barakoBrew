@@ -70,7 +70,7 @@ test.describe('Sign in: new-device step', () => {
         await code.fill('000000');
         await page.getByRole('button', { name: 'Continue' }).click();
 
-        await expect(page.getByRole('alert').filter({ hasText: 'Invalid or expired code.' })).toBeVisible();
+        await expect(page.getByRole('alert').filter({ hasText: 'That code did not match. Check the newest email' })).toBeVisible();
         await expect(code).toHaveAttribute('aria-invalid', 'true');
         await expect(page).toHaveURL(/\/login/);
         expect(await page.evaluate(() => window.localStorage.getItem('barako_token'))).toBeFalsy();
@@ -97,7 +97,7 @@ test.describe('Sign in: new-device step', () => {
 
         await code.fill('000000');
         await page.getByRole('button', { name: 'Continue' }).click();
-        await expect(page.getByRole('alert').filter({ hasText: 'Invalid or expired code.' })).toBeVisible();
+        await expect(page.getByRole('alert').filter({ hasText: 'That code did not match. Check the newest email' })).toBeVisible();
 
         await code.fill('123456');
         await page.getByRole('button', { name: 'Continue' }).click();
