@@ -1,8 +1,8 @@
 import type { ComponentType, SVGProps } from 'react';
 import {
+    IconAiMark,
     IconAnalytics,
     IconArchive,
-    IconBolt,
     IconBug,
     IconCoins,
     IconContent,
@@ -17,7 +17,7 @@ import {
     IconShield,
     IconTable,
 } from '@/components/icons';
-import { catalogEntry, type ModuleGlyph } from '@/lib/module-catalog';
+import { moduleGlyph, type ModuleGlyph } from '@/lib/module-catalog';
 import { cn } from '@/lib/utils';
 import type { ModuleSummary } from '@/types/modules';
 
@@ -36,7 +36,7 @@ const GLYPH: Record<ModuleGlyph, ComponentType<SVGProps<SVGSVGElement>>> = {
     bug: IconBug,
     mobile: IconMobile,
     analytics: IconAnalytics,
-    ai: IconBolt,
+    ai: IconAiMark,
     coins: IconCoins,
 };
 
@@ -49,11 +49,11 @@ export function ModuleTile({
     muted = false,
     className,
 }: {
-    module?: Pick<ModuleSummary, 'name' | 'package'>;
+    module?: Pick<ModuleSummary, 'name' | 'packageId' | 'glyph'>;
     muted?: boolean;
     className?: string;
 }) {
-    const Glyph = GLYPH[(module && catalogEntry(module)?.glyph) || 'cube'];
+    const Glyph = GLYPH[module ? moduleGlyph(module) : 'cube'];
     return (
         <span
             data-testid="module-tile"

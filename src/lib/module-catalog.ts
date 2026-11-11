@@ -17,6 +17,8 @@ import type { ModuleSummary } from '@/types/modules';
  */
 export interface CatalogEntry {
     name: string;
+    /** The name the design shows. The registered `name` stays the key everywhere else. */
+    displayName: string;
     package: string;
     category: string;
     description: string;
@@ -47,31 +49,41 @@ export type ModuleGlyph =
  */
 export const CATEGORY_ORDER = ['Content', 'Comms', 'Access', 'Platform', 'Insight', 'Business'] as const;
 
+const MODULE_GLYPHS = [
+    'content', 'form', 'archive', 'database', 'table', 'cube', 'send', 'envelope',
+    'key', 'shield', 'flag', 'bug', 'mobile', 'analytics', 'ai', 'coins',
+] as const satisfies readonly ModuleGlyph[];
+
 export const FIRST_PARTY: readonly CatalogEntry[] = [
-    { name: 'Pages', package: 'BarakoCMS.Pages', category: 'Content', glyph: 'content', description: 'A page tree with nested navigation, paths and breadcrumbs, for barakoPress to render.' },
-    { name: 'Forms', package: 'BarakoCMS.Forms', category: 'Content', glyph: 'form', description: 'Public form submissions, validated and stored as Sensitive entries, with a honeypot and a rate limit.' },
-    { name: 'Files', package: 'BarakoCMS.Files', category: 'Content', glyph: 'archive', description: 'Uploads and serves files, stored in Postgres. Files · S3 moves them to a bucket.' },
-    { name: 'Files.S3', package: 'BarakoCMS.Files.S3', category: 'Platform', glyph: 'database', description: 'Keeps Files in AWS S3, Cloudflare R2 or any S3-compatible store.' },
-    { name: 'Import', package: 'BarakoCMS.Import', category: 'Content', glyph: 'table', description: 'Bulk-creates entries from .xlsx or CSV uploads, mapped to a content type.' },
-    { name: 'Portability', package: 'BarakoCMS.Portability', category: 'Platform', glyph: 'cube', description: 'Exports content types and their entries as a JSON bundle, and imports it into another instance.' },
-    { name: 'Email.Resend', package: 'BarakoCMS.Email.Resend', category: 'Comms', glyph: 'send', description: 'Sends mail through Resend and records bounces and complaints.' },
-    { name: 'Email.Smtp', package: 'BarakoCMS.Email.Smtp', category: 'Comms', glyph: 'envelope', description: 'Sends mail through any SMTP relay.' },
-    { name: 'ExternalAuth', package: 'BarakoCMS.ExternalAuth', category: 'Access', glyph: 'key', description: 'Continue with Google, GitHub, LinkedIn or Facebook, matched by verified email.' },
-    { name: 'DeviceTrust', package: 'BarakoCMS.DeviceTrust', category: 'Access', glyph: 'shield', description: 'Binds sessions to devices and can require OTP approval for a new one.' },
-    { name: 'FeatureFlags', package: 'BarakoCMS.FeatureFlags', category: 'Platform', glyph: 'flag', description: 'Turns a feature on by tenant, by user or by percentage rollout.' },
-    { name: 'Diagnostics', package: 'BarakoCMS.Diagnostics', category: 'Platform', glyph: 'bug', description: 'Collects browser errors from your apps, grouped by fingerprint with a count.' },
-    { name: 'Pwa', package: 'BarakoCMS.Pwa', category: 'Platform', glyph: 'mobile', description: 'Records installs to the home screen, anonymous or per signed-in user.' },
-    { name: 'Analytics.Umami', package: 'BarakoCMS.Analytics.Umami', category: 'Insight', glyph: 'analytics', description: 'Shows Umami traffic in barakoBrew through a server-side proxy.' },
-    { name: 'AI', package: 'BarakoCMS.AI', category: 'Insight', glyph: 'ai', description: 'Semantic search over published, Public entries with a self-hosted model. No third-party key.' },
-    { name: 'Accounting', package: 'BarakoCMS.Accounting', category: 'Business', glyph: 'coins', description: 'Double-entry accounts, balanced journal entries and reports.' },
+    { name: 'Pages', displayName: 'Pages', package: 'BarakoCMS.Pages', category: 'Content', glyph: 'content', description: 'A page tree with nested navigation, paths and breadcrumbs, for barakoPress to render.' },
+    { name: 'Forms', displayName: 'Forms', package: 'BarakoCMS.Forms', category: 'Content', glyph: 'form', description: 'Public form submissions, validated and stored as Sensitive entries, with a honeypot and a rate limit.' },
+    { name: 'Files', displayName: 'Files', package: 'BarakoCMS.Files', category: 'Content', glyph: 'archive', description: 'Uploads and serves files, stored in Postgres. Files · S3 moves them to a bucket.' },
+    { name: 'Files.S3', displayName: 'Files · S3', package: 'BarakoCMS.Files.S3', category: 'Platform', glyph: 'database', description: 'Keeps Files in AWS S3, Cloudflare R2 or any S3-compatible store.' },
+    { name: 'Import', displayName: 'Import', package: 'BarakoCMS.Import', category: 'Content', glyph: 'table', description: 'Bulk-creates entries from .xlsx or CSV uploads, mapped to a content type.' },
+    { name: 'Portability', displayName: 'Portability', package: 'BarakoCMS.Portability', category: 'Platform', glyph: 'cube', description: 'Exports content types and their entries as a JSON bundle, and imports it into another instance.' },
+    { name: 'Email.Resend', displayName: 'Email · Resend', package: 'BarakoCMS.Email.Resend', category: 'Comms', glyph: 'send', description: 'Sends mail through Resend and records bounces and complaints.' },
+    { name: 'Email.Smtp', displayName: 'Email · Smtp', package: 'BarakoCMS.Email.Smtp', category: 'Comms', glyph: 'envelope', description: 'Sends mail through any SMTP relay.' },
+    { name: 'ExternalAuth', displayName: 'External sign-in', package: 'BarakoCMS.ExternalAuth', category: 'Access', glyph: 'key', description: 'Continue with Google, GitHub, LinkedIn or Facebook, matched by verified email.' },
+    { name: 'DeviceTrust', displayName: 'Device trust', package: 'BarakoCMS.DeviceTrust', category: 'Access', glyph: 'shield', description: 'Binds sessions to devices and can require OTP approval for a new one.' },
+    { name: 'FeatureFlags', displayName: 'Feature flags', package: 'BarakoCMS.FeatureFlags', category: 'Platform', glyph: 'flag', description: 'Turns a feature on by tenant, by user or by percentage rollout.' },
+    { name: 'Diagnostics', displayName: 'Diagnostics', package: 'BarakoCMS.Diagnostics', category: 'Platform', glyph: 'bug', description: 'Collects browser errors from your apps, grouped by fingerprint with a count.' },
+    { name: 'Pwa', displayName: 'PWA', package: 'BarakoCMS.Pwa', category: 'Platform', glyph: 'mobile', description: 'Records installs to the home screen, anonymous or per signed-in user.' },
+    { name: 'Analytics.Umami', displayName: 'Analytics · Umami', package: 'BarakoCMS.Analytics.Umami', category: 'Insight', glyph: 'analytics', description: 'Shows Umami traffic in barakoBrew through a server-side proxy.' },
+    { name: 'AI', displayName: 'AI', package: 'BarakoCMS.AI', category: 'Insight', glyph: 'ai', description: 'Semantic search over published, Public entries with a self-hosted model. No third-party key.' },
+    { name: 'Accounting', displayName: 'Accounting', package: 'BarakoCMS.Accounting', category: 'Business', glyph: 'coins', description: 'Double-entry accounts, balanced journal entries and reports.' },
 ];
+
+/** True when `value` names a glyph the console has an icon for. */
+export function isModuleGlyph(value: unknown): value is ModuleGlyph {
+    return typeof value === 'string' && (MODULE_GLYPHS as readonly string[]).includes(value);
+}
 
 const norm = (s: string | undefined) => (s ?? '').trim().toLowerCase();
 
 /** The catalog entry for a module, by the name it registers or by its package id. */
-export function catalogEntry(m: Pick<ModuleSummary, 'name' | 'package'>): CatalogEntry | undefined {
+export function catalogEntry(m: Pick<ModuleSummary, 'name' | 'packageId'>): CatalogEntry | undefined {
     const name = norm(m.name);
-    const pkg = norm(m.package);
+    const pkg = norm(m.packageId);
     return FIRST_PARTY.find((e) => norm(e.name) === name || (pkg !== '' && norm(e.package) === pkg));
 }
 
@@ -92,7 +104,7 @@ export function withFirstParty(listed: readonly ModuleSummary[]): ModuleSummary[
         if (!entry) return m;
         return {
             ...m,
-            package: m.package || entry.package,
+            packageId: m.packageId || entry.package,
             category: normaliseCategory(m.category) ?? entry.category,
             description: m.description || entry.description,
         };
@@ -105,9 +117,20 @@ export function withFirstParty(listed: readonly ModuleSummary[]): ModuleSummary[
         installed: false,
         schemaState: 'unknown',
         schemaChanges: [],
-        package: e.package,
+        packageId: e.package,
         category: e.category,
         description: e.description,
     }));
     return [...merged, ...missing];
+}
+
+/** What a card or header calls a module: the design's display name for a first-party one, else the registered name. */
+export function moduleDisplayName(m: Pick<ModuleSummary, 'name' | 'packageId'>): string {
+    return catalogEntry(m)?.displayName ?? m.name;
+}
+
+/** The glyph a module is drawn with: the API's when it names a known one, else the catalog's, else the cube. */
+export function moduleGlyph(m: Pick<ModuleSummary, 'name' | 'packageId' | 'glyph'>): ModuleGlyph {
+    if (isModuleGlyph(m.glyph)) return m.glyph;
+    return catalogEntry(m)?.glyph ?? 'cube';
 }

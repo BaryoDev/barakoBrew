@@ -50,8 +50,8 @@ describe('useModules optional text fields', () => {
         vi.mocked(api.get).mockResolvedValue({
             data: {
                 items: [
-                    { ...summary('Files'), category: { x: 1 }, package: 7, description: ['a'] },
-                    { ...summary('Forms'), category: 'Content', package: 'BarakoCMS.Forms', description: 'Forms.' },
+                    { ...summary('Files'), category: { x: 1 }, packageId: 7, description: ['a'] },
+                    { ...summary('Forms'), category: 'Content', packageId: 'BarakoCMS.Forms', description: 'Forms.' },
                 ],
             },
         });
@@ -60,10 +60,10 @@ describe('useModules optional text fields', () => {
         const modules = result.current.data?.kind === 'modules' ? result.current.data.modules : [];
         expect(modules).toHaveLength(2);
         expect(modules[0].category).toBeUndefined();
-        expect(modules[0].package).toBeUndefined();
+        expect(modules[0].packageId).toBeUndefined();
         expect(modules[0].description).toBeUndefined();
         expect(modules[1].category).toBe('Content');
-        expect(modules[1].package).toBe('BarakoCMS.Forms');
+        expect(modules[1].packageId).toBe('BarakoCMS.Forms');
     });
 });
 
