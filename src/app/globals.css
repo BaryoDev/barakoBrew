@@ -101,6 +101,9 @@
 
   /* The accent-soft tint and the ink that sits on it: tinted panels, active nav, badges. */
   --accent: #eeebfd;
+
+  /* The sign-in brand panel and other code-dark surfaces. Darker again in the dark theme. */
+  --code: #14162a;
   --accent-foreground: #4034a8;
 
   --destructive: #a3261f;
@@ -184,6 +187,7 @@
   --muted: #1c1f36;
   --muted-foreground: #a0a4bd;
   --accent: #25214a;
+  --code: #090a14;
   --accent-foreground: #b9aeff;
   --destructive: #ff8a80;
   --success: #4fd1b8;
