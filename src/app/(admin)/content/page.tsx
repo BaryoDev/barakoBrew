@@ -4,7 +4,15 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
-import { useContents, useContentCounts } from '@/hooks/use-contents';
+import {
+  useContents,
+  useContentCounts,
+  useBulkContentStatus,
+  type BulkStatusChange,
+} from '@/hooks/use-contents';
+import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api';
+import { Checkbox } from '@/components/ui/checkbox';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { ContentStatus, type ContentListItem } from '@/types/content';
 import {
@@ -84,7 +92,8 @@ const column = createColumnHelper<typeof features, ContentListItem>();
 
 /** The Signal classes for each column's head and cells, by column id. */
 const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
-  entry: { head: `${HEAD} pl-6`, cell: 'max-w-md py-3.5 pl-6' },
+  select: { head: `${HEAD} w-11 pl-4`, cell: 'w-11 py-3.5 pl-4' },
+  entry: { head: HEAD, cell: 'max-w-md py-3.5' },
   type: { head: HEAD, cell: `${META} py-3.5` },
   status: { head: HEAD, cell: 'py-3.5' },
   version: {
@@ -98,12 +107,40 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
 };
 
 const NO_ROWS: ContentListItem[] = [];
+const NO_IDS: ReadonlySet<string> = new Set();
+
+/** What the selection column needs from the screen. */
+interface Selection {
+  ids: ReadonlySet<string>;
+  allOnPage: boolean;
+  someOnPage: boolean;
+  toggle: (id: string) => void;
+  toggleAll: () => void;
+}
 
 function entryColumns(
   privateTypes: ReadonlySet<string>,
-  typeIcons: ReadonlyMap<string, ContentTypeIcon | null | undefined>
+  typeIcons: ReadonlyMap<string, ContentTypeIcon | null | undefined>,
+  selection: Selection
 ) {
   return column.columns([
+    column.display({
+      id: 'select',
+      header: () => (
+        <Checkbox
+          aria-label="Select all entries on this page"
+          checked={selection.allOnPage ? true : selection.someOnPage ? 'indeterminate' : false}
+          onCheckedChange={selection.toggleAll}
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          aria-label={`Select ${contentTitle(row.original.data, row.original.id)}`}
+          checked={selection.ids.has(row.original.id)}
+          onCheckedChange={() => selection.toggle(row.original.id)}
+        />
+      ),
+    }),
     column.display({
       id: 'entry',
       header: 'Entry',
@@ -179,6 +216,25 @@ function ContentListInner() {
   const urlQuery = searchParams.get('q') ?? '';
   const status = statusFromParam(searchParams.get('status'));
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
+
+  // The ticked entries. A selection belongs to the page and filters it was made on, which is the
+  // query string, so any change to them drops it: a bar saying "3 selected" over rows that are no
+  // longer there would act on entries nobody can see. Read as empty rather than cleared in an
+  // effect, so there is no render where the old ticks sit over the new rows.
+  const scope = searchParams.toString();
+  const [ticked, setTicked] = useState<{ scope: string; ids: ReadonlySet<string> }>({
+    scope,
+    ids: NO_IDS,
+  });
+  const selected = ticked.scope === scope ? ticked.ids : NO_IDS;
+  const setSelected = useCallback(
+    (next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) =>
+      setTicked((prev) => {
+        const current = prev.scope === scope ? prev.ids : NO_IDS;
+        return { scope, ids: typeof next === 'function' ? next(current) : next };
+      }),
+    [scope]
+  );
 
   const setParams = useCallback(
     (next: Record<string, string | null>) => {
@@ -275,13 +331,78 @@ function ContentListInner() {
     [schemas]
   );
 
-  const columns = useMemo(() => entryColumns(privateTypes, typeIcons), [privateTypes, typeIcons]);
+  const items = contents?.items ?? NO_ROWS;
+  const selectedItems = items.filter((item) => selected.has(item.id));
+  const allOnPage = items.length > 0 && selectedItems.length === items.length;
+  const selection = useMemo<Selection>(
+    () => ({
+      ids: selected,
+      allOnPage,
+      someOnPage: selectedItems.length > 0,
+      toggle: (id) =>
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (!next.delete(id)) next.add(id);
+          return next;
+        }),
+      toggleAll: () => setSelected(allOnPage ? new Set() : new Set(items.map((item) => item.id))),
+    }),
+    [selected, allOnPage, selectedItems.length, items, setSelected]
+  );
+
+  const columns = useMemo(
+    () => entryColumns(privateTypes, typeIcons, selection),
+    [privateTypes, typeIcons, selection]
+  );
   const table = useTable({
     features,
     columns,
     data: contents?.items ?? NO_ROWS,
     getRowId: (item) => item.id,
   });
+
+  const bulk = useBulkContentStatus();
+
+  /**
+   * Moves the ticked entries to a status with the per-entry status route, then offers to put each
+   * back as it was. Entries already there are left out. One refused (a type with its own lifecycle
+   * does not take a plain status) does not stop the others, and the toast says how many were.
+   */
+  const moveSelected = (target: ContentStatus, done: string) => {
+    const before = new Map(selectedItems.map((item) => [item.id, item.status]));
+    const changes: BulkStatusChange[] = selectedItems
+      .filter((item) => item.status !== target)
+      .map((item) => ({ id: item.id, status: target }));
+    if (changes.length === 0) {
+      setSelected(new Set());
+      return;
+    }
+    const report = (failed: { error: unknown }[]) => {
+      if (failed.length > 0) {
+        toast.error(
+          `${failed.length} of ${changes.length} could not be changed. ${apiErrorMessage(failed[0].error, 'The API refused it.')}`
+        );
+      }
+    };
+    bulk.mutate(changes, {
+      onSuccess: (result) => {
+        setSelected(new Set());
+        report(result.failed);
+        if (result.done.length === 0) return;
+        toast(`${result.done.length} ${result.done.length === 1 ? 'entry' : 'entries'} ${done}`, {
+          duration: 8000,
+          action: {
+            label: 'Undo',
+            onClick: () =>
+              bulk.mutate(
+                result.done.map((id) => ({ id, status: before.get(id) as ContentStatus })),
+                { onSuccess: (undone) => report(undone.failed) }
+              ),
+          },
+        });
+      },
+    });
+  };
 
   const setType = (value: string) => {
     setParams({ type: value === ALL_TYPES ? null : value, page: null });
@@ -375,6 +496,43 @@ function ContentListInner() {
         />
       </div>
 
+      {selectedItems.length > 0 && (
+        <div
+          role="region"
+          aria-label="Bulk actions"
+          className="bg-foreground text-background mb-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
+        >
+          <span className="flex-1 text-sm font-semibold">{selectedItems.length} selected</span>
+          <Button
+            type="button"
+            size="sm"
+            disabled={bulk.isPending}
+            onClick={() => moveSelected(ContentStatus.Published, 'published')}
+          >
+            Publish
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-background/40 text-background hover:bg-background/10 hover:text-background bg-transparent"
+            disabled={bulk.isPending}
+            onClick={() => moveSelected(ContentStatus.Archived, 'archived')}
+          >
+            Archive
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-background hover:bg-background/10 hover:text-background opacity-80"
+            onClick={() => setSelected(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       <TabsContent value={contentType ?? ALL_TYPES}>
         {isLoading ? (
           <TableSkeleton />
@@ -431,7 +589,7 @@ function ContentListInner() {
                         // The title is a real link, so keyboard users have a focusable target and
                         // the row is a convenience for the mouse. Without this guard a click on the
                         // link navigates twice.
-                        if ((e.target as HTMLElement).closest('a')) return;
+                        if ((e.target as HTMLElement).closest('a, button')) return;
                         router.push(`/content/${row.original.id}`);
                       }}
                     >

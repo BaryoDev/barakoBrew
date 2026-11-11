@@ -181,6 +181,45 @@ export function useUpdateContentStatus() {
     });
 }
 
+export interface BulkStatusChange {
+    id: string;
+    status: ContentStatus;
+}
+
+export interface BulkStatusResult {
+    done: string[];
+    /** The entries the API refused, with its reason, so a partial change can say what is left. */
+    failed: { id: string; error: unknown }[];
+}
+
+/**
+ * Moves several entries to a status, one existing PUT /api/contents/{id}/status each. There is no
+ * bulk route, and a type with its own lifecycle refuses a plain status, so one entry failing does
+ * not stop the rest: the caller gets which went through and which did not.
+ */
+export function useBulkContentStatus() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (changes: BulkStatusChange[]): Promise<BulkStatusResult> => {
+            const settled = await Promise.allSettled(
+                changes.map(({ id, status }) =>
+                    api.put<{ message: string }>(`/api/contents/${id}/status`, { id, newStatus: status }),
+                ),
+            );
+            const result: BulkStatusResult = { done: [], failed: [] };
+            settled.forEach((outcome, i) => {
+                if (outcome.status === 'fulfilled') result.done.push(changes[i].id);
+                else result.failed.push({ id: changes[i].id, error: outcome.reason });
+            });
+            return result;
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ['contents'] });
+        },
+    });
+}
+
 // SuperAdmin/Admin only.
 export function useRollbackContent() {
     const queryClient = useQueryClient();

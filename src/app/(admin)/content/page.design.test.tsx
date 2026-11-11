@@ -22,6 +22,9 @@ const navigate = (url: string) => {
   paramListeners.forEach((notify) => notify());
 };
 
+const toastFn = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({ toast: toastFn }));
+
 vi.mock('next/navigation', async () => {
   const { useSyncExternalStore } = await import('react');
   return {
@@ -331,5 +334,133 @@ describe('relative times', () => {
     const time = within(bodyRows()[0]).getByText('2h ago');
     expect(time.getAttribute('title')).toBe(new Date(twoHoursAgo).toLocaleString());
     expect(time.getAttribute('datetime')).toBe(twoHoursAgo);
+  });
+});
+
+describe('the selection column and bulk bar', () => {
+  const tick = (user: ReturnType<typeof userEvent.setup>, title: string) =>
+    user.click(screen.getByRole('checkbox', { name: `Select ${title}` }));
+
+  beforeEach(() => {
+    vi.mocked(api.put).mockResolvedValue({ data: { message: 'ok' } });
+  });
+
+  it('has a checkbox per row and one for the page, and no bar until something is ticked', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(screen.getByRole('checkbox', { name: 'Select all entries on this page' })).toBeTruthy();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(4);
+    expect(screen.queryByRole('region', { name: 'Bulk actions' })).toBeNull();
+  });
+
+  it('shows how many are selected, and Clear empties it', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Beta');
+    await tick(user, 'Gamma');
+    const bar = screen.getByRole('region', { name: 'Bulk actions' });
+    expect(within(bar).getByText('2 selected')).toBeTruthy();
+
+    await user.click(within(bar).getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByRole('region', { name: 'Bulk actions' })).toBeNull();
+  });
+
+  it('selects every row on the page from the header checkbox', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all entries on this page' }));
+
+    expect(within(screen.getByRole('region', { name: 'Bulk actions' })).getByText('3 selected')).toBeTruthy();
+  });
+
+  it('publishes each ticked draft with the per-entry status route, leaving ones already published alone', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Alpha');
+    await tick(user, 'Beta');
+    await tick(user, 'Gamma');
+    await user.click(screen.getByRole('button', { name: 'Publish' }));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.put).mock.calls.map((c) => c[0]).sort()).toEqual([
+      '/api/contents/b/status',
+      '/api/contents/c/status',
+    ]);
+    expect(vi.mocked(api.put).mock.calls[0][1]).toMatchObject({ newStatus: ContentStatus.Published });
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Bulk actions' })).toBeNull());
+  });
+
+  it('archives, and the undo toast puts every entry back in the status it had', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Alpha');
+    await tick(user, 'Beta');
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() => expect(toastFn).toHaveBeenCalled());
+    expect(toastFn.mock.calls[0][0]).toBe('2 entries archived');
+    const action = (toastFn.mock.calls[0][1] as { action: { label: string; onClick: () => void } }).action;
+    expect(action.label).toBe('Undo');
+    vi.mocked(api.put).mockClear();
+
+    action.onClick();
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2));
+    const sent = Object.fromEntries(
+      vi.mocked(api.put).mock.calls.map((c) => [c[0], (c[1] as { newStatus: string }).newStatus])
+    );
+    expect(sent).toEqual({
+      '/api/contents/a/status': ContentStatus.Published,
+      '/api/contents/b/status': ContentStatus.Draft,
+    });
+  });
+
+  it('says how many were refused and still offers undo for the rest', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.put).mockImplementation(async (url: string) => {
+      if (url === '/api/contents/c/status') throw new Error('This type has its own lifecycle.');
+      return { data: { message: 'ok' } };
+    });
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Beta');
+    await tick(user, 'Gamma');
+    await user.click(screen.getByRole('button', { name: 'Publish' }));
+
+    await waitFor(() => expect(toastFn.error).toHaveBeenCalled());
+    expect(toastFn.error.mock.calls[0][0]).toMatch(/^1 of 2 could not be changed/);
+    expect(toastFn.mock.calls[0][0]).toBe('1 entry published');
+  });
+
+  it('drops the selection when a filter changes', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+    await tick(user, 'Beta');
+    expect(screen.getByRole('region', { name: 'Bulk actions' })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /^Draft/ }));
+
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Bulk actions' })).toBeNull());
+  });
+
+  it('does not open the entry when a checkbox is clicked', async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    await tick(user, 'Alpha');
+
+    expect(push).not.toHaveBeenCalled();
   });
 });
