@@ -123,7 +123,9 @@ describe('the system strip from GET /api/overview', () => {
             health: { verdict: 'bad', items: [{ name: 'Storage', status: 'bad' }] },
         };
         render(<SystemStrip />);
-        expect(within(strip()).getByText('Storage').closest('a')).toHaveTextContent('problem');
-        expect(within(strip()).getByText('Storage').closest('a')).not.toHaveTextContent(/\bok\b/);
+        // Storage links to /settings/storage only when the caller can open it, and here they cannot.
+        const cell = within(strip()).getByText('Storage').parentElement as HTMLElement;
+        expect(cell).toHaveTextContent('problem');
+        expect(cell).not.toHaveTextContent(/\bok\b/);
     });
 });
