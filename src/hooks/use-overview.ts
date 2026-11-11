@@ -12,6 +12,13 @@ import type { Sample } from '@/lib/overview';
  */
 export const SAMPLE_SIZE = 100;
 
+/*
+ * Missing from core: a range-windowed series. GET /api/contents/counts takes only `contentType`
+ * (no `from` or `range`, no bucketed `series`), and GET /api/overview counts cover 24 hours only.
+ * Until core sends per-range counts with a bucketed series, the value is the list total, and the
+ * bars and the change sentence are read from this sample. They say how many sampled rows fall in
+ * each slice, not how many exist, and the change is left out when the sample cannot cover two ranges.
+ */
 const rowSchema = z.looseObject({ createdAt: z.string() });
 const pageSchema = paginatedSchema(rowSchema);
 

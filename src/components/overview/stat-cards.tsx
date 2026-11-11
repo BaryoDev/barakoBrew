@@ -23,8 +23,9 @@ export interface StatCardProps {
   tone?: StatTone;
 }
 
-const BAR_MIN_PX = 4;
-const BAR_SPAN_PX = 30;
+// The design draws bars from 8 to 34px.
+const BAR_MIN_PX = 8;
+const BAR_SPAN_PX = 26;
 
 function Spark({ bars, tone }: { bars: readonly number[]; tone: StatTone }) {
   const max = Math.max(...bars, 0);
