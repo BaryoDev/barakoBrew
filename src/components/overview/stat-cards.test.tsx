@@ -21,6 +21,7 @@ interface Lists {
     drafts: unknown[];
     runs: unknown[];
     failed: unknown[];
+    partial?: unknown[];
     totals?: { published?: number; drafts?: number; runs?: number; failed?: number };
     failing?: 'published' | 'runs';
 }
@@ -40,6 +41,7 @@ function answer(l: Lists) {
         }
         if (url === '/api/workflow-runs') {
             if (status === 'Failed') return pick(l.failed, l.totals?.failed);
+            if (status === 'PartiallyFailed') return pick(l.partial ?? []);
             if (l.failing === 'runs') throw new Error('boom');
             return pick(l.runs, l.totals?.runs);
         }
@@ -75,7 +77,7 @@ describe('the stat cards', () => {
         renderCards(30);
         await within(await card('Published')).findByText('0');
         const calls = vi.mocked(api.get).mock.calls;
-        expect(calls).toHaveLength(4);
+        expect(calls).toHaveLength(5);
         for (const [, config] of calls) {
             expect((config as { params: { pageSize: number } }).params.pageSize).toBe(100);
         }
@@ -181,3 +183,24 @@ describe('the range switch', () => {
         expect(new Set(await heightsOf()).size).toBe(2);
     });
 });
+
+describe('the stat card targets', () => {
+    it('open the filtered screen each one names', async () => {
+        answer({ published: [], drafts: [], runs: [], failed: [] });
+        renderCards(30);
+        await within(await card('Published')).findByText('0');
+        expect(await card('Published')).toHaveAttribute('href', '/content?status=Published');
+        expect(await card('Drafts')).toHaveAttribute('href', '/content?status=Draft');
+        expect(await card('Workflow runs')).toHaveAttribute('href', '/workflow-runs');
+        expect(await card('Failures')).toHaveAttribute('href', '/workflow-runs');
+    });
+
+    it('count Failed and Partly failed together in Failures', async () => {
+        answer({ published: [], drafts: [], runs: [], failed: [daysAgo(1)], partial: [daysAgo(2), daysAgo(3)] });
+        renderCards(30);
+        const failures = await card('Failures');
+        expect(await within(failures).findByText('3 for you')).toBeInTheDocument();
+        expect(within(failures).getByText('3', { selector: 'span.font-display' })).toBeInTheDocument();
+    });
+});
+

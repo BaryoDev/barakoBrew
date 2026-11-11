@@ -23,8 +23,9 @@ export interface StatCardProps {
   tone?: StatTone;
 }
 
-const BAR_MIN_PX = 4;
-const BAR_SPAN_PX = 30;
+// The design draws bars from 8 to 34px.
+const BAR_MIN_PX = 8;
+const BAR_SPAN_PX = 26;
 
 function Spark({ bars, tone }: { bars: readonly number[]; tone: StatTone }) {
   const max = Math.max(...bars, 0);
@@ -115,7 +116,8 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
   const published = useEntrySample('Published');
   const drafts = useEntrySample('Draft');
   const runs = useRunSample();
-  const failures = useRunSample('Failed');
+  const failedRuns = useRunSample('Failed');
+  const partialRuns = useRunSample('PartiallyFailed');
 
   const stateOf = (q: { isError: boolean; data: Sample | undefined }) =>
     q.isError ? 'error' : q.data ? 'ready' : 'loading';
@@ -123,14 +125,27 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
   const pub = fromSample(published.data, range, now);
   const dra = fromSample(drafts.data, range, now);
   const run = fromSample(runs.data, range, now);
+  // Failed and Partly failed both need a person, and the API takes one status per request.
+  const failures = {
+    isError: failedRuns.isError || partialRuns.isError,
+    data:
+      failedRuns.data && partialRuns.data
+        ? {
+            rows: [...failedRuns.data.rows, ...partialRuns.data.rows],
+            totalItems: failedRuns.data.totalItems + partialRuns.data.totalItems,
+            hasNextPage: failedRuns.data.hasNextPage || partialRuns.data.hasNextPage,
+          }
+        : undefined,
+  };
   const fail = fromSample(failures.data, range, now);
   const failed = failures.data?.totalItems ?? 0;
+  const failedTotal = failures.data?.totalItems;
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
       <StatCard
         label="Published"
-        href="/content"
+        href="/content?status=Published"
         state={stateOf(published)}
         value={published.data?.totalItems}
         bars={pub.bars}
@@ -138,7 +153,7 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
       />
       <StatCard
         label="Drafts"
-        href="/content"
+        href="/content?status=Draft"
         state={stateOf(drafts)}
         value={drafts.data?.totalItems}
         bars={dra.bars}
@@ -154,9 +169,10 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
       />
       <StatCard
         label="Failures"
+        // The count is Failed plus Partly failed, and the runs page filters one status, so this opens all runs.
         href="/workflow-runs"
         state={stateOf(failures)}
-        value={failures.data?.totalItems}
+        value={failedTotal}
         bars={fail.bars}
         caption={failed > 0 ? `${failed} for you` : 'None'}
         tone={failed > 0 ? 'alert' : 'normal'}

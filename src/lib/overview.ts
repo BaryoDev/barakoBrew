@@ -145,6 +145,26 @@ export function verdictFor({ needs, decision, systemOk: ok }: { needs: number; d
   };
 }
 
+/**
+ * The sentence under the greeting from what GET /api/overview said. The dot colour is the server's
+ * `verdict` and the lead words are its `headline`; this adds only the count of items. Nothing is
+ * judged here, so the console and any other client read the same severity. `needs` is the number of
+ * rows Needs you shows, so the line and the list cannot disagree.
+ */
+export function verdictFromCore(core: { verdict: Tone; headline: string; health?: unknown }, needs: number): Verdict {
+  // Without a health strip (a caller who may not view monitoring) nothing says the site is up or
+  // what the headline covers, so only what is waiting is said.
+  const seen = core.health != null;
+  if (needs === 0) {
+    return {
+      text: !seen ? 'Nothing is waiting on you.' : core.verdict === 'ok' ? 'Your site is up and nothing is waiting on you.' : `${core.headline}. Nothing is waiting on you.`,
+      tone: core.verdict,
+    };
+  }
+  const waiting = `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you.`;
+  return { text: seen ? `${core.headline}. ${waiting}` : waiting, tone: core.verdict };
+}
+
 /** "running a workflow" when any of these runs is Running or Pending, else "idle". */
 export function runnerState(rows: readonly { status?: unknown }[]): 'running a workflow' | 'idle' {
   return rows.some((row) => row.status === 'Running' || row.status === 'Pending') ? 'running a workflow' : 'idle';

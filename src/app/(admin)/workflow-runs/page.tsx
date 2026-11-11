@@ -221,9 +221,14 @@ function RunRow({ row, selected, onSelect }: { row: WorkflowRun; selected: boole
 }
 
 export default function WorkflowRunsPage() {
-  const [status, setStatus] = useState<string>(ANY_STATUS);
-  const [page, setPage] = useState(1);
   const searchParams = useSearchParams();
+  // `?status=PartiallyFailed` opens the list on that filter, which is how an Overview card links here.
+  // Only a status the chips offer counts, so a mistyped link shows every run rather than none.
+  const linkedStatus = searchParams.get('status');
+  const [status, setStatus] = useState<string>(
+    STATUS_SEGMENTS.some((segment) => segment.status === linkedStatus) ? (linkedStatus as string) : ANY_STATUS,
+  );
+  const [page, setPage] = useState(1);
   const linked = searchParams.get('run');
   // An id in the address that is not shaped like a run id is answered with "not found" here. The
   // API would answer 400 to it, and there is nothing to ask.
