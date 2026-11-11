@@ -40,4 +40,24 @@ describe('the Overview card slot', () => {
         render(<OverviewCardSlot />);
         expect(screen.queryByTestId('fake')).toBeNull();
     });
+
+    it('hides a card that throws and keeps the others', () => {
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        registerSlot('overview-card', 'Bad', () => {
+            throw new Error('boom');
+        });
+        registerSlot('overview-card', 'Good', () => <div data-testid="good" />);
+        enabled = ['Bad', 'Good'];
+        render(<OverviewCardSlot />);
+        expect(screen.getByTestId('good')).toBeInTheDocument();
+        spy.mockRestore();
+    });
+
+    it('keeps one card per module when it registers twice', () => {
+        registerSlot('overview-card', 'Fake', () => <div data-testid="fake" />);
+        registerSlot('overview-card', 'Fake', () => <div data-testid="fake" />);
+        enabled = ['Fake'];
+        render(<OverviewCardSlot />);
+        expect(screen.getAllByTestId('fake')).toHaveLength(1);
+    });
 });

@@ -3,19 +3,38 @@ import { render, screen, act, fireEvent } from '@testing-library/react';
 
 let state: { rows: { key: string; title: string; detail: string; href: string; dot: string; cta?: 'Review' | 'Open'; resolveId?: string }[]; source: 'activity' | 'counts'; isLoading: boolean; isError: boolean };
 
-vi.mock('@/hooks/use-needs-you', () => ({ useNeedsYou: () => state }));
+vi.mock('@/hooks/use-needs-you', async () => {
+    const { useSyncExternalStore } = await import('react');
+    const store = await import('@/lib/pending-resolves');
+    return {
+        useNeedsYou: () => {
+            const pending = useSyncExternalStore(store.subscribePending, store.pendingIds, store.pendingIds);
+            return { ...state, rows: state.rows.filter((r) => !(r.resolveId && pending.has(r.resolveId))) };
+        },
+    };
+});
+let tenant: string | null = 'a';
+vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => tenant }));
+// The token is the tenant here, so a test switches tenant by changing it.
+const tokens = { token: 'a' as string | null };
+vi.mock('@/lib/api', () => ({ tokenStore: tokens, tenantOfToken: (t: string | null) => t }));
 const resolve = vi.fn();
-vi.mock('@/hooks/use-overview-summary', () => ({ useResolveOverviewItem: () => ({ mutate: resolve }) }));
-const toastFn = Object.assign(vi.fn(), { error: vi.fn() });
+vi.mock('@/hooks/use-overview-summary', () => ({ useResolveOverviewItem: () => ({ mutateAsync: resolve }) }));
+const toastFn = Object.assign(vi.fn(() => 'toast-1'), { error: vi.fn(), dismiss: vi.fn() });
 vi.mock('sonner', () => ({ toast: toastFn }));
 
 const { NeedsYouCard } = await import('./needs-you-card');
+const { release } = await import('@/lib/pending-resolves');
 
 const row = (key: string) => ({ key, title: `Row ${key}`, detail: 'detail', href: `/x/${key}`, dot: 'bg-warning' });
 
 beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    resolve.mockResolvedValue(undefined);
+    tenant = 'a';
+    tokens.token = 'a';
+    release('mail.bounces');
     state = { rows: [], source: 'activity', isLoading: false, isError: false };
 });
 
@@ -87,6 +106,7 @@ describe('a Needs you row from the API', () => {
         });
         expect(resolve).toHaveBeenCalledTimes(1);
         expect(resolve.mock.calls[0][0]).toBe('mail.bounces');
+        expect(toastFn.dismiss).toHaveBeenCalledWith('toast-1');
     });
 
     it('brings the row back and sends nothing when Undo is pressed', () => {
@@ -102,13 +122,54 @@ describe('a Needs you row from the API', () => {
         expect(resolve).not.toHaveBeenCalled();
     });
 
-    it('sends a waiting resolve when the page is left', () => {
+    it('does nothing when Undo is pressed after the call went out', async () => {
+        vi.useFakeTimers();
+        resolve.mockReturnValue(new Promise(() => {}));
+        state.rows = [bounce];
+        render(<NeedsYouCard />);
+        fireEvent.click(screen.getByRole('button', { name: /Mark resolved/ }));
+        act(() => {
+            vi.advanceTimersByTime(6000);
+        });
+        act(() => toastFn.mock.calls[0][1].action.onClick());
+        expect(screen.queryByRole('link', { name: /^Review:/ })).toBeNull();
+    });
+
+    it('lets a later row with the same id show again once the call succeeded', async () => {
         vi.useFakeTimers();
         state.rows = [bounce];
-        const { unmount } = render(<NeedsYouCard />);
+        render(<NeedsYouCard />);
         fireEvent.click(screen.getByRole('button', { name: /Mark resolved/ }));
-        unmount();
-        expect(resolve).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            vi.advanceTimersByTime(6000);
+        });
+        expect(screen.getByRole('link', { name: /^Review:/ })).toBeInTheDocument();
+    });
+
+    it('drops a held resolve unsent when the tenant changes', () => {
+        vi.useFakeTimers();
+        state.rows = [bounce];
+        const { rerender } = render(<NeedsYouCard />);
+        fireEvent.click(screen.getByRole('button', { name: /Mark resolved/ }));
+        tenant = 'b';
+        tokens.token = 'b';
+        rerender(<NeedsYouCard />);
+        act(() => {
+            vi.advanceTimersByTime(10_000);
+        });
+        expect(resolve).not.toHaveBeenCalled();
+        expect(screen.getByRole('link', { name: /^Review:/ })).toBeInTheDocument();
+    });
+
+    it('does not send as someone else when the token changed before the timer', () => {
+        vi.useFakeTimers();
+        state.rows = [bounce];
+        render(<NeedsYouCard />);
+        fireEvent.click(screen.getByRole('button', { name: /Mark resolved/ }));
+        tokens.token = null; // signed out
+        act(() => {
+            vi.advanceTimersByTime(6000);
+        });
+        expect(resolve).not.toHaveBeenCalled();
     });
 });
-

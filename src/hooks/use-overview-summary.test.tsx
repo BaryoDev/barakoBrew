@@ -45,6 +45,25 @@ describe('useOverviewSummary', () => {
   });
 });
 
+describe('severity and polling', () => {
+    it('reads an unknown severity as warn, not ok', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { verdict: 'strange', headline: 'x', needsYou: [] } });
+        const { result } = renderHook(() => useOverviewSummary(), { wrapper });
+        await waitFor(() => expect(result.current.summary).toBeDefined());
+        expect(result.current.summary?.verdict).toBe('warn');
+    });
+
+    it('asks once, not on a timer, after the route answered 403', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        vi.mocked(api.get).mockRejectedValue({ isAxiosError: true, response: { status: 403 } });
+        const { result } = renderHook(() => useOverviewSummary(), { wrapper });
+        await waitFor(() => expect(result.current.unavailable).toBe(true));
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(api.get).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
+    });
+});
+
 describe('useResolveOverviewItem', () => {
   it('posts to the resolve route of the item', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: {} });

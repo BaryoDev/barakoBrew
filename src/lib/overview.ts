@@ -148,20 +148,21 @@ export function verdictFor({ needs, decision, systemOk: ok }: { needs: number; d
 /**
  * The sentence under the greeting from what GET /api/overview said. The dot colour is the server's
  * `verdict` and the lead words are its `headline`; this adds only the count of items. Nothing is
- * judged here, so the console and any other client read the same severity.
+ * judged here, so the console and any other client read the same severity. `needs` is the number of
+ * rows Needs you shows, so the line and the list cannot disagree.
  */
-export function verdictFromCore(core: { verdict: Tone; headline: string; needsYou: readonly unknown[] }): Verdict {
-  const needs = core.needsYou.length;
+export function verdictFromCore(core: { verdict: Tone; headline: string; health: unknown }, needs: number): Verdict {
+  // Without a health strip (a caller who may not view monitoring) nothing says the site is up or
+  // what the headline covers, so only what is waiting is said.
+  const seen = core.health != null;
   if (needs === 0) {
     return {
-      text: core.verdict === 'ok' ? 'Your site is up and nothing is waiting on you.' : `${core.headline}. Nothing is waiting on you.`,
+      text: !seen ? 'Nothing is waiting on you.' : core.verdict === 'ok' ? 'Your site is up and nothing is waiting on you.' : `${core.headline}. Nothing is waiting on you.`,
       tone: core.verdict,
     };
   }
-  return {
-    text: `${core.headline}. ${needs} ${needs === 1 ? 'thing needs' : 'things need'} you.`,
-    tone: core.verdict,
-  };
+  const waiting = `${needs} ${needs === 1 ? 'thing needs' : 'things need'} you.`;
+  return { text: seen ? `${core.headline}. ${waiting}` : waiting, tone: core.verdict };
 }
 
 /** "running a workflow" when any of these runs is Running or Pending, else "idle". */

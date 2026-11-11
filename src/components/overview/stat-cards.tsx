@@ -169,7 +169,8 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
       />
       <StatCard
         label="Failures"
-        href="/workflow-runs?status=PartiallyFailed"
+        // The count is Failed plus Partly failed, and the runs page filters one status, so this opens all runs.
+        href="/workflow-runs"
         state={stateOf(failures)}
         value={failedTotal}
         bars={fail.bars}

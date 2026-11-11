@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
+import { pendingIds, subscribePending } from '@/lib/pending-resolves';
 import { useRunSample } from '@/hooks/use-overview';
 import { useNavMetrics } from '@/hooks/use-nav-metrics';
 import { useActivity } from '@/hooks/use-activity';
@@ -141,8 +142,12 @@ export function useNeedsYou() {
     });
   }
 
+  // Rows held for an undo are not counted or shown, here or anywhere that reads this.
+  const pending = useSyncExternalStore(subscribePending, pendingIds, pendingIds);
+  const shown = rows.filter((row) => !(row.resolveId && pending.has(row.resolveId)));
+
   return {
-    rows,
+    rows: shown,
     source: fromCore || fromFeed ? ('activity' as const) : ('counts' as const),
     isLoading: overview.isLoading || (fromCore ? false : fromFeed ? activity.isLoading : failed.isLoading || partial.isLoading),
     isError: fromCore ? false : fromFeed ? activity.isError : failed.isError || partial.isError,

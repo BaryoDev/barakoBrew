@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { api, isForbidden, isNotFound, parseResponse } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 
-const severity = z.enum(['ok', 'warn', 'bad']).catch('ok');
+// An unknown severity reads as warn, never ok: unsure should not look fine.
+const severity = z.enum(['ok', 'warn', 'bad']).catch('warn');
 
 const stripItem = z.looseObject({
   name: z.string(),
@@ -44,7 +45,7 @@ const POLL_MS = 30 * 1000;
 
 /**
  * The summary, or `available: false` against a core without the route (404) or for a caller it
- * refuses (401, 403), so the page falls back to what it read before. Everything else is an error.
+ * refuses (403), so the page falls back to what it read before. Everything else is an error.
  */
 export function useOverviewSummary() {
   const tenant = useCurrentTenant();
@@ -61,7 +62,8 @@ export function useOverviewSummary() {
     },
     retry: false,
     staleTime: POLL_MS,
-    refetchInterval: POLL_MS,
+    // Not polled once the route answered 404 or 403: asking again changes nothing.
+    refetchInterval: (q) => (q.state.data?.available === false ? false : POLL_MS),
   });
   return {
     summary: query.data?.available ? query.data.summary : undefined,

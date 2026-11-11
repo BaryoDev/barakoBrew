@@ -49,7 +49,7 @@ export function OverviewHeader({ range, onRange }: { range: Range; onRange: (ran
   // is built from what the page loaded, once Needs you has answered, so it never claims "nothing
   // is waiting" while it loads.
   const verdict = overview.summary
-    ? verdictFromCore(overview.summary)
+    ? verdictFromCore(overview.summary, needs.rows.length)
     : overview.isLoading || !(overview.unavailable || overview.isError) || needs.isLoading || needs.isError
       ? null
       : verdictFor({

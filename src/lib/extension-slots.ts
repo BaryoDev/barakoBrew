@@ -25,7 +25,11 @@ const registry: { [K in SlotKind]: Entry<K>[] } = { 'overview-card': [] };
 
 /** Register a component for a slot, keyed by the module that owns it. Call it once, at startup. */
 export function registerSlot<K extends SlotKind>(kind: K, module: string, Component: SlotComponents[K]): void {
-  (registry[kind] as Entry<K>[]).push({ module, Component });
+  // One component per module and slot: registering again replaces, so a hot reload cannot stack cards.
+  const list = registry[kind] as Entry<K>[];
+  const at = list.findIndex((entry) => entry.module === module);
+  if (at >= 0) list[at] = { module, Component };
+  else list.push({ module, Component });
 }
 
 /** What is registered for a slot, whether or not its module runs. */

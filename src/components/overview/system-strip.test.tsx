@@ -114,5 +114,16 @@ describe('the system strip from GET /api/overview', () => {
         expect(within(strip()).getByText('Mail').closest('a')).toHaveAttribute('title', '2 bounces waiting.');
         expect(within(strip()).getByRole('link', { name: '1 warning' })).toHaveAttribute('href', '/email-events');
     });
-});
 
+    it('says the status word for a cell that is off with no detail', () => {
+        summary = {
+            verdict: 'bad',
+            headline: '1 problem',
+            needsYou: [],
+            health: { verdict: 'bad', items: [{ name: 'Storage', status: 'bad' }] },
+        };
+        render(<SystemStrip />);
+        expect(within(strip()).getByText('Storage').closest('a')).toHaveTextContent('problem');
+        expect(within(strip()).getByText('Storage').closest('a')).not.toHaveTextContent(/\bok\b/);
+    });
+});

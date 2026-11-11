@@ -192,7 +192,7 @@ describe('the stat card targets', () => {
         expect(await card('Published')).toHaveAttribute('href', '/content?status=Published');
         expect(await card('Drafts')).toHaveAttribute('href', '/content?status=Draft');
         expect(await card('Workflow runs')).toHaveAttribute('href', '/workflow-runs');
-        expect(await card('Failures')).toHaveAttribute('href', '/workflow-runs?status=PartiallyFailed');
+        expect(await card('Failures')).toHaveAttribute('href', '/workflow-runs');
     });
 
     it('count Failed and Partly failed together in Failures', async () => {

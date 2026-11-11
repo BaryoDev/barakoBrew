@@ -88,7 +88,7 @@ const STRIP_HREF: Record<string, string> = {
 function coreWords(item: OverviewStripItem): string {
   if (item.name === 'API') return item.version ? `up · ${item.version}` : 'up';
   if (item.name === 'Database' && item.ms != null) return item.detail ? `${item.detail} · ${item.ms} ms` : `${item.ms} ms`;
-  return item.detail ?? 'ok';
+  return item.detail ?? (item.status === 'ok' ? 'ok' : item.status === 'warn' ? 'warning' : 'problem');
 }
 
 /**

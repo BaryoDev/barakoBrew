@@ -71,8 +71,9 @@ describe('the Overview heading', () => {
 describe('the Overview verdict from GET /api/overview', () => {
     it('takes the dot and the words from the API, not from the page', () => {
         // The page's own reads say all is well. Only the API says warn, so a warn dot proves the source.
+        needs = { rows: [{ key: 'mail.bounces' }], isLoading: false, isError: false };
         overview = {
-            summary: { verdict: 'warn', headline: '1 warning', needsYou: [{ id: 'mail.bounces' }] },
+            summary: { verdict: 'warn', headline: '1 warning', health: { items: [] }, needsYou: [{ id: 'mail.bounces' }] },
             unavailable: false,
             isLoading: false,
             isError: false,
@@ -83,10 +84,29 @@ describe('the Overview verdict from GET /api/overview', () => {
     });
 
     it('uses a red dot when the API says bad', () => {
-        overview = { summary: { verdict: 'bad', headline: '2 problems', needsYou: [] }, unavailable: false, isLoading: false, isError: false };
+        overview = { summary: { verdict: 'bad', headline: '2 problems', health: { items: [] }, needsYou: [] }, unavailable: false, isLoading: false, isError: false };
         render(<OverviewHeader range={30} onRange={() => {}} />);
         expect(screen.getByRole('status')).toHaveTextContent('2 problems. Nothing is waiting on you.');
         expect(screen.getByTestId('verdict-dot').className).toContain('bg-destructive');
+    });
+
+    it('counts the rows Needs you shows, not the API list', () => {
+        // The API lists one item and the card shows that one plus a client errors row.
+        needs = { rows: [{ key: 'mail.bounces' }, { key: 'errors' }], isLoading: false, isError: false };
+        overview = {
+            summary: { verdict: 'warn', headline: '1 warning', health: { items: [] }, needsYou: [{ id: 'mail.bounces' }] },
+            unavailable: false,
+            isLoading: false,
+            isError: false,
+        };
+        render(<OverviewHeader range={30} onRange={() => {}} />);
+        expect(screen.getByRole('status')).toHaveTextContent('1 warning. 2 things need you.');
+    });
+
+    it('does not say the site is up when core sent no health', () => {
+        overview = { summary: { verdict: 'ok', headline: 'All systems normal', health: null, needsYou: [] }, unavailable: false, isLoading: false, isError: false };
+        render(<OverviewHeader range={30} onRange={() => {}} />);
+        expect(screen.getByRole('status')).toHaveTextContent(/^Nothing is waiting on you\.$/);
     });
 
     it('says nothing while the API has not answered', () => {

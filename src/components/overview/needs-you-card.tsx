@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useNeedsYou, type NeedsRow } from '@/hooks/use-needs-you';
 import { useResolveOverviewItem } from '@/hooks/use-overview-summary';
 import { IconCheck } from '@/components/icons';
+import { useCurrentTenant } from '@/hooks/use-tenants';
+import { tenantOfToken, tokenStore } from '@/lib/api';
+import { cancel, cancelAll, hold, release } from '@/lib/pending-resolves';
 import { cn } from '@/lib/utils';
 
 const MAX_ROWS = 6;
@@ -15,65 +18,54 @@ export const UNDO_MS = 6000;
 
 /**
  * Resolving is held for UNDO_MS before the call goes out, because core's resolve cannot be taken
- * back. Undo inside that time sends nothing. Leaving the page sends what is still waiting, so a
- * click is never lost.
+ * back (see lib/pending-resolves.ts). A call is sent only for the tenant that was open when the
+ * check was pressed: after a tenant switch or a sign out it is dropped, never sent as someone else.
  */
 function useResolveWithUndo() {
   const resolve = useResolveOverviewItem();
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
-  const waiting = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const send = useRef((id: string) => {});
+  const tenant = useCurrentTenant();
+  const seen = useRef(tenant);
 
-  const show = (id: string) =>
-    setHidden((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
-
-  send.current = (id: string) => {
-    waiting.current.delete(id);
-    resolve.mutate(id, {
-      onError: () => {
-        show(id);
-        toast.error('Could not resolve that. It is still on the list.');
-      },
-    });
-  };
-
+  // A tenant switch keeps this page mounted, so held resolves are dropped here, unsent.
   useEffect(() => {
-    const timers = waiting.current;
-    return () => {
-      for (const [id, timer] of timers) {
-        clearTimeout(timer);
-        send.current(id);
-      }
-    };
-  }, []);
+    if (seen.current !== tenant) {
+      seen.current = tenant;
+      cancelAll();
+    }
+  }, [tenant]);
 
   function start(row: NeedsRow) {
     const id = row.resolveId;
     if (!id) return;
-    setHidden((current) => new Set(current).add(id));
-    waiting.current.set(
-      id,
-      setTimeout(() => send.current(id), UNDO_MS),
-    );
-    toast('Marked as resolved', {
+    const startedIn = tenantOfToken(tokenStore.token);
+    const toastId = toast('Marked as resolved', {
       description: row.title,
       duration: UNDO_MS,
       action: {
         label: 'Undo',
+        // A no-op once the call went out: the row is not shown again and nothing says undone.
         onClick: () => {
-          clearTimeout(waiting.current.get(id));
-          waiting.current.delete(id);
-          show(id);
+          cancel(id);
         },
       },
     });
+    hold(id, UNDO_MS, () => {
+      toast.dismiss(toastId);
+      if (tenantOfToken(tokenStore.token) !== startedIn) {
+        release(id);
+        return;
+      }
+      resolve.mutateAsync(id).then(
+        () => release(id),
+        () => {
+          release(id);
+          toast.error('Could not resolve that. It is still on the list.');
+        },
+      );
+    });
   }
 
-  return { hidden, start };
+  return { start };
 }
 
 /**
@@ -82,9 +74,8 @@ function useResolveWithUndo() {
  * activity feed's warnings and errors, else the counts of failed runs, errors and bounces.
  */
 export function NeedsYouCard() {
-  const { rows: all, source, isLoading, isError } = useNeedsYou();
-  const { hidden, start } = useResolveWithUndo();
-  const rows = all.filter((row) => !(row.resolveId && hidden.has(row.resolveId)));
+  const { rows, source, isLoading, isError } = useNeedsYou();
+  const { start } = useResolveWithUndo();
 
   return (
     <section aria-labelledby="overview-needs" className="border-border bg-card rise grid gap-3 rounded-[18px] border p-5">
