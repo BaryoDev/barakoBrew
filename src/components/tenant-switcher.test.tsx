@@ -129,6 +129,12 @@ describe('the tenant card', () => {
         expect(card.textContent).not.toContain('Admin');
     });
 
+    it('says how a switch works, in the design words', () => {
+        render(<TenantSwitcher />);
+        fireEvent.click(screen.getByRole('button', { name: 'Switch tenant' }));
+        expect(screen.getByText('Switching re-issues your token. Your role can differ per tenant.')).toBeTruthy();
+    });
+
     it('takes initials from letters, whole characters and not punctuation', async () => {
         const { initialsOf } = await import('./tenant-switcher');
         expect(initialsOf('The Club')).toBe('TC');
