@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Sidebar, SidebarContent, SidebarProvider } from '@/components/ui/sidebar';
 import { setViewportWidth } from '@/test/setup';
 
@@ -71,15 +71,19 @@ describe('the top bar below 1000px', () => {
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('closes the drawer when the scrim is tapped', () => {
+    it('closes the drawer when the scrim is tapped', async () => {
         setViewportWidth(800);
         renderWithDrawer();
         fireEvent.click(screen.getByRole('button', { name: /sidebar/i }));
         const scrim = document.querySelector('[data-slot="sheet-overlay"]') as HTMLElement;
         expect(scrim.className).toContain('--scrim');
 
+        // Radix registers its outside-pointerdown listener in a setTimeout(0) after the layer
+        // mounts, so a tap in the same tick as the open is not heard. A real tap never is.
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        });
         fireEvent.pointerDown(scrim);
-        fireEvent.click(scrim);
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 
