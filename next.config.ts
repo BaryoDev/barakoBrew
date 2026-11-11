@@ -36,6 +36,10 @@ const connectOrigins = [
   // The barakoPress site, read with a plain fetch for its block schema (use-block-schema.ts).
   originOf(process.env.NEXT_PUBLIC_PRESS_URL),
   connectPlaceholder,
+  // The Modules Browse view asks NuGet's search service for packages tagged barakocms-module (#248).
+  // One origin, fixed, and a failed call only shows "unavailable", so an offline deployment loses
+  // nothing else.
+  "https://azuresearch-usnc.nuget.org",
 ].filter((value): value is string => Boolean(value));
 
 const isDev = process.env.NODE_ENV !== "production";
