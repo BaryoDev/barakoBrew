@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CheckIcon } from 'lucide-react';
 import { IconChevronDown } from '@/components/icons';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { useMyTenants, useCurrentTenant, useSwitchTenant } from '@/hooks/use-tenants';
@@ -61,19 +62,28 @@ function TenantRow({
       type="button"
       onClick={() => onPick(o.slug)}
       disabled={pending}
-      className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-hidden hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left outline-hidden hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50 max-rail:min-h-11',
+        o.slug === current && 'bg-accent'
+      )}
     >
-      <span className="mt-0.5 size-4 shrink-0">
-        {o.slug === current && <CheckIcon className="size-4" aria-label="Current tenant" />}
+      <span
+        aria-hidden
+        className="bg-secondary grid size-[26px] shrink-0 place-items-center rounded-[7px] font-mono text-[10.5px]"
+      >
+        {initialsOf(o.name)}
       </span>
-      <span className="min-w-0">
-        <span className="block truncate">{o.name}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13.5px] leading-tight font-semibold">{o.name}</span>
         {o.slug !== DEFAULT_SLUG && (
-          <span className="block truncate font-mono text-[11px] text-(--faint)">
+          <span className="text-muted-foreground block truncate font-mono text-[11.5px] leading-tight">
             {o.slug}
             {roleNames ? ` · ${roleNames}` : ''}
           </span>
         )}
+      </span>
+      <span className="text-primary size-4 shrink-0">
+        {o.slug === current && <CheckIcon className="size-4" aria-label="Current tenant" />}
       </span>
     </button>
   );
@@ -144,22 +154,22 @@ export function TenantSwitcher() {
           type="button"
           aria-label="Switch tenant"
           disabled={switchTenant.isPending}
-          className="border-border bg-card hover-card flex h-[52px] w-full items-center gap-2.5 rounded-xl border px-2.5 text-left shadow-[var(--shadow-card)] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+          className="border-border bg-card hover:border-primary flex w-full items-center gap-2.5 rounded-[11px] border px-2.5 py-[9px] text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
         >
           <span
             aria-hidden
-            className="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-lg text-[11px] font-bold"
+            className="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-lg font-mono text-[11px]"
           >
             {initialsOf(label)}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] leading-tight font-semibold">{label}</span>
+            <span className="block truncate text-[13.5px] leading-tight font-semibold">{label}</span>
             {role && <span className="text-muted-foreground block truncate text-[11.5px] leading-tight">{role}</span>}
           </span>
           <IconChevronDown aria-hidden className="size-3.5 shrink-0 text-(--faint)" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[330px] p-2">
+      <PopoverContent align="start" className="w-[276px] rounded-[14px] p-1.5 shadow-(--shadow)">
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -177,8 +187,8 @@ export function TenantSwitcher() {
         {tenants.length === 0 && !showHome && (
           <p className="px-2 py-1.5 text-sm text-muted-foreground">No tenant matches.</p>
         )}
-        <p className="mt-2 px-2 text-xs text-muted-foreground">
-          Switching signs you in again to the tenant you pick, with a new token.
+        <p className="mt-1 px-2.5 pt-2 pb-1 text-[11.5px] leading-normal text-muted-foreground">
+          Switching re-issues your token. Your role can differ per tenant.
         </p>
         {isSuperAdmin && (
           <Link

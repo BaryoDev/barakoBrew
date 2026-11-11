@@ -7,11 +7,9 @@ import { useCrumbTitle } from '@/components/crumb-title';
 import Link from 'next/link';
 import { BrandWordmark } from '@/components/brand';
 import { CommandMenu } from '@/components/command-menu';
-import { WhatsNew } from '@/components/whats-new';
 import { useIsSidebarDrawer } from '@/hooks/use-mobile';
 import { useCurrentTenant, useMyTenants } from '@/hooks/use-tenants';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Separator } from '@/components/ui/separator';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -35,39 +33,17 @@ export function AppHeader() {
 
   // Below 1000px the sidebar is a drawer, so the top bar carries the product: the wordmark, where
   // you are as "{tenant} / {screen}", and the palette, every target 44px.
-  if (bar) {
+  // At 1000px and up the design has no top bar: the sidebar carries the product and each screen
+  // carries its own title. The one exception is a screen below a screen, an entry or a theme page,
+  // where the trail is the way back up, so it gets a plain breadcrumb line in the content frame's
+  // own padding and nothing else.
+  if (!bar) {
+    if (crumbs.length < 2) return null;
     return (
-      <header className="bg-card/85 sticky top-0 z-40 flex shrink-0 items-center gap-2.5 border-b px-4 py-2.5 backdrop-blur">
-        <SidebarTrigger />
-        <Link href="/" className="rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
-          <BrandWordmark className="text-[17px]" />
-        </Link>
-        <p aria-label="Where you are" className="text-muted-foreground ml-auto flex min-w-0 items-center gap-1.5 text-[13.5px]">
-          {tenant && (
-            <>
-              <span className="truncate">{tenant}</span>
-              <span aria-hidden>/</span>
-            </>
-          )}
-          <b className="text-foreground truncate font-semibold">{screen}</b>
-        </p>
-        <CommandMenu trigger="bar" />
-      </header>
-    );
-  }
-
-  return (
-    <header className="bg-card/85 sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 rounded-t-[inherit] border-b px-4 backdrop-blur">
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-1 !h-4" />
-      <Breadcrumb className="min-w-0 flex-1">
+      <Breadcrumb className="px-[clamp(20px,3vw,40px)] pt-5">
         <BreadcrumbList className="flex-nowrap overflow-hidden">
           <BreadcrumbItem>
-            {crumbs.length === 0 ? (
-              <BreadcrumbPage>Overview</BreadcrumbPage>
-            ) : (
-              <BreadcrumbLink href="/">Overview</BreadcrumbLink>
-            )}
+            <BreadcrumbLink href="/">Overview</BreadcrumbLink>
           </BreadcrumbItem>
           {crumbs.map((crumb, i) => (
             <Fragment key={crumb.href}>
@@ -85,7 +61,27 @@ export function AppHeader() {
           ))}
         </BreadcrumbList>
       </Breadcrumb>
-      <WhatsNew />
+    );
+  }
+
+  return (
+    <header className="sticky top-0 z-40 flex shrink-0 items-center gap-2.5 border-b bg-card px-4 py-2.5">
+      <SidebarTrigger variant="outline" className="size-11 rounded-[11px] bg-card text-[18px] font-normal shadow-none">
+        <span aria-hidden>☰</span>
+      </SidebarTrigger>
+      <Link href="/" className="rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
+        <BrandWordmark className="text-[17px]" />
+      </Link>
+      <p aria-label="Where you are" className="text-muted-foreground ml-auto flex min-w-0 items-center gap-1.5 text-[13.5px]">
+        {tenant && (
+          <>
+            <span className="truncate">{tenant}</span>
+            <span aria-hidden>/</span>
+          </>
+        )}
+        <b className="text-foreground truncate font-semibold">{screen}</b>
+      </p>
+      <CommandMenu trigger="bar" />
     </header>
   );
 }

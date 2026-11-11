@@ -49,7 +49,7 @@ function RetryButton({
   return (
     <Button
       {...props}
-      className="ml-auto"
+      className="ml-auto max-rail:min-h-11"
       size="sm"
       variant="outline"
       disabled={retrying}

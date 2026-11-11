@@ -19,10 +19,10 @@ export function PageHeader({ title, description, actions, badge, className }: Pa
     <div className={cn('mb-6 flex flex-wrap items-start justify-between gap-3', className)}>
       <div className="min-w-0">
         <div className="flex items-center gap-2.5">
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="font-display text-[32px] leading-[1.1] font-semibold tracking-[-0.035em]">{title}</h1>
           {badge}
         </div>
-        {description && <p className="text-muted-foreground mt-1 text-sm">{description}</p>}
+        {description && <p className="text-muted-foreground mt-1.5 text-[13.5px]">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>

@@ -19,7 +19,7 @@ the console ships Bricolage Grotesque, Instrument Sans and JetBrains Mono (see C
 
 ## Layout shell
 
-- R7. Every screen mounts inside the shell: sidebar 236px, sticky toolbar, fluid content, optional 320px rail. A screen does not draw its own chrome.
+- R7. Every screen mounts inside the shell: sidebar 236px on the surface colour, no top bar at 1000px and up, a sticky top bar below it, content capped at 1240px with 32px above and clamp(20px, 3vw, 40px) at the sides, optional 320px rail. A screen does not draw its own chrome.
 - R8. Row height is 44px minimum, for table rows and list items alike. It is also the minimum hit target.
 - R9. Control height is 44px for form fields, 38 to 40px by default, 36px compact, 34px small.
 - R10. Radius is 14px on panels, 10 to 11px on controls, 8 to 9px on chips.

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppHeader } from '@/components/app-header';
@@ -13,6 +14,7 @@ import { RememberInstance } from '@/components/sign-in/remember-instance';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, requireAuth } = useAuth();
+  const pathname = usePathname();
 
   useEffect(() => {
     requireAuth();
@@ -27,17 +29,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    // 248px of rail, 16px of it padding. The rail sits on the page background and the content panel
-    // is inset away from it on three sides, which is what makes the panel read as a card rather
-    // than the other half of a split screen.
-    <SidebarProvider style={{ '--sidebar-width': '248px' } as React.CSSProperties}>
+    // The design's grid: a 236px sidebar on the surface colour with a hairline on its right edge,
+    // and the content straight on the page beside it. Screens set their own page title; main only
+    // sets the padding, 32px above, clamp(20px, 3vw, 40px) at the sides, 64px below, and the
+    // 1240px cap.
+    <SidebarProvider style={{ '--sidebar-width': '236px' } as React.CSSProperties}>
       <CrumbTitleProvider>
         <UploadsProvider>
           <RememberInstance />
           <AppSidebar />
-          <SidebarInset className="rail:my-4 rail:mr-4 rail:ml-0 rail:h-[calc(100svh-2rem)] rail:overflow-hidden rail:rounded-xl rail:border rail:bg-card rail:shadow-[var(--shadow-card)]">
+          <SidebarInset className="min-w-0">
             <AppHeader />
-            <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-6 rail:overflow-auto">{children}</main>
+            <main key={pathname} className="rise w-full max-w-[1240px] flex-1 px-[clamp(20px,3vw,40px)] pt-8 pb-16">{children}</main>
           </SidebarInset>
           {/* Outside the inset, so an upload keeps its row on screen on every route. */}
           <UploadTray />

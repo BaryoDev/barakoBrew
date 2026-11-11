@@ -33,24 +33,32 @@ beforeEach(() => {
     mockMedia(false);
 });
 
-describe('the Dark mode row', () => {
+describe('the theme row', () => {
     it('stores the choice under bk-brew-theme and sets the dark class', () => {
         renderToggle();
-        const row = screen.getByRole('switch', { name: /Dark mode/ });
-        expect(row).toHaveAttribute('aria-checked', 'false');
-
-        fireEvent.click(row);
+        fireEvent.click(screen.getByRole('button', { name: 'Dark mode' }));
 
         expect(localStorage.getItem('bk-brew-theme')).toBe('dark');
         expect(document.documentElement.classList.contains('dark')).toBe(true);
-        expect(screen.getByRole('switch', { name: /Dark mode/ })).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('names the mode you would switch to, and flips the label when you do', () => {
+        renderToggle();
+        expect(screen.getByRole('button', { name: 'Dark mode' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Light mode' })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Dark mode' }));
+        expect(screen.getByRole('button', { name: 'Light mode' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Dark mode' })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Light mode' }));
+        expect(screen.getByRole('button', { name: 'Dark mode' })).toBeInTheDocument();
     });
 
     it('turns dark off again', () => {
         localStorage.setItem('bk-brew-theme', 'dark');
         renderToggle();
-        const row = screen.getByRole('switch', { name: /Dark mode/ });
-        expect(row).toHaveAttribute('aria-checked', 'true');
+        const row = screen.getByRole('button', { name: 'Light mode' });
 
         fireEvent.click(row);
 
@@ -62,7 +70,7 @@ describe('the Dark mode row', () => {
         mockMedia(true);
         renderToggle();
         expect(document.documentElement.classList.contains('dark')).toBe(true);
-        expect(screen.getByRole('switch', { name: /Dark mode/ })).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByRole('button', { name: 'Light mode' })).toBeInTheDocument();
         expect(localStorage.getItem('bk-brew-theme')).toBeNull();
     });
 });

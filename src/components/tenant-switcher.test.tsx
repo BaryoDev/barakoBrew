@@ -129,6 +129,19 @@ describe('the tenant card', () => {
         expect(card.textContent).not.toContain('Admin');
     });
 
+    it('makes each tenant row a 44px target below 1000px', async () => {
+        render(<TenantSwitcher />);
+        await openPopover();
+        const row = screen.getAllByRole('button').find((b) => b.textContent?.includes('Other Place'));
+        expect(row?.className).toContain('max-rail:min-h-11');
+    });
+
+    it('says how a switch works, in the design words', async () => {
+        render(<TenantSwitcher />);
+        await openPopover();
+        expect(screen.getByText('Switching re-issues your token. Your role can differ per tenant.')).toBeTruthy();
+    });
+
     it('takes initials from letters, whole characters and not punctuation', async () => {
         const { initialsOf } = await import('./tenant-switcher');
         expect(initialsOf('The Club')).toBe('TC');

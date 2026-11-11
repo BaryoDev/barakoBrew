@@ -132,7 +132,7 @@ function StatusChips({
             aria-label={chip.count !== null ? `${chip.label}, ${chip.count} ${chip.count === 1 ? 'run' : 'runs'}` : undefined}
             onClick={() => onChange(chip.status)}
             className={cn(
-              'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-3 text-[13px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
+              'inline-flex h-8 max-rail:min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] px-3 text-[13px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
               on ? 'bg-card text-foreground shadow-[var(--shadow-thumb)]' : 'text-muted-foreground hover:text-foreground',
             )}
           >

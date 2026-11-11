@@ -20,6 +20,7 @@ import { TenantSwitcher } from '@/components/tenant-switcher';
 import { IconChevronDown } from '@/components/icons';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AboutDialog } from '@/components/about-dialog';
+import { WhatsNew } from '@/components/whats-new';
 import { brewVersion } from '@/hooks/use-meta';
 import { cn } from '@/lib/utils';
 import {
@@ -72,7 +73,7 @@ function NavMetricLabel({ item, metrics, dot }: { item: NavItem; metrics: NavMet
 
   if (!item.tone) {
     return (
-      <span className="font-mono text-[11px] tabular-nums text-(--faint)">{text}</span>
+      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">{text}</span>
     );
   }
 
@@ -121,15 +122,19 @@ function NavList({
               isActive={active}
               tooltip={item.title}
               className={cn(
-                'gap-2.5 rounded-[10px] px-2.5 font-medium transition-colors',
-                primary ? 'h-9 text-[13.5px] [&>svg]:size-[18px]' : 'h-[34px] text-[13px] [&>svg]:size-[17px]',
+                'gap-2.5 rounded-[9px] px-2.5 font-medium transition-colors',
+                // 36px and 14px for the main nav, 34px and 13.5px for a module row, the handoff's sizes.
+                primary ? 'h-9 text-[14px] [&>svg]:size-[18px]' : 'h-[34px] text-[13.5px] [&>svg]:size-[17px]',
                 item.parent && 'ml-5 h-8 w-[calc(100%-1.25rem)] text-[12.5px]',
-                'text-secondary-foreground hover:text-foreground',
-                // Hover is half the sunken tint. The active item takes all of it, a hairline and the
-                // accent icon, as in the round 2 handoff, so the two never look alike.
-                'hover:bg-secondary/50',
-                'data-[active=true]:bg-secondary data-[active=true]:hover:bg-secondary data-[active=true]:text-foreground data-[active=true]:font-semibold data-[active=true]:shadow-[inset_0_0_0_1px_var(--border)]',
-                active ? '[&>svg]:text-primary' : '[&>svg]:text-(--faint)'
+                'text-muted-foreground hover:text-foreground',
+                // Hover and active are the same surface2 tint, as the handoff has them. The active
+                // item adds the 600 weight, the ink colour and the accent icon.
+                'hover:bg-secondary',
+                'data-[active=true]:bg-secondary data-[active=true]:hover:bg-secondary data-[active=true]:text-foreground data-[active=true]:font-semibold',
+                // The last module row, in the accent text colour whether or not it is open.
+                item.href === '/modules' && 'font-semibold text-(--accent-ink) hover:text-(--accent-ink)',
+                active ? '[&>svg]:text-primary' : '[&>svg]:text-muted-foreground',
+                item.href === '/modules' && '[&>svg]:text-current'
               )}
             >
               <Link href={item.href}>
@@ -177,12 +182,12 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="offcanvas" className="border-none">
-      <SidebarHeader className="gap-3 p-4 pb-2">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Link href="/" className="flex min-w-0 items-center gap-2.5 rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
-            <BrandMark className="size-[30px]" />
-            <BrandWordmark className="truncate" />
+    <Sidebar collapsible="offcanvas">
+      <SidebarHeader className="gap-3.5 px-3.5 pt-4 pb-0">
+        <div className="flex min-w-0 items-center gap-[9px] px-1.5 py-0.5">
+          <Link href="/" className="flex min-w-0 items-center gap-[9px] rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
+            <BrandMark className="size-[26px]" />
+            <BrandWordmark className="truncate text-[17px]" />
           </Link>
           {/* This console's version, never the API's: that string is long enough to run into the
               wordmark. The API's version is in the About dialog this opens. */}
@@ -190,19 +195,21 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
-              className="ml-auto shrink-0 rounded-sm font-mono text-[11px] tabular-nums text-(--faint) outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="ml-auto shrink-0 rounded-sm font-mono text-[10.5px] tabular-nums text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               {version}
               <span className="sr-only"> (about this instance)</span>
             </button>
           )}
+          <WhatsNew className={cn('size-7 max-rail:size-11', !version && 'ml-auto')} />
         </div>
 
         <CommandMenu />
         <TenantSwitcher />
       </SidebarHeader>
 
-      <SidebarContent className="px-4 pb-2">
+      <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col">
+      <SidebarContent className="gap-0 px-3.5 pt-3.5 pb-2">
         {groups.map((group, i) => {
           const primary = !group.label;
           const isModules = group.label === 'Modules';
@@ -221,13 +228,13 @@ export function AppSidebar() {
           const attentionTone = flagged.some((f) => f.tone === 'danger') ? 'danger' : 'warning';
           const attentionLabel = flagged.map((f) => f.label).join(', ');
           return (
-            <SidebarGroup key={label ?? i} className="p-0 pt-3 first:pt-1">
+            <SidebarGroup key={label ?? i} className="p-0 pt-3 first:pt-0">
               {label && group.collapsible ? (
                 <button
                   type="button"
                   aria-expanded={open}
                   onClick={() => setToggled((t) => ({ ...t, [label]: !open }))}
-                  className="flex h-6 items-center gap-2 rounded-[9px] px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="flex h-[30px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-semibold tracking-[0.04em] text-muted-foreground uppercase outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
                   <span className="flex-1 text-left">{label}</span>
                   {flagged.length > 0 && (
@@ -247,7 +254,7 @@ export function AppSidebar() {
                 </button>
               ) : (
                 label && (
-                  <SidebarGroupLabel className="h-6 px-2.5 text-[10.5px] font-extrabold tracking-[0.12em] text-(--faint) uppercase">
+                  <SidebarGroupLabel className="h-[30px] px-2.5 text-[12px] font-semibold tracking-[0.04em] text-muted-foreground uppercase">
                     {label}
                   </SidebarGroupLabel>
                 )
@@ -268,9 +275,10 @@ export function AppSidebar() {
           );
         })}
       </SidebarContent>
+      </nav>
 
-      <SidebarFooter className="p-4 pt-2">
-        <SidebarMenu>
+      <SidebarFooter className="gap-0 border-t px-3.5 pt-3 pb-4">
+        <SidebarMenu className="gap-1.5">
           <SidebarMenuItem>
             <ThemeToggle />
           </SidebarMenuItem>
@@ -278,7 +286,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               tooltip="Sign out"
               onClick={logout}
-              className="h-[34px] gap-2.5 rounded-[9px] px-2.5 text-[13.5px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+              className="h-[34px] gap-2.5 rounded-[9px] px-2.5 text-[13.5px] text-muted-foreground hover:bg-secondary hover:text-foreground max-rail:h-11"
             >
               <span aria-hidden className="size-3 shrink-0 rounded-full border-2 border-primary bg-accent" />
               <span className="truncate">
