@@ -20,7 +20,6 @@ import { ErrorState } from '@/components/patterns/error-state';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { PaginationControls } from '@/components/patterns/pagination-controls';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { EntryTypeTabs, ALL_TYPES } from '@/components/content/entry-type-tabs';
 import { EntryStatusChips } from '@/components/content/entry-status-chips';
@@ -83,8 +82,7 @@ const column = createColumnHelper<typeof features, ContentListItem>();
 
 /** The Signal classes for each column's head and cells, by column id. */
 const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
-  select: { head: `${HEAD} w-10 pl-6`, cell: 'w-10 py-3.5 pl-6' },
-  entry: { head: HEAD, cell: 'max-w-md py-3.5' },
+  entry: { head: `${HEAD} pl-6`, cell: 'max-w-md py-3.5 pl-6' },
   type: { head: HEAD, cell: `${META} py-3.5` },
   status: { head: HEAD, cell: 'py-3.5' },
   version: {
@@ -92,12 +90,8 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
     cell: `${META} hidden py-3.5 text-right md:table-cell`,
   },
   updated: {
-    head: `${HEAD} hidden text-right sm:table-cell`,
-    cell: `${META} hidden py-3.5 text-right sm:table-cell`,
-  },
-  author: {
-    head: `${HEAD} hidden pr-6 md:table-cell`,
-    cell: 'text-muted-foreground hidden py-3.5 pr-6 text-[13px] md:table-cell',
+    head: `${HEAD} hidden pr-6 text-right sm:table-cell`,
+    cell: `${META} hidden py-3.5 pr-6 text-right sm:table-cell`,
   },
 };
 
@@ -165,13 +159,6 @@ function entryColumns(privateTypes: ReadonlySet<string>) {
           {relativeTime(getValue())}
         </time>
       ),
-    }),
-    // Blank when the list reply names no one. The list item does not carry lastModifiedBy on every
-    // API yet, and a name guessed from anywhere else would be a claim about who wrote the entry.
-    column.accessor('lastModifiedBy', {
-      id: 'author',
-      header: 'Author',
-      cell: ({ getValue }) => getValue() ?? '',
     }),
   ]);
 }
@@ -277,24 +264,6 @@ function ContentListInner() {
       new Set((schemas ?? []).filter((s) => s.isPubliclyDeliverable === false).map((s) => s.name)),
     [schemas]
   );
-
-  // Selection is by id and only ever read against the rows on screen, so a page change or a new
-  // filter cannot leave a hidden row counted as selected.
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  const rowIds = useMemo(() => (contents?.items ?? NO_ROWS).map((item) => item.id), [contents]);
-  const selected = useMemo(
-    () => new Set(rowIds.filter((id) => selectedIds.has(id))),
-    [rowIds, selectedIds]
-  );
-  const allSelected = rowIds.length > 0 && selected.size === rowIds.length;
-  const someSelected = selected.size > 0 && !allSelected;
-  const toggleRow = (id: string) => {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
-  };
-  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(rowIds));
 
   const columns = useMemo(() => entryColumns(privateTypes), [privateTypes]);
   const table = useTable({
@@ -426,31 +395,11 @@ function ContentListInner() {
           />
         ) : (
           <>
-            {selected.size > 0 && (
-              <div className="text-muted-foreground mb-2 flex items-center gap-3 text-[13px]">
-                <span>{selected.size} selected</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedIds(new Set())}
-                >
-                  Clear selection
-                </Button>
-              </div>
-            )}
             <div className="bg-card overflow-hidden rounded-xl border shadow-[var(--shadow-card)]">
               <Table>
                 <TableHeader>
                   {table.getHeaderGroups().map((group) => (
                     <TableRow key={group.id} className="hover:bg-background">
-                      <TableHead className={COLUMN_CLASSES.select.head}>
-                        <Checkbox
-                          aria-label="Select all entries on this page"
-                          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
-                          onCheckedChange={toggleAll}
-                        />
-                      </TableHead>
                       {group.headers.map((header) => (
                         <TableHead
                           key={header.id}
@@ -471,17 +420,10 @@ function ContentListInner() {
                         // The title is a real link, so keyboard users have a focusable target and
                         // the row is a convenience for the mouse. Without this guard a click on the
                         // link navigates twice.
-                        if ((e.target as HTMLElement).closest('a, button')) return;
+                        if ((e.target as HTMLElement).closest('a')) return;
                         router.push(`/content/${row.original.id}`);
                       }}
                     >
-                      <TableCell className={COLUMN_CLASSES.select.cell}>
-                        <Checkbox
-                          aria-label={`Select ${contentTitle(row.original.data, row.original.id)}`}
-                          checked={selected.has(row.original.id)}
-                          onCheckedChange={() => toggleRow(row.original.id)}
-                        />
-                      </TableCell>
                       {row.getAllCells().map((cell) => (
                         <TableCell key={cell.id} className={COLUMN_CLASSES[cell.column.id]?.cell}>
                           <table.FlexRender cell={cell} />

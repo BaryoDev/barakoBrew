@@ -69,7 +69,7 @@ function row(
   id: string,
   title: string,
   status: string,
-  extra: { lastModifiedBy?: string; updatedAt?: string; contentType?: string } = {}
+  extra: { updatedAt?: string; contentType?: string } = {}
 ) {
   return {
     id,
@@ -80,7 +80,6 @@ function row(
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: extra.updatedAt ?? '2026-01-01T00:00:00Z',
-    ...(extra.lastModifiedBy ? { lastModifiedBy: extra.lastModifiedBy } : {}),
   };
 }
 
@@ -97,8 +96,8 @@ beforeEach(() => {
   replace.mockImplementation(navigate);
   searchParams = new URLSearchParams();
   rows = [
-    row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: 'Ana' }),
-    row('b', 'Beta', ContentStatus.Draft, { lastModifiedBy: 'Marco' }),
+    row('a', 'Alpha', ContentStatus.Published),
+    row('b', 'Beta', ContentStatus.Draft),
     row('c', 'Gamma', ContentStatus.Draft),
   ];
   vi.mocked(api.get).mockImplementation(async (url: string) => {
@@ -189,7 +188,9 @@ describe('the status chips', () => {
     // as one status.
     expect(screen.queryByRole('button', { name: /148/ })).toBeNull();
     expect(
-      within(screen.getByRole('group', { name: 'Filter by status' })).getByText('Counts on this page')
+      within(screen.getByRole('group', { name: 'Filter by status' })).getByText(
+        'Counts on this page'
+      )
     ).toBeTruthy();
   });
 
@@ -214,6 +215,21 @@ describe('the status chips', () => {
     expect(screen.getByRole('button', { name: 'Published' })).toBeTruthy();
   });
 
+  it('show a count on the chosen chip only, and say the list is showing that status only', async () => {
+    searchParams = new URLSearchParams('status=Draft');
+    rows = [row('b', 'Beta', ContentStatus.Draft), row('c', 'Gamma', ContentStatus.Draft)];
+    renderList();
+    await screen.findByText('Beta');
+
+    const group = screen.getByRole('group', { name: 'Filter by status' });
+    const counted = within(group)
+      .getAllByRole('button')
+      .filter((button) => /\d/.test(button.textContent ?? ''));
+    expect(counted.map((button) => button.textContent)).toEqual(['Draft 2']);
+    expect(within(group).getByText('Showing Draft only')).toBeTruthy();
+    expect(within(group).queryByText('Counts on this page')).toBeNull();
+  });
+
   it('go back to All when the pressed chip is pressed again', async () => {
     const user = userEvent.setup();
     renderList();
@@ -227,7 +243,38 @@ describe('the status chips', () => {
   });
 });
 
-describe('the search and the Author column', () => {
+describe('filters go back to the first page', () => {
+  it('a status chip clicked from page 3 writes a URL with no page', async () => {
+    searchParams = new URLSearchParams('page=3');
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    await user.click(screen.getByRole('button', { name: /^Draft/ }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    const url = replace.mock.calls[replace.mock.calls.length - 1][0] as string;
+    expect(url).toContain('status=Draft');
+    expect(url).not.toContain('page=');
+  });
+
+  it('a type tab clicked from page 3 writes a URL with no page', async () => {
+    searchParams = new URLSearchParams('page=3');
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Alpha');
+
+    await user.click(await screen.findByRole('tab', { name: 'Pages' }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    const url = replace.mock.calls[replace.mock.calls.length - 1][0] as string;
+    expect(url).toContain('type=page');
+    expect(url).not.toContain('page=3');
+    expect(new URL(url, 'http://x').searchParams.has('page')).toBe(false);
+  });
+});
+
+describe('the search', () => {
   it('is worded for title only, which is all the server matches, and sends what is typed to the server', async () => {
     const user = userEvent.setup();
     renderList();
@@ -236,69 +283,8 @@ describe('the search and the Author column', () => {
     const box = screen.getByRole('searchbox', { name: /search entries/i });
     expect(box.getAttribute('placeholder')).toBe('Filter by title');
 
-    await user.type(box, 'marco');
-    await waitFor(() => expect(lastListParams().search).toBe('marco'));
-  });
-
-  it('shows who last changed each entry, and a blank where the server did not say', async () => {
-    renderList();
-    await screen.findByText('Alpha');
-
-    expect(screen.getByRole('columnheader', { name: 'Author' })).toBeTruthy();
-    const cells = bodyRows();
-    expect(cells).toHaveLength(3);
-    expect(within(cells[0]).getByText('Ana')).toBeTruthy();
-    expect(within(cells[1]).getByText('Marco')).toBeTruthy();
-    expect(within(cells[2]).queryByText(/Ana|Marco/)).toBeNull();
-  });
-});
-
-describe('selecting rows', () => {
-  it('labels each row checkbox with the entry title', async () => {
-    renderList();
-    await screen.findByText('Alpha');
-
-    expect(screen.getByRole('checkbox', { name: 'Select Alpha' })).toBeTruthy();
-    expect(screen.getByRole('checkbox', { name: 'Select Beta' })).toBeTruthy();
-    expect(screen.getByRole('checkbox', { name: 'Select Gamma' })).toBeTruthy();
-  });
-
-  it('selects every row on the page from the header, and clears them again', async () => {
-    const user = userEvent.setup();
-    renderList();
-    await screen.findByText('Alpha');
-
-    await user.click(screen.getByRole('checkbox', { name: 'Select all entries on this page' }));
-
-    const boxes = bodyRows().map((r) => within(r).getByRole('checkbox'));
-    expect(boxes).toHaveLength(3);
-    expect(boxes.every((b) => b.getAttribute('aria-checked') === 'true')).toBe(true);
-    expect(screen.getByText('3 selected')).toBeTruthy();
-
-    await user.click(screen.getByRole('checkbox', { name: 'Select all entries on this page' }));
-    expect(boxes.every((b) => b.getAttribute('aria-checked') === 'false')).toBe(true);
-  });
-
-  it('marks the header as mixed when only some rows are selected', async () => {
-    const user = userEvent.setup();
-    renderList();
-    await screen.findByText('Alpha');
-
-    await user.click(screen.getByRole('checkbox', { name: 'Select Beta' }));
-
-    const header = screen.getByRole('checkbox', { name: 'Select all entries on this page' });
-    expect(header.getAttribute('aria-checked')).toBe('mixed');
-    expect(screen.getByText('1 selected')).toBeTruthy();
-  });
-
-  it('does not open the entry when a checkbox is clicked', async () => {
-    const user = userEvent.setup();
-    renderList();
-    await screen.findByText('Alpha');
-
-    await user.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
-
-    expect(push).not.toHaveBeenCalled();
+    await user.type(box, 'beta');
+    await waitFor(() => expect(lastListParams().search).toBe('beta'));
   });
 });
 
