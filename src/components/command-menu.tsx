@@ -52,7 +52,7 @@ export function CommandMenu({ trigger = 'rail' }: { trigger?: 'rail' | 'bar' }) 
       {trigger === 'bar' ? (
         <button
           type="button"
-          aria-label="Search"
+          aria-label="Search ⌘K"
           onClick={() => setOpen(true)}
           className="border-border bg-card text-muted-foreground hover:text-foreground size-11 shrink-0 rounded-[11px] border font-mono text-[11px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
         >

@@ -38,7 +38,7 @@ describe('the top bar below 1000px', () => {
         renderHeader();
         expect(screen.getByText('barako').textContent).toBe('barakoBrew');
         expect(screen.getByLabelText('Where you are')).toHaveTextContent('Kape Cafe/Workflow runs');
-        const search = screen.getByRole('button', { name: 'Search' });
+        const search = screen.getByRole('button', { name: /^Search/ });
         expect(search.className).toContain('size-11');
         expect(screen.getByRole('button', { name: /sidebar/i }).className).toContain('max-rail:size-11');
     });
@@ -47,7 +47,21 @@ describe('the top bar below 1000px', () => {
         setViewportWidth(800);
         renderHeader();
         expect(screen.getByRole('button', { name: /sidebar/i })).toHaveTextContent('☰');
-        expect(screen.getByRole('button', { name: 'Search' })).toHaveTextContent('⌘K');
+        expect(screen.getByRole('button', { name: /^Search/ })).toHaveTextContent('⌘K');
+    });
+
+    it('gives every top-bar button an accessible name that holds its visible text', () => {
+        setViewportWidth(800);
+        const view = renderHeader();
+        const buttons = Array.from(view.container.querySelectorAll('header button'));
+        expect(buttons).toHaveLength(2);
+        for (const button of buttons) {
+            // axe's label-content-name-mismatch: what is drawn must be inside the name read aloud.
+            const visible = (button.textContent ?? '').replace(/Toggle Sidebar/, '').trim();
+            const name = button.getAttribute('aria-label') ?? button.textContent ?? '';
+            expect(name).toContain(visible);
+        }
+        expect(screen.getByRole('button', { name: 'Search ⌘K' })).toBeInTheDocument();
     });
 
     it('names a deeper screen in the breadcrumb, tenant first', () => {
