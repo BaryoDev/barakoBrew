@@ -119,7 +119,7 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
         <span
           data-testid="timeline-node"
           className={cn(
-            'grid size-7 shrink-0 place-items-center rounded-full font-mono text-[12px] font-semibold tabular-nums',
+            'grid size-7 shrink-0 place-items-center rounded-full font-mono text-[12px] font-medium tabular-nums',
             nodeTone(attempt),
           )}
         >
