@@ -103,7 +103,7 @@ export function CodeStep({
                             {kind === 'device'
                                 ? 'This browser has not signed in to this instance before, so we sent a 6-digit code to '
                                 : 'We sent a 6-digit code to '}
-                            <strong className="text-foreground font-mono font-semibold">{email}</strong>
+                            <strong className="text-foreground font-mono font-medium">{email}</strong>
                             {kind === 'code' ? ' if that address is registered' : ''}. It works once.
                         </>
                     )}
