@@ -1209,3 +1209,31 @@ describe('a run with no usable start time', () => {
     expect(screen.getByText('Started', { selector: 'dt' }).nextElementSibling).toHaveTextContent('n/a');
   });
 });
+
+describe('a link to a status', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('opens on ?status=PartiallyFailed with that chip on and asks the API for it', async () => {
+    searchParams = new URLSearchParams('status=PartiallyFailed');
+    renderRuns([run('r1', 'One', 'PartiallyFailed', [])]);
+    await screen.findByRole('button', { name: /One/ });
+
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    expect(within(group).getByRole('button', { name: /^Partly failed/ })).toHaveAttribute('aria-pressed', 'true');
+    const listCall = vi.mocked(api.get).mock.calls.find(([url]) => url === '/api/workflow-runs');
+    expect((listCall?.[1] as { params: { status?: string } }).params.status).toBe('PartiallyFailed');
+  });
+
+  it('shows every status for a status the chips do not offer', async () => {
+    searchParams = new URLSearchParams('status=Bogus');
+    renderRuns([run('r1', 'One', 'Failed', [])]);
+    await screen.findByRole('button', { name: /One/ });
+
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    expect(within(group).getByRole('button', { name: /^Every status/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
