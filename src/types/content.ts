@@ -22,6 +22,9 @@ export interface ContentListItem {
     // which is why it is optional and why the cell renders nothing rather than a zero: a row showing
     // v0 is a claim about the entry, and "the server did not say" is not the same claim.
     version?: number;
+    // Who last changed the entry. Read from the list when the API sends it there, which the console
+    // does not require: the Author column is blank without it.
+    lastModifiedBy?: string;
 }
 
 export interface ContentDetail extends ContentListItem {
