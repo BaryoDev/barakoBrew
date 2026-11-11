@@ -16,7 +16,9 @@ export function relativeTime(value: string, now: Date = new Date()): string {
   if (Number.isNaN(then.getTime())) return value;
 
   const elapsed = now.getTime() - then.getTime();
-  // A clock a few seconds ahead of the server's should not print a negative age.
+  // A clock a little ahead of the server's is skew, and reads as now. A time further ahead than
+  // that is not an age at all, so it gets the exact time rather than a made-up "just now".
+  if (elapsed < -MINUTE) return exactTime(value);
   if (elapsed < MINUTE) return 'just now';
   if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} min ago`;
   if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`;
@@ -26,7 +28,7 @@ export function relativeTime(value: string, now: Date = new Date()): string {
     const weeks = Math.floor(elapsed / (7 * DAY));
     return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
   }
-  return `${MONTHS[then.getUTCMonth()]} ${then.getUTCFullYear()}`;
+  return `${MONTHS[then.getMonth()]} ${then.getFullYear()}`;
 }
 
 /** The exact time, for a title or tooltip beside the relative one. */
