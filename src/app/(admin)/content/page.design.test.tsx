@@ -189,7 +189,7 @@ describe('the status chips', () => {
     // as one status.
     expect(screen.queryByRole('button', { name: /148/ })).toBeNull();
     expect(
-      within(screen.getByRole('group', { name: 'Filter by status' })).getByText('on this page')
+      within(screen.getByRole('group', { name: 'Filter by status' })).getByText('Counts on this page')
     ).toBeTruthy();
   });
 
