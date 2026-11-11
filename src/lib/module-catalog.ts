@@ -78,7 +78,7 @@ export function isModuleGlyph(value: unknown): value is ModuleGlyph {
     return typeof value === 'string' && (MODULE_GLYPHS as readonly string[]).includes(value);
 }
 
-const norm = (s: string | undefined) => (s ?? '').trim().toLowerCase();
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
 
 /** The catalog entry for a module, by the name it registers or by its package id. */
 export function catalogEntry(m: Pick<ModuleSummary, 'name' | 'packageId'>): CatalogEntry | undefined {
