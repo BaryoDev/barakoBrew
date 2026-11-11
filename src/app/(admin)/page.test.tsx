@@ -32,6 +32,8 @@ interface Answers {
     contract?: number;
     health?: 'fail' | Record<string, { status: string; duration?: string }>;
     workflowHealth?: 'fail' | '404' | { successRate: number; finishedRuns: number };
+    /** The status of the one outcome the health answer lists. Left out, Succeeded. */
+    outcome?: string;
     analytics?: 'absent';
     workflows?: 'fail';
     contents?: 'fail';
@@ -76,7 +78,7 @@ function renderOverview(answers: Answers = {}) {
                             enabled: true,
                             successRate: h.successRate,
                             finishedRuns: h.finishedRuns,
-                            lastOutcomes: [{ runId: 'r1', status: 'Succeeded', createdAt: '2026-10-01T00:00:00Z' }],
+                            lastOutcomes: [{ runId: 'r1', status: answers.outcome ?? 'Succeeded', createdAt: '2026-10-01T00:00:00Z' }],
                         },
                     ],
                     totalItems: 1,
@@ -123,6 +125,14 @@ beforeEach(() => {
 });
 
 describe('the Overview', () => {
+    it('says Partly failed on the workflow health chip, never the enum name', async () => {
+        renderOverview({ outcome: 'PartiallyFailed' });
+
+        const row = (await screen.findByText('Workflow health')).closest('section') as HTMLElement;
+        expect(await within(row).findByText('Partly failed')).toBeInTheDocument();
+        expect(within(row).queryByText('PartiallyFailed')).toBeNull();
+    });
+
     it('still shows the other cards when the health call fails', async () => {
         renderOverview({ health: 'fail', published: 31 });
 
