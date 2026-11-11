@@ -12,7 +12,36 @@ const m = (name: string, extra: Partial<ModuleSummary> = {}): ModuleSummary => (
     ...extra,
 });
 
+/**
+ * Package ids published on nuget.org under the barakocms-module tag, copied from
+ * https://azuresearch-usnc.nuget.org/query?q=tags:barakocms-module&take=100 on 2026-11-11
+ * (34 hits; only the ones a catalog entry could name are kept here).
+ */
+const PUBLISHED = [
+    'BarakoCMS.Accounting',
+    'BarakoCMS.AI',
+    'BarakoCMS.Analytics.Umami',
+    'BarakoCMS.DeviceTrust',
+    'BarakoCMS.Diagnostics',
+    'BarakoCMS.Email.Resend',
+    'BarakoCMS.Email.Smtp',
+    'BarakoCMS.ExternalAuth',
+    'BarakoCMS.FeatureFlags',
+    'BarakoCMS.Files',
+    'BarakoCMS.Files.S3',
+    'BarakoCMS.Forms',
+    'BarakoCMS.Import',
+    'BarakoCMS.Pages',
+    'BarakoCMS.Portability',
+    'BarakoCMS.Pwa',
+];
+
 describe('first-party catalog', () => {
+    it('names only packages published on nuget.org under the module tag', () => {
+        expect(FIRST_PARTY.length).toBeGreaterThan(0);
+        for (const e of FIRST_PARTY) expect(PUBLISHED, e.package).toContain(e.package);
+    });
+
     it('has the 16 modules the design shows', () => {
         expect(FIRST_PARTY).toHaveLength(16);
     });

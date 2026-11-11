@@ -6,7 +6,12 @@ import type { ModuleSummary } from '@/types/modules';
  *
  * Detected by presence (design note D20): `GET /api/modules` still decides what is installed. This
  * list only supplies the cards for the ones it did not list, and fills a category, description or
- * package an older API leaves out. A module the API lists that is not here is drawn from what the
+ * package an older API leaves out.
+ *
+ * Names are the `Name` each module returns from IBarakoModule and packages are the csproj
+ * `PackageId`, both read from the barakoCMS source, except Email.Resend, whose source is not in that
+ * tree: its name is the one `MODULE.emailEvents` already carries and its package is on nuget.org.
+ * Only modules published publicly under the barakocms-module tag are listed. A module the API lists that is not here is drawn from what the
  * API sent, so a new module needs no entry for its card to appear.
  */
 export interface CatalogEntry {
