@@ -1108,7 +1108,8 @@ describe('the open run across the poll', () => {
     });
 
     expect(screen.getByRole('alertdialog')).toBe(dialog);
-    expect(screen.getByRole('button', { name: /Charge the card/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('list', { name: 'Actions' })).toBeInTheDocument();
+    // The dialog is modal, so the rest of the page is hidden from the accessibility tree.
+    expect(screen.getByRole('button', { name: /Charge the card/, hidden: true })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('list', { name: 'Actions', hidden: true })).toBeInTheDocument();
   });
 });

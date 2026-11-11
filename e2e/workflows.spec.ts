@@ -206,7 +206,7 @@ test('the workflows page is a list and a pane, and a recent run opens in Workflo
     await authed(page);
     await stubShell(page);
     const run = {
-        id: 'run-recent-1',
+        id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
         workflowDefinitionId: 'wf-press',
         workflowName: SAVED.name,
         contentId: '11111111-1111-1111-1111-111111111111',
@@ -228,7 +228,7 @@ test('the workflows page is a list and a pane, and a recent run opens in Workflo
             },
         }),
     );
-    await page.route(/\/api\/workflow-runs\/run-recent-1$/, (r) => r.fulfill({ json: run }));
+    await page.route(/\/api\/workflow-runs\/3f2504e0-4f89-11d3-9a0c-0305e82c3301$/, (r) => r.fulfill({ json: run }));
     await page.route(/\/api\/workflow-runs(\?|$)/, (r) => r.fulfill({ json: pageOf([run]) }));
 
     await page.goto('/workflows');
@@ -241,6 +241,6 @@ test('the workflows page is a list and a pane, and a recent run opens in Workflo
 
     await page.getByRole('list', { name: 'Recent runs' }).getByRole('button').click();
 
-    await expect(page).toHaveURL(/\/workflow-runs\?run=run-recent-1$/);
+    await expect(page).toHaveURL(/\/workflow-runs\?run=3f2504e0-4f89-11d3-9a0c-0305e82c3301$/);
     await expect(page.getByRole('heading', { name: SAVED.name })).toBeVisible({ timeout: 15000 });
 });
