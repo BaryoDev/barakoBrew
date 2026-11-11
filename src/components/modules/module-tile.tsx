@@ -21,7 +21,7 @@ import { moduleGlyph, type ModuleGlyph } from '@/lib/module-catalog';
 import { cn } from '@/lib/utils';
 import type { ModuleSummary } from '@/types/modules';
 
-const GLYPH: Record<ModuleGlyph, ComponentType<SVGProps<SVGSVGElement>>> = {
+export const GLYPH: Record<ModuleGlyph, ComponentType<SVGProps<SVGSVGElement>>> = {
     content: IconContent,
     form: IconFieldEdit,
     archive: IconArchive,

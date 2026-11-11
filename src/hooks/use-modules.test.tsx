@@ -67,6 +67,30 @@ describe('useModules optional text fields', () => {
     });
 });
 
+describe('useModules packageVersion and glyph', () => {
+    it('drops a packageVersion or glyph that is not a string and keeps string ones', async () => {
+        vi.mocked(api.get).mockResolvedValue({
+            data: {
+                items: [
+                    { ...summary('Files'), packageVersion: 5, glyph: { x: 1 } },
+                    { ...summary('Forms'), packageVersion: '5.1.0', glyph: 'form' },
+                    { ...summary('Pwa'), packageVersion: null, glyph: null },
+                ],
+            },
+        });
+        const { result } = renderHook(() => useModules(), { wrapper: wrapper() });
+        await waitFor(() => expect(result.current.data?.kind).toBe('modules'));
+        const modules = result.current.data?.kind === 'modules' ? result.current.data.modules : [];
+        expect(modules).toHaveLength(3);
+        expect(modules[0].packageVersion).toBeUndefined();
+        expect(modules[0].glyph).toBeUndefined();
+        expect(modules[1].packageVersion).toBe('5.1.0');
+        expect(modules[1].glyph).toBe('form');
+        expect(modules[2].packageVersion).toBeUndefined();
+        expect(modules[2].glyph).toBeUndefined();
+    });
+});
+
 describe('useModules', () => {
     it('reads the list out of the pagination envelope', async () => {
         vi.mocked(api.get).mockResolvedValue({ data: { items: [summary('Files'), summary('Pwa', false)] } });
