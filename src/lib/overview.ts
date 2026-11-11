@@ -151,7 +151,7 @@ export function verdictFor({ needs, decision, systemOk: ok }: { needs: number; d
  * judged here, so the console and any other client read the same severity. `needs` is the number of
  * rows Needs you shows, so the line and the list cannot disagree.
  */
-export function verdictFromCore(core: { verdict: Tone; headline: string; health: unknown }, needs: number): Verdict {
+export function verdictFromCore(core: { verdict: Tone; headline: string; health?: unknown }, needs: number): Verdict {
   // Without a health strip (a caller who may not view monitoring) nothing says the site is up or
   // what the headline covers, so only what is waiting is said.
   const seen = core.health != null;

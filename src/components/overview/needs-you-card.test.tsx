@@ -20,10 +20,12 @@ const tokens = { token: 'a' as string | null };
 vi.mock('@/lib/api', () => ({ tokenStore: tokens, tenantOfToken: (t: string | null) => t }));
 const resolve = vi.fn();
 vi.mock('@/hooks/use-overview-summary', () => ({ useResolveOverviewItem: () => ({ mutateAsync: resolve }) }));
-const toastFn = Object.assign(vi.fn(() => 'toast-1'), { error: vi.fn(), dismiss: vi.fn() });
+const toastFn = Object.assign(vi.fn((..._args: unknown[]) => 'toast-1'), { error: vi.fn(), dismiss: vi.fn() });
 vi.mock('sonner', () => ({ toast: toastFn }));
 
 const { NeedsYouCard } = await import('./needs-you-card');
+/** The options of the first toast shown: the action holds Undo. */
+const firstToast = () => toastFn.mock.calls[0]![1] as { action: { label: string; onClick: () => void } };
 const { release } = await import('@/lib/pending-resolves');
 
 const row = (key: string) => ({ key, title: `Row ${key}`, detail: 'detail', href: `/x/${key}`, dot: 'bg-warning' });
@@ -99,7 +101,7 @@ describe('a Needs you row from the API', () => {
         render(<NeedsYouCard />);
         fireEvent.click(screen.getByRole('button', { name: /Mark resolved/ }));
         expect(screen.queryByRole('link', { name: /^Review:/ })).toBeNull();
-        expect(toastFn.mock.calls[0][1].action.label).toBe('Undo');
+        expect(firstToast().action.label).toBe('Undo');
         expect(resolve).not.toHaveBeenCalled();
         act(() => {
             vi.advanceTimersByTime(6000);
@@ -114,7 +116,7 @@ describe('a Needs you row from the API', () => {
         state.rows = [bounce];
         render(<NeedsYouCard />);
         fireEvent.click(screen.getByRole('button', { name: /Mark resolved/ }));
-        act(() => toastFn.mock.calls[0][1].action.onClick());
+        act(() => firstToast().action.onClick());
         act(() => {
             vi.advanceTimersByTime(10_000);
         });
@@ -131,7 +133,7 @@ describe('a Needs you row from the API', () => {
         act(() => {
             vi.advanceTimersByTime(6000);
         });
-        act(() => toastFn.mock.calls[0][1].action.onClick());
+        act(() => firstToast().action.onClick());
         expect(screen.queryByRole('link', { name: /^Review:/ })).toBeNull();
     });
 
