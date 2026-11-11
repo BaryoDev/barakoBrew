@@ -88,7 +88,7 @@ test('sign in', async ({ page }, testInfo) => {
     );
 
     await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'Sign in to barakoBrew' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({
         timeout: 15000,
     });
     await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();

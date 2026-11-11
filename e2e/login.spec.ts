@@ -17,7 +17,7 @@ test.describe('Login & Authentication', () => {
         await expect(page).toHaveURL(/\/login/);
         // Asserting the heading, not the sub-line: what this test is about is landing on the
         // sign-in page, and the sub-line under the heading is now the API host rather than copy.
-        await expect(page.getByRole('heading', { name: 'Sign in to barakoBrew' })).toBeVisible({
+        await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible({
             timeout: 10000,
         });
     });
@@ -123,7 +123,7 @@ test.describe('Login & Authentication', () => {
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await page.getByLabel('Authentication code').fill('123456');
-        await page.getByRole('button', { name: 'Verify' }).click();
+        await page.getByRole('button', { name: 'Continue' }).click();
 
         await expect(page).toHaveURL('/', { timeout: 10000 });
         await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
@@ -189,7 +189,7 @@ test.describe('Login & Authentication', () => {
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await page.getByLabel('Device approval code').fill('123456');
-        await page.getByRole('button', { name: 'Approve device' }).click();
+        await page.getByRole('button', { name: 'Continue' }).click();
 
         await expect(page).toHaveURL('/', { timeout: 10000 });
     });
@@ -232,7 +232,7 @@ test.describe('Login & Authentication', () => {
         await page.getByRole('button', { name: 'Sign in' }).click();
 
         await page.getByLabel('Device approval code').fill('123456');
-        await page.getByRole('button', { name: 'Approve device' }).click();
+        await page.getByRole('button', { name: 'Continue' }).click();
 
         await expect(page.getByLabel('Authentication code')).toBeVisible();
         await expect(page).not.toHaveURL('/');
