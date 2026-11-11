@@ -13,12 +13,30 @@ import { cn } from '@/lib/utils';
 const ROWS = 8;
 const BARS = 10;
 
-function barTone(status: string): string {
-  const tone = toneForRunStatus(status);
-  if (tone === 'success') return 'bg-success';
-  if (tone === 'destructive') return 'bg-destructive';
-  if (tone === 'warning') return 'bg-warning';
-  return 'bg-(--faint)';
+/**
+ * The design's bar per outcome: Succeeded 22px in ok, Failed and Partly failed 18px in bad and
+ * warn, Running 14px in the accent, anything else (Cancelled) 14px in the line colour.
+ */
+export function barStyle(status: string): { tone: string; height: number } {
+  switch (status) {
+    case 'Succeeded':
+      return { tone: 'bg-success', height: 22 };
+    case 'Failed':
+      return { tone: 'bg-destructive', height: 18 };
+    case 'PartiallyFailed':
+      return { tone: 'bg-warning', height: 18 };
+    case 'Running':
+      return { tone: 'bg-primary', height: 14 };
+    default:
+      return { tone: 'bg-border', height: 14 };
+  }
+}
+
+/** 90 and up reads ok, 70 and up warn, anything lower bad. */
+export function rateTone(percent: number): string {
+  if (percent >= 90) return 'text-success';
+  if (percent >= 70) return 'text-warning';
+  return 'text-destructive';
 }
 
 /** The last ten outcomes, oldest on the left so the newest sits on the right. */
@@ -60,11 +78,11 @@ export function WorkflowHealthCard() {
           }}
           className="py-8"
         />
-      ) : isLoading ? null : !workflows?.length ? (
-        <p className="text-muted-foreground text-sm">No workflows yet.</p>
+      ) : isLoading ? null : !workflows?.some((w) => w.enabled !== false) ? (
+        <p className="text-muted-foreground text-sm">No active workflows.</p>
       ) : (
         <ul className="grid gap-0.5">
-          {workflows.slice(0, ROWS).map((workflow) => {
+          {workflows.filter((w) => w.enabled !== false).slice(0, ROWS).map((workflow) => {
             const h = health.healthOf(workflow.id);
             const tile = healthTile(h);
             const outcomes = lastTen(h?.lastOutcomes ?? []);
@@ -72,7 +90,7 @@ export function WorkflowHealthCard() {
             return (
               <li key={workflow.id} className="border-border border-t first:border-t-0">
                 <Link
-                  href={`/workflows/${workflow.id}`}
+                  href={last ? `/workflow-runs?run=${encodeURIComponent(last.runId)}` : '/workflow-runs'}
                   className="hover:bg-secondary grid grid-cols-[minmax(0,1.2fr)_auto_minmax(64px,auto)_minmax(72px,auto)] items-center gap-4 rounded-lg px-2.5 py-3 transition-colors duration-150 outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
                   <span className="grid min-w-0 gap-0.5">
@@ -86,11 +104,17 @@ export function WorkflowHealthCard() {
                       <span
                         key={o.runId}
                         title={runStatusLabel(o.status)}
-                        className={cn('h-full w-[7px] rounded-[2px]', barTone(o.status))}
+                        style={{ height: barStyle(o.status).height }}
+                        className={cn('w-[7px] rounded-[2px]', barStyle(o.status).tone)}
                       />
                     ))}
                   </span>
-                  <span className="font-display text-right text-[19px] font-semibold tracking-[-0.02em] tabular-nums">
+                  <span
+                    className={cn(
+                      'font-display text-right text-[19px] font-semibold tracking-[-0.02em] tabular-nums',
+                      tile.kind === 'rate' && rateTone(tile.percent),
+                    )}
+                  >
                     {tile.kind === 'rate' ? (
                       <>
                         {tile.percent}%
