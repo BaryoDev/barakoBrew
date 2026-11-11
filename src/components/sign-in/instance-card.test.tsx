@@ -1,0 +1,42 @@
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { InstanceCard, hostInitials, reachabilityLabel } from './instance-card';
+
+describe('InstanceCard before sign in', () => {
+    it('shows the host and that it answers, and nothing from inside the tenant', () => {
+        const { container } = render(<InstanceCard host="api.cafe.example" reachability={{ reachable: true, ms: 42 }} />);
+
+        expect(screen.getByText('api.cafe.example')).toBeInTheDocument();
+        expect(screen.getByText('Reachable · 42 ms')).toBeInTheDocument();
+
+        const text = container.textContent ?? '';
+        expect(text).not.toMatch(/barakoCMS\s*\d/i);
+        expect(text).not.toMatch(/module/i);
+        expect(text).not.toMatch(/\d+\.\d+\.\d+/);
+        expect(text).not.toMatch(/checked/i);
+    });
+
+    it('says so when the instance does not answer', () => {
+        render(<InstanceCard host="api.cafe.example" reachability={{ reachable: false, ms: null }} />);
+        expect(screen.getByText('Unreachable')).toBeInTheDocument();
+    });
+
+    it('says it is checking before the first answer', () => {
+        render(<InstanceCard host="api.cafe.example" reachability={undefined} />);
+        expect(screen.getByText('Checking…')).toBeInTheDocument();
+    });
+});
+
+describe('reachabilityLabel', () => {
+    it('leaves the time out when there is none', () => {
+        expect(reachabilityLabel({ reachable: true, ms: null })).toBe('Reachable');
+    });
+});
+
+describe('hostInitials', () => {
+    it('takes two letters from the first label of the host', () => {
+        expect(hostInitials('api.cafe.example')).toBe('AP');
+        expect(hostInitials('localhost:5005')).toBe('LO');
+        expect(hostInitials(null)).toBe('··');
+    });
+});
