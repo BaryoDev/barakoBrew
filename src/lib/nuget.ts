@@ -16,6 +16,8 @@ export const NUGET_PAGE_SIZE = 50;
 export const NUGET_MAX_PAGES = 4;
 export const NUGET_MAX_PACKAGES = NUGET_PAGE_SIZE * NUGET_MAX_PAGES;
 const NUGET_TIMEOUT_MS = 8000;
+/** A hostile or broken reply could claim any total; the note that the list was cut shows it. */
+export const MAX_TOTAL_HITS = 1_000_000;
 
 export interface NugetPackage {
     id: string;
@@ -51,7 +53,7 @@ export function httpsUrl(value: unknown): string | null {
     if (typeof value !== 'string' || value.length > 2048) return null;
     try {
         const url = new URL(value.trim());
-        return url.protocol === 'https:' && url.hostname ? url.toString() : null;
+        return url.protocol === 'https:' && url.hostname && !url.username && !url.password ? url.toString() : null;
     } catch {
         return null;
     }
@@ -113,7 +115,7 @@ export function parseSearchPage(data: unknown): { packages: NugetPackage[]; tota
         packages.push(pkg);
     }
     const totalHits = typeof body.totalHits === 'number' && Number.isFinite(body.totalHits) && body.totalHits >= 0
-        ? Math.floor(body.totalHits)
+        ? Math.min(Math.floor(body.totalHits), MAX_TOTAL_HITS)
         : packages.length;
     return { packages, totalHits };
 }
@@ -129,11 +131,20 @@ export function searchUrl(skip: number): string {
     return `${NUGET_SEARCH_URL}?${params.toString()}`;
 }
 
+/** The caller's signal (so leaving the page cancels the call) and the timeout, whichever fires first. */
+export function withTimeout(signal?: AbortSignal): AbortSignal {
+    const timeout = AbortSignal.timeout(NUGET_TIMEOUT_MS);
+    return signal && typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, timeout]) : (signal ?? timeout);
+}
+
 /**
  * Every package under the tag, up to the cap. A plain `fetch`, not the API client: that one adds the
  * console's bearer token to whatever it calls, and nuget.org has no business seeing it.
  */
-export async function fetchModulePackages(fetchImpl: typeof fetch = fetch): Promise<NugetResult> {
+export async function fetchModulePackages(
+    fetchImpl: typeof fetch = fetch,
+    signal?: AbortSignal,
+): Promise<NugetResult> {
     const packages: NugetPackage[] = [];
     const seen = new Set<string>();
     let totalHits = 0;
@@ -143,7 +154,7 @@ export async function fetchModulePackages(fetchImpl: typeof fetch = fetch): Prom
             credentials: 'omit',
             referrerPolicy: 'no-referrer',
             headers: { Accept: 'application/json' },
-            signal: AbortSignal.timeout(NUGET_TIMEOUT_MS),
+            signal: withTimeout(signal),
         });
         if (!response.ok) throw new Error(`NuGet search answered ${response.status}.`);
         const parsed = parseSearchPage(await response.json());

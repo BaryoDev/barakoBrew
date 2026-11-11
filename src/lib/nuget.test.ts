@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+    MAX_TOTAL_HITS,
     NUGET_MAX_PACKAGES,
     NUGET_PAGE_SIZE,
     fetchModulePackages,
@@ -101,7 +102,7 @@ describe('reading a NuGet search page', () => {
 });
 
 describe('httpsUrl', () => {
-    it.each([['javascript:alert(1)'], ['data:text/html,<script>1</script>'], ['http://example.com'], ['//example.com'], ['not a url'], [42], [null]])(
+    it.each([['https://user:pw@example.com/'], ['https://user@example.com/'], ['javascript:alert(1)'], ['data:text/html,<script>1</script>'], ['http://example.com'], ['//example.com'], ['not a url'], [42], [null]])(
         'rejects %s',
         (value) => {
             expect(httpsUrl(value)).toBeNull();
@@ -112,7 +113,24 @@ describe('httpsUrl', () => {
     });
 });
 
+describe('totalHits', () => {
+    it('is clamped, so a hostile total cannot be shown as a number', () => {
+        expect(parseSearchPage({ totalHits: 9e15, data: [] }).totalHits).toBe(MAX_TOTAL_HITS);
+        expect(parseSearchPage({ totalHits: 12, data: [] }).totalHits).toBe(12);
+    });
+});
+
 describe('fetching the packages', () => {
+    it('cancels the request when the caller aborts', async () => {
+        const controller = new AbortController();
+        const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ totalHits: 0, data: [] }) });
+        await fetchModulePackages(fetchImpl, controller.signal);
+        const sent = fetchImpl.mock.calls[0][1].signal as AbortSignal;
+        expect(sent.aborted).toBe(false);
+        controller.abort();
+        expect(sent.aborted).toBe(true);
+    });
+
     const page = (ids: string[], totalHits: number) =>
         ({ ok: true, status: 200, json: async () => ({ totalHits, data: ids.map((id) => row(id)) }) }) as Response;
 

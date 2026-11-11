@@ -13,7 +13,7 @@ export const NUGET_MODULES_KEY = ['nuget', 'barakocms-module'] as const;
 export function useNugetModules(enabled: boolean) {
     return useQuery({
         queryKey: NUGET_MODULES_KEY,
-        queryFn: () => fetchModulePackages(),
+        queryFn: ({ signal }) => fetchModulePackages(fetch, signal),
         enabled,
         retry: false,
         staleTime: 10 * 60 * 1000,
