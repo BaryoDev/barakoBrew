@@ -37,7 +37,8 @@ export function EntryStatusChips({
       role="group"
       aria-label="Filter by status"
       aria-describedby={hasCounts ? 'entry-status-note' : undefined}
-      className="flex flex-wrap items-center gap-1.5">
+      className="flex flex-wrap items-center gap-1.5"
+    >
       {chips.map((chip) => {
         const key = chip.value ?? 'all';
         const count = counts[key];
@@ -66,9 +67,13 @@ export function EntryStatusChips({
           </button>
         );
       })}
-      {hasCounts && <span id="entry-status-note" className="text-muted-foreground text-[11px]">
-          Counts on this page
-        </span>}
+      {hasCounts && (
+        <span id="entry-status-note" className="text-muted-foreground text-[11px]">
+          {value === undefined
+            ? 'Counts on this page'
+            : `Showing ${chips.find((chip) => chip.value === value)?.label ?? value} only`}
+        </span>
+      )}
     </div>
   );
 }
