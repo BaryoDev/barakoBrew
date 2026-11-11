@@ -4,7 +4,6 @@ import { useId, useState } from 'react';
 import { useLogin } from '@/hooks/use-auth';
 import { apiErrorMessage } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { IconArrowRight } from '@/components/icons';
@@ -12,16 +11,11 @@ import { FieldError } from './field-error';
 import { FIELD, SubmitButton } from './parts';
 import type { SignInPanelProps } from './types';
 
-export function PasswordPanel({ flow }: SignInPanelProps) {
+export function PasswordPanel({ flow, form }: SignInPanelProps) {
+    const { username, password, setUsername, setPassword } = form;
     const login = useLogin();
     const errorId = useId();
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    // Drawn as the design has it, default on. The server decides trust itself: it records the
-    // device when the emailed code is verified, and the login and verify requests carry no flag to
-    // opt out, so this is the explanation of that and not a request parameter.
-    const [trust, setTrust] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -32,7 +26,6 @@ export function PasswordPanel({ flow }: SignInPanelProps) {
             {
                 onSuccess: (data) => {
                     if (data.requiresMfa && data.mfaChallengeToken) {
-                        setPassword('');
                         flow.needsMfa(data.mfaChallengeToken);
                         return;
                     }
@@ -43,7 +36,6 @@ export function PasswordPanel({ flow }: SignInPanelProps) {
                             setError('This device needs approval, but the server did not say where the code was sent.');
                             return;
                         }
-                        setPassword('');
                         flow.needsDeviceCode(data.email, data.message);
                         return;
                     }
@@ -79,14 +71,17 @@ export function PasswordPanel({ flow }: SignInPanelProps) {
                         Password
                     </Label>
                     {/* There is no password reset in this product (#416), so this goes to the route
-                        back in that exists: a code to the address on the account. */}
-                    <button
-                        type="button"
-                        onClick={() => flow.openMethod('email-code')}
-                        className="text-accent-foreground text-[12.5px] font-semibold hover:underline"
-                    >
-                        Forgot it?
-                    </button>
+                        back in that exists: a code to the address on the account. Only drawn when
+                        the server lists that route. */}
+                    {flow.availableMethods.includes('email-code') && (
+                        <button
+                            type="button"
+                            onClick={() => flow.openMethod('email-code')}
+                            className="text-accent-foreground text-[12.5px] font-semibold hover:underline"
+                        >
+                            Forgot it?
+                        </button>
+                    )}
                 </div>
                 <div className="relative">
                     <Input
@@ -120,23 +115,11 @@ export function PasswordPanel({ flow }: SignInPanelProps) {
                 ) : null}
             </div>
 
-            <div className="flex items-start gap-3 rounded-xl border p-3.5">
-                <Checkbox
-                    id="trust-device"
-                    checked={trust}
-                    onCheckedChange={(v) => setTrust(v === true)}
-                    className="mt-0.5"
-                />
-                <div className="flex flex-col gap-0.5">
-                    <Label htmlFor="trust-device" className="text-[13.5px] font-bold">
-                        Trust this device for 30 days
-                    </Label>
-                    <p className="text-[var(--faint)] text-xs leading-snug">
-                        Skips the emailed code on this browser next time. Leave it off on a shared
-                        computer.
-                    </p>
-                </div>
-            </div>
+            {/* A note, not a control: the server trusts the browser on every verified emailed code
+                and neither request carries a flag to opt out. */}
+            <p className="text-[var(--faint)] text-xs leading-snug">
+                Entering the emailed code trusts this browser for 30 days.
+            </p>
 
             <SubmitButton pending={login.isPending} pendingLabel="Signing in…">
                 Sign in

@@ -9,7 +9,7 @@ import { useInstanceReachability } from '@/hooks/use-instance-reachability';
 import { useSignInMethods } from '@/hooks/use-sign-in-methods';
 import { apiErrorMessage, getApiUrl } from '@/lib/api';
 import { signInErrorFromQuery } from '@/lib/social-callback';
-import { tabsFor } from '@/lib/sign-in-methods';
+import { DEFAULT_METHOD_IDS, tabsFor } from '@/lib/sign-in-methods';
 import { BrandBean, BrandWordmark } from '@/components/brand';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BrandPanel } from '@/components/sign-in/brand-panel';
@@ -51,11 +51,17 @@ export default function LoginPage() {
   const verifyDevice = useVerifyDeviceCode();
   const requestCode = useRequestSignInCode();
   const { data: providers } = useAuthProviders();
-  const { data: listed } = useSignInMethods();
+  const { data: listed, isError: methodsFailed } = useSignInMethods();
   const { data: reachability } = useInstanceReachability();
 
   const [step, setStep] = useState<Step>('form');
   const [method, setMethod] = useState('password');
+  // True after "Forgot it?" opened the email tab, so focus lands in its field. A tab click leaves
+  // focus on the tab, where the arrow keys expect it.
+  const [focusEmail, setFocusEmail] = useState(false);
+  // The fields live here so they survive the methods list arriving and a switch between tabs.
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   // Set when the password was accepted but a second factor is required. Holds the short-lived
   // challenge, so the password never has to be kept around or re-sent.
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
@@ -76,7 +82,8 @@ export default function LoginPage() {
   }, [isLoading, isAuthenticated, router]);
 
   // Until the list arrives only the password form is drawn, so the tabs do not flicker in and out.
-  const tabs = tabsFor(listed ?? ['password'], SIGN_IN_METHODS);
+  // If it could not be read at all, the two methods the console always drew, not cached.
+  const tabs = tabsFor(listed ?? (methodsFailed ? DEFAULT_METHOD_IDS : ['password']), SIGN_IN_METHODS);
   const activeTab = tabs.find((t) => t.id === method) ?? tabs[0];
 
   const goTo = (next: Step) => {
@@ -90,8 +97,15 @@ export default function LoginPage() {
     setEmail('');
   };
 
+  const selectMethod = (id: string) => {
+    setFocusEmail(false);
+    setMethod(id);
+  };
+
   const flow: SignInFlow = {
     needsDeviceCode(address, message) {
+      // The password has done its job. It is not kept while the page waits for a code.
+      setPassword('');
       setEmail(address);
       goTo('device');
       toast.info(message ?? 'Check your email for a device approval code.');
@@ -104,11 +118,16 @@ export default function LoginPage() {
       toast.info(message ?? 'If that email is registered, a sign-in code has been sent.');
     },
     needsMfa(token) {
+      setPassword('');
       setChallengeToken(token);
       goTo('mfa');
     },
     signedIn: () => router.push('/'),
-    openMethod: (id) => setMethod(id),
+    openMethod: (id) => {
+      setFocusEmail(true);
+      setMethod(id);
+    },
+    availableMethods: tabs.map((t) => t.id),
   };
 
   const handleMfa = (code: string) => {
@@ -147,12 +166,15 @@ export default function LoginPage() {
     );
   };
 
-  const handleResend = () => {
+  const handleResend = (onSent?: () => void) => {
     if (!email) return;
     requestCode.mutate(
       { email },
       {
-        onSuccess: (data) => toast.info(data.message ?? 'If that email is registered, a new code has been sent.'),
+        onSuccess: (data) => {
+          toast.info(data.message ?? 'If that email is registered, a new code has been sent.');
+          onSent?.();
+        },
         onError: (error) => toast.error(apiErrorMessage(error, 'Could not send a new code.')),
       }
     );
@@ -163,10 +185,7 @@ export default function LoginPage() {
   // nothing, so a link without its prerequisite would be a dead end.
   const swapToEmail =
     step === 'mfa' && email
-      ? () => {
-          handleResend();
-          goTo('code');
-        }
+      ? () => handleResend(() => goTo('code'))
       : undefined;
   const swapToAuthenticator = step === 'code' && challengeToken ? () => goTo('mfa') : undefined;
 
@@ -208,27 +227,34 @@ export default function LoginPage() {
                   <p className="text-muted-foreground rounded-xl border p-4 text-[13px]">
                     This instance does not list a sign-in method this console can draw.
                   </p>
-                ) : tabs.length === 1 ? (
-                  <activeTab.Panel flow={flow} />
                 ) : (
-                  <Tabs value={activeTab.id} onValueChange={setMethod}>
-                    <TabsList className="bg-secondary h-11 w-full">
-                      {tabs.map((tab) => (
-                        <TabsTrigger key={tab.id} value={tab.id} className="text-[13px] font-bold whitespace-nowrap">
-                          <tab.icon className="size-3.5" />
-                          {tab.label}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
+                  // One wrapper whether there is one tab or several, so the panel is never
+                  // remounted when the list arrives. With one tab there is nothing to choose, so
+                  // the list is left out.
+                  <Tabs value={activeTab.id} onValueChange={selectMethod}>
+                    {tabs.length > 1 && (
+                      <TabsList className="bg-secondary h-11 w-full">
+                        {tabs.map((tab) => (
+                          <TabsTrigger key={tab.id} value={tab.id} className="text-[13px] font-bold whitespace-nowrap">
+                            <tab.icon className="size-3.5" />
+                            {tab.label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    )}
                     {/* Radix names the panel after its tab, which gave a screen reader two things called
                         "Password" (the panel and the field). The panel is named for what it is. */}
                     <TabsContent
                       value={activeTab.id}
                       aria-labelledby={undefined}
                       aria-label={`${activeTab.label} sign in`}
-                      className="mt-3"
+                      className={tabs.length > 1 ? 'mt-3' : undefined}
                     >
-                      <activeTab.Panel flow={flow} />
+                      <activeTab.Panel
+                        flow={flow}
+                        form={{ username, password, email, setUsername, setPassword, setEmail }}
+                        autoFocusField={focusEmail}
+                      />
                     </TabsContent>
                   </Tabs>
                 )}
@@ -253,7 +279,7 @@ export default function LoginPage() {
               error={codeError}
               onSubmit={step === 'mfa' ? handleMfa : handleEmailCode}
               onBack={startOver}
-              onResend={handleResend}
+              onResend={() => handleResend()}
               resending={requestCode.isPending}
               onSwap={step === 'mfa' ? swapToEmail : swapToAuthenticator}
             />

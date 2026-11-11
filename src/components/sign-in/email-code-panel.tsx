@@ -10,10 +10,10 @@ import { FIELD, SubmitButton } from './parts';
 import type { SignInPanelProps } from './types';
 
 /** Passwordless: the address, then the same 6-digit step the new-device check uses. */
-export function EmailCodePanel({ flow }: SignInPanelProps) {
+export function EmailCodePanel({ flow, form, autoFocusField }: SignInPanelProps) {
+    const { email, setEmail } = form;
     const requestCode = useRequestSignInCode();
     const errorId = useId();
-    const [email, setEmail] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -41,6 +41,8 @@ export function EmailCodePanel({ flow }: SignInPanelProps) {
                     id="email"
                     type="email"
                     autoComplete="email"
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- only set when the person followed "Forgot it?" here, so focus follows their own action and does not drop to the page.
+                    autoFocus={autoFocusField}
                     required
                     aria-invalid={error ? true : undefined}
                     aria-describedby={error ? errorId : undefined}
