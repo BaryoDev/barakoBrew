@@ -201,3 +201,46 @@ test('switching a workflow off writes enabled false to the API', async ({ page }
     await expect.poll(() => written).toEqual({ enabled: false });
     await expect(toggle).not.toBeChecked();
 });
+
+test('the workflows page is a list and a pane, and a recent run opens in Workflow runs', async ({ page }) => {
+    await authed(page);
+    await stubShell(page);
+    const run = {
+        id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+        workflowDefinitionId: 'wf-press',
+        workflowName: SAVED.name,
+        contentId: '11111111-1111-1111-1111-111111111111',
+        contentType: 'post',
+        triggerEvent: 'Published',
+        status: 'PartiallyFailed',
+        createdAt: '2026-10-19T10:00:00Z',
+        completedAt: null,
+        actions: [{ ordinal: 1, actionType: 'Webhook', status: 'Succeeded', attempts: 1 }],
+    };
+    await page.route(/\/api\/workflows(\?|$)/, (r) => r.fulfill({ json: pageOf([{ ...SAVED, enabled: true }]) }));
+    await page.route('**/api/workflows/health**', (r) =>
+        r.fulfill({
+            json: {
+                ...pageOf([
+                    { workflowId: 'wf-press', name: SAVED.name, enabled: true, lastOutcomes: [], successRate: 1, finishedRuns: 1, averageActionDurationMs: 108 },
+                ]),
+                windowDays: 30,
+            },
+        }),
+    );
+    await page.route(/\/api\/workflow-runs\/3f2504e0-4f89-11d3-9a0c-0305e82c3301$/, (r) => r.fulfill({ json: run }));
+    await page.route(/\/api\/workflow-runs(\?|$)/, (r) => r.fulfill({ json: pageOf([run]) }));
+
+    await page.goto('/workflows');
+
+    await expect(page.getByRole('heading', { name: SAVED.name })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('table')).toHaveCount(0);
+    await expect(page.getByText('Runs here')).toBeVisible();
+    await expect(page.getByText('Avg. action')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible();
+
+    await page.getByRole('list', { name: 'Recent runs' }).getByRole('button').click();
+
+    await expect(page).toHaveURL(/\/workflow-runs\?run=3f2504e0-4f89-11d3-9a0c-0305e82c3301$/);
+    await expect(page.getByRole('heading', { name: SAVED.name })).toBeVisible({ timeout: 15000 });
+});

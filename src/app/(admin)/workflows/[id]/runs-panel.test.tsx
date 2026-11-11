@@ -99,6 +99,20 @@ describe('RunsPanel', () => {
       expect(useWorkflowDebugLogs).not.toHaveBeenCalled();
     });
 
+    it('says Partly failed and writes the trigger arrow as a word', () => {
+      useWorkflowRuns.mockReturnValue({
+        isLoading: false,
+        isError: false,
+        data: { items: [listRun('r-1', { status: 'PartiallyFailed', triggerEvent: 'Article \u2192 In review' })] },
+      });
+      render(<RunsPanel workflowId="wf-1" />);
+
+      const link = within(screen.getByRole('list', { name: 'Recent runs' })).getByRole('link');
+      expect(link).toHaveTextContent('Partly failed');
+      expect(link).not.toHaveTextContent('PartiallyFailed');
+      expect(link).toHaveTextContent('Article to In review');
+    });
+
     it('shows the debug log, not the empty message, when the list holds another workflow run', () => {
       useWorkflowRuns.mockReturnValue({
         isLoading: false,

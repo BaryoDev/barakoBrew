@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { setViewportWidth } from '@/test/setup';
 
@@ -126,7 +127,7 @@ function renderPage() {
 
 async function openMixedRun() {
   renderPage();
-  fireEvent.click(await screen.findByRole('radio', { name: /Announce a post/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Announce a post/ }));
   const list = await screen.findByRole('list', { name: 'Actions' });
   expect(within(list).getAllByRole('listitem')).toHaveLength(3);
   return list;
@@ -202,9 +203,9 @@ describe('the workflow runs screen and the kind of a failure', () => {
 
   it('marks a run in the list by its worst failure, and leaves an older API run unmarked', async () => {
     renderPage();
-    await screen.findByRole('radio', { name: /Announce a post/ });
+    await screen.findByRole('button', { name: /Announce a post/ });
 
-    const rows = screen.getAllByRole('row').slice(1);
+    const rows = within(screen.getByRole('list', { name: 'Runs' })).getAllByRole('listitem');
     expect(rows).toHaveLength(3);
 
     expect(within(rows[0]).getByText('Permanent')).toBeInTheDocument();
@@ -228,6 +229,8 @@ describe('cancelling a run', () => {
   };
   const ALL = [WAITING, WAITING_OLD_API, STOPPED];
 
+  let client: QueryClient;
+
   function renderRuns() {
     vi.mocked(api.get).mockImplementation((async (url: string) => {
       if (url === '/api/workflow-runs') {
@@ -239,8 +242,9 @@ describe('cancelling a run', () => {
     }) as typeof api.get);
     vi.mocked(api.post).mockResolvedValue({ data: {} });
 
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider client={client}>
         <WorkflowRunsPage />
       </QueryClientProvider>,
     );
@@ -253,7 +257,7 @@ describe('cancelling a run', () => {
 
   it('cancels a waiting run only after confirming', async () => {
     renderRuns();
-    fireEvent.click(await screen.findByRole('radio', { name: /Send the invoice/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Send the invoice/ }));
 
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel run' }));
     const dialog = await screen.findByRole('alertdialog');
@@ -265,7 +269,7 @@ describe('cancelling a run', () => {
 
   it('keeps the confirmation open when a refresh shows the run has since been cancelled, and does not send the request', async () => {
     renderRuns();
-    fireEvent.click(await screen.findByRole('radio', { name: /Send the invoice/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Send the invoice/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel run' }));
     const dialog = await screen.findByRole('alertdialog');
 
@@ -278,7 +282,11 @@ describe('cancelling a run', () => {
       }
       return { data: cancelledMeanwhile };
     }) as typeof api.get);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh', hidden: true }));
+    // What the poll does every two seconds, asked for now.
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+      await client.refetchQueries({ queryKey: ['workflow-run'] });
+    });
     await waitFor(() => expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0));
 
     expect(screen.getByRole('alertdialog')).toBe(dialog);
@@ -290,7 +298,7 @@ describe('cancelling a run', () => {
 
   it('offers no cancel on an API that sends no cancelledAt', async () => {
     renderRuns();
-    fireEvent.click(await screen.findByRole('radio', { name: /Old waiting run/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Old waiting run/ }));
 
     await screen.findByRole('list', { name: 'Actions' });
     expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
@@ -298,7 +306,7 @@ describe('cancelling a run', () => {
 
   it('offers neither cancel nor retry on a stopped run', async () => {
     renderRuns();
-    fireEvent.click(await screen.findByRole('radio', { name: /Stopped run/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Stopped run/ }));
 
     const list = await screen.findByRole('list', { name: 'Actions' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
@@ -338,7 +346,7 @@ describe('a run rolled back, as contract 8 reports it', () => {
   });
 
   it('offers no retry, which the API refuses on a run being undone, and says how the undoing went', async () => {
-    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
 
     const list = await screen.findByRole('list', { name: 'Actions' });
     const rows = within(list).getAllByRole('listitem');
@@ -349,7 +357,7 @@ describe('a run rolled back, as contract 8 reports it', () => {
   });
 
   it('still offers the retry on a failed run nobody rolled back', async () => {
-    fireEvent.click(await screen.findByRole('radio', { name: /Charge again/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Charge again/ }));
 
     await screen.findByRole('list', { name: 'Actions' });
     expect(screen.getByRole('button', { name: /Retry action 1/ })).toBeInTheDocument();
@@ -410,7 +418,7 @@ describe('the status chips', () => {
 
   it('shows a segment for every status with the count the API sent, not the count of the loaded page', async () => {
     renderRuns([run('r1', 'One', 'Failed', []), run('r2', 'Two', 'Succeeded', [])], { statusCounts: COUNTS, totalItems: 48 });
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
     for (const [status, count] of Object.entries(SEGMENT_COUNTS)) {
@@ -418,12 +426,12 @@ describe('the status chips', () => {
     }
     expect(within(group).getByTestId('count-all')).toHaveTextContent('48');
     // Two rows are loaded and Succeeded says 30, so the number cannot have been counted here.
-    expect(screen.getAllByRole('row')).toHaveLength(3);
+    expect(within(screen.getByRole('list', { name: 'Runs' })).getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('names a chip with its count apart from the label, so it does not read as one word', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])], { statusCounts: COUNTS, totalItems: 48 });
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
     expect(within(group).getByRole('button', { name: 'Failed, 4 runs' })).toBeInTheDocument();
@@ -432,7 +440,7 @@ describe('the status chips', () => {
 
   it('leaves Pending out of Running and says Partly failed, with no Pending segment', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])], { statusCounts: COUNTS, totalItems: 48 });
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
     expect(within(group).getByRole('button', { name: 'Running, 2 runs' })).toBeInTheDocument();
@@ -443,7 +451,7 @@ describe('the status chips', () => {
     ]);
   });
 
-  it('keeps the table and says so when a refresh fails after the list has loaded', async () => {
+  it('keeps the list and says so when a refresh fails after the list has loaded', async () => {
     const loaded = [run('r1', 'One', 'Failed', [])];
     let lists = 0;
     vi.mocked(api.get).mockImplementation((async (url: string) => {
@@ -452,22 +460,25 @@ describe('the status chips', () => {
       if (lists > 1) throw httpError(500);
       return { data: listOf(loaded, {}) };
     }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider client={client}>
         <WorkflowRunsPage />
       </QueryClientProvider>,
     );
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+    });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not be refreshed/);
-    expect(screen.getByRole('radio', { name: /One/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /One/ })).toBeInTheDocument();
   });
 
   it('is a plain filter, with no counts, against an API that sends none', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])]);
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
 
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
     expect(within(group).getAllByRole('button')).toHaveLength(6);
@@ -476,7 +487,7 @@ describe('the status chips', () => {
 
   it('asks the API for the status that was pressed, from page 1', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])], { statusCounts: COUNTS });
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
 
     fireEvent.click(within(screen.getByRole('group', { name: 'Filter runs by status' })).getByRole('button', { name: /^Failed/ }));
 
@@ -495,7 +506,7 @@ describe('the Live switch', () => {
 
   it('starts Live and flips to Paused and back', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])]);
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
 
     const live = screen.getByRole('switch', { name: 'Live updates' });
     expect(live).toHaveAttribute('aria-checked', 'true');
@@ -511,10 +522,10 @@ describe('the Live switch', () => {
 
   it('keeps the list readable and the rows selectable while paused', async () => {
     renderRuns([run('r1', 'One', 'Failed', [])]);
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
     fireEvent.click(screen.getByRole('switch', { name: 'Live updates' }));
 
-    fireEvent.click(screen.getByRole('radio', { name: /One/ }));
+    fireEvent.click(screen.getByRole('button', { name: /One/ }));
     expect(await screen.findByRole('heading', { name: 'One' })).toBeInTheDocument();
   });
 });
@@ -531,7 +542,7 @@ describe('picking a run on one column', () => {
     setViewportWidth(900);
     renderRuns([run('r1', 'One', 'Failed', [])]);
 
-    fireEvent.click(await screen.findByRole('radio', { name: /One/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /One/ }));
 
     await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
   });
@@ -541,7 +552,7 @@ describe('picking a run on one column', () => {
     Element.prototype.scrollIntoView = scroll;
     renderRuns([run('r1', 'One', 'Failed', [])]);
 
-    fireEvent.click(await screen.findByRole('radio', { name: /One/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /One/ }));
     await screen.findByRole('heading', { name: 'One' });
 
     expect(scroll).not.toHaveBeenCalled();
@@ -561,7 +572,7 @@ describe('the attempt history in the panel', () => {
       { number: 3, outcome: 'Succeeded', responseStatus: 200 },
     ];
     renderRuns([run('r1', 'Announce', 'Succeeded', [action(1, 'Succeeded', { attempts: 3, history, droppedAttempts: 0 })])]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Announce/ }));
 
     const tries = await screen.findByRole('list', { name: 'Tries of action 1' });
     const items = within(tries).getAllByRole('listitem');
@@ -580,14 +591,14 @@ describe('the attempt history in the panel', () => {
       { number: 22, outcome: 'Failed', error: 'later' },
     ];
     renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { attempts: 22, history, droppedAttempts: 20 })])]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Announce/ }));
 
     expect(await screen.findByText(/20 earlier tries are no longer kept/)).toBeInTheDocument();
   });
 
   it('shows the count and the last error for a run from an API without a history', async () => {
     renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { attempts: 3, error: 'Service Unavailable' })])]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Announce/ }));
 
     const list = await screen.findByRole('list', { name: 'Actions' });
     expect(within(list).getByText('Service Unavailable')).toBeInTheDocument();
@@ -612,7 +623,7 @@ describe('who sees the buttons on a run', () => {
 
   async function open() {
     renderRuns([LIVE]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
     await screen.findByRole('list', { name: 'Actions' });
   }
 
@@ -679,7 +690,7 @@ describe('abandoning a run', () => {
 
   async function openAndAbandon() {
     renderRuns([PARTLY]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Abandon run' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(api.post).not.toHaveBeenCalled();
@@ -698,7 +709,7 @@ describe('abandoning a run', () => {
     vi.mocked(api.get).mockReset();
     renderRuns([PARTLY]);
     vi.mocked(api.post).mockRejectedValue(httpError(status, reason));
-    fireEvent.click(await screen.findByRole('radio', { name: /Charge the card/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
     await screen.findByRole('list', { name: 'Actions' });
     const before = detailReads('r1');
     expect(before).toBeGreaterThan(0);
@@ -712,7 +723,7 @@ describe('abandoning a run', () => {
 
   it('offers no abandon on a run nothing succeeded in', async () => {
     renderRuns([{ ...run('r2', 'Nothing went out', 'Failed', [action(1, 'Failed')]), abandonedAt: null }]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Nothing went out/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Nothing went out/ }));
 
     await screen.findByRole('list', { name: 'Actions' });
     expect(screen.queryByRole('button', { name: 'Abandon run' })).toBeNull();
@@ -729,7 +740,7 @@ describe('text from the API stays text', () => {
 
   it('shows markup in an error as text in the error row', async () => {
     renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { error: MARKUP })])]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Announce/ }));
 
     const list = await screen.findByRole('list', { name: 'Actions' });
     expect(within(list).getByText(MARKUP)).toBeInTheDocument();
@@ -742,7 +753,7 @@ describe('text from the API stays text', () => {
       { number: 2, outcome: 'Failed', error: 'plain' },
     ];
     renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { attempts: 2, history })])]);
-    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Announce/ }));
 
     expect(await screen.findByText(MARKUP)).toBeInTheDocument();
     expect(document.querySelector('img')).toBeNull();
@@ -751,7 +762,7 @@ describe('text from the API stays text', () => {
   it('hands a refusal that carries markup to the toast as a string, which it renders as text', async () => {
     renderRuns([run('r1', 'Announce', 'Failed', [action(1, 'Failed', { retryable: true })])]);
     vi.mocked(api.post).mockRejectedValue(httpError(409, MARKUP));
-    fireEvent.click(await screen.findByRole('radio', { name: /Announce/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Announce/ }));
     fireEvent.click(await screen.findByRole('button', { name: /Retry action 1/ }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(MARKUP));
@@ -775,7 +786,7 @@ describe('a link to a run', () => {
     const list = await screen.findByRole('list', { name: 'Actions' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Two' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Two/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: /Two/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('says so when the id is not a run', async () => {
@@ -821,7 +832,7 @@ describe('a link to a run', () => {
     renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);
 
     expect(await screen.findByText('Run not found')).toBeInTheDocument();
-    await screen.findByRole('radio', { name: /One/ });
+    await screen.findByRole('button', { name: /One/ });
     expect(vi.mocked(api.get).mock.calls.filter(([url]) => String(url).startsWith('/api/workflow-runs/'))).toEqual([]);
   });
 
@@ -831,10 +842,10 @@ describe('a link to a run', () => {
     });
     try {
       renderRuns([run('run-plain', 'Plain', 'Failed', [action(1, 'Failed')])]);
-      fireEvent.click(await screen.findByRole('radio', { name: /Plain/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /Plain/ }));
 
       await screen.findByRole('list', { name: 'Actions' });
-      expect(screen.getByRole('radio', { name: /Plain/ })).toBeChecked();
+      expect(screen.getByRole('button', { name: /Plain/ })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.queryByText('Run not found')).toBeNull();
     } finally {
       follow.mockRestore();
@@ -843,7 +854,7 @@ describe('a link to a run', () => {
 
   it('writes the chosen run into the address', async () => {
     renderRuns([run(GUID_ONE, 'One', 'Failed', [action(1, 'Failed')])]);
-    fireEvent.click(await screen.findByRole('radio', { name: /One/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /One/ }));
 
     await screen.findByRole('list', { name: 'Actions' });
     expect(new URLSearchParams(window.location.search).get('run')).toBe(GUID_ONE);
@@ -859,10 +870,342 @@ describe('a run with a status the console does not know', () => {
   it('shows it as its own text beside the others, and leaves it out of the chips', async () => {
     renderRuns([run('r1', 'Odd one', 'Abandoned', []), run('r2', 'Usual', 'Failed', [])]);
 
-    const table = await screen.findByRole('table');
-    expect(within(table).getByText('Abandoned')).toBeInTheDocument();
-    expect(within(table).getByText('Failed')).toBeInTheDocument();
+    const list = await screen.findByRole('list', { name: 'Runs' });
+    expect(within(list).getByText('Abandoned')).toBeInTheDocument();
+    expect(within(list).getByText('Failed')).toBeInTheDocument();
     const group = screen.getByRole('group', { name: 'Filter runs by status' });
     expect(within(group).queryByRole('button', { name: /Abandoned/ })).toBeNull();
+  });
+});
+
+describe('the run list as cards', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  const PARTLY = {
+    ...run('r-partly', 'Publish and announce', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Unknown'), action(3, 'Skipped')]),
+    triggerEvent: 'Article → In review',
+    executor: null,
+    abandonedAt: null,
+  };
+  const PERMANENT = run('r-perm', 'Welcome email', 'Failed', [action(1, 'Failed', { retryable: false })]);
+
+  it('has a Live pill and no Refresh button', async () => {
+    renderRuns([PARTLY]);
+    await screen.findByRole('button', { name: /Publish and announce/ });
+
+    expect(screen.getByRole('switch', { name: 'Live updates' })).toHaveTextContent('Live');
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+  });
+
+  it('lists runs as buttons, with no table and no radios', async () => {
+    renderRuns([PARTLY, PERMANENT]);
+    await screen.findByRole('button', { name: /Publish and announce/ });
+
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    const rows = within(screen.getByRole('list', { name: 'Runs' })).getAllByRole('button');
+    expect(rows).toHaveLength(2);
+  });
+
+  it('says Partly failed in the row and in the open run, never PartiallyFailed', async () => {
+    renderRuns([PARTLY]);
+    const row = await screen.findByRole('button', { name: /Publish and announce/ });
+
+    expect(within(row).getByText('Partly failed')).toBeInTheDocument();
+    fireEvent.click(row);
+    await screen.findByRole('list', { name: 'Actions' });
+
+    expect(screen.queryByText('PartiallyFailed')).toBeNull();
+    const title = screen.getByRole('heading', { name: 'Publish and announce' });
+    expect(within(title.parentElement as HTMLElement).getByText('Partly failed')).toBeInTheDocument();
+  });
+
+  it('shows a Permanent badge on a run whose failure a retry will not fix', async () => {
+    renderRuns([PERMANENT]);
+    const row = await screen.findByRole('button', { name: /Welcome email/ });
+
+    expect(within(row).getByText('Failed')).toBeInTheDocument();
+    expect(within(row).getByText('Permanent')).toBeInTheDocument();
+  });
+
+  it('puts the workflow and the entry on one line, the trigger in words below it, and one bar per action', async () => {
+    renderRuns([PARTLY]);
+    const row = await screen.findByRole('button', { name: /Publish and announce/ });
+
+    expect(within(row).getByText('Publish and announce')).toBeInTheDocument();
+    expect(within(row).getByText(/article 11111111/)).toBeInTheDocument();
+    const trigger = within(row).getByText('Article to In review');
+    expect(trigger).toHaveClass('font-mono');
+    expect(trigger.textContent).not.toMatch(/→/);
+
+    const bars = within(row).getAllByTestId('progress-segment');
+    expect(bars).toHaveLength(3);
+    expect(bars[0]).toHaveClass('bg-success');
+    expect(bars[1]).toHaveClass('bg-warning');
+    expect(bars[2]).toHaveClass('bg-border');
+  });
+
+  it('keeps the trigger whole, with no truncation to clip it', async () => {
+    renderRuns([{ ...PARTLY, triggerEvent: 'A very long trigger event name that must not be cut off' }]);
+    const row = await screen.findByRole('button', { name: /Publish and announce/ });
+
+    const trigger = within(row).getByText('A very long trigger event name that must not be cut off');
+    expect(trigger).not.toHaveClass('truncate');
+  });
+
+  it('keeps every status filter on one row', async () => {
+    renderRuns([PARTLY]);
+    await screen.findByRole('button', { name: /Publish and announce/ });
+
+    const group = screen.getByRole('group', { name: 'Filter runs by status' });
+    expect(group).toHaveClass('flex-nowrap');
+    for (const chip of within(group).getAllByRole('button')) expect(chip).toHaveClass('whitespace-nowrap');
+  });
+
+  it('selects a run on a click', async () => {
+    renderRuns([PARTLY, PERMANENT]);
+    const row = await screen.findByRole('button', { name: /Welcome email/ });
+    expect(row).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(row);
+
+    expect(await screen.findByRole('heading', { name: 'Welcome email' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Welcome email/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Publish and announce/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it.each([['{Enter}'], [' ']])('selects a run from the keyboard with %j', async (key) => {
+    const user = userEvent.setup();
+    renderRuns([PARTLY, PERMANENT]);
+    const row = await screen.findByRole('button', { name: /Welcome email/ });
+
+    row.focus();
+    await user.keyboard(key);
+
+    expect(await screen.findByRole('heading', { name: 'Welcome email' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Welcome email/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('reaches a run by tabbing past the filter and into the list', async () => {
+    const user = userEvent.setup();
+    renderRuns([PERMANENT]);
+    const row = await screen.findByRole('button', { name: /Welcome email/ });
+
+    for (let i = 0; i < 20 && document.activeElement !== row; i++) await user.tab();
+
+    expect(row).toHaveFocus();
+  });
+});
+
+describe('the open run, as the design draws it', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  const UNKNOWN = {
+    ...run('r-unknown', 'Publish and announce', 'PartiallyFailed', [
+      action(1, 'Succeeded'),
+      action(2, 'Unknown', { actionType: 'HttpRequest', error: 'Timed out after 30 s.' }),
+      action(3, 'Skipped', { haltedBy: 2, error: null }),
+    ]),
+    executor: null,
+    abandonedAt: null,
+    cancelledAt: null,
+  };
+
+  async function open() {
+    renderRuns([UNKNOWN]);
+    fireEvent.click(await screen.findByRole('button', { name: /Publish and announce/ }));
+    return screen.findByRole('list', { name: 'Actions' });
+  }
+
+  it('lists the facts: Trigger, Content type, Content, Started, Finished, Runs on and Run', async () => {
+    await open();
+
+    for (const label of ['Trigger', 'Content type', 'Content', 'Started', 'Finished', 'Runs on', 'Run']) {
+      expect(screen.getByText(label, { selector: 'dt' })).toBeInTheDocument();
+    }
+    expect(screen.getByText('built-in runner')).toBeInTheDocument();
+    expect(screen.getByText('r-unknown', { selector: 'dd' })).toBeInTheDocument();
+  });
+
+  it('draws one numbered node per action on the timeline', async () => {
+    const list = await open();
+
+    const nodes = within(list).getAllByTestId('timeline-node');
+    expect(nodes.map((node) => node.textContent)).toEqual(['1', '2', '3']);
+  });
+
+  it('shows the type, the status, Attempts and Took on a card, and Retry on the Unknown one only', async () => {
+    const list = await open();
+    const cards = within(list).getAllByRole('listitem');
+
+    expect(within(cards[1]).getByText('HttpRequest')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('Unknown')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('Attempts')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('Took')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('Timed out after 30 s.').tagName).toBe('PRE');
+    expect(within(cards[1]).getByRole('button', { name: /Retry action 2/ })).toBeInTheDocument();
+    expect(within(cards[0]).queryByRole('button', { name: /Retry/ })).toBeNull();
+    expect(within(cards[2]).queryByRole('button', { name: /Retry/ })).toBeNull();
+  });
+
+  it('says why an action was skipped', async () => {
+    const list = await open();
+    const cards = within(list).getAllByRole('listitem');
+
+    expect(within(cards[2]).getByText('Skipped because')).toBeInTheDocument();
+    expect(within(cards[2]).getByText('action 2 failed')).toBeInTheDocument();
+  });
+
+  it('explains an Unknown outcome and the idempotency key under the timeline', async () => {
+    await open();
+
+    const note = screen.getByTestId('run-note');
+    expect(note).toHaveTextContent(/may already have gone out/);
+    expect(note).toHaveTextContent(/idempotency key/);
+  });
+
+  it('keeps Abandon, the API\'s name for the action the design calls Cancel run', async () => {
+    await open();
+
+    expect(screen.getByRole('button', { name: 'Abandon run' })).toBeInTheDocument();
+  });
+});
+
+describe('the open run across the poll', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('keeps the selection and an open dialog when the list is read again', async () => {
+    const PARTLY = {
+      ...run('r-keep', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Failed')]),
+      abandonedAt: null,
+    };
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf([PARTLY]) };
+      return { data: PARTLY };
+    }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon run' }));
+    const dialog = await screen.findByRole('alertdialog');
+
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+      await client.refetchQueries({ queryKey: ['workflow-run'] });
+    });
+
+    expect(screen.getByRole('alertdialog')).toBe(dialog);
+    // The dialog is modal, so the rest of the page is hidden from the accessibility tree.
+    expect(screen.getByRole('button', { name: /Charge the card/, hidden: true })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('list', { name: 'Actions', hidden: true })).toBeInTheDocument();
+  });
+});
+
+describe('the open run after a poll that changes it', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('keeps the same row node selected and focused, and its detail shown, when a refetch changes its status', async () => {
+    let current = { ...run('r-poll', 'Charge the card', 'Running', [action(1, 'Running')]), abandonedAt: null };
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf([current]) };
+      return { data: current };
+    }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+    const row = await screen.findByRole('button', { name: /Charge the card/ });
+    fireEvent.click(row);
+    await screen.findByRole('list', { name: 'Actions' });
+    row.focus();
+    expect(within(row).getByText('Running')).toBeInTheDocument();
+
+    current = { ...current, status: 'Succeeded', actions: [action(1, 'Succeeded')] };
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+      await client.refetchQueries({ queryKey: ['workflow-run'] });
+    });
+
+    // The status changed, so the refetch really landed.
+    await waitFor(() => expect(within(row).getByText('Succeeded')).toBeInTheDocument());
+    const after = screen.getByRole('button', { name: /Charge the card/ });
+    expect(after).toBe(row);
+    expect(after).toHaveAttribute('aria-pressed', 'true');
+    expect(after).toHaveFocus();
+    expect(screen.getByRole('list', { name: 'Actions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Charge the card' })).toBeInTheDocument();
+  });
+});
+
+describe('the note under the timeline on a run that cannot be retried', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('says rolled back, and does not invite a retry, on an abandoned PartiallyFailed run', async () => {
+    const abandoned = {
+      ...run('r-ab', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Unknown')]),
+      abandonedAt: '2026-09-03T10:00:09Z',
+      compensation: 'Compensated',
+    };
+    renderRuns([abandoned]);
+    fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
+    await screen.findByRole('list', { name: 'Actions' });
+
+    const note = screen.getByTestId('run-note');
+    expect(note).toHaveTextContent('Rolled back or abandoned. Its actions are not retried.');
+    expect(note).not.toHaveTextContent(/idempotency key/);
+    expect(note).not.toHaveTextContent(/Retrying the failed action/);
+  });
+
+  it('says cancelled on a cancelled Failed run, with no permanent-failure advice', async () => {
+    const cancelled = {
+      ...run('r-can', 'Send the invoice', 'Failed', [action(1, 'Failed', { retryable: false })]),
+      cancelledAt: '2026-09-03T10:00:03Z',
+    };
+    renderRuns([cancelled]);
+    fireEvent.click(await screen.findByRole('button', { name: /Send the invoice/ }));
+    await screen.findByRole('list', { name: 'Actions' });
+
+    const note = screen.getByTestId('run-note');
+    expect(note).toHaveTextContent('A cancelled run cannot be retried.');
+    expect(note).not.toHaveTextContent(/A retry then asks you to confirm/);
+  });
+});
+
+describe('a run with no usable start time', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('says n/a in the row and in the Started fact when createdAt is garbage', async () => {
+    renderRuns([{ ...run('r-bad', 'Charge the card', 'Failed', [action(1, 'Failed')]), createdAt: 'garbage' }]);
+    const row = await screen.findByRole('button', { name: /Charge the card/ });
+
+    expect(within(row).getByText('n/a')).toBeInTheDocument();
+    fireEvent.click(row);
+    await screen.findByRole('list', { name: 'Actions' });
+
+    expect(screen.getByText('Started', { selector: 'dt' }).nextElementSibling).toHaveTextContent('n/a');
   });
 });

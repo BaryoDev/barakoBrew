@@ -60,10 +60,12 @@ export function RunNowButton({
   workflow,
   available = true,
   size = 'sm',
+  variant = 'outline',
 }: {
   workflow: RunNowWorkflow;
   available?: boolean;
   size?: 'sm' | 'icon';
+  variant?: 'outline' | 'default';
 }) {
   const access = useAccess();
   const [open, setOpen] = useState(false);
@@ -77,7 +79,7 @@ export function RunNowButton({
     <>
       <Button
         type="button"
-        variant="outline"
+        variant={variant}
         size={size}
         disabled={!runnable}
         title={runnable ? undefined : 'Switch the workflow on to run it.'}

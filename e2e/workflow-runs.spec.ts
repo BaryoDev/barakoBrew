@@ -136,9 +136,9 @@ test.describe('workflow runs', () => {
   test('lists every run with its status carried by a badge', async ({ page }) => {
     await open(page);
 
-    const table = page.getByRole('table');
+    const table = page.getByRole('list', { name: 'Runs' });
     await expect(table.getByText('Announce a post')).toBeVisible();
-    await expect(table.getByText('PartiallyFailed', { exact: true })).toBeVisible();
+    await expect(table.getByText('Partly failed', { exact: true })).toBeVisible();
     await expect(table.getByText('Succeeded', { exact: true })).toBeVisible();
     await expect(table.getByText('Failed', { exact: true })).toBeVisible();
     await expect(table.getByText('Running', { exact: true })).toBeVisible();
@@ -150,15 +150,39 @@ test.describe('workflow runs', () => {
 
     await chip(page, 'Failed').click();
 
-    const table = page.getByRole('table');
+    const table = page.getByRole('list', { name: 'Runs' });
     await expect(table.getByText('Push to the CDN')).toBeVisible();
     await expect(table.getByText('Announce a post')).toBeHidden();
+  });
+
+  test('keeps the status filter on one row at 1440 and has a Live pill, not a Refresh button', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page);
+
+    const group = page.getByRole('group', { name: 'Filter runs by status' });
+    const boxes = await group.getByRole('button').evaluateAll((buttons) =>
+      buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
+    );
+    expect(boxes).toHaveLength(6);
+    expect(new Set(boxes).size).toBe(1);
+    await expect(page.getByRole('switch', { name: 'Live updates' })).toHaveText('Live');
+    await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0);
+  });
+
+  test('opens a run from the keyboard', async ({ page }) => {
+    await open(page);
+
+    await page.getByRole('button', { name: /Announce a post/ }).focus();
+    await page.keyboard.press('Enter');
+
+    await expect(actions(page)).toHaveCount(5);
+    await expect(page.getByRole('button', { name: /Announce a post/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('opening a run shows its actions in order, with the error on the one that failed', async ({ page }) => {
     await open(page);
 
-    await page.getByRole('radio', { name: /Announce a post/ }).check();
+    await page.getByRole('button', { name: /Announce a post/ }).click();
 
     const detail = actions(page);
     await expect(detail).toHaveCount(5);
@@ -170,7 +194,7 @@ test.describe('workflow runs', () => {
   test('offers retry on the failed and unknown actions and on nothing else', async ({ page }) => {
     await open(page);
 
-    await page.getByRole('radio', { name: /Announce a post/ }).check();
+    await page.getByRole('button', { name: /Announce a post/ }).click();
     await expect(actions(page)).toHaveCount(5);
 
     // Ordinals 2 (Failed) and 3 (Unknown). Ordinal 1 succeeded, so a retry would send it a second
@@ -183,7 +207,7 @@ test.describe('workflow runs', () => {
   test('retrying posts to that ordinal and then reads the run again', async ({ page }) => {
     const stubs = await open(page);
 
-    await page.getByRole('radio', { name: /Announce a post/ }).check();
+    await page.getByRole('button', { name: /Announce a post/ }).click();
     await expect(actions(page)).toHaveCount(5);
     const readsBefore = stubs.detailReads.length;
     expect(readsBefore).toBeGreaterThan(0);
@@ -211,7 +235,7 @@ test.describe('workflow runs', () => {
     });
 
     await page.goto('/workflow-runs');
-    await page.getByRole('radio', { name: /Announce a post/ }).check();
+    await page.getByRole('button', { name: /Announce a post/ }).click();
     await expect(actions(page)).toHaveCount(5);
     const readsBefore = stubs.detailReads.length;
 
@@ -239,7 +263,7 @@ test.describe('workflow runs', () => {
     });
 
     await page.goto('/workflow-runs');
-    await page.getByRole('radio', { name: /Announce a post/ }).check();
+    await page.getByRole('button', { name: /Announce a post/ }).click();
     await expect(actions(page)).toHaveCount(5);
 
     const second = page.getByRole('button', { name: /Retry action 2/ });
@@ -265,7 +289,7 @@ test.describe('workflow runs', () => {
     await page.setViewportSize({ width: 393, height: 851 });
     await open(page);
 
-    await page.getByRole('radio', { name: /Announce a post/ }).check();
+    await page.getByRole('button', { name: /Announce a post/ }).click();
     await expect(actions(page)).toHaveCount(5);
 
     // The two-column grid used to let the table's own width grow the track, so the page scrolled
@@ -315,7 +339,7 @@ test.describe('workflow runs, temporary and permanent failures', () => {
     });
 
     await page.goto('/workflow-runs');
-    await page.getByRole('radio', { name: /Sync the catalogue/ }).check({ timeout: 15000 });
+    await page.getByRole('button', { name: /Sync the catalogue/ }).click({ timeout: 15000 });
     await expect(actions(page)).toHaveCount(3);
     return retries;
   }
@@ -330,7 +354,7 @@ test.describe('workflow runs, temporary and permanent failures', () => {
     await expect(detail.nth(2).getByText(/Temporary|Permanent/)).toHaveCount(0);
 
     // The list marks the run by its worst failure.
-    await expect(page.getByRole('table').getByText('Permanent', { exact: true })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Runs' }).getByText('Permanent', { exact: true })).toBeVisible();
   });
 
   test('a permanent failure asks first, from the keyboard, and cancelling sends nothing', async ({ page }) => {
@@ -461,7 +485,7 @@ test.describe('workflow runs paging', () => {
     const asked = await stubPagedRuns(page);
 
     await page.goto('/workflow-runs');
-    const table = page.getByRole('table');
+    const table = page.getByRole('list', { name: 'Runs' });
     await expect(table.getByText('Announce a post')).toBeVisible({ timeout: 15000 });
 
     await page.getByRole('button', { name: 'Next', exact: true }).click();
@@ -477,10 +501,10 @@ test.describe('workflow runs paging', () => {
     const asked = await stubPagedRuns(page);
 
     await page.goto('/workflow-runs');
-    await expect(page.getByRole('table').getByText('Announce a post')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('list', { name: 'Runs' }).getByText('Announce a post')).toBeVisible({ timeout: 15000 });
 
     await page.getByRole('button', { name: 'Next', exact: true }).click();
-    await expect(page.getByRole('table').getByText('Tidy the index')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Runs' }).getByText('Tidy the index')).toBeVisible();
 
     await chip(page, 'Failed').click();
 
@@ -493,7 +517,7 @@ test.describe('workflow runs paging', () => {
           .map((url) => url.searchParams.get('page'))
       )
       .toEqual(['1']);
-    await expect(page.getByRole('table').getByText('Push to the CDN')).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Runs' }).getByText('Push to the CDN')).toBeVisible();
   });
 });
 
@@ -528,10 +552,10 @@ test.describe('workflow runs live', () => {
       return route.fulfill({ json: { ...pageOf(changed), cursor: `cursor-${polls}` } });
     });
     await page.goto('/workflow-runs');
-    await expect(page.getByRole('table').getByText('Notify the desk')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('list', { name: 'Runs' }).getByText('Notify the desk')).toBeVisible({ timeout: 15000 });
 
     await expect.poll(() => asked.some((url) => url.searchParams.get('changedSince') === 'cursor-1'), { timeout: 15000 }).toBe(true);
-    await expect(page.getByRole('row', { name: /Notify the desk/ }).getByText('Succeeded', { exact: true })).toBeVisible();
+    await expect(page.getByRole('listitem').filter({ hasText: 'Notify the desk' }).getByText('Succeeded', { exact: true })).toBeVisible();
   });
 
   const LINKED_ID = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
