@@ -4,8 +4,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import type { ReactNode } from 'react';
 
-const get = vi.fn();
-vi.mock('@/lib/api', () => ({ api: { get: (...args: unknown[]) => get(...args) } }));
+// A plain function, not vi.fn(): vitest's spy tracks the promise a mock returns, and for a rejected
+// one that surfaces as a second, unhandled copy of the error on the test even though the hook
+// caught it. What matters here is how many times the hook asked, so count by hand.
+let calls = 0;
+let reply: () => Promise<unknown> = async () => ({ data: {} });
+vi.mock('@/lib/api', () => ({
+    api: {
+        get: () => {
+            calls += 1;
+            return reply();
+        },
+    },
+}));
 
 const { useSignInMethods } = await import('./use-sign-in-methods');
 
@@ -18,38 +29,44 @@ function wrapper() {
 }
 
 function failure(status: number) {
-    const error = new AxiosError('failed');
-    error.response = { status, data: {}, statusText: '', headers: {}, config: {} as never };
-    return error;
+    return new AxiosError('failed', undefined, undefined, undefined, {
+        status,
+        data: {},
+        statusText: '',
+        headers: {},
+        config: {} as never,
+    });
 }
 
 describe('useSignInMethods', () => {
-    beforeEach(() => get.mockReset());
+    beforeEach(() => {
+        calls = 0;
+    });
 
     it('takes the list the server gives', async () => {
-        get.mockResolvedValue({ data: { methods: ['password'] } });
+        reply = async () => ({ data: { methods: ['password'] } });
         const { result } = renderHook(() => useSignInMethods(), { wrapper: wrapper() });
         await waitFor(() => expect(result.current.data).toEqual(['password']));
     });
 
     it('uses the two defaults on a 404, an API that predates the endpoint', async () => {
-        get.mockRejectedValue(failure(404));
+        reply = () => Promise.reject(failure(404));
         const { result } = renderHook(() => useSignInMethods(), { wrapper: wrapper() });
         await waitFor(() => expect(result.current.data).toEqual(['password', 'email-code']));
-        expect(get).toHaveBeenCalledTimes(1);
+        expect(calls).toBe(1);
     });
 
     it('uses the two defaults when the reply is not a list', async () => {
-        get.mockResolvedValue({ data: { methods: 'password' } });
+        reply = async () => ({ data: { methods: 'password' } });
         const { result } = renderHook(() => useSignInMethods(), { wrapper: wrapper() });
         await waitFor(() => expect(result.current.data).toEqual(['password', 'email-code']));
     });
 
     it('retries a 500 and then reports an error instead of caching the defaults', async () => {
-        get.mockRejectedValue(failure(500));
+        reply = () => Promise.reject(failure(500));
         const { result } = renderHook(() => useSignInMethods(), { wrapper: wrapper() });
         await waitFor(() => expect(result.current.isError).toBe(true), { timeout: 4000 });
-        expect(get.mock.calls.length).toBeGreaterThan(1);
+        expect(calls).toBeGreaterThan(1);
         expect(result.current.data).toBeUndefined();
     });
 });
