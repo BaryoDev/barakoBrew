@@ -86,7 +86,7 @@ export function useDeleteFile() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async ({ id, force = false }: { id: string; force?: boolean }) => {
-            await api.delete(`/api/files/${id}`, { params: force ? { force: true } : undefined });
+            await api.delete(`/api/files/${encodeURIComponent(id)}`, { params: force ? { force: true } : undefined });
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['files'] }),
     });

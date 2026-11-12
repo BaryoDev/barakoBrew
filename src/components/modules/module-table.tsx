@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { StatusBadge, type Tone } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { IconSearch } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { statusTone } from './status-tone';
 
-export type ColumnKind = 'text' | 'number' | 'mono' | 'status' | 'switch';
+export type ColumnKind = 'text' | 'number' | 'mono' | 'status' | 'switch' | 'date';
 
 export interface ModuleColumn {
     key: string;
@@ -33,12 +33,20 @@ export interface DrawerField {
 export type RowAction =
     | { kind: 'toggle'; label: string }
     | { kind: 'run'; label: string; destructive?: boolean; run: () => Promise<unknown> | void; done: string }
-    | { kind: 'remove'; label: string; commit: () => Promise<unknown> | void };
+    | {
+          kind: 'remove';
+          label: string;
+          commit: () => Promise<unknown> | void;
+          /** Turns a failed commit into the toast text. Return null for the generic text. */
+          failure?: (error: unknown) => string | null;
+      };
 
 export interface ModuleRow {
     id: string;
     title: string;
     cells: Record<string, string | number>;
+    /** Raw values to sort on when a cell is formatted text, such as an ISO date behind a date cell. */
+    sort?: Record<string, string | number | null | undefined>;
     /** The state of the switch column, when the table has one. */
     on?: boolean;
     fields: DrawerField[];
@@ -82,6 +90,36 @@ export function nextSort(current: Sort | null, key: string): Sort | null {
 }
 
 const UNDO_MS = 6000;
+
+type SortValue = string | number | null | undefined;
+
+function sortValue(col: ModuleColumn | undefined, row: ModuleRow): number | string | null {
+    const raw: SortValue = row.sort && col && col.key in row.sort ? row.sort[col.key] : row.cells[col?.key ?? ''];
+    if (raw === null || raw === undefined || raw === '') return null;
+    if (col?.kind === 'date') {
+        const t = typeof raw === 'number' ? raw : Date.parse(raw);
+        return Number.isNaN(t) ? null : t;
+    }
+    if (col?.kind === 'number') {
+        const n = Number(raw);
+        return Number.isNaN(n) ? null : n;
+    }
+    return String(raw);
+}
+
+/** Missing values sort last in both directions. */
+export function compareRows(col: ModuleColumn | undefined, dir: SortDir) {
+    const sign = dir === 'asc' ? 1 : -1;
+    return (a: ModuleRow, b: ModuleRow): number => {
+        const av = sortValue(col, a);
+        const bv = sortValue(col, b);
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sign;
+        return String(av).localeCompare(String(bv), undefined, { numeric: true }) * sign;
+    };
+}
 
 function cellText(col: ModuleColumn, value: string | number | undefined): string {
     if (value === undefined) return '';
@@ -128,6 +166,45 @@ export function ModuleTable({
     const [openId, setOpenId] = useState<string | null>(null);
     const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
     const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+    const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+    const busyRef = useRef<Set<string>>(new Set());
+    const pendingRemovals = useRef<Map<string, () => void>>(new Map());
+
+    function markBusy(key: string, on: boolean) {
+        if (on) busyRef.current.add(key);
+        else busyRef.current.delete(key);
+        setBusy(new Set(busyRef.current));
+    }
+    const isBusy = (key: string) => busy.has(key);
+    const rowBusy = (id: string) => [...busy].some((k) => k === id || k.startsWith(`${id}\u0000`));
+
+    // A refetch wins: once the server row shows the value an override holds, the override goes.
+    useEffect(() => {
+        setOverrides((o) => {
+            const ids = Object.keys(o);
+            if (ids.length === 0) return o;
+            let next: Record<string, boolean> | null = null;
+            for (const id of ids) {
+                const row = rows.find((r) => r.id === id);
+                if (!row || Boolean(row.on) === o[id]) {
+                    next ??= { ...o };
+                    delete next[id];
+                }
+            }
+            return next ?? o;
+        });
+    }, [rows]);
+
+    // Best effort: a reload, a closed tab or leaving the screen inside the undo window still deletes.
+    useEffect(() => {
+        const pending = pendingRemovals.current;
+        const flush = () => [...pending.values()].forEach((run) => run());
+        window.addEventListener('pagehide', flush);
+        return () => {
+            window.removeEventListener('pagehide', flush);
+            flush();
+        };
+    }, []);
 
     const withState = useMemo(
         () => rows.map((r) => (r.id in overrides ? { ...r, on: overrides[r.id], cells: switchCells(r, overrides[r.id]) } : r)),
@@ -145,44 +222,55 @@ export function ModuleTable({
         }
         if (sort) {
             const col = columns.find((c) => c.key === sort.key);
-            const sign = sort.dir === 'asc' ? 1 : -1;
-            out = [...out].sort((a, b) => {
-                const av = a.cells[sort.key] ?? '';
-                const bv = b.cells[sort.key] ?? '';
-                if (col?.kind === 'number') return (Number(av) - Number(bv)) * sign;
-                return String(av).localeCompare(String(bv)) * sign;
-            });
+            out = [...out].sort(compareRows(col, sort.dir));
         }
         return out;
     }, [withState, hidden, filter, sort, columns]);
 
     const open = withState.find((r) => r.id === openId) ?? null;
 
-    async function setOn(row: ModuleRow, next: boolean) {
+    async function setOn(row: ModuleRow, next: boolean): Promise<boolean> {
+        // The core toggle flips whatever is stored, so a second call while one is open would undo the first.
+        if (busyRef.current.has(row.id)) return false;
+        const before = Boolean(row.on);
+        markBusy(row.id, true);
         setOverrides((o) => ({ ...o, [row.id]: next }));
         try {
             await onToggle?.(row, next);
             toast.success(`${row.title} turned ${next ? 'On' : 'Off'}`);
+            return true;
         } catch {
-            setOverrides((o) => ({ ...o, [row.id]: !next }));
+            setOverrides((o) => ({ ...o, [row.id]: before }));
             toast.error(`Could not turn ${row.title} ${next ? 'On' : 'Off'}`);
+            return false;
+        } finally {
+            markBusy(row.id, false);
         }
     }
 
-    function remove(row: ModuleRow, commit: () => Promise<unknown> | void) {
+    function remove(row: ModuleRow, action: Extract<RowAction, { kind: 'remove' }>) {
+        const { commit } = action;
         let undone = false;
         let settled = false;
         const finish = () => {
+            pendingRemovals.current.delete(row.id);
             if (undone || settled) return;
             settled = true;
-            void Promise.resolve(commit()).then(
+            let started: Promise<unknown>;
+            try {
+                started = Promise.resolve(commit());
+            } catch (error) {
+                started = Promise.reject(error);
+            }
+            void started.then(
                 () => setHidden((h) => without(h, row.id)),
-                () => {
+                (error: unknown) => {
                     setHidden((h) => without(h, row.id));
-                    toast.error(`Could not remove ${row.title}`);
+                    toast.error(action.failure?.(error) || `Could not remove ${row.title}`);
                 },
             );
         };
+        pendingRemovals.current.set(row.id, finish);
         setHidden((h) => new Set(h).add(row.id));
         setOpenId(null);
         toast(`Removed ${row.title}`, {
@@ -191,6 +279,7 @@ export function ModuleTable({
                 label: 'Undo',
                 onClick: () => {
                     undone = true;
+                    pendingRemovals.current.delete(row.id);
                     setHidden((h) => without(h, row.id));
                 },
             },
@@ -200,15 +289,23 @@ export function ModuleTable({
     }
 
     async function runAction(row: ModuleRow, action: RowAction) {
-        if (action.kind === 'toggle') return setOn(row, !row.on);
-        if (action.kind === 'remove') return remove(row, action.commit);
+        if (action.kind === 'toggle') {
+            await setOn(row, !row.on);
+            return;
+        }
+        if (action.kind === 'remove') return remove(row, action);
+        const key = `${row.id}\u0000${action.label}`;
+        if (busyRef.current.has(key)) return;
+        markBusy(key, true);
         try {
             await action.run();
             toast.success(action.done);
+            setOpenId(null);
         } catch {
             toast.error(`${action.label} failed`);
+        } finally {
+            markBusy(key, false);
         }
-        setOpenId(null);
     }
 
     const statusCol = columns.find((c) => c.kind === 'status' || c.kind === 'switch');
@@ -303,7 +400,12 @@ export function ModuleTable({
                                 tabIndex={0}
                                 onClick={() => setOpenId(r.id)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && e.target === e.currentTarget) setOpenId(r.id);
+                                    // Keys from the switch or any other control inside the row are theirs.
+                                    if (e.target !== e.currentTarget) return;
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        setOpenId(r.id);
+                                    }
                                 }}
                                 className="border-border hover:bg-secondary/60 min-h-11 cursor-pointer border-b last:border-b-0"
                             >
@@ -319,8 +421,9 @@ export function ModuleTable({
                                         {c.kind === 'switch' ? (
                                             <span className="inline-flex items-center gap-2">
                                                 <Switch
-                                                    aria-label={`${r.title} ${r.on ? 'On' : 'Off'}`}
+                                                    aria-label={r.title}
                                                     checked={Boolean(r.on)}
+                                                    disabled={isBusy(r.id)}
                                                     onClick={(e) => e.stopPropagation()}
                                                     onCheckedChange={(next) => void setOn(r, next)}
                                                     className="data-[size=default]:h-5 data-[size=default]:w-9"
@@ -399,6 +502,7 @@ export function ModuleTable({
                                                 key={a.label}
                                                 type="button"
                                                 variant={i === 0 ? 'default' : 'outline'}
+                                                disabled={rowBusy(open.id)}
                                                 className={cn(
                                                     (a.kind === 'remove' || (a.kind === 'run' && a.destructive)) &&
                                                         'text-destructive',

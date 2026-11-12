@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 type ToastOptions = { action?: { label: string; onClick: () => void }; onAutoClose?: () => void; onDismiss?: () => void };
@@ -24,8 +24,8 @@ const rows: ModuleRow[] = [
     { id: 'c', title: 'gamma', on: true, cells: { name: 'gamma', count: 100, state: 'On' }, fields: [] },
 ];
 
-function setup(over: Partial<ModuleBodyProps> = {}) {
-    const props: ModuleBodyProps = {
+function propsFor(over: Partial<ModuleBodyProps> = {}): ModuleBodyProps {
+    return {
         moduleLabel: 'Demo',
         title: 'Things',
         noun: 'things',
@@ -39,7 +39,10 @@ function setup(over: Partial<ModuleBodyProps> = {}) {
         callFor: (r) => `DELETE /api/things/${r.id}`,
         ...over,
     };
-    return render(<ModuleTable {...props} />);
+}
+
+function setup(over: Partial<ModuleBodyProps> = {}) {
+    return render(<ModuleTable {...propsFor(over)} />);
 }
 
 const names = () => screen.getAllByTestId('module-row').map((r) => within(r).getAllByRole('cell')[0].textContent);
@@ -106,10 +109,107 @@ describe('ModuleTable switch', () => {
     it('toggles in place with a toast and does not open the drawer', async () => {
         const onToggle = vi.fn().mockResolvedValue(undefined);
         setup({ onToggle });
-        await userEvent.click(screen.getByRole('switch', { name: 'alpha Off' }));
+        await userEvent.click(screen.getByRole('switch', { name: 'alpha' }));
         expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), true);
         expect(screen.queryByRole('dialog')).toBeNull();
-        expect(await screen.findByRole('switch', { name: 'alpha On' })).toBeTruthy();
+        await waitFor(() => expect(screen.getByRole('switch', { name: 'alpha' }).getAttribute('aria-checked')).toBe('true'));
+    });
+
+    it('labels the switch with the row title only', () => {
+        setup();
+        expect(screen.getByRole('switch', { name: 'beta' }).getAttribute('aria-checked')).toBe('true');
+        expect(screen.queryByRole('switch', { name: 'beta On' })).toBeNull();
+    });
+
+    it('drops an override once the server row matches, so a later refetch wins', async () => {
+        const onToggle = vi.fn().mockResolvedValue(undefined);
+        const { rerender } = setup({ onToggle });
+        await userEvent.click(screen.getByRole('switch', { name: 'alpha' }));
+        await waitFor(() => expect(screen.getByRole('switch', { name: 'alpha' }).getAttribute('aria-checked')).toBe('true'));
+        const withOn = (on: boolean) => rows.map((r) => (r.id === 'a' ? { ...r, on } : r));
+        rerender(<ModuleTable {...propsFor({ onToggle, rows: withOn(true) })} />);
+        rerender(<ModuleTable {...propsFor({ onToggle, rows: withOn(false) })} />);
+        expect(screen.getByRole('switch', { name: 'alpha' }).getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('disables the switch while a toggle is pending and ignores a second click', async () => {
+        let finish: () => void = () => undefined;
+        const onToggle = vi.fn(() => new Promise<void>((res) => (finish = res)));
+        setup({ onToggle });
+        const sw = screen.getByRole('switch', { name: 'alpha' });
+        await userEvent.click(sw);
+        expect((screen.getByRole('switch', { name: 'alpha' }) as HTMLButtonElement).disabled).toBe(true);
+        await userEvent.click(screen.getByRole('switch', { name: 'alpha' }));
+        expect(onToggle).toHaveBeenCalledTimes(1);
+        await act(async () => finish());
+        expect((screen.getByRole('switch', { name: 'alpha' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('rolls back to the value before the click when the toggle fails', async () => {
+        const onToggle = vi.fn().mockRejectedValue(new Error('no'));
+        setup({ onToggle });
+        await userEvent.click(screen.getByRole('switch', { name: 'beta' }));
+        await waitFor(() => expect(onToggle).toHaveBeenCalled());
+        await waitFor(() => expect(screen.getByRole('switch', { name: 'beta' }).getAttribute('aria-checked')).toBe('true'));
+    });
+});
+
+describe('ModuleTable row keys', () => {
+    it('opens the drawer on Space and prevents the page scroll', () => {
+        setup();
+        const row = screen.getAllByTestId('module-row')[0];
+        const notCancelled = fireEvent.keyDown(row, { key: ' ' });
+        expect(notCancelled).toBe(false);
+    });
+
+    it('opens the drawer on Enter', async () => {
+        setup();
+        fireEvent.keyDown(screen.getAllByTestId('module-row')[0], { key: 'Enter' });
+        expect(await screen.findByRole('dialog')).toBeTruthy();
+    });
+
+    it('ignores keys that come from the switch', () => {
+        setup();
+        const sw = within(screen.getAllByTestId('module-row')[0]).getByRole('switch');
+        fireEvent.keyDown(sw, { key: ' ' });
+        fireEvent.keyDown(sw, { key: 'Enter' });
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+});
+
+describe('ModuleTable sort values', () => {
+    const sortRows: ModuleRow[] = [
+        { id: '1', title: 'r1', cells: { name: 'item 10', n: 5, when: 'Never' }, sort: { when: null }, fields: [] },
+        { id: '2', title: 'r2', cells: { name: 'item 2', when: '2024-05-01' }, sort: { when: '2024-05-01T10:00:00Z' }, fields: [] },
+        { id: '3', title: 'r3', cells: { name: 'Item 1', n: 40, when: '2023-01-01' }, sort: { when: '2023-01-01T00:00:00Z' }, fields: [] },
+    ];
+    const cols: ModuleBodyProps['columns'] = [
+        { key: 'name', label: 'Name' },
+        { key: 'n', label: 'N', kind: 'number' },
+        { key: 'when', label: 'When', kind: 'date' },
+    ];
+    const order = () => screen.getAllByTestId('module-row').map((r) => within(r).getAllByRole('cell')[0].textContent);
+
+    it('sorts text with numeric collation', async () => {
+        setup({ rows: sortRows, columns: cols });
+        await userEvent.click(screen.getByRole('button', { name: /^Name/ }));
+        expect(order()).toEqual(['Item 1', 'item 2', 'item 10']);
+    });
+
+    it('puts missing numbers last in both directions', async () => {
+        setup({ rows: sortRows, columns: cols });
+        await userEvent.click(screen.getByRole('button', { name: /^N/ }));
+        expect(order()).toEqual(['item 10', 'Item 1', 'item 2']);
+        await userEvent.click(screen.getByRole('button', { name: /^N/ }));
+        expect(order()).toEqual(['Item 1', 'item 10', 'item 2']);
+    });
+
+    it('sorts a date column on the raw value with Never last', async () => {
+        setup({ rows: sortRows, columns: cols });
+        await userEvent.click(screen.getByRole('button', { name: /^When/ }));
+        expect(order()).toEqual(['Item 1', 'item 2', 'item 10']);
+        await userEvent.click(screen.getByRole('button', { name: /^When/ }));
+        expect(order()).toEqual(['item 2', 'Item 1', 'item 10']);
     });
 });
 
@@ -164,5 +264,93 @@ describe('ModuleTable drawer', () => {
         const opts = toastFn.mock.calls[0][1] as ToastOptions;
         await act(async () => opts.onAutoClose?.());
         expect(commit).toHaveBeenCalledTimes(1);
+    });
+
+    it('commits a pending removal on pagehide and only once', async () => {
+        const commit = vi.fn().mockResolvedValue(undefined);
+        const withCommit = rows.map((r) =>
+            r.id === 'b' ? { ...r, actions: [{ kind: 'remove' as const, label: 'Remove', commit }] } : r,
+        );
+        setup({ rows: withCommit });
+        await userEvent.click(screen.getAllByTestId('module-row')[0]);
+        await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+        expect(commit).not.toHaveBeenCalled();
+        act(() => {
+            window.dispatchEvent(new Event('pagehide'));
+        });
+        expect(commit).toHaveBeenCalledTimes(1);
+        const opts = toastFn.mock.calls[0][1] as ToastOptions;
+        await act(async () => opts.onAutoClose?.());
+        expect(commit).toHaveBeenCalledTimes(1);
+    });
+
+    it('commits a pending removal when the table unmounts', async () => {
+        const commit = vi.fn().mockResolvedValue(undefined);
+        const withCommit = rows.map((r) =>
+            r.id === 'b' ? { ...r, actions: [{ kind: 'remove' as const, label: 'Remove', commit }] } : r,
+        );
+        const { unmount } = setup({ rows: withCommit });
+        await userEvent.click(screen.getAllByTestId('module-row')[0]);
+        await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+        unmount();
+        expect(commit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not commit on unmount after Undo', async () => {
+        const commit = vi.fn();
+        const withCommit = rows.map((r) =>
+            r.id === 'b' ? { ...r, actions: [{ kind: 'remove' as const, label: 'Remove', commit }] } : r,
+        );
+        const { unmount } = setup({ rows: withCommit });
+        await userEvent.click(screen.getAllByTestId('module-row')[0]);
+        await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+        act(() => (toastFn.mock.calls[0][1] as ToastOptions).action!.onClick());
+        unmount();
+        expect(commit).not.toHaveBeenCalled();
+    });
+
+    it('uses the failure text of a remove action in the toast', async () => {
+        const commit = vi.fn().mockRejectedValue(new Error('409'));
+        const failure = vi.fn(() => 'Used by 3 entries');
+        const withCommit = rows.map((r) =>
+            r.id === 'b' ? { ...r, actions: [{ kind: 'remove' as const, label: 'Remove', commit, failure }] } : r,
+        );
+        setup({ rows: withCommit });
+        await userEvent.click(screen.getAllByTestId('module-row')[0]);
+        await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+        await act(async () => (toastFn.mock.calls[0][1] as ToastOptions).onAutoClose?.());
+        const { toast } = await import('sonner');
+        expect(toast.error).toHaveBeenCalledWith('Used by 3 entries');
+    });
+
+    it('disables the action while it runs and keeps the drawer open when it fails', async () => {
+        let fail: (e: Error) => void = () => undefined;
+        const run = vi.fn(() => new Promise<void>((_, rej) => (fail = rej)));
+        const withRun = rows.map((r) =>
+            r.id === 'a' ? { ...r, actions: [{ kind: 'run' as const, label: 'Resolve', done: 'Done', run }] } : r,
+        );
+        setup({ rows: withRun });
+        await userEvent.click(screen.getAllByTestId('module-row')[1]);
+        const drawer = await screen.findByRole('dialog');
+        await userEvent.click(within(drawer).getByRole('button', { name: 'Resolve' }));
+        expect((within(drawer).getByRole('button', { name: 'Resolve' }) as HTMLButtonElement).disabled).toBe(true);
+        await userEvent.click(within(drawer).getByRole('button', { name: 'Resolve' }));
+        expect(run).toHaveBeenCalledTimes(1);
+        await act(async () => fail(new Error('no')));
+        expect(screen.getByRole('dialog')).toBeTruthy();
+        expect((within(screen.getByRole('dialog')).getByRole('button', { name: 'Resolve' }) as HTMLButtonElement).disabled).toBe(false);
+        const { toast } = await import('sonner');
+        expect(toast.error).toHaveBeenCalledWith('Resolve failed');
+    });
+
+    it('closes the drawer when the action succeeds', async () => {
+        const run = vi.fn().mockResolvedValue(undefined);
+        const withRun = rows.map((r) =>
+            r.id === 'a' ? { ...r, actions: [{ kind: 'run' as const, label: 'Resolve', done: 'Done', run }] } : r,
+        );
+        setup({ rows: withRun });
+        await userEvent.click(screen.getAllByTestId('module-row')[1]);
+        await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Resolve' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
 });

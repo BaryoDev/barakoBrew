@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useAccounts, accountTypeLabel } from '@/hooks/use-accounting';
 import { useClientErrors, useResolveClientError } from '@/hooks/use-errors';
 import { useFeatureFlags, useToggleFeatureFlag } from '@/hooks/use-feature-flags';
-import { useDeleteFile, useFiles, FILES_PAGE_SIZE } from '@/hooks/use-files';
+import { deleteRefusal, useDeleteFile, useFiles, FILES_PAGE_SIZE } from '@/hooks/use-files';
 import { useForms, useSetForm } from '@/hooks/use-forms';
 import { formatBytes } from '@/lib/files';
 import { MODULE } from '@/types/modules';
@@ -30,6 +30,26 @@ function date(value: string | null | undefined): string {
     return Number.isNaN(d.getTime()) ? 'Never' : d.toISOString().slice(0, 10);
 }
 
+const DIAGNOSTICS_PAGE_SIZE = 25;
+const ACCOUNTS_PAGE_SIZE = 100;
+
+/** The note under a list that shows only its first page. */
+function truncated(shownCount: number, total: number, where = ''): ReactNode {
+    if (total <= shownCount) return undefined;
+    return (
+        <p className="text-muted-foreground pt-3 text-xs">
+            Showing the first {shownCount} of {total}.{where ? ` ${where}` : ''}
+        </p>
+    );
+}
+
+/** The toast text for a failed file delete. A refusal says how many entries still use the file. */
+export function removeFailure(error: unknown): string | null {
+    const refusal = deleteRefusal(error);
+    if (!refusal) return null;
+    return refusal.message || `This file is used by ${refusal.total} ${refusal.total === 1 ? 'entry' : 'entries'}.`;
+}
+
 function stateOf(
     q: { isLoading: boolean; isError: boolean },
     readable: boolean,
@@ -48,6 +68,7 @@ const FeatureFlagsBody: Adapter = ({ side }) => {
         id: f.key,
         title: f.key,
         on: f.enabled,
+        sort: { updated: f.updatedAt },
         cells: { key: f.key, rollout: f.rolloutPercent ?? 0, updated: date(f.updatedAt), enabled: f.enabled ? 'On' : 'Off' },
         fields: [
             { label: 'Description', value: shown(f.description) },
@@ -74,12 +95,12 @@ const FeatureFlagsBody: Adapter = ({ side }) => {
             columns={[
                 { key: 'key', label: 'Flag', kind: 'mono' },
                 { key: 'rollout', label: 'Rollout', kind: 'number', format: (v) => `${v}%` },
-                { key: 'updated', label: 'Updated' },
+                { key: 'updated', label: 'Updated', kind: 'date' },
                 { key: 'enabled', label: 'State', kind: 'switch' },
             ]}
             rows={rows}
             state={stateOf(q, list !== null)}
-            callFor={(r) => `POST /api/feature-flags/admin/${r.id}/toggle`}
+            callFor={(r) => `POST /api/feature-flags/admin/${encodeURIComponent(r.id)}/toggle`}
             onToggle={(r) => toggle.mutateAsync(r.id)}
         />
     );
@@ -121,7 +142,7 @@ const FormsBody: Adapter = ({ side }) => {
             ]}
             rows={rows}
             state={absent ? { kind: 'message', text: 'This deployment does not serve the Forms API.' } : stateOf(q, forms !== null)}
-            callFor={(r) => `PUT /api/forms/${r.id}`}
+            callFor={(r) => `PUT /api/forms/${encodeURIComponent(r.id)}`}
             onToggle={(r, next) => set.mutateAsync({ contentType: r.id, enabled: next })}
         />
     );
@@ -149,7 +170,7 @@ const FilesBody: Adapter = ({ side }) => {
             { label: 'Uploaded', value: date(f.createdAt) },
             { label: 'Alt text', value: shown(f.alt) },
         ],
-        actions: [{ kind: 'remove', label: 'Remove', commit: () => del.mutateAsync({ id: f.id }) }],
+        actions: [{ kind: 'remove', label: 'Remove', commit: () => del.mutateAsync({ id: f.id }), failure: removeFailure }],
     }));
     const bytes = (items ?? []).reduce((n, f) => n + (f.size || 0), 0);
     return (
@@ -171,20 +192,14 @@ const FilesBody: Adapter = ({ side }) => {
             ]}
             rows={rows}
             state={stateOf(q, items !== null)}
-            callFor={(r) => `DELETE /api/files/${r.id}`}
-            footer={
-                total > FILES_PAGE_SIZE ? (
-                    <p className="text-muted-foreground pt-3 text-xs">
-                        Showing the first {FILES_PAGE_SIZE} of {total}. Open Files in the sidebar for every page.
-                    </p>
-                ) : undefined
-            }
+            callFor={(r) => `DELETE /api/files/${encodeURIComponent(r.id)}`}
+            footer={truncated(FILES_PAGE_SIZE, total, 'Open Files in the sidebar for every page.')}
         />
     );
 };
 
 const DiagnosticsBody: Adapter = ({ side }) => {
-    const q = useClientErrors({ page: 1, pageSize: 25 });
+    const q = useClientErrors({ page: 1, pageSize: DIAGNOSTICS_PAGE_SIZE });
     const resolve = useResolveClientError();
     const items = Array.isArray(q.data?.items) ? q.data.items : null;
     const rows: ModuleRow[] = (items ?? []).map((e) => {
@@ -192,6 +207,7 @@ const DiagnosticsBody: Adapter = ({ side }) => {
         return {
             id: e.id,
             title: e.message,
+            sort: { last: e.lastSeenAt },
             cells: { message: e.message, severity: e.severity, count: e.count, last: date(e.lastSeenAt), status },
             fields: [
                 { label: 'Status', value: status, tone: e.resolved ? 'success' : 'warning' },
@@ -220,18 +236,19 @@ const DiagnosticsBody: Adapter = ({ side }) => {
             columns={[
                 { key: 'message', label: 'Message' },
                 { key: 'count', label: 'Count', kind: 'number' },
-                { key: 'last', label: 'Last seen' },
+                { key: 'last', label: 'Last seen', kind: 'date' },
                 { key: 'status', label: 'Status', kind: 'status' },
             ]}
             rows={rows}
             state={stateOf(q, items !== null)}
-            callFor={(r) => `POST /api/client-errors/${r.id}/resolve`}
+            callFor={(r) => `POST /api/client-errors/${encodeURIComponent(r.id)}/resolve`}
+            footer={truncated(DIAGNOSTICS_PAGE_SIZE, q.data?.totalItems ?? rows.length)}
         />
     );
 };
 
 const AccountingBody: Adapter = ({ side }) => {
-    const q = useAccounts();
+    const q = useAccounts({ pageSize: ACCOUNTS_PAGE_SIZE });
     const list = Array.isArray(q.data) ? q.data : null;
     const rows: ModuleRow[] = (list ?? []).map((a) => {
         const status = a.isActive ? 'Active' : 'Inactive';
@@ -268,6 +285,13 @@ const AccountingBody: Adapter = ({ side }) => {
             rows={rows}
             state={stateOf(q, list !== null)}
             callFor={() => 'GET /api/accounting/accounts'}
+            footer={
+                rows.length === ACCOUNTS_PAGE_SIZE ? (
+                    <p className="text-muted-foreground pt-3 text-xs">
+                        Showing the first {ACCOUNTS_PAGE_SIZE} accounts. There may be more.
+                    </p>
+                ) : undefined
+            }
         />
     );
 };

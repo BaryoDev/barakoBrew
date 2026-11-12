@@ -137,7 +137,7 @@ export function useResolveClientError() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...rest }: ResolveInput) => {
-      await api.post(`/api/client-errors/${id}/resolve`, resolveBody(rest));
+      await api.post(`/api/client-errors/${encodeURIComponent(id)}/resolve`, resolveBody(rest));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-errors'] });
