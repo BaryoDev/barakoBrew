@@ -86,7 +86,7 @@ describe('the Tenants screen', () => {
         await renderPage();
 
         fireEvent.click(screen.getByRole('button', { name: /new tenant/i }));
-        expect(screen.getByRole('dialog', { name: 'Tenant' })).toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: 'New tenant' })).toBeInTheDocument();
         expect(screen.queryByLabelText(/about/i)).not.toBeInTheDocument();
         fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'South club' } });
         fireEvent.click(screen.getByRole('button', { name: 'Create tenant' }));
@@ -102,11 +102,11 @@ describe('the Tenants screen', () => {
         session.user.roles = ['SuperAdmin'];
         await renderPage();
         await waitFor(() => expect(screen.getByText('North club')).toBeInTheDocument());
-        expect(screen.queryByRole('dialog', { name: 'Tenant' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: 'North club' })).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByText('north.example'));
 
-        const rail = await screen.findByRole('dialog', { name: 'Tenant' });
+        const rail = await screen.findByRole('dialog', { name: 'North club' });
         expect(within(rail).getByText('PUT /api/tenants/north')).toBeInTheDocument();
         expect(within(rail).getByText('Pending')).toBeInTheDocument();
     });
@@ -117,7 +117,7 @@ describe('the Tenants screen', () => {
         await renderPage();
         await waitFor(() => expect(screen.getByText('North club')).toBeInTheDocument());
         fireEvent.click(screen.getByText('north.example'));
-        const rail = await screen.findByRole('dialog', { name: 'Tenant' });
+        const rail = await screen.findByRole('dialog', { name: 'North club' });
 
         expect(within(rail).getByRole('button', { name: 'Save' })).toBeInTheDocument();
         fireEvent.click(within(rail).getByLabelText(/^Suspended/));

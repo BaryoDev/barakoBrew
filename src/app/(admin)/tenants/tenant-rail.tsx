@@ -367,7 +367,6 @@ export function TenantRail({ target, onClose }: { target: Tenant | 'new' | null;
   return (
     <Sheet open={target !== null} onOpenChange={(open) => !open && !pending && onClose()}>
       <SheetContent
-        aria-label="Tenant"
         showCloseButton={!pending}
         onEscapeKeyDown={(e) => pending && e.preventDefault()}
         onPointerDownOutside={(e) => pending && e.preventDefault()}
