@@ -132,7 +132,7 @@ test('a tenant reads its status from contract 8, and a domains edit keeps it', a
     // body that dropped it would switch the tenant back on here.
     const saved = await request.put(`${API}/api/tenants/${handle}`, {
         headers,
-        data: tenantWriteBody({ name: read!.name, status: read!.status ?? 'Suspended', domains: [`${handle}.example`] }),
+        data: tenantWriteBody({ name: read!.name, status: read!.status ?? 'Suspended', legacyFlag: read!.status === undefined, domains: [`${handle}.example`] }),
     });
     expect(saved.status(), `the domains edit answered ${await saved.text()}`).toBe(200);
     const after: Tenant = await saved.json();

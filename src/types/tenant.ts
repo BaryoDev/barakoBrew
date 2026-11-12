@@ -55,12 +55,15 @@ export interface TenantWrite {
     signUp?: string | null;
     signUpRoleId?: string | null;
     domains: readonly string[];
+    /** True when the tenant as read had no `status`, so the API is older than contract 8. */
+    legacyFlag?: boolean;
 }
 
 /**
  * The body of `POST /api/tenants` and `PUT /api/tenants/{handle}`: Handle (create), Name, Status,
  * SignUp, SignUpRoleId and Domains, and nothing else. The status goes alone, never with the obsolete
- * active flag, which contract 8 refuses when the two disagree. The profile fields are not sent: the
+ * active flag, which contract 8 refuses when the two disagree. An API before contract 8 knows only the
+ * flag, so for a tenant read without a status (`legacyFlag`) the body carries `IsActive` and no `Status`. The profile fields are not sent: the
  * API refuses a value in one. A role id goes only with Open, which is the only sign-up that takes one.
  * An empty domain list clears the domains; leaving the field out would keep them.
  */
@@ -68,7 +71,8 @@ export function tenantWriteBody(input: TenantWrite): Record<string, unknown> {
     const body: Record<string, unknown> = {};
     if (input.handle !== undefined) body.Handle = input.handle;
     body.Name = input.name.trim();
-    body.Status = input.status;
+    if (input.legacyFlag) body.IsActive = input.status === 'Active';
+    else body.Status = input.status;
     if (input.signUp) body.SignUp = input.signUp;
     if (input.signUp === 'Open' && input.signUpRoleId) body.SignUpRoleId = input.signUpRoleId;
     body.Domains = input.domains.map((d) => d.trim());

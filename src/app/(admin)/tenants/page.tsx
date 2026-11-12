@@ -31,11 +31,21 @@ export default function TenantsPage() {
   const access = useAccess();
   const platformAdmin = access.can('manage_tenants', ['SuperAdmin']);
   const { data: tenants, isLoading, isError, refetch } = useTenants({ enabled: platformAdmin });
-  // The open tenant is local state. Other rails here do not carry it in the URL either.
-  const [selected, setSelected] = useState<Tenant | 'new' | null>(null);
+  // The open tenant is local state. Other rails here do not carry it in the URL either. Only the
+  // handle is kept, so the rail reads the tenant from the current list and shows a refresh.
+  const [selectedSlug, setSelectedSlug] = useState<string | 'new' | null>(null);
+  const selected: Tenant | 'new' | null =
+    selectedSlug === 'new' ? 'new' : ((selectedSlug && tenants?.find((t) => t.slug === selectedSlug)) || null);
+
+  // Save writes what the rail shows, so read the list again as it opens. No version token exists, so
+  // this narrows the window for a stale write and does not close it.
+  function open(slug: string | 'new') {
+    setSelectedSlug(slug);
+    void refetch();
+  }
 
   const newButton = (
-    <Button size="sm" onClick={() => setSelected('new')}>
+    <Button size="sm" onClick={() => open('new')}>
       <IconPlus />
       New tenant
     </Button>
@@ -75,7 +85,7 @@ export default function TenantsPage() {
             </TableHeader>
             <TableBody>
               {tenants.map((t) => (
-                <TableRow key={t.id} className="h-11 cursor-pointer" onClick={() => setSelected(t)}>
+                <TableRow key={t.id} className="h-11 cursor-pointer" onClick={() => open(t.slug)}>
                   <TableCell className="py-0">
                     <StatusBadge tone={statusTone(t)} dot>
                       {tenantStatusLabel(t)}
@@ -87,7 +97,7 @@ export default function TenantsPage() {
                       className="grid text-left leading-tight"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelected(t);
+                        open(t.slug);
                       }}
                     >
                       <span className="font-medium">{t.name}</span>
@@ -111,7 +121,7 @@ export default function TenantsPage() {
 
       <TenantMembers />
 
-      <TenantRail target={selected} onClose={() => setSelected(null)} />
+      <TenantRail target={selected} onClose={() => setSelectedSlug(null)} />
     </>
   );
 }

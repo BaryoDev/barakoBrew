@@ -130,6 +130,100 @@ describe('the Tenants screen', () => {
         ]);
     });
 
+    async function openNorth() {
+        session.user.roles = ['SuperAdmin'];
+        await renderPage();
+        await waitFor(() => expect(screen.getByText('North club')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('north.example'));
+        return screen.findByRole('dialog', { name: 'North club' });
+    }
+
+    it('shows Verified in the open rail once the refreshed list says so', async () => {
+        let verified = false;
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation(async (url: string, ...rest: unknown[]) => {
+            if (url === '/api/tenants') {
+                return page([
+                    verified
+                        ? { ...TENANT, domainStates: [{ domain: 'north.example', status: 'Verified' }] }
+                        : TENANT,
+                ]);
+            }
+            return (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest);
+        });
+        vi.mocked(api.post).mockImplementation(async () => {
+            verified = true;
+            return { data: { domain: 'north.example', status: 'Verified' } };
+        });
+        const rail = await openNorth();
+
+        fireEvent.click(within(rail).getByRole('button', { name: /^Verify/ }));
+
+        await waitFor(() => expect(within(rail).getByText('Verified')).toBeInTheDocument());
+        expect(within(rail).queryByText('Pending')).not.toBeInTheDocument();
+        expect(within(rail).queryByRole('button', { name: /^Verify/ })).not.toBeInTheDocument();
+    });
+
+    it('reads the tenants list again when the rail opens', async () => {
+        const rail = await openNorth();
+        expect(rail).toBeInTheDocument();
+        const before = vi.mocked(api.get).mock.calls.filter((c) => c[0] === '/api/tenants').length;
+        fireEvent.click(within(rail).getByRole('button', { name: 'Cancel' }));
+        fireEvent.click(screen.getByText('north.example'));
+        await waitFor(() =>
+            expect(vi.mocked(api.get).mock.calls.filter((c) => c[0] === '/api/tenants').length).toBeGreaterThan(before),
+        );
+    });
+
+    it('says the lookup timed out instead of calling it pending', async () => {
+        const { toast } = await import('sonner');
+        vi.mocked(api.post).mockResolvedValue({ data: { domain: 'north.example', status: 'Pending', timedOut: true } });
+        const rail = await openNorth();
+
+        fireEvent.click(within(rail).getByRole('button', { name: /^Verify/ }));
+
+        await waitFor(() => expect(toast.message).toHaveBeenCalledWith(expect.stringContaining('timed out')));
+        expect(toast.message).not.toHaveBeenCalledWith(expect.stringContaining('still pending'));
+    });
+
+    it('refuses a reserved handle on a new tenant and says why', async () => {
+        session.user.roles = ['SuperAdmin'];
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: /new tenant/i }));
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Admin' } });
+        fireEvent.change(screen.getByLabelText('Handle'), { target: { value: 'admin' } });
+
+        expect(screen.getByText('That handle is reserved.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Create tenant' })).toBeDisabled();
+    });
+
+    it('does not say the sign-up is unreported on a new tenant', async () => {
+        session.user.roles = ['SuperAdmin'];
+        await renderPage();
+        fireEvent.click(screen.getByRole('button', { name: /new tenant/i }));
+
+        expect(screen.queryByText('Not reported by this API.')).not.toBeInTheDocument();
+        expect(screen.getByText(/Registration creates an account with no membership/)).toBeInTheDocument();
+    });
+
+    it('keeps Save plain when a Suspended tenant is only renamed, and red when the status changes', async () => {
+        session.user.roles = ['SuperAdmin'];
+        const fallback = vi.mocked(api.get).getMockImplementation()!;
+        vi.mocked(api.get).mockImplementation(async (url: string, ...rest: unknown[]) => {
+            if (url === '/api/tenants') return page([{ ...TENANT, status: 'Suspended', isActive: false }]);
+            return (fallback as (u: string, ...r: unknown[]) => unknown)(url, ...rest);
+        });
+        await renderPage();
+        fireEvent.click(await screen.findByText('north.example'));
+        const rail = await screen.findByRole('dialog', { name: 'North club' });
+
+        fireEvent.change(within(rail).getByLabelText('Name'), { target: { value: 'North club 2' } });
+        expect(within(rail).getByRole('button', { name: 'Save' })).toHaveAttribute('data-variant', 'default');
+
+        fireEvent.click(within(rail).getByLabelText(/^Archived/));
+        expect(within(rail).getByRole('button', { name: 'Save and archive' })).toHaveAttribute('data-variant', 'destructive');
+    });
+
     it('shows a dash, not null, for a member count and site mode the API did not report', async () => {
         session.user.roles = ['SuperAdmin'];
         const fallback = vi.mocked(api.get).getMockImplementation()!;

@@ -22,9 +22,20 @@ import {
 } from '@/hooks/use-tenants';
 import { apiErrorMessage } from '@/lib/api';
 
-// Handle rules mirror the server (TenantHandles): 3-40 chars, lowercase alphanumerics + hyphens,
-// no leading/trailing hyphen.
+// The format mirrors the server (TenantHandles): 3-40 chars, lowercase alphanumerics + hyphens,
+// no leading/trailing hyphen. The server also refuses the reserved names below, which would collide
+// with app routes. A copy of its list; the server still decides.
 export const HANDLE_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+
+const RESERVED_HANDLES = new Set([
+  'login', 'logout', 'signin', 'signout', 'api', 'admin', 'health', 'metrics',
+  'dashboard', 'me', 'tenant', 'tenants', 'static', 'assets', 'public',
+  '_next', 'www', 'app', 'default', 'favicon.ico', 'robots.txt',
+]);
+
+export function isReservedHandle(handle: string): boolean {
+  return RESERVED_HANDLES.has(handle.toLowerCase());
+}
 
 const mono = 'font-mono text-xs';
 
@@ -93,14 +104,16 @@ function Body({ tenant, onClose, onPending }: { tenant: Tenant | null; onClose: 
   const [handle, setHandle] = useState('');
   const [handleEdited, setHandleEdited] = useState(false);
   const [status, setStatus] = useState<TenantStatus>(readStatus);
-  const [signUp, setSignUp] = useState<string | null>(tenant?.signUp ?? null);
+  const [signUp, setSignUp] = useState<string | null>(isNew ? 'NotSet' : (tenant?.signUp ?? null));
   const [domains, setDomains] = useState<string[]>(tenant?.domains ?? []);
   const [newDomain, setNewDomain] = useState('');
   const [clash, setClash] = useState<string | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
 
   const shownHandle = isNew ? (handleEdited ? handle : slugFrom(name)) : tenant.slug;
-  const handleValid = HANDLE_RE.test(shownHandle);
+  const handleFormatOk = HANDLE_RE.test(shownHandle);
+  const handleReserved = isNew && isReservedHandle(shownHandle);
+  const handleValid = handleFormatOk && !handleReserved;
   const pending = create.isPending || update.isPending;
   const problems = domainProblems(domains);
   const canSave = name.trim().length > 0 && (!isNew || handleValid) && problems.length === 0 && !pending;
@@ -119,7 +132,8 @@ function Body({ tenant, onClose, onPending }: { tenant: Tenant | null; onClose: 
     setVerifying(domain);
     try {
       const result = await verify.mutateAsync({ slug: tenant.slug, domain });
-      if (result.status === 'Verified') toast.success(`${domain} is verified.`);
+      if (result.timedOut) toast.message(`The DNS lookup for ${domain} timed out. Try again.`);
+      else if (result.status === 'Verified') toast.success(`${domain} is verified.`);
       else toast.message(`${domain} is still pending. The DNS record was not found yet.`);
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Could not check the domain.'));
@@ -136,7 +150,9 @@ function Body({ tenant, onClose, onPending }: { tenant: Tenant | null; onClose: 
     const input = {
       name,
       status,
-      signUp,
+      // A new tenant starts NotSet on the server, so the create does not name it.
+      signUp: isNew && signUp === 'NotSet' ? null : signUp,
+      legacyFlag: tenant ? tenant.status === undefined : false,
       signUpRoleId: signUp === 'Open' ? tenant?.signUpRoleId : null,
       domains: reported ? domains : [],
     };
@@ -200,9 +216,11 @@ function Body({ tenant, onClose, onPending }: { tenant: Tenant | null; onClose: 
             aria-invalid={isNew && shownHandle.length > 0 && !handleValid ? true : undefined}
           />
           <p className="text-muted-foreground text-xs">
-            {isNew && shownHandle.length > 0 && !handleValid
-              ? '3–40 characters, lowercase letters, numbers and hyphens; no leading or trailing hyphen.'
-              : 'Used in URLs and the X-Tenant header. Cannot be changed later.'}
+            {handleReserved && handleFormatOk
+              ? 'That handle is reserved.'
+              : isNew && shownHandle.length > 0 && !handleValid
+                ? '3–40 characters, lowercase letters, numbers and hyphens; no leading or trailing hyphen.'
+                : 'Used in URLs and the X-Tenant header. Cannot be changed later.'}
           </p>
         </div>
 
@@ -353,7 +371,7 @@ function Body({ tenant, onClose, onPending }: { tenant: Tenant | null; onClose: 
         <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
           Cancel
         </Button>
-        <Button type="submit" variant={status === 'Active' ? 'default' : 'destructive'} disabled={!canSave}>
+        <Button type="submit" variant={status !== 'Active' && (isNew || status !== readStatus) ? 'destructive' : 'default'} disabled={!canSave}>
           {pending ? 'Saving…' : saveLabel(isNew, isNew ? undefined : readStatus, status)}
         </Button>
       </div>
@@ -364,6 +382,10 @@ function Body({ tenant, onClose, onPending }: { tenant: Tenant | null; onClose: 
 /** The 440px rail for one tenant. `target` is a tenant to edit, `'new'` for an empty one, null when closed. */
 export function TenantRail({ target, onClose }: { target: Tenant | 'new' | null; onClose: () => void }) {
   const [pending, setPending] = useState(false);
+  // The Sheet slides out after `target` goes null, so keep drawing the last one until it is gone.
+  const [last, setLast] = useState(target);
+  if (target !== null && target !== last) setLast(target);
+  const shown = target ?? last;
   return (
     <Sheet open={target !== null} onOpenChange={(open) => !open && !pending && onClose()}>
       <SheetContent
@@ -373,8 +395,8 @@ export function TenantRail({ target, onClose }: { target: Tenant | 'new' | null;
         onInteractOutside={(e) => pending && e.preventDefault()}
         className="w-[min(440px,100%)] gap-0 p-0 sm:max-w-[440px]"
       >
-        {target && (
-          <Body key={target === 'new' ? 'new' : target.slug} tenant={target === 'new' ? null : target} onClose={onClose} onPending={setPending} />
+        {shown && (
+          <Body key={shown === 'new' ? 'new' : shown.slug} tenant={shown === 'new' ? null : shown} onClose={onClose} onPending={setPending} />
         )}
       </SheetContent>
     </Sheet>

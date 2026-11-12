@@ -50,6 +50,14 @@ describe('tenantWriteBody', () => {
         expect(open.SignUpRoleId).toBe('r-1');
     });
 
+    it('sends the flag, not a status, to an API before contract 8, which reports none', () => {
+        const body = tenantWriteBody({ name: TENANT.name, status: 'Suspended', domains: ['rckoronadal.org'], legacyFlag: true });
+
+        expect(body.IsActive).toBe(false);
+        expect(body).not.toHaveProperty('Status');
+        expect(tenantWriteBody({ name: 'A', status: 'Active', domains: [], legacyFlag: true }).IsActive).toBe(true);
+    });
+
     it('sends an empty list to clear the domains, not null, which the API reads as keep', () => {
         expect(tenantWriteBody({ name: 'A', status: 'Active', domains: [] }).Domains).toEqual([]);
     });
