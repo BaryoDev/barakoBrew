@@ -28,13 +28,13 @@ export const DEMOS: Record<string, DemoScript> = {
         run: 'Evaluate',
         cases: [
             {
-                label: 'Ana · kape-ana',
-                lines: ['· flag  new-editor', '· rule  tenant kape-ana · 20% rollout', '· bucket 14 of 100', '✓ on'],
+                label: 'Ana · demo-site',
+                lines: ['· flag  new-editor', '· rule  tenant demo-site · 20% rollout', '· bucket 14 of 100', '✓ on'],
                 result: { ok: true, text: 'new-editor is on for Ana' },
             },
             {
-                label: 'Ben · kape-ana',
-                lines: ['· flag  new-editor', '· rule  tenant kape-ana · 20% rollout', '· bucket 63 of 100', '✗ off · outside the 20%'],
+                label: 'Ben · demo-site',
+                lines: ['· flag  new-editor', '· rule  tenant demo-site · 20% rollout', '· bucket 63 of 100', '✗ off · outside the 20%'],
                 result: { ok: false, text: 'new-editor stays off' },
             },
         ],
@@ -46,8 +46,8 @@ export const DEMOS: Record<string, DemoScript> = {
             {
                 label: 'Real visitor',
                 lines: [
-                    '→ POST /api/forms/contact',
-                    '· honeypot empty · 6.2 s to fill',
+                    '→ POST /api/public/forms/contact',
+                    '· honeypot empty',
                     '✓ entry created in Contact submissions',
                     '· workflow  notify-owner queued',
                 ],
@@ -55,7 +55,7 @@ export const DEMOS: Record<string, DemoScript> = {
             },
             {
                 label: 'Spam bot',
-                lines: ['→ POST /api/forms/contact', '· honeypot filled · 0.4 s to fill', '✗ 422 · spam check failed, nothing stored'],
+                lines: ['→ POST /api/public/forms/contact', '· honeypot filled', '✗ refused · spam check failed, nothing stored'],
                 result: { ok: false, text: 'Refused before it became data' },
             },
         ],
@@ -66,13 +66,13 @@ export const DEMOS: Record<string, DemoScript> = {
         cases: [
             {
                 label: 'receipt.jpg · 2.4 MB',
-                lines: ['→ POST /api/files', '· stored in Postgres · tenant kape-ana', '✓ 201 · file id f_8k21'],
+                lines: ['→ POST /api/files', '· stored · tenant demo-site', '✓ 201 · file id f_8k21'],
                 result: { ok: true, text: 'Stored and ready to attach' },
             },
             {
                 label: 'menu.exe',
-                lines: ['→ POST /api/files', '✗ 415 · type not in Files:AllowedTypes'],
-                result: { ok: false, text: 'Blocked by the allow-list' },
+                lines: ['→ POST /api/files', '✗ 400 · file type not allowed'],
+                result: { ok: false, text: 'Blocked by the upload type check' },
             },
         ],
     },
@@ -83,7 +83,7 @@ export const DEMOS: Record<string, DemoScript> = {
             {
                 label: 'Known error',
                 lines: [
-                    '→ POST /api/client-errors',
+                    '→ report sent',
                     '· TypeError: price is undefined · /menu',
                     '· fingerprint 7c1e… · seen before',
                     '✓ occurrence count 14',
@@ -92,7 +92,7 @@ export const DEMOS: Record<string, DemoScript> = {
             },
             {
                 label: 'New error',
-                lines: ['→ POST /api/client-errors', '· ReferenceError: map is not defined · /find-us', '✓ new fingerprint a92f…'],
+                lines: ['→ report sent', '· ReferenceError: map is not defined · /find-us', '✓ new fingerprint a92f…'],
                 result: { ok: true, text: 'Logged for an Admin to fix' },
             },
         ],
@@ -103,12 +103,12 @@ export const DEMOS: Record<string, DemoScript> = {
         cases: [
             {
                 label: 'Balanced entry',
-                lines: ['· debit Cash 500.00 · credit Sales 500.00', '✓ journal entry JE-0043 posted'],
+                lines: ['· debit Cash 500.00 · credit Sales 500.00', '✓ journal entry posted'],
                 result: { ok: true, text: 'Posted, the books balance' },
             },
             {
                 label: 'Unbalanced journal',
-                lines: ['· debit 500.00 · credit 450.00', '✗ 422 · entries must balance'],
+                lines: ['· debit 500.00 · credit 450.00', '✗ refused · entries must balance'],
                 result: { ok: false, text: 'The write is refused' },
             },
         ],
@@ -213,6 +213,7 @@ export function TryItCard({ name }: { name: string }) {
             </div>
             <div
                 className="grid min-h-[140px] content-start gap-0.5 rounded-xl bg-[#14152B] px-3.5 py-3 font-mono text-[12.5px] leading-[1.6] text-[#E6E8F5]"
+                role="log"
                 aria-live="polite"
                 data-testid="try-it-console"
             >
@@ -222,7 +223,7 @@ export function TryItCard({ name }: { name: string }) {
                         const mark = line.slice(0, 1) as Mark;
                         return (
                             <div key={line} className="grid grid-cols-[16px_1fr] gap-2">
-                                <span className={MARK_CLASS[mark] ?? 'text-[#8D91B0]'}>{mark}</span>
+                                <span aria-hidden className={MARK_CLASS[mark] ?? 'text-[#8D91B0]'}>{mark}</span>
                                 <span className="[overflow-wrap:anywhere]">{line.slice(2)}</span>
                             </div>
                         );
@@ -230,7 +231,6 @@ export function TryItCard({ name }: { name: string }) {
             </div>
             {done && (
                 <div
-                    role="status"
                     data-testid="try-it-result"
                     className={cn(
                         'flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-semibold',

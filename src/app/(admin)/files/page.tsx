@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
   deleteRefusal,
-  isForbidden,
   useDeleteFile,
   useFiles,
   type DeleteRefusal,
@@ -13,7 +12,7 @@ import {
 } from '@/hooks/use-files';
 import { useAuth } from '@/hooks/use-auth';
 import { useAccess } from '@/hooks/use-access';
-import { apiErrorMessage, getApiUrl } from '@/lib/api';
+import { apiErrorMessage, getApiUrl, isForbidden } from '@/lib/api';
 import { UPLOAD_RULES, canDeleteFile, contentProblem, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
 import { ImageViewer, isViewableImage } from '@/components/patterns/image-viewer';

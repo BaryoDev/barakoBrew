@@ -100,10 +100,6 @@ export function deleteRefusal(error: unknown): DeleteRefusal | null {
     return { message: data.message ?? '', total: data.total, usages: data.usages ?? [] };
 }
 
-export function isForbidden(error: unknown): boolean {
-    return axios.isAxiosError(error) && error.response?.status === 403;
-}
-
 /**
  * The bytes behind an authenticated file URL, fetched through the shared client so the bearer rides
  * in a header. Cached by URL, so a remount or a return to the same page does not download it again.
