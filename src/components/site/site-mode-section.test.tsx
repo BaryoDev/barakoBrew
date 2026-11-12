@@ -50,7 +50,7 @@ describe('SiteModeSection', () => {
         expect(screen.getByRole('radio', { name: 'Private' })).toBeChecked();
         expect(
             screen.getByText(
-                'Every public route answers 404 unless the request carries a share key or a signed-in viewer who may read the site.',
+                'Every public route answers 404 unless the request carries a share key or a signed-in viewer who may read the site. It applies once the site entry is published.',
             ),
         ).toBeInTheDocument();
         expect(screen.queryByText(/needs the Private option/)).toBeNull();
