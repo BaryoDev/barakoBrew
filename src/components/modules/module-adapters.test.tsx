@@ -16,11 +16,10 @@ vi.mock('@/hooks/use-forms', () => ({
     useForms: () => hooks.forms,
     useSetForm: () => ({ mutateAsync: vi.fn() }),
 }));
-vi.mock('@/hooks/use-files', () => ({
+vi.mock('@/hooks/use-files', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/hooks/use-files')>()),
     useFiles: () => hooks.files,
     useDeleteFile: () => ({ mutateAsync: vi.fn() }),
-    deleteRefusal: () => null,
-    FILES_PAGE_SIZE: 20,
 }));
 vi.mock('@/hooks/use-feature-flags', () => ({
     useFeatureFlags: () => hooks.flags,
