@@ -4,11 +4,14 @@ import { useSyncExternalStore } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { api, apiErrorMessage, tokenStore, subscribeToAuth, tenantOfToken, type Paginated } from '@/lib/api';
-import { tenantDomainsBody, type Tenant } from '@/types/tenant';
+import { tenantWriteBody, type Tenant, type TenantWrite } from '@/types/tenant';
 
 export {
   TENANT_STATUSES,
-  tenantDomainsBody,
+  tenantWriteBody,
+  SIGN_UPS,
+  type DomainState,
+  type TenantWrite,
   tenantStatusLabel,
   type Tenant,
   type TenantStatus,
@@ -30,12 +33,6 @@ interface SwitchResponse {
   refreshTokenExpiry: string;
 }
 
-export interface CreateTenantInput {
-  Handle: string;
-  Name: string;
-  IsActive: boolean;
-}
-
 /** Every tenant on the deployment (platform admin). Distinct from useMyTenants (only the caller's). */
 export function useTenants({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
@@ -50,8 +47,8 @@ export function useTenants({ enabled = true }: { enabled?: boolean } = {}) {
 export function useCreateTenant() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateTenantInput) =>
-      (await api.post<Tenant>('/api/tenants', input)).data,
+    mutationFn: async (input: TenantWrite) =>
+      (await api.post<Tenant>('/api/tenants', tenantWriteBody(input))).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenants'] });
       queryClient.invalidateQueries({ queryKey: ['me', 'tenants'] });
@@ -167,11 +164,39 @@ export function domainProblems(domains: readonly string[]): string[] {
   return problems;
 }
 
-export function useUpdateTenantDomains() {
+/** Save a tenant: `PUT /api/tenants/{handle}`. */
+export function useUpdateTenant() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tenant, domains }: { tenant: Tenant; domains: readonly string[] }) =>
-      (await api.put<Tenant>(`/api/tenants/${encodeURIComponent(tenant.slug)}`, tenantDomainsBody(tenant, domains))).data,
+    mutationFn: async ({ slug, input }: { slug: string; input: TenantWrite }) =>
+      (await api.put<Tenant>(`/api/tenants/${encodeURIComponent(slug)}`, tenantWriteBody(input))).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+    },
+  });
+}
+
+export interface DomainVerifyResult {
+  domain: string;
+  status: string;
+  cnameFound?: boolean;
+  txtFound?: boolean;
+  timedOut?: boolean;
+  cnameTarget?: string | null;
+  txtName?: string | null;
+  verifiedAt?: string | null;
+}
+
+/** Check a domain's DNS now. A failed check still answers 200 with status Pending. */
+export function useVerifyDomain() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ slug, domain }: { slug: string; domain: string }) =>
+      (
+        await api.post<DomainVerifyResult>(
+          `/api/tenants/${encodeURIComponent(slug)}/domains/${encodeURIComponent(domain)}/verify`,
+        )
+      ).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenants'] });
     },
