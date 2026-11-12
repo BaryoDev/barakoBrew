@@ -179,7 +179,10 @@ export function ModuleTable({
     const rowBusy = (id: string) => [...busy].some((k) => k === id || k.startsWith(`${id}\u0000`));
 
     // A refetch wins: once the server row shows the value an override holds, the override goes.
-    useEffect(() => {
+    // Pruned during render when the rows change, so no effect sets state.
+    const [prunedFor, setPrunedFor] = useState(rows);
+    if (prunedFor !== rows) {
+        setPrunedFor(rows);
         setOverrides((o) => {
             const ids = Object.keys(o);
             if (ids.length === 0) return o;
@@ -193,7 +196,7 @@ export function ModuleTable({
             }
             return next ?? o;
         });
-    }, [rows]);
+    }
 
     // Best effort: a reload, a closed tab or leaving the screen inside the undo window still deletes.
     useEffect(() => {
