@@ -198,9 +198,9 @@ describe('ModuleTable sort values', () => {
 
     it('puts missing numbers last in both directions', async () => {
         setup({ rows: sortRows, columns: cols });
-        await userEvent.click(screen.getByRole('button', { name: /^N/ }));
+        await userEvent.click(screen.getByRole('button', { name: /^N\b/ }));
         expect(order()).toEqual(['item 10', 'Item 1', 'item 2']);
-        await userEvent.click(screen.getByRole('button', { name: /^N/ }));
+        await userEvent.click(screen.getByRole('button', { name: /^N\b/ }));
         expect(order()).toEqual(['Item 1', 'item 10', 'item 2']);
     });
 
