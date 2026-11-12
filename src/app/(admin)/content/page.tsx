@@ -1,10 +1,20 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
-import { useContents } from '@/hooks/use-contents';
+import {
+  useContents,
+  useContentCounts,
+  useBulkContentStatus,
+  type BulkStatusChange,
+} from '@/hooks/use-contents';
+import { toast } from 'sonner';
+import { apiErrorMessage, tenantOfToken, tokenStore } from '@/lib/api';
+import { useCurrentTenant } from '@/hooks/use-tenants';
+import { Checkbox } from '@/components/ui/checkbox';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { ContentStatus, type ContentListItem } from '@/types/content';
 import {
@@ -33,6 +43,8 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { IconContent, IconLock, IconPlus } from '@/components/icons';
+import { TypeIcon } from '@/components/schema/type-icon';
+import type { ContentTypeIcon } from '@/types/schema';
 import { useDebounced } from '@/hooks/use-debounced';
 import { exactTime, relativeTime } from '@/lib/relative-time';
 import { contentTitle } from '@/lib/content-title';
@@ -82,7 +94,8 @@ const column = createColumnHelper<typeof features, ContentListItem>();
 
 /** The Signal classes for each column's head and cells, by column id. */
 const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
-  entry: { head: `${HEAD} pl-6`, cell: 'max-w-md py-3.5 pl-6' },
+  select: { head: `${HEAD} w-11 pl-4`, cell: 'w-11 py-3.5 pl-4' },
+  entry: { head: HEAD, cell: 'max-w-md py-3.5' },
   type: { head: HEAD, cell: `${META} py-3.5` },
   status: { head: HEAD, cell: 'py-3.5' },
   version: {
@@ -96,9 +109,40 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
 };
 
 const NO_ROWS: ContentListItem[] = [];
+const NO_IDS: ReadonlySet<string> = new Set();
 
-function entryColumns(privateTypes: ReadonlySet<string>) {
+/** What the selection column needs from the screen. */
+interface Selection {
+  ids: ReadonlySet<string>;
+  allOnPage: boolean;
+  someOnPage: boolean;
+  toggle: (id: string) => void;
+  toggleAll: () => void;
+}
+
+function entryColumns(
+  privateTypes: ReadonlySet<string>,
+  typeIcons: ReadonlyMap<string, ContentTypeIcon | null | undefined>,
+  selection: Selection
+) {
   return column.columns([
+    column.display({
+      id: 'select',
+      header: () => (
+        <Checkbox
+          aria-label="Select all entries on this page"
+          checked={selection.allOnPage ? true : selection.someOnPage ? 'indeterminate' : false}
+          onCheckedChange={selection.toggleAll}
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          aria-label={`Select ${contentTitle(row.original.data, row.original.id)}`}
+          checked={selection.ids.has(row.original.id)}
+          onCheckedChange={() => selection.toggle(row.original.id)}
+        />
+      ),
+    }),
     column.display({
       id: 'entry',
       header: 'Entry',
@@ -116,7 +160,7 @@ function entryColumns(privateTypes: ReadonlySet<string>) {
       header: 'Type',
       cell: ({ getValue }) => (
         <span className="inline-flex items-center gap-1.5">
-          <IconContent aria-hidden className="size-3.5" />
+          <TypeIcon icon={typeIcons.get(getValue())} aria-hidden className="size-3.5" />
           {getValue()}
         </span>
       ),
@@ -174,6 +218,31 @@ function ContentListInner() {
   const urlQuery = searchParams.get('q') ?? '';
   const status = statusFromParam(searchParams.get('status'));
   const page = Math.max(1, Number(searchParams.get('page')) || 1);
+
+  // The ticked entries. A selection belongs to the page and filters it was made on, which is the
+  // query string, so any change to them drops it: a bar saying "3 selected" over rows that are no
+  // longer there would act on entries nobody can see. Read as empty rather than cleared in an
+  // effect, so there is no render where the old ticks sit over the new rows.
+  const scope = searchParams.toString();
+  const [ticked, setTicked] = useState<{
+    scope: string;
+    ids: ReadonlySet<string>;
+  }>({
+    scope,
+    ids: NO_IDS,
+  });
+  const selected = ticked.scope === scope ? ticked.ids : NO_IDS;
+  const setSelected = useCallback(
+    (next: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) =>
+      setTicked((prev) => {
+        const current = prev.scope === scope ? prev.ids : NO_IDS;
+        return {
+          scope,
+          ids: typeof next === 'function' ? next(current) : next,
+        };
+      }),
+    [scope]
+  );
 
   const setParams = useCallback(
     (next: Record<string, string | null>) => {
@@ -265,13 +334,157 @@ function ContentListInner() {
     [schemas]
   );
 
-  const columns = useMemo(() => entryColumns(privateTypes), [privateTypes]);
+  const typeIcons = useMemo(
+    () => new Map((schemas ?? []).map((s) => [s.name, s.icon] as const)),
+    [schemas]
+  );
+
+  const items = contents?.items ?? NO_ROWS;
+  const selectedItems = items.filter((item) => selected.has(item.id));
+  const allOnPage = items.length > 0 && selectedItems.length === items.length;
+  const selection = useMemo<Selection>(
+    () => ({
+      ids: selected,
+      allOnPage,
+      someOnPage: selectedItems.length > 0,
+      toggle: (id) =>
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (!next.delete(id)) next.add(id);
+          return next;
+        }),
+      toggleAll: () => setSelected(allOnPage ? new Set() : new Set(items.map((item) => item.id))),
+    }),
+    [selected, allOnPage, selectedItems.length, items, setSelected]
+  );
+
+  const columns = useMemo(
+    () => entryColumns(privateTypes, typeIcons, selection),
+    [privateTypes, typeIcons, selection]
+  );
   const table = useTable({
     features,
     columns,
     data: contents?.items ?? NO_ROWS,
     getRowId: (item) => item.id,
   });
+
+  const bulk = useBulkContentStatus();
+
+  /**
+   * What the bulk actions leave out of the selection, and why.
+   *
+   * A Scheduled entry is left out because the status route clears its publish time, so undoing
+   * the change would put it back to Scheduled with nothing to publish at. An entry of a type with
+   * its own lifecycle is left out because the plain status route refuses it. Both are said in the
+   * bar, so the count of what will move is never a surprise.
+   */
+  const lifecycleTypes = useMemo(
+    () =>
+      new Set(
+        (schemas ?? []).filter((s) => (s.lifecycle?.states.length ?? 0) > 0).map((s) => s.name)
+      ),
+    [schemas]
+  );
+  const leftOutScheduled = selectedItems.filter((i) => i.status === ContentStatus.Scheduled);
+  const leftOutLifecycle = selectedItems.filter(
+    (i) => i.status !== ContentStatus.Scheduled && lifecycleTypes.has(i.contentType)
+  );
+  const eligible = selectedItems.filter(
+    (i) => !leftOutScheduled.includes(i) && !leftOutLifecycle.includes(i)
+  );
+
+  // Toasts this screen raised, so a tenant switch takes them down: an Undo that outlived it would
+  // write to another tenant's entries.
+  const tenant = useCurrentTenant();
+  const toastIds = useRef<(string | number)[]>([]);
+  useEffect(
+    () => () => {
+      toastIds.current.forEach((id) => toast.dismiss(id));
+      toastIds.current = [];
+    },
+    [tenant]
+  );
+
+  /** One line for what the API refused: conflicts as a refresh, anything else in its own words. */
+  const report = (failed: { error: unknown }[], total: number) => {
+    if (failed.length === 0) return;
+    const conflicts = failed.filter(
+      (f) => axios.isAxiosError(f.error) && f.error.response?.status === 409
+    );
+    const others = failed.filter((f) => !conflicts.includes(f));
+    toast.error(
+      [
+        `${failed.length} of ${total} could not be changed.`,
+        conflicts.length > 0 && `${conflicts.length} changed by someone else, refresh.`,
+        others.length > 0 && apiErrorMessage(others[0].error, 'The API refused it.'),
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+  };
+
+  /**
+   * Moves the eligible ticked entries to a status with the per-entry status route, then offers to
+   * put each back as it was. Entries already there are left out. One refused does not stop the
+   * others. The undo works once, and moves back only the entries still in the status this change
+   * gave them, read again first, so it never overwrites somebody else's edit.
+   */
+  const moveSelected = async (target: ContentStatus, done: string) => {
+    const before = new Map(eligible.map((item) => [item.id, item.status]));
+    const changes: BulkStatusChange[] = eligible
+      .filter((item) => item.status !== target)
+      .map((item) => ({ id: item.id, status: target }));
+    if (changes.length === 0) {
+      setSelected(new Set());
+      return;
+    }
+    const startedIn = tenantOfToken(tokenStore.token);
+    let result;
+    try {
+      result = await bulk.mutateAsync(changes);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'The entries could not be changed.'));
+      return;
+    }
+    setSelected(new Set());
+    report(result.failed, changes.length);
+    if (result.done.length === 0) return;
+
+    let undone = false;
+    const toastId = toast(
+      `${result.done.length} ${result.done.length === 1 ? 'entry' : 'entries'} ${done}`,
+      {
+        duration: 8000,
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            if (undone || tenantOfToken(tokenStore.token) !== startedIn) return;
+            undone = true;
+            toast.dismiss(toastId);
+            try {
+              const back = await bulk.mutateAsync(
+                result.done.map((id) => ({
+                  id,
+                  status: before.get(id) as ContentStatus,
+                  onlyIfCurrently: target,
+                }))
+              );
+              report(back.failed, result.done.length);
+              if (back.skipped.length > 0) {
+                toast(
+                  `${back.skipped.length} ${back.skipped.length === 1 ? 'entry was' : 'entries were'} changed since and left as they are.`
+                );
+              }
+            } catch (error) {
+              toast.error(apiErrorMessage(error, 'The change could not be undone.'));
+            }
+          },
+        },
+      }
+    );
+    toastIds.current.push(toastId);
+  };
 
   const setType = (value: string) => {
     setParams({ type: value === ALL_TYPES ? null : value, page: null });
@@ -283,21 +496,22 @@ function ContentListInner() {
   const tabTypes = (schemas ?? []).filter((s) => s.isSingleton !== true);
 
   /**
-   * What each chip can say, from the rows loaded.
+   * What each chip says, from GET /api/contents/counts for the chosen type.
    *
-   * The list reply carries no per-status counts, and a request per status is the round trip this
-   * screen refuses to make. So these are a tally of this page and are labelled that way. With a
-   * status chosen the page holds only that status, so only its own chip has a number worth showing;
-   * the others would read zero, which is a claim about entries nobody asked for.
+   * Counts are the type's, not the page's and not the search's: they do not move when a status is
+   * chosen or a title typed, which is what lets one chip be compared with another. They are empty
+   * until the reply arrives, and chips show no number rather than a zero while they are.
    */
-  const statusCounts = (() => {
-    const items = contents?.items ?? NO_ROWS;
-    if (!contents) return {};
-    if (status !== undefined) return { [status]: items.length };
-    const tally: Record<string, number> = { all: items.length };
-    for (const item of items) tally[item.status] = (tally[item.status] ?? 0) + 1;
-    return tally;
-  })();
+  const { data: counts } = useContentCounts(contentType);
+  const statusCounts: Record<string, number> = counts
+    ? {
+        all: counts.total,
+        [ContentStatus.Draft]: counts.draft,
+        [ContentStatus.Published]: counts.published,
+        [ContentStatus.Archived]: counts.archived,
+        [ContentStatus.Scheduled]: counts.scheduled,
+      }
+    : {};
 
   return (
     <Tabs value={contentType ?? ALL_TYPES} onValueChange={setType} className="gap-0">
@@ -364,6 +578,63 @@ function ContentListInner() {
         />
       </div>
 
+      {selectedItems.length > 0 && (
+        <div
+          role="region"
+          aria-label="Bulk actions"
+          className="bg-foreground text-background mb-3 flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
+        >
+          <span className="flex-1 text-sm font-semibold">
+            {selectedItems.length} selected
+            {leftOutScheduled.length > 0 && (
+              <span className="ml-2 text-xs font-normal opacity-80">
+                {leftOutScheduled.length} scheduled left out
+              </span>
+            )}
+            {leftOutLifecycle.length > 0 && (
+              <span className="ml-2 text-xs font-normal opacity-80">
+                {leftOutLifecycle.length} left out, their type has its own lifecycle
+              </span>
+            )}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            disabled={bulk.isPending || eligible.length === 0}
+            onClick={() => moveSelected(ContentStatus.Published, 'published')}
+          >
+            Publish
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="border-background/40 text-background hover:bg-background/10 hover:text-background bg-transparent"
+            disabled={bulk.isPending || eligible.length === 0}
+            onClick={() => moveSelected(ContentStatus.Archived, 'archived')}
+          >
+            Archive
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-background hover:bg-background/10 hover:text-background opacity-80"
+            onClick={() => setSelected(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
+      {(counts?.uncountedTypes?.length ?? 0) > 0 && (
+        <p className="text-muted-foreground -mt-2 mb-4 text-[11px]">
+          Excludes {counts!.uncountedTypes!.length}{' '}
+          {counts!.uncountedTypes!.length === 1 ? 'type' : 'types'} from these counts, because their
+          read rules need a check on each entry.
+        </p>
+      )}
+
       <TabsContent value={contentType ?? ALL_TYPES}>
         {isLoading ? (
           <TableSkeleton />
@@ -420,12 +691,18 @@ function ContentListInner() {
                         // The title is a real link, so keyboard users have a focusable target and
                         // the row is a convenience for the mouse. Without this guard a click on the
                         // link navigates twice.
-                        if ((e.target as HTMLElement).closest('a')) return;
+                        // The select cell is all checkbox as far as a click goes, padding included.
+                        if ((e.target as HTMLElement).closest('a, button, [data-cell="select"]'))
+                          return;
                         router.push(`/content/${row.original.id}`);
                       }}
                     >
                       {row.getAllCells().map((cell) => (
-                        <TableCell key={cell.id} className={COLUMN_CLASSES[cell.column.id]?.cell}>
+                        <TableCell
+                          key={cell.id}
+                          data-cell={cell.column.id}
+                          className={COLUMN_CLASSES[cell.column.id]?.cell}
+                        >
                           <table.FlexRender cell={cell} />
                         </TableCell>
                       ))}

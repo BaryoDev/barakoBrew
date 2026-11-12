@@ -31,6 +31,15 @@ export const FIELD_MASKS: { value: FieldMask; label: string }[] = [
     { value: FieldMask.Last4, label: 'Show last 4 only' },
 ];
 
+/**
+ * The icon a type is drawn with: a sprite glyph by `name`, or custom markup in `svg`, never both.
+ * The API sanitises `svg` on write; the console still draws it only through a registered symbol.
+ */
+export interface ContentTypeIcon {
+    name?: string | null;
+    svg?: string | null;
+}
+
 export interface ContentTypeDefinition {
     id?: string;
     name: string;
@@ -46,6 +55,10 @@ export interface ContentTypeDefinition {
      * API refuses a second create. Absent from an API older than the flag, which reads as false.
      */
     isSingleton?: boolean;
+    /** The entry stream is this type's source of truth, so its fields have to stay Public. Absent before the API sent it. */
+    eventSourced?: boolean;
+    /** The icon this type is drawn with. Absent or null when it has none. */
+    icon?: ContentTypeIcon | null;
     /** Where an entry lives on the site, such as `/blog/{slug}`. Absent or null when none is declared. */
     routeTemplate?: string | null;
     /** Values only one entry of this type may hold at a time. Absent or null when there are none. */

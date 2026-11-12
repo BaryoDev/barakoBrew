@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
+import { useCurrentTenant } from '@/hooks/use-tenants';
 import type {
     ContentTypeDefinition,
+    ContentTypeIcon,
     CreateSchemaRequest,
     FieldOption,
     UniquenessRule,
@@ -10,8 +12,12 @@ import type {
 // enabled is for chrome that only needs the list when the caller may read it. The default is every
 // existing caller's behaviour.
 export function useSchemas(enabled = true) {
+    // The tenant is in the key, so another tenant's types never sit on screen while the new
+    // tenant's load. A tenant switch only invalidates, which keeps showing the old data until the
+    // new answer lands. After the 'schemas' prefix the mutations invalidate on.
+    const tenant = useCurrentTenant();
     return useQuery({
-        queryKey: ['schemas'],
+        queryKey: ['schemas', 'list', tenant],
         queryFn: async () => {
             const response = await api.get<Paginated<ContentTypeDefinition>>('/api/content-types');
             // The envelope stops here. Every caller wants the list, and unwrapping once in the hook
@@ -224,5 +230,106 @@ export function useUniquenessDuplicates(name: string, rule: string, page: number
                 )
             ).data,
         enabled,
+    });
+}
+
+/**
+ * Sets or clears the icon a type is drawn with. A glyph is `{ name }` and custom markup is
+ * `{ svg }`; null clears it. The API sanitises the markup and answers with what it stored, and a
+ * refusal comes back as an error whose message is the reason.
+ */
+export function useSetIcon(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (icon: ContentTypeIcon | null) => {
+            const response = await api.put<{ name: string; icon: ContentTypeIcon | null }>(
+                `${typePath(name)}/icon`,
+                { icon },
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+/** What a field is sent with when it is added to a type that already exists. */
+export interface AddFieldRequest {
+    fieldName: string;
+    displayName: string;
+    type: string;
+    isRequired: boolean;
+    referenceType?: string;
+    options?: FieldOption[];
+    itemType?: string;
+}
+
+/**
+ * Adds one field to a type that already exists, POST /api/content-types/{name}/fields. The API
+ * refuses a name the type has, a required field with no default on a type that holds entries, and
+ * anything the create validator would, and says why; the message is the caller's to show.
+ */
+export function useAddField(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (field: AddFieldRequest) => {
+            const response = await api.post<{ contentType: string; added: string; fields: string[] }>(
+                `${typePath(name)}/fields`,
+                field,
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+export interface SetFieldSensitivityResult {
+    name: string;
+    field: string;
+    from: string;
+    to: string;
+    /** Present when the change is still applying to entries in the background. */
+    change?: { status?: string } | null;
+}
+
+/**
+ * Sets a field's sensitivity, PUT .../fields/{field}/sensitivity. Lowering it makes values already
+ * written readable to more callers, so the API refuses unless `acknowledgeDisclosure` is set and
+ * says how many entries are affected.
+ */
+export function useSetFieldSensitivity(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            field,
+            sensitivity,
+            acknowledgeDisclosure,
+            visibleToRoles,
+            mask,
+        }: {
+            field: string;
+            sensitivity: string;
+            acknowledgeDisclosure: boolean;
+            /** Sent with every change: the API replaces the field's list with what it is given. */
+            visibleToRoles: string[];
+            mask?: string;
+        }) => {
+            const response = await api.put<SetFieldSensitivityResult>(`${fieldPath(name, field)}/sensitivity`, {
+                sensitivity,
+                acknowledgeDisclosure,
+                visibleToRoles,
+                ...(mask ? { mask } : {}),
+            });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
     });
 }

@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { TypeIcon } from '@/components/schema/type-icon';
 import { IconContentTypes, IconCube, IconList, IconPlus, IconSearch } from '@/components/icons';
 import type { ContentTypeDefinition } from '@/types/schema';
 
@@ -221,6 +222,11 @@ export default function SchemasPage() {
                     <TableRow key={schema.name} className="hover:bg-background">
                       <TableCell className="py-3.5 pl-6">
                         <div className="flex flex-wrap items-center gap-2">
+                          <TypeIcon
+                            icon={schema.icon}
+                            fallback={IconContentTypes}
+                            className="text-primary size-4 shrink-0"
+                          />
                           <Link
                             href={openHref(schema)}
                             className="focus-visible:ring-ring truncate rounded-sm text-[13.5px] font-bold outline-none focus-visible:ring-[3px]"
@@ -269,7 +275,11 @@ function TypeCard({ schema }: { schema: ContentTypeDefinition }) {
   return (
     <div className="group hover:border-ring/40 relative rounded-lg border p-4 transition-colors">
       <div className="flex items-start gap-2.5">
-        <IconContentTypes className="text-primary mt-0.5 size-4 shrink-0" />
+        <TypeIcon
+          icon={schema.icon}
+          fallback={IconContentTypes}
+          className="text-primary mt-0.5 size-4 shrink-0"
+        />
         <Link
           href={openHref(schema)}
           className="focus-visible:ring-ring min-w-0 flex-1 rounded-sm text-sm font-medium outline-none after:absolute after:inset-0 focus-visible:ring-[3px]"
