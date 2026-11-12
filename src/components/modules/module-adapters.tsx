@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { useAccess } from '@/hooks/use-access';
 import { isForbidden } from '@/lib/api';
 import { useAccounts, accountTypeLabel } from '@/hooks/use-accounting';
 import { useClientErrors, useResolveClientError } from '@/hooks/use-errors';
@@ -67,6 +68,17 @@ function stateOf(
     return undefined;
 }
 
+/** A header button to a page that already exists, shown only to a caller the nav entry would show. */
+function PrimaryLink({ href, label, capability }: { href: string; label: string; capability: string }) {
+    const can = useAccess().can(capability, ['SuperAdmin', 'Admin']);
+    if (!can) return null;
+    return (
+        <Button asChild size="sm">
+            <Link href={href}>{label}</Link>
+        </Button>
+    );
+}
+
 const FeatureFlagsBody: Adapter = ({ side }) => {
     const q = useFeatureFlags();
     const toggle = useToggleFeatureFlag();
@@ -106,6 +118,7 @@ const FeatureFlagsBody: Adapter = ({ side }) => {
                 { key: 'enabled', label: 'State', kind: 'switch' },
             ]}
             rows={rows}
+            primary={<PrimaryLink href="/feature-flags" label="New flag" capability="manage_feature_flags" />}
             state={stateOf(q, list !== null)}
             callFor={(r) => `POST /api/feature-flags/admin/${encodeURIComponent(r.id)}/toggle`}
             onToggle={(r) => toggle.mutateAsync(r.id)}
@@ -148,6 +161,7 @@ const FormsBody: Adapter = ({ side }) => {
                 { key: 'enabled', label: 'Accepting', kind: 'switch' },
             ]}
             rows={rows}
+            primary={<PrimaryLink href="/settings/forms" label="New form" capability="manage_forms" />}
             state={absent ? { kind: 'message', text: 'This deployment does not serve the Forms API.' } : stateOf(q, forms !== null)}
             callFor={(r) => `PUT /api/forms/${encodeURIComponent(r.id)}`}
             onToggle={(r, next) => set.mutateAsync({ contentType: r.id, enabled: next })}
@@ -198,11 +212,7 @@ const FilesBody: Adapter = ({ side }) => {
                 { key: 'access', label: 'Access' },
             ]}
             rows={rows}
-            primary={
-                <Button asChild size="sm">
-                    <Link href="/files">Upload</Link>
-                </Button>
-            }
+            primary={<PrimaryLink href="/files" label="Upload" capability="upload_files" />}
             state={stateOf(q, items !== null)}
             callFor={(r) => `DELETE /api/files/${encodeURIComponent(r.id)}`}
             footer={truncated(FILES_PAGE_SIZE, total, 'Open Files in the sidebar for every page.')}

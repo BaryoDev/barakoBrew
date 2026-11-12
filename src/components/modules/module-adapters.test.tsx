@@ -10,6 +10,11 @@ const hooks = vi.hoisted(() => ({
     errors: { data: undefined as unknown, isLoading: false, isError: false },
     accounts: { data: undefined as unknown, isLoading: false, isError: false },
     files: { data: undefined as unknown, isLoading: false, isError: false },
+    forms: { data: undefined as unknown, isLoading: false, isError: false },
+}));
+vi.mock('@/hooks/use-forms', () => ({
+    useForms: () => hooks.forms,
+    useSetForm: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@/hooks/use-files', () => ({
     useFiles: () => hooks.files,
@@ -28,6 +33,11 @@ vi.mock('@/hooks/use-errors', () => ({
 vi.mock('@/hooks/use-accounting', () => ({
     useAccounts: () => hooks.accounts,
     accountTypeLabel: (t: string) => t,
+}));
+
+const access = vi.hoisted(() => ({ held: new Set<string>(['upload_files', 'manage_feature_flags', 'manage_forms']) }));
+vi.mock('@/hooks/use-access', () => ({
+    useAccess: () => ({ can: (c: string) => access.held.has(c) }),
 }));
 
 const { ModuleAdapterBody, removeFailure } = await import('./module-adapters');
@@ -130,5 +140,33 @@ describe('primary action', () => {
         render(<ModuleAdapterBody name="Files" side={null} />);
         const upload = screen.getByRole('link', { name: 'Upload' });
         expect(upload.getAttribute('href')).toBe('/files');
+    });
+
+    it('shows New flag on Feature flags and links to the flags page', () => {
+        hooks.flags.data = [];
+        render(<ModuleAdapterBody name="FeatureFlags" side={null} />);
+        expect(screen.getByRole('link', { name: 'New flag' }).getAttribute('href')).toBe('/feature-flags');
+    });
+
+    it('shows New form on Forms and links to the forms settings page', () => {
+        hooks.forms.data = { kind: 'forms', forms: [] };
+        render(<ModuleAdapterBody name="Forms" side={null} />);
+        expect(screen.getByRole('link', { name: 'New form' }).getAttribute('href')).toBe('/settings/forms');
+    });
+
+    it('hides a primary from a user without its capability', () => {
+        hooks.flags.data = [];
+        hooks.forms.data = { kind: 'forms', forms: [] };
+        hooks.files.data = { items: [], totalItems: 0 };
+        access.held.clear();
+        try {
+            for (const name of ['FeatureFlags', 'Forms', 'Files']) {
+                const { unmount } = render(<ModuleAdapterBody name={name} side={null} />);
+                expect(screen.queryByRole('link')).toBeNull();
+                unmount();
+            }
+        } finally {
+            ['upload_files', 'manage_feature_flags', 'manage_forms'].forEach((c) => access.held.add(c));
+        }
     });
 });
