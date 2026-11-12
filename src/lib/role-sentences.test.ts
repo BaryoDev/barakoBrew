@@ -66,4 +66,76 @@ describe('roleSentences', () => {
     it('calls an unnamed role This role', () => {
         expect(texts([base({ read: { enabled: true } })], [], '  ')).toEqual(['This role can read every Absence.']);
     });
+
+    it('never reads a rule holding a kept condition as every entry', () => {
+        const out = texts([base({ read: { enabled: true, conditions: { Seats: { _eq: 4 } } } })]);
+        expect(out).toEqual(['Editor can read Absence, limited by 1 condition this screen cannot show.']);
+    });
+
+    it('mentions both the shown rows and the kept conditions', () => {
+        const out = roleSentences({
+            roleName: 'Editor',
+            schemas,
+            capabilities: [],
+            permissions: [
+                base({
+                    update: {
+                        enabled: true,
+                        conditions: { CreatedBy: { _eq: '$CURRENT_USER' }, Seats: { _gt: 1, _lt: 9 }, Rank: { _eq: 2 } },
+                    },
+                }),
+            ],
+        });
+        expect(out).toEqual([
+            {
+                tone: 'warn',
+                text: 'Editor can update Absence where CreatedBy is the current user and 2 more conditions this screen cannot show.',
+            },
+        ]);
+    });
+
+    it('says an unsaved invalid condition is not valid yet, for a rule and a transition', () => {
+        const out = roleSentences({
+            roleName: 'Editor',
+            schemas,
+            capabilities: [],
+            permissions: [base({ read: { enabled: true }, transitions: { Approve: { enabled: true } } })],
+            invalid: new Set(['absence:read', 'absence:transition:Approve']),
+        });
+        expect(out.map((s) => s.tone)).toEqual(['warn', 'warn']);
+        for (const s of out) {
+            expect(s.text).toContain('not saved yet');
+            expect(s.text).not.toContain('every Absence');
+        }
+    });
+
+    it('shows $CURRENT_USER as plain text under a list operator, since the API only swaps it for _eq and _ne', () => {
+        const out = texts([
+            base({
+                read: { enabled: true, conditions: { Owner: { _in: ['$CURRENT_USER'] } } },
+                update: { enabled: true, conditions: { Owner: { _ne: '$CURRENT_USER' } } },
+            }),
+        ]);
+        expect(out).toContain('Editor can read Absence where Owner is one of $CURRENT_USER.');
+        expect(out).toContain('Editor can update Absence where Owner is not the current user.');
+    });
+
+    it('reads * as every capability', () => {
+        expect(texts([], ['*'])).toEqual(['Editor holds every capability.']);
+    });
+
+    it('gives no sees-only sentence for an empty readable list', () => {
+        expect(texts([base({ read: { enabled: true, readableFields: [] } })])).toEqual(['Editor can read every Absence.']);
+    });
+
+    it('reads writable fields on create, and none on a disabled update', () => {
+        const out = texts([
+            base({
+                create: { enabled: true, writableFields: ['Name'] },
+                update: { enabled: false, writableFields: ['Grade'] },
+            }),
+        ]);
+        expect(out).toContain('Editor can set only Name when they create Absence.');
+        expect(out.join(' ')).not.toContain('Grade');
+    });
 });

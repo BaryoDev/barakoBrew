@@ -10,7 +10,28 @@ export interface RoleSentence {
     text: string;
 }
 
+/**
+ * One rule's sentence. Conditions the editor cannot draw are kept as stored and still enforced, so a
+ * rule holding any says so and is never read as unconditional.
+ */
+function ruleLine(who: string, verb: string, display: string, conditions: Record<string, unknown> | null | undefined) {
+    const { rows, kept } = readConditions(conditions);
+    const hidden = Object.keys(kept).length;
+    const base = ruleSentence(who, verb, display, rows);
+    if (hidden === 0) return { text: base, hasKept: false };
+    const more = `${hidden} ${rows.length > 0 ? 'more ' : ''}${hidden === 1 ? 'condition' : 'conditions'} this screen cannot show`;
+    const text =
+        rows.length > 0
+            ? `${base.slice(0, -1)} and ${more}.`
+            : `${who} can ${verb} ${display}, limited by ${more}.`;
+    return { text, hasKept: true };
+}
+
 const ACTIONS: PermissionAction[] = ['create', 'read', 'update', 'delete'];
+
+function notValid(who: string, verb: string, display: string): string {
+    return `${who} can ${verb} ${display} only once its unsaved condition is valid. It is not saved yet.`;
+}
 
 function joined(items: readonly string[]): string {
     if (items.length <= 1) return items.join('');
@@ -28,6 +49,11 @@ export function roleSentences(input: {
     permissions: readonly ContentTypePermission[];
     capabilities: readonly string[];
     schemas?: readonly Pick<ContentTypeDefinition, 'name' | 'displayName'>[];
+    /**
+     * Rules whose unsaved condition the editor will not save yet, as `slug:action` or
+     * `slug:transition:name`. Each reads as not valid yet, never as granted.
+     */
+    invalid?: ReadonlySet<string>;
 }): RoleSentence[] {
     const who = input.roleName.trim() || 'This role';
     const out: RoleSentence[] = [];
@@ -39,9 +65,14 @@ export function roleSentences(input: {
         for (const action of ACTIONS) {
             const rule = permission[action];
             if (!rule?.enabled) continue;
-            const rows = readConditions(rule.conditions).rows;
-            if (rows.length === 0) plain.push(action);
-            else out.push({ tone: 'accent', text: ruleSentence(who, action, display, rows) });
+            if (input.invalid?.has(`${permission.contentTypeSlug}:${action}`)) {
+                out.push({ tone: 'warn', text: notValid(who, action, display) });
+                continue;
+            }
+            const line = ruleLine(who, action, display, rule.conditions);
+            if (line.hasKept) out.push({ tone: 'warn', text: line.text });
+            else if (line.text === ruleSentence(who, action, display, [])) plain.push(action);
+            else out.push({ tone: 'accent', text: line.text });
         }
         if (plain.length > 0) {
             out.push({ tone: 'accent', text: `${who} can ${joined(plain)} every ${display}.` });
@@ -58,11 +89,21 @@ export function roleSentences(input: {
 
         for (const [name, rule] of Object.entries(permission.transitions ?? {})) {
             if (!rule?.enabled) continue;
-            out.push({ tone: 'ok', text: ruleSentence(who, `run ${name} on`, display, readConditions(rule.conditions).rows) });
+            const verb = `run ${name} on`;
+            if (input.invalid?.has(`${permission.contentTypeSlug}:transition:${name}`)) {
+                out.push({ tone: 'warn', text: notValid(who, verb, display) });
+                continue;
+            }
+            const line = ruleLine(who, verb, display, rule.conditions);
+            out.push({ tone: line.hasKept ? 'warn' : 'ok', text: line.text });
         }
     }
 
     for (const capability of input.capabilities) {
+        if (capability === '*') {
+            out.push({ tone: 'accent', text: `${who} holds every capability.` });
+            continue;
+        }
         const label = capabilityLabel(capability);
         out.push({
             tone: 'accent',

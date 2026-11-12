@@ -126,6 +126,13 @@ export function RoleEditor({
     ...liveTransitionDrafts.map((t) => t.draft),
   ].some((draft) => draft.rows.some((row) => conditionProblem(row) !== null));
 
+  const invalid = new Set([
+    ...liveDrafts.filter(([, d]) => d.rows.some((r) => conditionProblem(r) !== null)).map(([key]) => key),
+    ...liveTransitionDrafts
+      .filter((t) => t.draft.rows.some((r) => conditionProblem(r) !== null))
+      .map((t) => `${t.slug}:transition:${t.name}`),
+  ]);
+
   const withConditions = (list: ContentTypePermission[]) =>
     list.map((permission) => {
       let next = permission;
@@ -175,6 +182,7 @@ export function RoleEditor({
     permissions: withConditions(permissions),
     capabilities,
     schemas,
+    invalid,
   });
 
   return (
