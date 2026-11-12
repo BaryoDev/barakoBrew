@@ -31,6 +31,16 @@ const DEFAULT_MODES: FieldOption[] = [
     { value: HOLDING, label: HOLDING },
 ];
 
+/** Core compares Mode without regard to case, so every match here does the same. */
+export const sameMode = (a: unknown, b: unknown): boolean =>
+    typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** The note for a stored or picked mode, whatever its case. Undefined for a mode with no note. */
+export function modeNote(value: unknown): string | undefined {
+    const key = Object.keys(MODE_NOTES).find((k) => sameMode(k, readMode(value)));
+    return key ? MODE_NOTES[key] : undefined;
+}
+
 /** Unset means Live. Any other stored string is kept as it is, so opening the screen changes nothing. */
 export function readMode(value: unknown): string {
     return typeof value === 'string' && value.trim() !== '' ? value : LIVE;
@@ -43,7 +53,7 @@ export function readMode(value: unknown): string {
 export function modeOptions(field: FieldDefinition | undefined, stored: unknown): FieldOption[] {
     const options = field?.options?.length ? field.options : DEFAULT_MODES;
     const current = readMode(stored);
-    return options.some((o) => o.value === current) ? options : [...options, { value: current, label: current }];
+    return options.some((o) => sameMode(o.value, current)) ? options : [...options, { value: current, label: current }];
 }
 
 export interface HoldingPageOption {
@@ -95,8 +105,9 @@ export function siteShareScope(siteUrl: unknown): ShareLinkScope {
         key: ['site'],
         path: '/api/site/share-links',
         description:
-            'Let someone see the site while it is holding. A link works until it expires or is revoked, and is not saved with the changes above.',
-        revokeWarning: 'Anyone opening this link sees the holding page again. This cannot be undone.',
+            'Let someone see the site while it is holding or private. A link works until it expires or is revoked, and is not saved with the changes above.',
+        revokeWarning:
+            'Anyone opening this link loses access: a holding site shows the holding page again, and a private site answers 404. This cannot be undone.',
         link: (key) => {
             const url = shareLinkUrl(siteUrl, key);
             return url ? { value: url, complete: true } : { value: `/_share#${key}`, complete: false };
