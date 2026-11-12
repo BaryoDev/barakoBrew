@@ -9,6 +9,7 @@ import type { ModuleSummary } from '@/types/modules';
 import { ModuleAdapterBody } from './module-adapters';
 import { ModuleConfigurationCard } from './module-configuration-card';
 import { ModuleStateBadge } from './module-state-badge';
+import { TryItCard, hasDemo } from './try-it-card';
 import { GLYPH } from './module-tile';
 
 function Header({ module }: { module: ModuleSummary }) {
@@ -61,7 +62,12 @@ function Header({ module }: { module: ModuleSummary }) {
  */
 export function ModuleScreen({ module, children }: { module: ModuleSummary; children?: ReactNode }) {
     const state = moduleState(module);
-    const config = <ModuleConfigurationCard name={module.name} enabled={state === 'enabled'} />;
+    const config = (
+        <>
+            {hasDemo(module.name) && <TryItCard name={module.name} />}
+            <ModuleConfigurationCard name={module.name} enabled={state === 'enabled'} />
+        </>
+    );
 
     return (
         <>

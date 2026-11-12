@@ -1,6 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
+import { isForbidden } from '@/lib/api';
 import { useAccounts, accountTypeLabel } from '@/hooks/use-accounting';
 import { useClientErrors, useResolveClientError } from '@/hooks/use-errors';
 import { useFeatureFlags, useToggleFeatureFlag } from '@/hooks/use-feature-flags';
@@ -19,6 +22,10 @@ type Adapter = (props: { side: ReactNode }) => ReactNode;
 
 const UNREADABLE: TableState = { kind: 'message', text: 'The API sent a list this console cannot read.' };
 const FAILED: TableState = { kind: 'message', text: 'Could not load this list.' };
+export const FORBIDDEN: TableState = {
+    kind: 'message',
+    text: 'You do not have permission to view this module. Ask an admin for access.',
+};
 
 function shown(value: string | null | undefined): string {
     return value && value.trim() ? value : 'None';
@@ -51,11 +58,11 @@ export function removeFailure(error: unknown): string | null {
 }
 
 function stateOf(
-    q: { isLoading: boolean; isError: boolean },
+    q: { isLoading: boolean; isError: boolean; error?: unknown },
     readable: boolean,
 ): TableState | undefined {
     if (q.isLoading) return { kind: 'loading' };
-    if (q.isError) return FAILED;
+    if (q.isError) return isForbidden(q.error) ? FORBIDDEN : FAILED;
     if (!readable) return UNREADABLE;
     return undefined;
 }
@@ -191,6 +198,11 @@ const FilesBody: Adapter = ({ side }) => {
                 { key: 'access', label: 'Access' },
             ]}
             rows={rows}
+            primary={
+                <Button asChild size="sm">
+                    <Link href="/files">Upload</Link>
+                </Button>
+            }
             state={stateOf(q, items !== null)}
             callFor={(r) => `DELETE /api/files/${encodeURIComponent(r.id)}`}
             footer={truncated(FILES_PAGE_SIZE, total, 'Open Files in the sidebar for every page.')}

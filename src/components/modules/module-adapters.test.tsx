@@ -6,9 +6,16 @@ import axios, { AxiosError } from 'axios';
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 
 const hooks = vi.hoisted(() => ({
-    flags: { data: undefined as unknown, isLoading: false, isError: false },
+    flags: { data: undefined as unknown, isLoading: false, isError: false, error: undefined as unknown },
     errors: { data: undefined as unknown, isLoading: false, isError: false },
     accounts: { data: undefined as unknown, isLoading: false, isError: false },
+    files: { data: undefined as unknown, isLoading: false, isError: false },
+}));
+vi.mock('@/hooks/use-files', () => ({
+    useFiles: () => hooks.files,
+    useDeleteFile: () => ({ mutateAsync: vi.fn() }),
+    deleteRefusal: () => null,
+    FILES_PAGE_SIZE: 20,
 }));
 vi.mock('@/hooks/use-feature-flags', () => ({
     useFeatureFlags: () => hooks.flags,
@@ -79,5 +86,49 @@ describe('call text', () => {
         render(<ModuleAdapterBody name="FeatureFlags" side={null} />);
         await userEvent.click(screen.getAllByTestId('module-row')[0]);
         expect(await screen.findByText('POST /api/feature-flags/admin/a%2Fb%20c/toggle')).toBeTruthy();
+    });
+});
+
+describe('list failures', () => {
+    const failWith = (error: unknown) => {
+        hooks.flags.data = undefined;
+        hooks.flags.isError = true;
+        hooks.flags.error = error;
+    };
+    const reset = () => {
+        hooks.flags.isError = false;
+        hooks.flags.error = undefined;
+    };
+
+    it('says the user lacks permission on a 403, not the generic failure', () => {
+        failWith(refusal(403, {}));
+        render(<ModuleAdapterBody name="FeatureFlags" side={null} />);
+        expect(screen.getByText(/You do not have permission to view this module/)).toBeTruthy();
+        expect(screen.queryByText('Could not load this list.')).toBeNull();
+        reset();
+    });
+
+    it('keeps the generic failure on a 500', () => {
+        failWith(refusal(500, {}));
+        render(<ModuleAdapterBody name="FeatureFlags" side={null} />);
+        expect(screen.getByText('Could not load this list.')).toBeTruthy();
+        expect(screen.queryByText(/You do not have permission/)).toBeNull();
+        reset();
+    });
+
+    it('keeps the generic failure on an error with no status', () => {
+        failWith(new Error('network'));
+        render(<ModuleAdapterBody name="FeatureFlags" side={null} />);
+        expect(screen.getByText('Could not load this list.')).toBeTruthy();
+        reset();
+    });
+});
+
+describe('primary action', () => {
+    it('shows Upload on Files and sends the user to the Files page', () => {
+        hooks.files.data = { items: [], totalItems: 0 };
+        render(<ModuleAdapterBody name="Files" side={null} />);
+        const upload = screen.getByRole('link', { name: 'Upload' });
+        expect(upload.getAttribute('href')).toBe('/files');
     });
 });
