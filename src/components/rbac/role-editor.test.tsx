@@ -317,7 +317,10 @@ describe('transition permissions', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
         fireEvent.change(screen.getByLabelText('Condition 1 field'), { target: { value: 'CreatedBy' } });
         fireEvent.change(screen.getByLabelText('Condition 1 value'), { target: { value: '$CURRENT_USER' } });
-        expect(screen.getByText('Teacher can run Explain on Absence where CreatedBy is the current user.')).toBeInTheDocument();
+        const sentence = 'Teacher can run Explain on Absence where CreatedBy is the current user.';
+        // Said under the rule in the editor, and again in the rail.
+        expect(within(screen.getByLabelText('Name').closest('form')!).getByText(sentence)).toBeInTheDocument();
+        expect(within(screen.getByRole('complementary', { name: 'Reads back as' })).getByText(sentence)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
 
         const [permission] = submitted(onSubmit).permissions;
@@ -396,7 +399,9 @@ describe('the Reads back as rail', () => {
                 <RoleEditor initial={ROLE} locked="Locked." submitLabel="Save role" isPending={false} onSubmit={onSubmit} onCancel={() => {}} />
             </QueryClientProvider>,
         );
-        const rail = await screen.findByRole('complementary', { name: 'Reads back as' });
+        // The type's display name arrives with the content types, so wait for it.
+        await waitFor(() => expect(screen.getByText('Record')).toBeInTheDocument());
+        const rail = screen.getByRole('complementary', { name: 'Reads back as' });
         expect(within(rail).getByText('Teacher can run approve on every Record.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Save role' })).toBeDisabled();
     });
