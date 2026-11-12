@@ -10,7 +10,7 @@ vi.mock('@/lib/api', async () => {
 vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => 'cafe' }));
 
 const { api } = await import('@/lib/api');
-const { useActivity, activityDelay, isActivityUnavailable, ACTIVITY_POLL_MS } = await import('./use-activity');
+const { useActivityGone, useActivity, activityDelay, isActivityUnavailable, ACTIVITY_POLL_MS } = await import('./use-activity');
 
 function httpError(status: number) {
     return Object.assign(new Error(`Request failed with status code ${status}`), { isAxiosError: true, response: { status } });
@@ -37,6 +37,35 @@ describe('useActivity', () => {
         await waitFor(() => expect(result.current.items).toHaveLength(1));
         expect(api.get).toHaveBeenCalledWith('/api/activity', { params: { pageSize: 50 } });
         expect(result.current.available).toBe(true);
+    });
+
+    it('sends the kinds it was asked for, and none when there are none', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [], cursor: 'c', hasMore: false } });
+        const client = new QueryClient();
+        const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+        renderHook(() => useActivity({ kinds: ['run.failed', 'bounced'] }), { wrapper });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/activity', { params: { pageSize: 50, kinds: 'run.failed,bounced' } }));
+    });
+
+    it('does not ask while disabled', async () => {
+        const { result } = renderHook(() => useActivity({ enabled: false }), {
+            wrapper: ({ children }: { children: React.ReactNode }) => (
+                <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+            ),
+        });
+        await new Promise((r) => setTimeout(r, 10));
+        expect(api.get).not.toHaveBeenCalled();
+        expect(result.current.missing).toBe(false);
+    });
+
+    it('says missing only for a 404', async () => {
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(404); });
+        const missing = run();
+        await waitFor(() => expect(missing.result.current.missing).toBe(true));
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(403); });
+        const refused = run();
+        await waitFor(() => expect(refused.result.current.available).toBe(false));
+        expect(refused.result.current.missing).toBe(false);
     });
 
     it('is unavailable on a 404, an API without the feed', async () => {
@@ -82,5 +111,51 @@ describe('the poll pace', () => {
         expect(isActivityUnavailable(httpError(401))).toBe(true);
         expect(isActivityUnavailable(httpError(500))).toBe(false);
         expect(isActivityUnavailable(new Error('network'))).toBe(false);
+    });
+});
+
+describe('useActivityGone', () => {
+    function probe(enabled = true) {
+        const client = new QueryClient();
+        const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+        return { client, ...renderHook(() => useActivityGone(enabled), { wrapper }) };
+    }
+
+    it('asks for one row on its own key and says gone for a 404, and keeps the answer', async () => {
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(404); });
+        const { result, client } = probe();
+        await waitFor(() => expect(result.current).toBe(true));
+        expect(api.get).toHaveBeenCalledWith('/api/activity', { params: { pageSize: 1 } });
+        expect(client.getQueryCache().findAll({ queryKey: ['activity-probe'] })[0]?.state.status).toBe('success');
+    });
+
+    it('says gone for a 403 too', async () => {
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(403); });
+        const { result } = probe();
+        await waitFor(() => expect(result.current).toBe(true));
+    });
+
+    it('is not gone when the feed answers, or on a 500', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [] } });
+        const ok = probe();
+        await waitFor(() => expect(api.get).toHaveBeenCalled());
+        expect(ok.result.current).toBe(false);
+        vi.mocked(api.get).mockImplementation(async () => { throw httpError(500); });
+        const bad = probe();
+        await waitFor(() => expect(vi.mocked(api.get).mock.calls.length).toBeGreaterThan(1));
+        expect(bad.result.current).toBe(false);
+    });
+
+    it('does not ask while the caller is not offered the item', async () => {
+        probe(false);
+        await new Promise((r) => setTimeout(r, 10));
+        expect(api.get).not.toHaveBeenCalled();
+    });
+
+    it('asks for a larger page when told to', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [] } });
+        const client = new QueryClient();
+        renderHook(() => useActivity({ pageSize: 100 }), { wrapper: ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/activity', { params: { pageSize: 100 } }));
     });
 });

@@ -21,7 +21,7 @@ describe('the Live activity card', () => {
         feed = {
             ...base,
             items: [
-                { id: 'a', at: at(120), kind: 'published', severity: 'info', actor: { name: 'Ana' }, subject: { title: 'New pastry menu' }, text: 'Published an entry.', ref: '/content/1' },
+                { id: 'a', at: at(120), kind: 'published', severity: 'info', actor: { name: 'Ana' }, subject: { title: 'New pastry menu' }, text: 'Published an entry.', ref: '/content/article/abc' },
                 { id: 'b', at: at(7200), kind: 'quota.reached', actor: { name: 'System' }, text: 'Something happened.' },
             ],
         };
@@ -30,8 +30,11 @@ describe('the Live activity card', () => {
         const rows = within(list).getAllByRole('listitem');
         expect(rows).toHaveLength(2);
         expect(rows[0]).toHaveTextContent('2 min');
-        expect(rows[0]).toHaveTextContent('Ana Published an entry. New pastry menu');
-        expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/content/1');
+        // The sentence is built from kind, actor and subject title, so the text carries no title twice.
+        expect(rows[0]).toHaveTextContent('Ana published New pastry menu');
+        expect(rows[0]).not.toHaveTextContent('Published an entry.');
+        expect(within(rows[0]).getAllByText('published').some((e) => e.className.includes('font-mono'))).toBe(true);
+        expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/content/abc');
         // An unknown kind is drawn as its name, in mono.
         expect(within(rows[1]).getByText('quota.reached').className).toContain('font-mono');
         expect(screen.queryByText(/677/)).toBeNull();

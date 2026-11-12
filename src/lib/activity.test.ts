@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activityPageSchema, attentionRows, kindLabel, needsAttention, relativeTime, safeRef } from './activity';
+import { activityHref, ACTIVITY_FILTERS, activitySentence, kindTone, activityPageSchema, attentionRows, kindLabel, needsAttention, relativeTime, safeRef } from './activity';
 
 const NOW = Date.parse('2026-11-06T12:00:00Z');
 const ago = (seconds: number) => new Date(NOW - seconds * 1000).toISOString();
@@ -99,5 +99,78 @@ describe('what needs a person', () => {
     it('takes the newest row of an id, so a run that was retried and passed drops out', () => {
         const rows = attentionRows([row('r1', 'info'), row('r1', 'error'), row('r2', 'error'), row('r3', 'warning')]);
         expect(rows.map((r) => r.id)).toEqual(['r2', 'r3']);
+    });
+});
+
+describe('the activity filter chips', () => {
+    it('are Everything, Problems, Publishing, Workflow runs, Sign-ins and Imports, in that order', () => {
+        expect(ACTIVITY_FILTERS.map((f) => f.label)).toEqual(['Everything', 'Problems', 'Publishing', 'Workflow runs', 'Sign-ins', 'Imports']);
+    });
+
+    it('send the kinds core filters by, and Everything sends none', () => {
+        const kinds = (id: string) => ACTIVITY_FILTERS.find((f) => f.id === id)?.kinds;
+        expect(kinds('all')).toEqual([]);
+        expect(kinds('problems')).toEqual(['run.failed', 'bounced']);
+        expect(kinds('publishing')).toEqual(['published', 'scheduled']);
+        expect(kinds('runs')).toEqual(['run.succeeded', 'run.failed']);
+        expect(kinds('signins')).toEqual(['signin']);
+        expect(kinds('imports')).toEqual(['imported']);
+    });
+});
+
+describe('activitySentence', () => {
+    it('builds the sentence from kind, actor and subject title, not from text', () => {
+        expect(
+            activitySentence({ kind: 'published', actor: { name: 'Ana' }, subject: { title: 'New pastry menu' }, text: 'Published an entry.' }),
+        ).toEqual({ actor: 'Ana', verb: 'published', subject: 'New pastry menu' });
+    });
+
+    it('names the actor System when none came', () => {
+        expect(activitySentence({ kind: 'run.failed', subject: { title: 'Sunday hours' } }).actor).toBe('System');
+        expect(activitySentence({ kind: 'run.failed' }).verb).toBe('failed on');
+    });
+
+    it('falls back to the API text for a kind it has no verb for', () => {
+        expect(activitySentence({ kind: 'quota.reached', actor: { name: 'System' }, text: 'Something happened.' }).verb).toBe('Something happened.');
+    });
+});
+
+describe('kindTone', () => {
+    it('tints failures bad, bounces warn and an unknown kind muted', () => {
+        expect(kindTone('run.failed')).toBe('bad');
+        expect(kindTone('bounced')).toBe('warn');
+        expect(kindTone('published')).toBe('ok');
+        expect(kindTone('quota.reached')).toBe('muted');
+    });
+});
+
+describe('activityHref', () => {
+    it('maps an entry to Brew\'s /content/{id}', () => {
+        expect(activityHref('/content/article/abc-1')).toBe('/content/abc-1');
+    });
+    it('maps a run to the runs list opened on it', () => {
+        expect(activityHref('/workflows/runs/run-9')).toBe('/workflow-runs?run=run-9');
+    });
+    it('maps a content type to /schemas/{name}', () => {
+        expect(activityHref('/content-types/article')).toBe('/schemas/article');
+    });
+    it('passes through the audit log, the runs list and mail settings', () => {
+        expect(activityHref('/audit?action=auth.login.succeeded')).toBe('/audit?action=auth.login.succeeded');
+        expect(activityHref('/workflow-runs?run=r1')).toBe('/workflow-runs?run=r1');
+        expect(activityHref('/settings/email')).toBe('/settings/email');
+    });
+    it('gives null for a ref with no screen, an empty one and one that leaves the console', () => {
+        expect(activityHref('/something/else/entirely')).toBeNull();
+        expect(activityHref('/content/article')).toBeNull();
+        expect(activityHref('')).toBeNull();
+        expect(activityHref('//evil.example/content/a/b')).toBeNull();
+    });
+});
+
+describe('activitySentence bidi', () => {
+    it('strips bidi control characters from actor and subject', () => {
+        const s = activitySentence({ kind: 'edited', actor: { name: 'A‮na' }, subject: { title: 'T⁦itle‏' } });
+        expect(s.actor).toBe('Ana');
+        expect(s.subject).toBe('Title');
     });
 });

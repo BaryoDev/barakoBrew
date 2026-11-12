@@ -33,7 +33,7 @@ const { setViewportWidth } = await import('@/test/setup');
 const notFound = () =>
     Object.assign(new Error('Request failed with status code 404'), { isAxiosError: true, response: { status: 404 } });
 
-function renderRail(me: { capabilities: string[] } | 'missing', errors = 0, withTrigger = false) {
+function renderRail(me: { capabilities: string[] } | 'missing', errors = 0, withTrigger = false, activity: 'feed' | 'none' | 'forbidden' = 'feed') {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
         if (url === '/api/me') {
             if (me === 'missing') throw notFound();
@@ -41,6 +41,8 @@ function renderRail(me: { capabilities: string[] } | 'missing', errors = 0, with
         }
         // Not readable for this caller, so the rail keeps every module item: see withModules.
         if (url === '/api/modules') throw Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403 } });
+        if (url === '/api/activity' && activity === 'none') throw notFound();
+        if (url === '/api/activity' && activity === 'forbidden') throw Object.assign(new Error('403'), { isAxiosError: true, response: { status: 403 } });
         if (url.startsWith('/api/client-errors')) return { data: { items: [], totalItems: errors, page: 1, pageSize: 1 } };
         return { data: { items: [], totalItems: 0, page: 1, pageSize: 20 } };
     });
@@ -71,6 +73,29 @@ describe('the rail', () => {
         await waitFor(() => expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument(), { timeout: 5000 });
         expect(rail()).toBeTruthy();
         expect(screen.queryByRole('link', { name: /^Users/ })).toBeNull();
+    });
+
+    it('lists Activity for a caller who may read the audit log', async () => {
+        renderRail({ capabilities: ['view_audit_log'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^Activity/ })).toBeInTheDocument(), { timeout: 5000 });
+    });
+
+    it('drops Activity when the API answers 404 for the feed', async () => {
+        renderRail({ capabilities: ['view_audit_log'] }, 0, false, 'none');
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/activity', expect.anything()));
+        await waitFor(() => expect(screen.queryByRole('link', { name: /^Activity/ })).toBeNull());
+    });
+
+    it('drops Activity when the feed answers 403 too, asking for one row', async () => {
+        renderRail({ capabilities: ['view_audit_log'] }, 0, false, 'forbidden');
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/activity', { params: { pageSize: 1 } }));
+        await waitFor(() => expect(screen.queryByRole('link', { name: /^Activity/ })).toBeNull());
+    });
+
+    it('does not ask the feed of a caller who is not offered Activity', async () => {
+        renderRail({ capabilities: ['upload_files'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^Files/ })).toBeInTheDocument(), { timeout: 5000 });
+        expect(api.get).not.toHaveBeenCalledWith('/api/activity', expect.anything());
     });
 
     it('keeps the role-name rule against an API without /api/me', async () => {

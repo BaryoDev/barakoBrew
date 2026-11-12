@@ -503,15 +503,27 @@ describe('the rail after the prototype match', () => {
         }
     });
 
-    it('keeps the primary list to the seven the prototype shows', () => {
+    it('keeps the primary list to the prototype\'s: the seven, then Activity', () => {
         const titles = NAV_GROUPS[0].items.filter((i) => !i.parent).map((i) => i.title);
         expect(titles).toEqual([
-            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings',
+            'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings', 'Activity',
         ]);
     });
 
     it('puts Theme and Style recipes under Site settings', () => {
         const children = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.parent === '/site');
         expect(children.map((i) => i.title)).toEqual(['Theme', 'Style recipes']);
+    });
+});
+
+describe('the Activity item', () => {
+    it('sits after Site settings and its children, for the audit log capability', () => {
+        const items = NAV_GROUPS.flatMap((g) => g.items);
+        const titles = items.map((i) => i.title);
+        expect(titles.indexOf('Activity')).toBeGreaterThan(titles.indexOf('Style recipes'));
+        const activity = items.find((i) => i.title === 'Activity');
+        expect(activity?.href).toBe('/activity');
+        expect(activity?.capability).toBe('view_audit_log');
+        expect(breadcrumbsFor('/activity').map((c) => c.title)).toEqual(['Activity']);
     });
 });

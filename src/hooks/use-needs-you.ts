@@ -5,7 +5,7 @@ import { pendingIds, subscribePending } from '@/lib/pending-resolves';
 import { useRunSample } from '@/hooks/use-overview';
 import { useNavMetrics } from '@/hooks/use-nav-metrics';
 import { useActivity } from '@/hooks/use-activity';
-import { attentionRows, relativeTime, safeRef, type ActivityItem } from '@/lib/activity';
+import { attentionRows, relativeTime, activityHref, type ActivityItem } from '@/lib/activity';
 import { useOverviewSummary, type OverviewNeed } from '@/hooks/use-overview-summary';
 import { hrefsOf, useAllowedGroups } from '@/hooks/use-visible-hrefs';
 
@@ -69,7 +69,7 @@ function rowFromActivity(item: ActivityItem): NeedsRow {
     key: item.id,
     title: item.text || item.kind,
     detail: [item.subject?.title, relativeTime(item.at, Date.now())].filter(Boolean).join(' · '),
-    href: safeRef(item.ref) ?? fallbackHref(item.kind),
+    href: activityHref(item.ref) ?? fallbackHref(item.kind),
     dot: error ? 'bg-destructive' : 'bg-warning',
     decision: item.kind === 'run.failed',
   };
