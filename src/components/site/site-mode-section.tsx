@@ -2,9 +2,12 @@
 
 import { Section, TextField } from '@/components/site/editors';
 import { Label } from '@/components/ui/label';
+import { SegmentedControl, SegmentedControlItem } from '@/components/ui/segmented-control';
 import { usePageTree } from '@/hooks/use-pages';
 import {
     HOLDING_PATH_FIELD,
+    MODE_NOTES,
+    PRIVATE,
     SITE_MODE_FIELD,
     holdingPageOptions,
     modeOptions,
@@ -37,32 +40,53 @@ export function SiteModeSection({
 
     if (!modeField && !holdingField) return null;
 
+    const mode = readMode(values[SITE_MODE_FIELD]);
+    const options = modeField ? modeOptions(modeField, values[SITE_MODE_FIELD]) : [];
+    const privateOffered = options.some((o) => o.value === PRIVATE);
     const holding = typeof values[HOLDING_PATH_FIELD] === 'string' ? (values[HOLDING_PATH_FIELD] as string) : '';
     const pages = holdingPageOptions(tree.data);
     const usePicker = tree.isLoading || pages.length > 0;
 
     return (
-        <Section title="Site mode" description="What visitors see: the site, or one holding page on every route.">
+        <Section title="Site mode" description="What visitors see: the site, one holding page on every route, or nothing unless they hold a share key.">
             {modeField && (
-                <div className="space-y-1.5">
-                    <Label htmlFor="site-mode">Mode</Label>
-                    <select
-                        id="site-mode"
-                        className={SELECT}
-                        value={readMode(values[SITE_MODE_FIELD])}
-                        aria-describedby="site-mode-hint"
-                        onChange={(e) => set(SITE_MODE_FIELD, e.target.value)}
+                <div className="space-y-2">
+                    <Label id="site-mode-label">Mode</Label>
+                    <SegmentedControl
+                        aria-labelledby="site-mode-label"
+                        aria-describedby="site-mode-note"
+                        value={mode}
+                        onValueChange={(next) => set(SITE_MODE_FIELD, next)}
                     >
-                        {modeOptions(modeField, values[SITE_MODE_FIELD]).map((option) => (
-                            <option key={option.value} value={option.value}>
+                        {options.map((option) => (
+                            <SegmentedControlItem key={option.value} value={option.value}>
                                 {option.label}
-                            </option>
+                            </SegmentedControlItem>
                         ))}
-                    </select>
-                    <p id="site-mode-hint" className="text-muted-foreground text-xs">
-                        Holding changes what visitors see and hides nothing at the API. Unpublished content stays
-                        hidden until it is published.
-                    </p>
+                    </SegmentedControl>
+                    {MODE_NOTES[mode] && (
+                        <p
+                            id="site-mode-note"
+                            className={
+                                mode === PRIVATE
+                                    ? 'bg-accent text-accent-foreground rounded-md px-3 py-2 text-xs'
+                                    : 'text-muted-foreground text-xs'
+                            }
+                        >
+                            {MODE_NOTES[mode]}
+                        </p>
+                    )}
+                    {!privateOffered && (
+                        <p id="site-mode-private-missing" className="text-muted-foreground text-xs">
+                            Private mode is not available yet. The site type needs the Private option added to its
+                            Mode field first.
+                        </p>
+                    )}
+                    {mode === PRIVATE && (
+                        <p id="site-mode-private-pointer" className="text-muted-foreground text-xs">
+                            Outsiders get in with a site share key. Make one in Share links, further down this page.
+                        </p>
+                    )}
                 </div>
             )}
 

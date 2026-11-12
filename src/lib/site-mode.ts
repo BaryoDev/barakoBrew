@@ -1,8 +1,10 @@
 /**
  * Site mode, the holding page and share links, as barakoCMS documents them for the `site` type.
  *
- * Mode is presentation for the site's renderer. The API hides nothing because of it, so the screen
- * says that next to the control.
+ * Live and Holding are presentation for the site's renderer: the API hides nothing because of them.
+ * Private is enforced by the API, which answers 404 on every public route unless the request carries
+ * a site share key or a signed-in viewer who may read `site`. Private exists only on site types whose
+ * Mode field options include it, so it is not in DEFAULT_MODES.
  */
 import { isAbsoluteHttpUrl } from '@/lib/site-settings';
 import type { ShareLinkScope } from '@/lib/share-links';
@@ -14,6 +16,15 @@ export const HOLDING_PATH_FIELD = 'HoldingPath';
 
 export const LIVE = 'Live';
 export const HOLDING = 'Holding';
+export const PRIVATE = 'Private';
+
+/** One line per mode, shown under the Mode control. */
+export const MODE_NOTES: Record<string, string> = {
+    [LIVE]: 'Visitors see the site. Delivery answers as published.',
+    [HOLDING]: 'Visitors see the holding page. Nothing is hidden at the API; a renderer decides what to show.',
+    [PRIVATE]:
+        'Every public route answers 404 unless the request carries a share key or a signed-in viewer who may read the site.',
+};
 
 const DEFAULT_MODES: FieldOption[] = [
     { value: LIVE, label: LIVE },
@@ -26,7 +37,7 @@ export function readMode(value: unknown): string {
 }
 
 /**
- * The options the Mode select offers: the field's own when it is a choice field with options, Live
+ * The options the Mode control offers: the field's own when it is a choice field with options, Live
  * and Holding otherwise, and the stored value when neither list has it.
  */
 export function modeOptions(field: FieldDefinition | undefined, stored: unknown): FieldOption[] {
