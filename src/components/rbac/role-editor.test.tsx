@@ -369,3 +369,35 @@ describe('transition permissions', () => {
         });
     });
 });
+
+describe('the Reads back as rail', () => {
+    it('says nothing is granted for a new role, then follows the grid and the name as they change', async () => {
+        await renderEditor();
+        const rail = screen.getByRole('complementary', { name: 'Reads back as' });
+        expect(within(rail).getByText('Nothing is granted yet.')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Teacher' } });
+        fireEvent.click(screen.getByLabelText('Allow read on Record'));
+        expect(within(rail).getByText('Teacher can read every Record.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByLabelText('Allow update on Record'));
+        expect(within(rail).getByText('Teacher can read and update every Record.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByLabelText('Allow read on Record'));
+        fireEvent.click(screen.getByLabelText('Allow update on Record'));
+        expect(within(rail).getByText('Nothing is granted yet.')).toBeInTheDocument();
+    });
+
+    it('is drawn for a role this caller may not change', async () => {
+        const onSubmit = vi.fn();
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor initial={ROLE} locked="Locked." submitLabel="Save role" isPending={false} onSubmit={onSubmit} onCancel={() => {}} />
+            </QueryClientProvider>,
+        );
+        const rail = await screen.findByRole('complementary', { name: 'Reads back as' });
+        expect(within(rail).getByText('Teacher can run approve on every Record.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save role' })).toBeDisabled();
+    });
+});
