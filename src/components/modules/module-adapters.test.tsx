@@ -142,16 +142,16 @@ describe('primary action', () => {
         expect(upload.getAttribute('href')).toBe('/files');
     });
 
-    it('shows New flag on Feature flags and links to the flags page', () => {
+    it('shows Manage flags on Feature flags and links to the flags page', () => {
         hooks.flags.data = [];
         render(<ModuleAdapterBody name="FeatureFlags" side={null} />);
-        expect(screen.getByRole('link', { name: 'New flag' }).getAttribute('href')).toBe('/feature-flags');
+        expect(screen.getByRole('link', { name: 'Manage flags' }).getAttribute('href')).toBe('/feature-flags');
     });
 
-    it('shows New form on Forms and links to the forms settings page', () => {
+    it('shows Manage forms on Forms and links to the forms settings page', () => {
         hooks.forms.data = { kind: 'forms', forms: [] };
         render(<ModuleAdapterBody name="Forms" side={null} />);
-        expect(screen.getByRole('link', { name: 'New form' }).getAttribute('href')).toBe('/settings/forms');
+        expect(screen.getByRole('link', { name: 'Manage forms' }).getAttribute('href')).toBe('/settings/forms');
     });
 
     it('hides a primary from a user without its capability', () => {

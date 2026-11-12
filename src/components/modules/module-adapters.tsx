@@ -118,7 +118,7 @@ const FeatureFlagsBody: Adapter = ({ side }) => {
                 { key: 'enabled', label: 'State', kind: 'switch' },
             ]}
             rows={rows}
-            primary={<PrimaryLink href="/feature-flags" label="New flag" capability="manage_feature_flags" />}
+            primary={<PrimaryLink href="/feature-flags" label="Manage flags" capability="manage_feature_flags" />}
             state={stateOf(q, list !== null)}
             callFor={(r) => `POST /api/feature-flags/admin/${encodeURIComponent(r.id)}/toggle`}
             onToggle={(r) => toggle.mutateAsync(r.id)}
@@ -161,7 +161,7 @@ const FormsBody: Adapter = ({ side }) => {
                 { key: 'enabled', label: 'Accepting', kind: 'switch' },
             ]}
             rows={rows}
-            primary={<PrimaryLink href="/settings/forms" label="New form" capability="manage_forms" />}
+            primary={<PrimaryLink href="/settings/forms" label="Manage forms" capability="manage_forms" />}
             state={absent ? { kind: 'message', text: 'This deployment does not serve the Forms API.' } : stateOf(q, forms !== null)}
             callFor={(r) => `PUT /api/forms/${encodeURIComponent(r.id)}`}
             onToggle={(r, next) => set.mutateAsync({ contentType: r.id, enabled: next })}
