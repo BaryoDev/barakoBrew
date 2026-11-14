@@ -247,7 +247,8 @@ export default function WorkflowRunsPage() {
   // retry, cancel or abandon works the same either way.
   const [live, setLive] = useState(true);
   const detail = useRef<HTMLElement | null>(null);
-  const picked = useRef(false);
+  // Counts picks, so clicking the run that is already open still scrolls to it on one column.
+  const [picks, setPicks] = useState(0);
   // Held here, not inside the run's panel, so a poll that changes the run cannot unmount an open dialog.
   const [confirming, setConfirming] = useState<{ kind: 'cancel' | 'abandon'; id: string; name: string } | null>(null);
   // What the dialog says, kept through its closing animation once `confirming` is cleared.
@@ -286,7 +287,7 @@ export default function WorkflowRunsPage() {
   function select(id: string) {
     setSelectedId(id);
     setBadLink(false);
-    picked.current = true;
+    setPicks((n) => n + 1);
     const next = new URLSearchParams(window.location.search);
     next.set('run', id);
     window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}${window.location.hash}`);
@@ -310,11 +311,10 @@ export default function WorkflowRunsPage() {
   // On one column the detail sits below the list, so a pick scrolls to it. After the render, once
   // the section holds the run, and not from a timer.
   useEffect(() => {
-    if (!picked.current || !selectedId) return;
-    picked.current = false;
+    if (picks === 0) return;
     if (typeof window.matchMedia === 'function' && !window.matchMedia('(max-width: 1179px)').matches) return;
     detail.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  }, [selectedId]);
+  }, [picks]);
   const retry = useRetryAttempt();
   const cancel = useCancelRun();
   const abandon = useAbandonRun();

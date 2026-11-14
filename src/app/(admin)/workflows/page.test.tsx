@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { exactTime, momentLabel } from '@/lib/relative-time';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -360,7 +361,11 @@ describe('Recent runs', () => {
         expect(within(rows[0]).getByText('Succeeded')).toBeInTheDocument();
         expect(within(rows[0]).getByText(/post 10000000/)).toBeInTheDocument();
         expect(within(rows[0]).getAllByTestId('progress-segment')).toHaveLength(2);
-        expect(within(rows[0]).getByText(new Date('2026-10-19T10:08:00Z').toLocaleString())).toBeInTheDocument();
+        // The label is read against the clock, so the test asks the helper for it, and checks the
+        // full timestamp is the title.
+        const started = '2026-10-19T10:08:00Z';
+        const label = within(rows[0]).getByText(momentLabel(started));
+        expect(label).toHaveAttribute('title', exactTime(started));
         expect(within(rows[1]).getByText('Partly failed')).toBeInTheDocument();
         expect(within(list).queryByText(/post 60000000/)).toBeNull();
     });
