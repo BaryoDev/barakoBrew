@@ -1280,3 +1280,103 @@ describe('the run open on load', () => {
     expect(rows[0]).toHaveAttribute('aria-pressed', 'false');
   });
 });
+
+describe('the run opened by default across the poll', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('stays open, with its confirm, when a refetch puts a newer run first', async () => {
+    const OPEN = {
+      ...run('r-open', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Failed')]),
+      abandonedAt: null,
+    };
+    const NEWER = run('r-newer', 'Send the digest', 'Failed', [action(1, 'Failed')]);
+    let items: Record<string, unknown>[] = [OPEN];
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf(items) };
+      return { data: [OPEN, NEWER].find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+
+    // Nothing is picked: the first run is open by default, and its Abandon is asked about.
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon' }));
+    const dialog = await screen.findByRole('alertdialog');
+
+    items = [NEWER, OPEN];
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+    });
+
+    expect(screen.getByRole('alertdialog')).toBe(dialog);
+    const rows = within(screen.getByRole('list', { name: 'Runs', hidden: true })).getAllByRole('button', { hidden: true });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAttribute('aria-pressed', 'false');
+    expect(rows[1]).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'Charge the card', hidden: true })).toBeInTheDocument();
+  });
+
+  it('chooses again when the open run leaves the list', async () => {
+    const A = run('r-a', 'Alpha run', 'Failed', []);
+    const B = run('r-b', 'Beta run', 'Failed', []);
+    let items: Record<string, unknown>[] = [A];
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf(items) };
+      return { data: [A, B].find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('heading', { name: 'Alpha run' })).toBeInTheDocument();
+
+    items = [B];
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Beta run' })).toBeInTheDocument();
+  });
+});
+
+describe('scrolling on one column', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('does not scroll for the run opened by default at load, and scrolls on every pick after', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    setViewportWidth(900);
+    const first = run('r1', 'First run', 'Failed', []);
+    const second = run('r2', 'Second run', 'Failed', []);
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf([first, second]) };
+      return { data: [first, second].find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'First run' })).toBeInTheDocument();
+    expect(scroll).not.toHaveBeenCalled();
+
+    // Clicking the run that is already open still scrolls to it.
+    fireEvent.click(screen.getByRole('button', { name: /First run/ }));
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /Second run/ }));
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(2));
+  });
+});

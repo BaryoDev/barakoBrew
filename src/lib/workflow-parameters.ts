@@ -77,10 +77,16 @@ export function actionLabel(type: string): string {
         .replace(/Action$/, '')
         .replace(/[_-]+/g, ' ')
         .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+        .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2')
         .trim();
     if (!words) return type;
-    return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+    // A word with two capitals in a row ("SMS", "HTTP", "OAuth2") keeps its case. Other
+    // words are lowered, and only the first letter of the label is raised.
+    const lowered = words
+        .split(' ')
+        .map((word) => (/[A-Z]{2}/.test(word) ? word : word.toLowerCase()))
+        .join(' ');
+    return lowered.charAt(0).toUpperCase() + lowered.slice(1);
 }
 
 /** The label to show beside a kind, or null when it would only repeat the kind ("Webhook" beside "Webhook"). */

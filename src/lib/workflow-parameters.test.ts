@@ -105,7 +105,10 @@ describe('actionLabel', () => {
     it('spells a kind as words', () => {
         expect(actionLabel('SendEmail')).toBe('Send email');
         expect(actionLabel('HttpRequest')).toBe('Http request');
-        expect(actionLabel('HTTPRequest')).toBe('Http request');
+        expect(actionLabel('HTTPRequest')).toBe('HTTP request');
+        expect(actionLabel('OAuth2Login')).toBe('OAuth2 login');
+        expect(actionLabel('SMS')).toBe('SMS');
+        expect(actionLabel('SendSMS')).toBe('Send SMS');
         expect(actionLabel('WebhookAction')).toBe('Webhook');
         expect(actionLabel('Log')).toBe('Log');
     });

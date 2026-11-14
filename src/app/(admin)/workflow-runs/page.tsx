@@ -249,6 +249,8 @@ export default function WorkflowRunsPage() {
   const detail = useRef<HTMLElement | null>(null);
   // Counts picks, so clicking the run that is already open still scrolls to it on one column.
   const [picks, setPicks] = useState(0);
+  // The run opened by default, remembered so a poll that puts a newer run first does not change it.
+  const [defaultId, setDefaultId] = useState<string | null>(null);
   // Held here, not inside the run's panel, so a poll that changes the run cannot unmount an open dialog.
   const [confirming, setConfirming] = useState<{ kind: 'cancel' | 'abandon'; id: string; name: string } | null>(null);
   // What the dialog says, kept through its closing animation once `confirming` is cleared.
@@ -300,10 +302,15 @@ export default function WorkflowRunsPage() {
 
   const runs = useWorkflowRuns({ page, pageSize: 25, status }, { live });
   const rows = runs.data?.items ?? [];
-  // Nothing picked and no link in the address: the newest run in the list is open, so the detail
-  // is never an empty "Choose a run" beside a list that has runs. A link, good or bad, is never
-  // overridden. It is not written to the address, so a pick is still what makes a shareable link.
-  const selectedId = pickedId ?? (linked ? null : (rows[0]?.id ?? null));
+  // Nothing picked and no link in the address: the first run in the list is open, so the detail is
+  // never an empty "Choose a run" beside a list that has runs. The default sticks to the run it
+  // chose: a newer run landing at the top of a live list does not swap the detail under the reader,
+  // and it is only chosen again once that run leaves the list (a filter or status change). A link,
+  // good or bad, is never overridden, and the default is not written to the address.
+  const defaultListed = defaultId !== null && rows.some((row) => row.id === defaultId);
+  const firstId = rows[0]?.id ?? null;
+  if (!defaultListed && firstId !== defaultId && firstId !== null) setDefaultId(firstId);
+  const selectedId = pickedId ?? (linked ? null : defaultListed ? defaultId : firstId);
   // A question about one run must not stay up once another is picked.
   if (confirming && confirming.id !== selectedId) setConfirming(null);
   const run = useWorkflowRun(selectedId);

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { exactTime, momentLabel } from '@/lib/relative-time';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -361,13 +360,34 @@ describe('Recent runs', () => {
         expect(within(rows[0]).getByText('Succeeded')).toBeInTheDocument();
         expect(within(rows[0]).getByText(/post 10000000/)).toBeInTheDocument();
         expect(within(rows[0]).getAllByTestId('progress-segment')).toHaveLength(2);
-        // The label is read against the clock, so the test asks the helper for it, and checks the
-        // full timestamp is the title.
-        const started = '2026-10-19T10:08:00Z';
-        const label = within(rows[0]).getByText(momentLabel(started));
-        expect(label).toHaveAttribute('title', exactTime(started));
         expect(within(rows[1]).getByText('Partly failed')).toBeInTheDocument();
         expect(within(list).queryByText(/post 60000000/)).toBeNull();
+    });
+
+    it('writes each start time as Today, Yesterday or a date, with the full time in the title', async () => {
+        // Local times, with no zone, so the clock reads the same wherever the suite runs.
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-11-14T12:00:00'));
+        try {
+            const runs = [
+                runOf('run-a', 'Succeeded', { createdAt: '2026-11-14T08:51:00' }),
+                runOf('run-b', 'Failed', { createdAt: '2026-11-13T17:05:00' }),
+                runOf('run-c', 'Succeeded', { createdAt: '2026-10-19T10:08:00' }),
+                runOf('run-d', 'Succeeded', { createdAt: '2025-12-31T22:00:00' }),
+            ];
+            renderWith([workflow('w1', 'Announce', { enabled: true })], [healthOf('w1')], runs);
+
+            const list = await screen.findByRole('list', { name: 'Recent runs' });
+            const rows = within(list).getAllByRole('button');
+            expect(rows).toHaveLength(4);
+            const times = ['Today 08:51', 'Yesterday 17:05', 'Oct 19 10:08', 'Dec 31, 2025 22:00'];
+            const stamps = ['2026-11-14T08:51:00', '2026-11-13T17:05:00', '2026-10-19T10:08:00', '2025-12-31T22:00:00'];
+            rows.forEach((row, i) => {
+                expect(within(row).getByText(times[i])).toHaveAttribute('title', new Date(stamps[i]).toLocaleString());
+            });
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('asks the API for the workflow\'s own runs, five of them', async () => {
