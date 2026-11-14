@@ -5,6 +5,7 @@ import axios from 'axios';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
+import { useUsers } from '@/hooks/use-rbac';
 import {
   useContents,
   useContentCounts,
@@ -77,9 +78,8 @@ const STATUS_FILTERS: { label: string; value: ContentStatus | undefined }[] = [
   })),
 ];
 
-/** 10.5px, 800, uppercase, on the sunken tint. The Signal column head. */
-const HEAD =
-  'h-auto bg-background py-3 text-[10.5px] font-extrabold tracking-[0.12em] uppercase text-[var(--faint)]';
+/** 12px, muted, sentence case, on the sunken tint. The r3 column head. */
+const HEAD = 'h-auto bg-background py-3 text-[12px] font-semibold text-muted-foreground';
 
 /** Machine-produced cell values: mono, tabular, muted. Types, versions, timestamps. */
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
@@ -102,9 +102,15 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
     head: `${HEAD} hidden text-right md:table-cell`,
     cell: `${META} hidden py-3.5 text-right md:table-cell`,
   },
+  // Updated is a sentence about when, so it reads in the body font. Mono stays for the machine
+  // values (type, version).
   updated: {
-    head: `${HEAD} hidden pr-6 text-right sm:table-cell`,
-    cell: `${META} hidden py-3.5 pr-6 text-right sm:table-cell`,
+    head: `${HEAD} hidden sm:table-cell`,
+    cell: 'text-muted-foreground hidden py-3.5 text-[13px] sm:table-cell',
+  },
+  author: {
+    head: `${HEAD} hidden pr-6 md:table-cell`,
+    cell: 'text-muted-foreground hidden py-3.5 pr-6 text-[13px] md:table-cell',
   },
 };
 
@@ -123,7 +129,8 @@ interface Selection {
 function entryColumns(
   privateTypes: ReadonlySet<string>,
   typeIcons: ReadonlyMap<string, ContentTypeIcon | null | undefined>,
-  selection: Selection
+  selection: Selection,
+  authorNames: ReadonlyMap<string, string>
 ) {
   return column.columns([
     column.display({
@@ -145,7 +152,7 @@ function entryColumns(
     }),
     column.display({
       id: 'entry',
-      header: 'Entry',
+      header: 'Title',
       cell: ({ row }) => (
         <Link
           href={`/content/${row.original.id}`}
@@ -203,6 +210,24 @@ function entryColumns(
           {relativeTime(getValue())}
         </time>
       ),
+    }),
+    column.display({
+      id: 'author',
+      header: 'Author',
+      cell: ({ row }) => {
+        // The list row names the last editor by id when the API sends it. An id with no user behind
+        // it (deleted, or one this caller may not list) and a row with no id both show a muted dash,
+        // never the raw id, which would read as a name.
+        const id = row.original.lastModifiedBy;
+        const name = id ? authorNames.get(id) : undefined;
+        return name ? (
+          <span className="block max-w-[10rem] truncate" title={name}>
+            {name}
+          </span>
+        ) : (
+          <span aria-label="No author">-</span>
+        );
+      },
     }),
   ]);
 }
@@ -358,9 +383,18 @@ function ContentListInner() {
     [selected, allOnPage, selectedItems.length, items, setSelected]
   );
 
+  // Author names, only fetched when a row names an editor. A caller who may not list users gets a
+  // failed query and so a dash, which is the same answer as a user who no longer exists.
+  const hasEditors = items.some((item) => !!item.lastModifiedBy);
+  const { data: users } = useUsers({ page: 1, pageSize: 100 }, hasEditors);
+  const authorNames = useMemo(
+    () => new Map((users?.items ?? []).map((u) => [u.id, u.username] as const)),
+    [users]
+  );
+
   const columns = useMemo(
-    () => entryColumns(privateTypes, typeIcons, selection),
-    [privateTypes, typeIcons, selection]
+    () => entryColumns(privateTypes, typeIcons, selection, authorNames),
+    [privateTypes, typeIcons, selection, authorNames]
   );
   const table = useTable({
     features,
@@ -529,19 +563,6 @@ function ContentListInner() {
 
       <PageHeader
         title={schema?.displayName ?? 'Entries'}
-        description={
-          contentType
-            ? (schema?.description ??
-              `Everything written as ${schema?.displayName ?? contentType}.`)
-            : 'Everything written in your CMS, filterable by content type.'
-        }
-        badge={
-          contents ? (
-            <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-[3px] font-mono text-[11px] font-medium tabular-nums">
-              {contents.totalItems}
-            </span>
-          ) : null
-        }
         actions={
           <Button asChild size="sm">
             <Link href={newEntryHref(contentType)}>

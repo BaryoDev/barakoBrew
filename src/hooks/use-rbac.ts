@@ -4,8 +4,9 @@ import type { User, Role, RoleRequest } from '@/types/rbac';
 
 // Users
 
-export function useUsers(params: PageParams = {}) {
+export function useUsers(params: PageParams = {}, enabled = true) {
     return useQuery({
+        enabled,
         queryKey: ['users', params],
         queryFn: async () => {
             const response = await api.get<Paginated<User>>('/api/users', { params });

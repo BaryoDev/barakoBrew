@@ -84,7 +84,7 @@ function row(
   id: string,
   title: string,
   status: string,
-  extra: { updatedAt?: string; contentType?: string } = {}
+  extra: { updatedAt?: string; contentType?: string; lastModifiedBy?: string } = {}
 ) {
   return {
     id,
@@ -95,6 +95,7 @@ function row(
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: extra.updatedAt ?? '2026-01-01T00:00:00Z',
+    ...(extra.lastModifiedBy ? { lastModifiedBy: extra.lastModifiedBy } : {}),
   };
 }
 
@@ -640,5 +641,112 @@ describe('counts that leave types out', () => {
     await screen.findByRole('button', { name: 'All 148' });
 
     expect(screen.queryByText(/Excludes/)).toBeNull();
+  });
+});
+
+describe('the table head and the page header', () => {
+  it('names the columns in sentence case, Author last', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    const heads = within(screen.getByRole('table'))
+      .getAllByRole('columnheader')
+      .map((head) => head.textContent)
+      .filter(Boolean);
+    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated', 'Author']);
+  });
+
+  it('has no count chip or description line under the title', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(screen.queryByText('148')).toBeNull();
+    expect(screen.queryByText(/Everything written/)).toBeNull();
+  });
+
+  it('reads Updated as relative text outside the mono face', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { updatedAt: new Date().toISOString() })];
+    renderList();
+    await screen.findByText('Alpha');
+
+    const time = within(bodyRows()[0]).getByText('just now');
+    expect(time.closest('td')?.className).not.toContain('font-mono');
+  });
+});
+
+describe('the status counts', () => {
+  it('come from the API totals and not from the rows loaded', async () => {
+    // Two rows loaded, one of them a Draft. The totals say otherwise on purpose.
+    rows = [row('a', 'Alpha', ContentStatus.Published), row('b', 'Beta', ContentStatus.Draft)];
+    counts = { total: 9, draft: 2, published: 5, archived: 1, scheduled: 1 };
+    renderList();
+    await screen.findByText('Alpha');
+
+    const group = screen.getByRole('group', { name: 'Filter by status' });
+    expect(await within(group).findByRole('button', { name: 'All 9' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Draft 2' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Published 5' })).toBeTruthy();
+    // One Published row is loaded, so a tally of the page would say 1.
+    expect(within(group).queryByRole('button', { name: 'Published 1' })).toBeNull();
+  });
+
+  it('do not move when a status filter narrows the list', async () => {
+    searchParams = new URLSearchParams('status=Draft');
+    rows = [row('b', 'Beta', ContentStatus.Draft)];
+    renderList();
+    await screen.findByText('Beta');
+
+    const group = screen.getByRole('group', { name: 'Filter by status' });
+    expect(await within(group).findByRole('button', { name: 'All 148' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Draft 60' })).toBeTruthy();
+  });
+});
+
+describe('the Author column', () => {
+  const withUsers = (items: { id: string; username: string }[] | Error) => {
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(async (url: string, config?: unknown) => {
+      if (url === '/api/users') {
+        if (items instanceof Error) throw items;
+        return { data: { items, page: 1, pageSize: 100, totalItems: items.length } };
+      }
+      return base(url, config as never);
+    });
+  };
+
+  it('shows the name of the last editor', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: 'u1' })];
+    withUsers([{ id: 'u1', username: 'maria' }]);
+    renderList();
+
+    expect(await screen.findByText('maria')).toBeTruthy();
+  });
+
+  it('shows a dash for a user who no longer exists, never the raw id', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: 'gone-id' })];
+    withUsers([{ id: 'u1', username: 'maria' }]);
+    renderList();
+    await screen.findByText('Alpha');
+
+    await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalledWith('/api/users', expect.anything()));
+    expect(screen.queryByText('gone-id')).toBeNull();
+    expect(within(bodyRows()[0]).getByLabelText('No author').textContent).toBe('-');
+  });
+
+  it('shows a dash when the list sends no editor, and does not ask for users', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(within(bodyRows()[0]).getByLabelText('No author')).toBeTruthy();
+    expect(vi.mocked(api.get).mock.calls.some((c) => c[0] === '/api/users')).toBe(false);
+  });
+
+  it('shows a dash when the caller may not list users', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: 'u1' })];
+    withUsers(new Error('403'));
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(within(bodyRows()[0]).getByLabelText('No author')).toBeTruthy();
   });
 });
