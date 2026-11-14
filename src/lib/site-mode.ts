@@ -1,8 +1,10 @@
 /**
  * Site mode, the holding page and share links, as barakoCMS documents them for the `site` type.
  *
- * Mode is presentation for the site's renderer. The API hides nothing because of it, so the screen
- * says that next to the control.
+ * Live and Holding are presentation for the site's renderer: the API hides nothing because of them.
+ * Private is enforced by the API, which answers 404 on every public route unless the request carries
+ * a site share key or a signed-in viewer who may read `site`. Private exists only on site types whose
+ * Mode field options include it, so it is not in DEFAULT_MODES.
  */
 import { isAbsoluteHttpUrl } from '@/lib/site-settings';
 import type { ShareLinkScope } from '@/lib/share-links';
@@ -14,11 +16,30 @@ export const HOLDING_PATH_FIELD = 'HoldingPath';
 
 export const LIVE = 'Live';
 export const HOLDING = 'Holding';
+export const PRIVATE = 'Private';
+
+/** One line per mode, shown under the Mode control. */
+export const MODE_NOTES: Record<string, string> = {
+    [LIVE]: 'Visitors see the site. Delivery answers as published.',
+    [HOLDING]: 'Visitors see the holding page. Nothing is hidden at the API; a renderer decides what to show.',
+    [PRIVATE]:
+        'Every public route answers 404 unless the request carries a share key or a signed-in viewer who may read the site.',
+};
 
 const DEFAULT_MODES: FieldOption[] = [
     { value: LIVE, label: LIVE },
     { value: HOLDING, label: HOLDING },
 ];
+
+/** Core compares Mode without regard to case, so every match here does the same. */
+export const sameMode = (a: unknown, b: unknown): boolean =>
+    typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** The note for a stored or picked mode, whatever its case. Undefined for a mode with no note. */
+export function modeNote(value: unknown): string | undefined {
+    const key = Object.keys(MODE_NOTES).find((k) => sameMode(k, readMode(value)));
+    return key ? MODE_NOTES[key] : undefined;
+}
 
 /** Unset means Live. Any other stored string is kept as it is, so opening the screen changes nothing. */
 export function readMode(value: unknown): string {
@@ -26,13 +47,13 @@ export function readMode(value: unknown): string {
 }
 
 /**
- * The options the Mode select offers: the field's own when it is a choice field with options, Live
+ * The options the Mode control offers: the field's own when it is a choice field with options, Live
  * and Holding otherwise, and the stored value when neither list has it.
  */
 export function modeOptions(field: FieldDefinition | undefined, stored: unknown): FieldOption[] {
     const options = field?.options?.length ? field.options : DEFAULT_MODES;
     const current = readMode(stored);
-    return options.some((o) => o.value === current) ? options : [...options, { value: current, label: current }];
+    return options.some((o) => sameMode(o.value, current)) ? options : [...options, { value: current, label: current }];
 }
 
 export interface HoldingPageOption {
@@ -84,8 +105,9 @@ export function siteShareScope(siteUrl: unknown): ShareLinkScope {
         key: ['site'],
         path: '/api/site/share-links',
         description:
-            'Let someone see the site while it is holding. A link works until it expires or is revoked, and is not saved with the changes above.',
-        revokeWarning: 'Anyone opening this link sees the holding page again. This cannot be undone.',
+            'Let someone see the site while it is holding or private. A link works until it expires or is revoked, and is not saved with the changes above.',
+        revokeWarning:
+            'Anyone opening this link loses access: a holding site shows the holding page again, and a private site answers 404. This cannot be undone.',
         link: (key) => {
             const url = shareLinkUrl(siteUrl, key);
             return url ? { value: url, complete: true } : { value: `/_share#${key}`, complete: false };

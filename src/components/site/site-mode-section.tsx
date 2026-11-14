@@ -2,14 +2,19 @@
 
 import { Section, TextField } from '@/components/site/editors';
 import { Label } from '@/components/ui/label';
+import { SegmentedControl, SegmentedControlItem } from '@/components/ui/segmented-control';
 import { usePageTree } from '@/hooks/use-pages';
 import {
     HOLDING_PATH_FIELD,
+    PRIVATE,
     SITE_MODE_FIELD,
     holdingPageOptions,
+    modeNote,
     modeOptions,
     readMode,
+    sameMode,
 } from '@/lib/site-mode';
+import { optionLabel } from '@/lib/choice';
 import type { ContentTypeDefinition } from '@/types/schema';
 
 const SELECT =
@@ -26,10 +31,13 @@ export function SiteModeSection({
     values,
     set,
     schema,
+    published = true,
 }: {
     values: Record<string, unknown>;
     set: (field: string, value: unknown) => void;
     schema: ContentTypeDefinition;
+    /** False when the loaded site entry is a draft. Unknown counts as published. */
+    published?: boolean;
 }) {
     const modeField = schema.fields.find((f) => f.name === SITE_MODE_FIELD);
     const holdingField = schema.fields.find((f) => f.name === HOLDING_PATH_FIELD);
@@ -37,32 +45,79 @@ export function SiteModeSection({
 
     if (!modeField && !holdingField) return null;
 
+    const mode = readMode(values[SITE_MODE_FIELD]);
+    const options = modeField ? modeOptions(modeField, values[SITE_MODE_FIELD]) : [];
+    const selected = options.find((o) => sameMode(o.value, mode))?.value ?? mode;
+    const isPrivate = sameMode(mode, PRIVATE);
+    // Offered means the type's own options list it, not that the stored value was appended to the list.
+    const privateOffered = (modeField?.options ?? []).some((o) => sameMode(o.value, PRIVATE));
+    const note = modeNote(mode);
+    const describedBy = [
+        note ? 'site-mode-note' : null,
+        !privateOffered ? 'site-mode-private-missing' : null,
+        isPrivate ? 'site-mode-private-pointer' : null,
+        isPrivate && !published ? 'site-mode-private-draft' : null,
+    ]
+        .filter(Boolean)
+        .join(' ');
     const holding = typeof values[HOLDING_PATH_FIELD] === 'string' ? (values[HOLDING_PATH_FIELD] as string) : '';
     const pages = holdingPageOptions(tree.data);
     const usePicker = tree.isLoading || pages.length > 0;
 
     return (
-        <Section title="Site mode" description="What visitors see: the site, or one holding page on every route.">
+        <Section
+            title="Site mode"
+            description={
+                privateOffered
+                    ? 'What visitors see: the site, one holding page on every route, or nothing unless they hold a share key.'
+                    : 'What visitors see: the site, or one holding page on every route.'
+            }
+        >
             {modeField && (
-                <div className="space-y-1.5">
-                    <Label htmlFor="site-mode">Mode</Label>
-                    <select
-                        id="site-mode"
-                        className={SELECT}
-                        value={readMode(values[SITE_MODE_FIELD])}
-                        aria-describedby="site-mode-hint"
-                        onChange={(e) => set(SITE_MODE_FIELD, e.target.value)}
+                <div className="space-y-2">
+                    <Label id="site-mode-label">Mode</Label>
+                    <SegmentedControl
+                        aria-labelledby="site-mode-label"
+                        aria-describedby={describedBy || undefined}
+                        value={selected}
+                        onValueChange={(next) => set(SITE_MODE_FIELD, next)}
                     >
-                        {modeOptions(modeField, values[SITE_MODE_FIELD]).map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
+                        {options.map((option) => (
+                            <SegmentedControlItem key={option.value} value={option.value}>
+                                {optionLabel(option)}
+                            </SegmentedControlItem>
                         ))}
-                    </select>
-                    <p id="site-mode-hint" className="text-muted-foreground text-xs">
-                        Holding changes what visitors see and hides nothing at the API. Unpublished content stays
-                        hidden until it is published.
-                    </p>
+                    </SegmentedControl>
+                    {note && (
+                        <p
+                            id="site-mode-note"
+                            className={
+                                isPrivate
+                                    ? 'bg-accent text-accent-foreground rounded-md px-3 py-2 text-xs'
+                                    : 'text-muted-foreground text-xs'
+                            }
+                        >
+                            {note}
+                            {isPrivate && ' It applies once the site entry is published.'}
+                        </p>
+                    )}
+                    {!privateOffered && (
+                        <p id="site-mode-private-missing" className="text-muted-foreground text-xs">
+                            {isPrivate
+                                ? 'Private is on, but the site type does not offer it. Add the Private option to its Mode field to keep it.'
+                                : 'Private mode is not available yet. The site type needs the Private option added to its Mode field first.'}
+                        </p>
+                    )}
+                    {isPrivate && (
+                        <p id="site-mode-private-pointer" className="text-muted-foreground text-xs">
+                            Outsiders get in with a site share key. Make one in Share links, further down this page.
+                        </p>
+                    )}
+                    {isPrivate && !published && (
+                        <p id="site-mode-private-draft" className="text-muted-foreground text-xs">
+                            The site entry is a draft, so the site is not private until it is published.
+                        </p>
+                    )}
                 </div>
             )}
 
