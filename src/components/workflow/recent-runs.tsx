@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { IconArrowRight } from '@/components/icons';
 import { RunProgressStrip } from '@/components/workflow/run-progress';
+import { exactTime, momentLabel } from '@/lib/relative-time';
 import { runStatusLabel, toneForRunStatus, useWorkflowRuns } from '@/hooks/use-workflow-runs';
 
 /** How many runs the page shows. The full list is one click away. */
 export const RECENT_RUN_COUNT = 5;
 
 function startedAt(value: string): string {
-  const at = new Date(value);
-  return Number.isNaN(at.getTime()) ? '' : at.toLocaleString();
+  return Number.isNaN(new Date(value).getTime()) ? '' : momentLabel(value);
 }
 
 /**
@@ -69,7 +69,9 @@ export function RecentRuns({ workflowId }: { workflowId: string }) {
                   {run.contentType} {run.contentId.slice(0, 8)}
                 </span>
                 <RunProgressStrip actions={run.actions} />
-                <span className="text-muted-foreground min-w-24 text-right text-[12.5px]">{startedAt(run.createdAt)}</span>
+                <span title={exactTime(run.createdAt)} className="text-muted-foreground min-w-24 text-right text-[12.5px]">
+                  {startedAt(run.createdAt)}
+                </span>
               </button>
             </li>
           ))}

@@ -66,3 +66,31 @@ export function withoutBlankOptional(
         Object.entries(parameters).filter(([name, value]) => required.has(name) || value.trim() !== '')
     );
 }
+
+/**
+ * A readable name for an action kind: "SendEmail" is "Send email", "HttpRequest" is "Http request".
+ * The API sends no label of its own, so this is only the kind spelled as words, and a module's kind
+ * gets the same treatment without the console knowing its name. A trailing "Action" is dropped.
+ */
+export function actionLabel(type: string): string {
+    const words = type
+        .replace(/Action$/, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2')
+        .trim();
+    if (!words) return type;
+    // A word with two capitals in a row ("SMS", "HTTP", "OAuth2") keeps its case. Other
+    // words are lowered, and only the first letter of the label is raised.
+    const lowered = words
+        .split(' ')
+        .map((word) => (/[A-Z]{2}/.test(word) ? word : word.toLowerCase()))
+        .join(' ');
+    return lowered.charAt(0).toUpperCase() + lowered.slice(1);
+}
+
+/** The label to show beside a kind, or null when it would only repeat the kind ("Webhook" beside "Webhook"). */
+export function extraActionLabel(type: string): string | null {
+    const label = actionLabel(type);
+    return label.toLowerCase() === type.toLowerCase() ? null : label;
+}
