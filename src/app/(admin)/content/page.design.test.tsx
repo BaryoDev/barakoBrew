@@ -660,7 +660,10 @@ describe('the table head and the page header', () => {
     renderList();
     await screen.findByText('Alpha');
 
-    expect(screen.queryByText('148')).toBeNull();
+    // The header is the heading's container. The status chips show 148 too, so a page-wide query
+    // would match them.
+    const header = screen.getByRole('heading', { level: 1 }).parentElement!.parentElement!;
+    expect(within(header).queryByText('148')).toBeNull();
     expect(screen.queryByText(/Everything written/)).toBeNull();
   });
 

@@ -78,8 +78,8 @@ const STATUS_FILTERS: { label: string; value: ContentStatus | undefined }[] = [
   })),
 ];
 
-/** 12px, muted, sentence case, on the sunken tint. The r3 column head. */
-const HEAD = 'h-auto bg-background py-3 text-[12px] font-semibold text-muted-foreground';
+/** The sunken tint. Size, weight and colour come from the shared TableHead. */
+const HEAD = 'h-auto bg-background py-3';
 
 /** Machine-produced cell values: mono, tabular, muted. Types, versions, timestamps. */
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
