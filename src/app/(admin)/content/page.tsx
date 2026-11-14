@@ -77,9 +77,8 @@ const STATUS_FILTERS: { label: string; value: ContentStatus | undefined }[] = [
   })),
 ];
 
-/** 10.5px, 800, uppercase, on the sunken tint. The Signal column head. */
-const HEAD =
-  'h-auto bg-background py-3 text-[10.5px] font-extrabold tracking-[0.12em] uppercase text-[var(--faint)]';
+/** The sunken tint. Size, weight and colour come from the shared TableHead. */
+const HEAD = 'h-auto bg-background py-3';
 
 /** Machine-produced cell values: mono, tabular, muted. Types, versions, timestamps. */
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
@@ -102,9 +101,11 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
     head: `${HEAD} hidden text-right md:table-cell`,
     cell: `${META} hidden py-3.5 text-right md:table-cell`,
   },
+  // Updated is a sentence about when, so it reads in the body font. Mono stays for the machine
+  // values (type, version).
   updated: {
-    head: `${HEAD} hidden pr-6 text-right sm:table-cell`,
-    cell: `${META} hidden py-3.5 pr-6 text-right sm:table-cell`,
+    head: `${HEAD} hidden pr-6 sm:table-cell`,
+    cell: 'text-muted-foreground hidden py-3.5 pr-6 text-[13px] sm:table-cell',
   },
 };
 
@@ -145,7 +146,7 @@ function entryColumns(
     }),
     column.display({
       id: 'entry',
-      header: 'Entry',
+      header: 'Title',
       cell: ({ row }) => (
         <Link
           href={`/content/${row.original.id}`}
@@ -529,19 +530,6 @@ function ContentListInner() {
 
       <PageHeader
         title={schema?.displayName ?? 'Entries'}
-        description={
-          contentType
-            ? (schema?.description ??
-              `Everything written as ${schema?.displayName ?? contentType}.`)
-            : 'Everything written in your CMS, filterable by content type.'
-        }
-        badge={
-          contents ? (
-            <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-[3px] font-mono text-[11px] font-medium tabular-nums">
-              {contents.totalItems}
-            </span>
-          ) : null
-        }
         actions={
           <Button asChild size="sm">
             <Link href={newEntryHref(contentType)}>

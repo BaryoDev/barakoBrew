@@ -7,7 +7,7 @@ import { ContentStatus, SensitivityLevel } from '@/types/content';
 
 /**
  * The Entries list as the round 3 design draws it (#287): type tabs, status chips with counts,
- * a checkbox column, an Author column and relative times.
+ * a checkbox column and relative times.
  */
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -640,5 +640,66 @@ describe('counts that leave types out', () => {
     await screen.findByRole('button', { name: 'All 148' });
 
     expect(screen.queryByText(/Excludes/)).toBeNull();
+  });
+});
+
+describe('the table head and the page header', () => {
+  it('names the columns in sentence case', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    const heads = within(screen.getByRole('table'))
+      .getAllByRole('columnheader')
+      .map((head) => head.textContent)
+      .filter(Boolean);
+    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated']);
+  });
+
+  it('has no count chip or description line under the title', async () => {
+    renderList();
+    await screen.findByText('Alpha');
+
+    // The header is the heading's container. The status chips show 148 too, so a page-wide query
+    // would match them.
+    const header = screen.getByRole('heading', { level: 1 }).parentElement!.parentElement!;
+    expect(within(header).queryByText('148')).toBeNull();
+    expect(screen.queryByText(/Everything written/)).toBeNull();
+  });
+
+  it('reads Updated as relative text outside the mono face', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { updatedAt: new Date().toISOString() })];
+    renderList();
+    await screen.findByText('Alpha');
+
+    const time = within(bodyRows()[0]).getByText('just now');
+    expect(time.closest('td')?.className).not.toContain('font-mono');
+  });
+});
+
+describe('the status counts', () => {
+  it('come from the API totals and not from the rows loaded', async () => {
+    // Two rows loaded, one of them a Draft. The totals say otherwise on purpose.
+    rows = [row('a', 'Alpha', ContentStatus.Published), row('b', 'Beta', ContentStatus.Draft)];
+    counts = { total: 9, draft: 2, published: 5, archived: 1, scheduled: 1 };
+    renderList();
+    await screen.findByText('Alpha');
+
+    const group = screen.getByRole('group', { name: 'Filter by status' });
+    expect(await within(group).findByRole('button', { name: 'All 9' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Draft 2' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Published 5' })).toBeTruthy();
+    // One Published row is loaded, so a tally of the page would say 1.
+    expect(within(group).queryByRole('button', { name: 'Published 1' })).toBeNull();
+  });
+
+  it('do not move when a status filter narrows the list', async () => {
+    searchParams = new URLSearchParams('status=Draft');
+    rows = [row('b', 'Beta', ContentStatus.Draft)];
+    renderList();
+    await screen.findByText('Beta');
+
+    const group = screen.getByRole('group', { name: 'Filter by status' });
+    expect(await within(group).findByRole('button', { name: 'All 148' })).toBeTruthy();
+    expect(within(group).getByRole('button', { name: 'Draft 60' })).toBeTruthy();
   });
 });
