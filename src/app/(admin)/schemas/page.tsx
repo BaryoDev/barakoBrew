@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, type Ref, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatDistanceToNowStrict } from 'date-fns';
@@ -28,9 +28,7 @@ import { cn } from '@/lib/utils';
 import { IconContentTypes, IconPlus, IconSearch } from '@/components/icons';
 import { fieldTypeLabel, type ContentTypeDefinition } from '@/types/schema';
 
-/** 10.5px, 800, uppercase, on the sunken tint. The Signal column head. */
-const HEAD =
-  'h-auto bg-background py-3 text-[10.5px] font-extrabold tracking-[0.12em] uppercase text-[var(--faint)]';
+const HEAD = 'h-auto bg-background py-3';
 
 /**
  * Where a content type is opened from this screen.
@@ -90,6 +88,7 @@ function SchemasInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState('');
+  const detailRef = useRef<HTMLElement>(null);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -105,12 +104,17 @@ function SchemasInner() {
   // A name in the URL that no type has, such as a deleted one, falls back to the first rather than
   // leaving the right side empty.
   const wanted = searchParams.get('type');
-  const selected = (schemas ?? []).find((s) => s.name === wanted) ?? filtered[0] ?? schemas?.[0];
+  const selected = (schemas ?? []).find((s) => s.name === wanted) ?? schemas?.[0];
 
   const select = (name: string) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('type', name);
     router.replace(`/schemas?${params.toString()}`, { scroll: false });
+    // Stacked, the detail is below the list and a click shows nothing happening. Only after a click,
+    // never on load.
+    if (!window.matchMedia('(min-width: 1024px)').matches) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView?.({ block: 'start' }));
+    }
   };
 
   return (
@@ -179,7 +183,7 @@ function SchemasInner() {
             )}
           </div>
 
-          {selected && <TypeDetail schema={selected} allTypes={schemas} />}
+          {selected && <TypeDetail ref={detailRef} key={selected.name} schema={selected} allTypes={schemas} />}
         </div>
       )}
     </>
@@ -200,7 +204,7 @@ function TypeRow({
     <button
       type="button"
       onClick={onSelect}
-      aria-pressed={selected}
+      aria-current={selected ? 'true' : undefined}
       className={cn(
         'focus-visible:ring-ring flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-left outline-none focus-visible:ring-[3px]',
         selected ? 'bg-primary/10' : 'hover:bg-muted'
@@ -236,14 +240,17 @@ function TypeRow({
 function TypeDetail({
   schema,
   allTypes,
+  ref,
 }: {
   schema: ContentTypeDefinition;
   allTypes: ContentTypeDefinition[];
+  ref?: Ref<HTMLElement>;
 }) {
   const edited = lastEdited(schema);
 
   return (
     <section
+      ref={ref}
       aria-label={`${schema.displayName} fields`}
       className="bg-card min-w-0 rounded-xl border p-5 shadow-[var(--shadow-card)]"
     >

@@ -72,6 +72,7 @@ const TYPES = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
   searchParams = new URLSearchParams();
   vi.mocked(api.get).mockImplementation(async (url: string) => {
     if (url === '/api/content-types') {
@@ -107,8 +108,10 @@ describe('the content types screen', () => {
   it('shows the first type selected and tinted when the URL names none', async () => {
     await renderPage();
     const rows = within(await screen.findByRole('list', { name: 'Content types' })).getAllByRole('button');
-    expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
-    expect(rows[1]).toHaveAttribute('aria-pressed', 'false');
+    expect(rows[0]).toHaveAttribute('aria-current', 'true');
+    expect(rows[0].className).toContain('bg-primary/10');
+    expect(rows[1]).not.toHaveAttribute('aria-current');
+    expect(rows[1].className).not.toContain('bg-primary/10');
     expect(await screen.findByRole('heading', { name: 'Articles' })).toBeInTheDocument();
   });
 
@@ -140,6 +143,29 @@ describe('the content types screen', () => {
     const detail = await screen.findByRole('region', { name: 'Staff fields' });
     await waitFor(() => expect(within(detail).getAllByRole('row').length).toBeGreaterThan(1));
     expect(screen.queryByRole('region', { name: 'Articles fields' })).not.toBeInTheDocument();
+  });
+
+  it('does not carry an open Add a field draft to the next type', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    const detail = await screen.findByRole('region', { name: 'Articles fields' });
+    await user.click(within(detail).getByRole('button', { name: 'Add a field' }));
+    await user.click(within(detail).getByRole('button', { name: 'Text' }));
+    await user.type(within(detail).getByLabelText('Label'), 'Teaser');
+
+    await user.click(screen.getByRole('button', { name: /Staff/ }));
+    const next = await screen.findByRole('region', { name: 'Staff fields' });
+    expect(within(next).queryByRole('region', { name: 'Add a field' })).not.toBeInTheDocument();
+    await user.click(within(next).getByRole('button', { name: 'Add a field' }));
+    await user.click(within(next).getByRole('button', { name: 'Text' }));
+    expect(within(next).getByLabelText('Label')).toHaveValue('');
+  });
+
+  it('keeps the detail on the first type, not the search result, when the URL names none', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.type(await screen.findByLabelText('Search content types'), 'staff');
+    expect(screen.getByRole('region', { name: 'Articles fields' })).toBeInTheDocument();
   });
 
   it('falls back to the first type when the URL names one that is gone', async () => {
