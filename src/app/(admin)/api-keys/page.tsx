@@ -358,7 +358,7 @@ export default function ApiKeysPage() {
                 <TableRow key={k.id} data-state={k.revoked ? 'revoked' : undefined} className={k.revoked ? 'bg-muted/40' : undefined}>
                   <TableCell>
                     <div className="grid min-w-0">
-                      <span className={k.revoked ? 'text-muted-foreground font-semibold line-through' : 'font-semibold'}>{k.name}</span>
+                      <span className={k.revoked ? 'text-muted-foreground font-semibold line-through' : 'font-semibold'}>{k.name}{k.revoked && <span className="sr-only"> (revoked)</span>}</span>
                       <span className="text-muted-foreground font-mono text-[11px]">{k.prefix}…</span>
                     </div>
                   </TableCell>
