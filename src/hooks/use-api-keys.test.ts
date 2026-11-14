@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { apiKeyRotationSchema, inOverlap, overlapLabel, OVERLAP_STOPS, DEFAULT_OVERLAP_INDEX, timeLeft, supportsKeyContentTypes, type ApiKey } from './use-api-keys';
+import { apiKeyRotationSchema, inOverlap, overlapLabel, OVERLAP_STOPS, DEFAULT_OVERLAP_INDEX, timeLeft, supportsKeyContentTypes, canRotate, lastUsedLabel, type ApiKey } from './use-api-keys';
 
 const key = (extra: Partial<ApiKey> = {}): ApiKey => ({
     id: 'k',
@@ -70,5 +70,43 @@ describe('the rotation marker', () => {
         const bare = apiKeyRotationSchema.parse({ id: 'k' });
         expect(bare.replacedBy).toBeUndefined();
         expect(apiKeyRotationSchema.parse({ replacedBy: null, kind: 3 }).replacedBy).toBeUndefined();
+    });
+});
+
+describe('whether a key can be rotated', () => {
+    const now = Date.parse('2026-11-14T12:00:00Z');
+
+    it('cannot when it is revoked', () => {
+        expect(canRotate(key({ revoked: true }), now)).toBe(false);
+    });
+
+    it('cannot at the instant it expires, the same moment the list calls it Expired', () => {
+        expect(canRotate(key({ expiresAt: new Date(now).toISOString() }), now)).toBe(false);
+    });
+
+    it('can with no expiry, and before one', () => {
+        expect(canRotate(key({ expiresAt: null }), now)).toBe(true);
+        expect(canRotate(key({ expiresAt: new Date(now + 1000).toISOString() }), now)).toBe(true);
+    });
+});
+
+describe('the last used label', () => {
+    const now = Date.parse('2026-11-14T12:00:00Z');
+    const ago = (seconds: number) => lastUsedLabel(new Date(now - seconds * 1000).toISOString(), now);
+
+    it('is never for a key with no use, or a time that does not parse', () => {
+        expect(lastUsedLabel(null, now)).toBe('never');
+        expect(lastUsedLabel('not a date', now)).toBe('never');
+    });
+
+    it('counts seconds, minutes, hours and days', () => {
+        expect(ago(12)).toBe('12 s ago');
+        expect(ago(60)).toBe('1 min ago');
+        expect(ago(3600)).toBe('1 h ago');
+        expect(ago(86400)).toBe('1 d ago');
+    });
+
+    it('reads a time in the future as 0 s ago, not a negative', () => {
+        expect(ago(-30)).toBe('0 s ago');
     });
 });

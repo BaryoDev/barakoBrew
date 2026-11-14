@@ -107,7 +107,7 @@ test.describe('API keys', () => {
     });
 
     await page.goto('/api-keys');
-    await expect(page.getByRole('columnheader', { name: 'Content types' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('columnheader', { name: 'Types' })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('row', { name: /CI deploy/ })).toContainText('contributor');
 
     await page.getByRole('button', { name: 'New key' }).first().click();
@@ -129,7 +129,7 @@ test.describe('API keys', () => {
 
     await page.goto('/api-keys');
     await expect(page.getByText('CI deploy')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByRole('columnheader', { name: 'Content types' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Types' })).toHaveCount(0);
     await page.getByRole('button', { name: 'New key' }).first().click();
     await expect(page.getByLabel('Name')).toBeVisible();
     await expect(page.getByRole('group', { name: 'Content types' })).toHaveCount(0);

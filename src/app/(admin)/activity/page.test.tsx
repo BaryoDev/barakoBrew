@@ -37,6 +37,21 @@ describe('the Activity screen', () => {
         expect(last().kinds).toEqual([]);
     });
 
+    it('does not count the loaded page onto the chips, because the API sends no counts', () => {
+        feed.value = { ...feed.value, items: [{ id: 'a', at: at(10), kind: 'published', actor: { name: 'Ana' }, subject: { title: 'Menu' } }] };
+        render(<ActivityPage />);
+        expect(screen.getByRole('button', { name: 'Everything' }).textContent).toBe('Everything');
+    });
+
+    it('puts the endpoint chip at the right of the header', () => {
+        render(<ActivityPage />);
+        const chip = screen.getByText('GET /api/activity?since=&kinds=');
+        const title = screen.getByRole('heading', { level: 1, name: 'Activity' });
+        const titleWrapper = title.parentElement?.parentElement as HTMLElement;
+        expect(titleWrapper.contains(chip)).toBe(false);
+        expect(chip.parentElement?.parentElement).toBe(titleWrapper.parentElement);
+    });
+
     it('sends the chip kinds when a chip is picked', () => {
         render(<ActivityPage />);
         fireEvent.click(screen.getByRole('button', { name: 'Problems' }));
