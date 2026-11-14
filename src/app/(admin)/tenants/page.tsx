@@ -55,7 +55,7 @@ export default function TenantsPage() {
     <>
       <PageHeader
         title="Tenants"
-        description="Isolated spaces on this deployment, each with its own content, users and data."
+        description="One deployment, many sites. Open a row to edit it in the rail."
         actions={platformAdmin ? newButton : undefined}
       />
 

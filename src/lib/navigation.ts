@@ -171,11 +171,17 @@ export const NAV_GROUPS: NavGroup[] = [
       // manage_content_types, which GET /api/content-types asks for, since these screens find the
       // site type through it before they read or write the entry. Theme and Style recipes are
       // settings of the site, so they sit under it and show while one of the three is open.
-      { title: 'Site settings', href: '/site', icon: IconCube, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Site settings', href: '/site', icon: IconSettings, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Theme', href: '/site/theme', parent: '/site', icon: IconSun, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Style recipes', href: '/site/recipes', parent: '/site', icon: IconPen, capability: 'manage_content_types', roles: ['SuperAdmin', 'Admin'] },
       // GET /api/activity asks for view_audit_log. The rail drops this item when the API answers 404.
-      { title: 'Activity', href: '/activity', icon: IconBolt, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Activity', href: '/activity', icon: IconEye, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
+      // Tenants, Roles and API keys follow Activity in the primary set, as the r3 canvas draws them.
+      // Tenants: Admin for the members list, where a tenant Admin gives roles in their tenant. The
+      // tenant list and New tenant stay SuperAdmin only on the screen itself.
+      { title: 'Tenants', href: '/tenants', icon: IconServer, capability: ['manage_tenants', 'manage_tenant_members'], roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Roles', href: '/roles', icon: IconRoles, capability: 'manage_roles', roles: ['SuperAdmin'] },
+      { title: 'API keys', href: '/api-keys', icon: IconKey, capability: 'manage_api_keys', roles: ['SuperAdmin', 'Admin'] },
     ],
   },
   {
@@ -220,20 +226,15 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Access',
     collapsible: true,
     items: [
-      // Admin for the members list, where a tenant Admin gives roles in their tenant. The tenant list
-      // and New tenant stay SuperAdmin only on the screen itself.
-      { title: 'Tenants', href: '/tenants', icon: IconServer, capability: ['manage_tenants', 'manage_tenant_members'], roles: ['SuperAdmin', 'Admin'] },
       { title: 'Users', href: '/users', icon: IconUsers, capability: 'manage_users', roles: ['SuperAdmin'] },
-      { title: 'Roles', href: '/roles', icon: IconRoles, capability: 'manage_roles', roles: ['SuperAdmin'] },
       { title: 'Groups', href: '/user-groups', icon: IconGroups, capability: 'manage_user_groups', roles: ['SuperAdmin', 'Admin'] },
-      { title: 'API keys', href: '/api-keys', icon: IconKey, capability: 'manage_api_keys', roles: ['SuperAdmin', 'Admin'] },
     ],
   },
   {
     label: 'System',
     collapsible: true,
     items: [
-      { title: 'Audit log', href: '/audit', icon: IconEye, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
+      { title: 'Audit log', href: '/audit', icon: IconBolt, capability: 'view_audit_log', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Errors', href: '/errors', icon: IconBug, metric: 'unresolvedErrors', tone: 'danger', capability: 'manage_client_errors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Health', href: '/ops/health', icon: IconHealth },
       // Reading takes manage_settings; saving and the test send take manage_email_settings, which the

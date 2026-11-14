@@ -65,7 +65,7 @@ export default function AnalyticsPage() {
     <>
       <PageHeader
         title="Analytics"
-        description="Visitor traffic from Umami — who's visiting, what they read, and where they come from."
+        description="From Umami, proxied through barakoCMS."
         actions={
           !unavailable && hasSites && (
             <div className="flex items-center gap-2">

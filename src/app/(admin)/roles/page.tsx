@@ -38,7 +38,7 @@ export default function RolesPage() {
     <>
       <PageHeader
         title="Roles"
-        description="What each kind of user is allowed to do, per content type."
+        description="What each role may do, per content type."
         actions={
           <Button asChild size="sm">
             <Link href="/roles/new">

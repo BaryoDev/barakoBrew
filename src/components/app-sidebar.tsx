@@ -185,9 +185,9 @@ export function AppSidebar() {
     <Sidebar collapsible="offcanvas">
       <SidebarHeader className="gap-3.5 px-3.5 pt-4 pb-0">
         <div className="flex min-w-0 items-center gap-[9px] px-1.5 py-0.5">
-          <Link href="/" className="flex min-w-0 items-center gap-[9px] rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
+          <Link href="/" className="flex shrink-0 items-center gap-[9px] rounded-[10px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50">
             <BrandMark className="size-[26px]" />
-            <BrandWordmark className="truncate text-[17px]" />
+            <BrandWordmark className="text-[17px] whitespace-nowrap" />
           </Link>
           {/* This console's version, never the API's: that string is long enough to run into the
               wordmark. The API's version is in the About dialog this opens. */}
@@ -195,13 +195,12 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
-              className="ml-auto shrink-0 rounded-sm font-mono text-[10.5px] tabular-nums text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="ml-auto min-w-0 truncate rounded-sm font-mono text-[10.5px] tabular-nums text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               {version}
               <span className="sr-only"> (about this instance)</span>
             </button>
           )}
-          <WhatsNew className={cn('size-7 max-rail:size-11', !version && 'ml-auto')} />
         </div>
 
         <CommandMenu />
@@ -246,7 +245,7 @@ export function AppSidebar() {
                     </span>
                   )}
                   <span className="font-mono text-[11px] font-normal tracking-normal">
-                    {group.items.filter((item) => !item.parent).length}
+                    {group.items.filter((item) => !item.parent && item.href !== '/modules').length}
                   </span>
                   <IconChevronDown
                     className={cn('size-3.5 transition-transform duration-200', !open && '-rotate-90')}
@@ -279,8 +278,12 @@ export function AppSidebar() {
 
       <SidebarFooter className="gap-0 border-t px-3.5 pt-3 pb-4">
         <SidebarMenu className="gap-1.5">
-          <SidebarMenuItem>
-            <ThemeToggle />
+          <SidebarMenuItem className="flex items-center gap-1">
+            <div className="min-w-0 flex-1">
+              <ThemeToggle />
+            </div>
+            {/* Down here rather than in the header row, where it squeezed the wordmark. */}
+            <WhatsNew className="size-[34px] shrink-0 max-rail:size-11" />
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton

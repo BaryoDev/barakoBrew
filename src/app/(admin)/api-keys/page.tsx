@@ -322,7 +322,7 @@ export default function ApiKeysPage() {
     <>
       <PageHeader
         title="API keys"
-        description="Long-lived keys for machine callers — SDKs, CI, integrations — scoped to the content API."
+        description="A key is shown once. Rotation keeps the old key alive for an overlap window."
         actions={newButton}
       />
 
