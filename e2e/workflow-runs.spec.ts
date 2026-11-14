@@ -610,7 +610,7 @@ test.describe('workflow runs live', () => {
     await page.goto(`/workflow-runs?run=${LINKED_ID}`);
 
     await expect(actions(page)).toHaveCount(5, { timeout: 15000 });
-    await expect(page.getByRole('button', { name: 'Abandon run' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Abandon' })).toHaveCount(0);
   });
 
   test('abandons a run after asking, then reads it again', async ({ page }) => {
@@ -627,7 +627,7 @@ test.describe('workflow runs live', () => {
     await expect(actions(page)).toHaveCount(5, { timeout: 15000 });
     const before = detailReads.length;
 
-    await page.getByRole('button', { name: 'Abandon run' }).click();
+    await page.getByRole('button', { name: 'Abandon' }).click();
     expect(abandons).toEqual([]);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Yes, abandon the run' }).click();
 

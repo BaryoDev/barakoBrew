@@ -66,3 +66,25 @@ export function withoutBlankOptional(
         Object.entries(parameters).filter(([name, value]) => required.has(name) || value.trim() !== '')
     );
 }
+
+/**
+ * A readable name for an action kind: "SendEmail" is "Send email", "HttpRequest" is "Http request".
+ * The API sends no label of its own, so this is only the kind spelled as words, and a module's kind
+ * gets the same treatment without the console knowing its name. A trailing "Action" is dropped.
+ */
+export function actionLabel(type: string): string {
+    const words = type
+        .replace(/Action$/, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+        .trim();
+    if (!words) return type;
+    return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
+/** The label to show beside a kind, or null when it would only repeat the kind ("Webhook" beside "Webhook"). */
+export function extraActionLabel(type: string): string | null {
+    const label = actionLabel(type);
+    return label.toLowerCase() === type.toLowerCase() ? null : label;
+}
