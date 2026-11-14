@@ -155,7 +155,8 @@ describe('the rail', () => {
         renderRail({ capabilities: ['view_modules'] });
         await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
 
-        expect(screen.getByRole('button', { name: /^Modules/ })).toHaveTextContent(/^Modules0$/);
+        // Devices has no capability, so it is the one module row left; All modules is not counted.
+        expect(screen.getByRole('button', { name: /^Modules/ })).toHaveTextContent(/^Modules1$/);
     });
 
     it('sizes the main nav to 36px rows and the module rows to 34px', async () => {
