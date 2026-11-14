@@ -333,7 +333,7 @@ describe('key state', () => {
         expect(rows).toHaveLength(3);
         const revoked = rows[2];
         expect(within(revoked).getByText('Revoked')).toBeInTheDocument();
-        expect(within(revoked).getByRole('button', { name: 'Rotate Old key' })).toBeDisabled();
+        expect(within(revoked).queryByRole('button', { name: 'Rotate Old key' })).toBeNull();
         expect(within(revoked).queryByRole('button', { name: 'Revoke Old key' })).toBeNull();
         expect(within(rows[1]).getByRole('button', { name: 'Rotate Live key' })).toBeEnabled();
         expect(within(rows[1]).getByRole('button', { name: 'Revoke Live key' })).toBeEnabled();

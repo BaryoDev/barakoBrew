@@ -393,16 +393,11 @@ export default function ApiKeysPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!canRotate(k, now)}
-                      onClick={() => setRotatingIn({ tenant, key: k })}
-                      aria-label={`Rotate ${k.name}`}
-                    >
-                      Rotate
-                    </Button>
+                    {canRotate(k, now) && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setRotatingIn({ tenant, key: k })} aria-label={`Rotate ${k.name}`}>
+                        Rotate
+                      </Button>
+                    )}
                     {!k.revoked && (
                       <Button
                         type="button"

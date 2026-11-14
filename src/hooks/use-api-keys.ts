@@ -148,7 +148,7 @@ export function inOverlap(key: ApiKey, now: number): boolean {
   return Number.isFinite(at) && at > now;
 }
 
-/** A revoked or expired key cannot be rotated: the API answers 400. The screen disables the button for it. */
+/** A revoked or expired key cannot be rotated: the API answers 400. The screen offers no Rotate for it. */
 export function canRotate(key: ApiKey, now: number): boolean {
   return !key.revoked && !(key.expiresAt && Date.parse(key.expiresAt) <= now);
 }
