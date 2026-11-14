@@ -200,7 +200,7 @@ describe('limiting a key to content types', () => {
             { ...LISTED, id: 'k2', name: 'Reader', contentTypes: [] },
         ]);
         await renderPage();
-        expect(await screen.findByRole('columnheader', { name: 'Content types' })).toBeInTheDocument();
+        expect(await screen.findByRole('columnheader', { name: 'Types' })).toBeInTheDocument();
         const rows = screen.getAllByRole('row');
         expect(rows).toHaveLength(3);
         expect(rows[1]).toHaveTextContent('changelog');
@@ -276,7 +276,7 @@ describe('limiting a key to content types', () => {
 
         expect(screen.getByLabelText('Name')).toBeInTheDocument();
         expect(screen.queryByRole('group', { name: 'Content types' })).toBeNull();
-        expect(screen.queryByRole('columnheader', { name: 'Content types' })).toBeNull();
+        expect(screen.queryByRole('columnheader', { name: 'Types' })).toBeNull();
         expect(api.get).not.toHaveBeenCalledWith('/api/content-types');
     });
 
@@ -297,5 +297,64 @@ describe('limiting a key to content types', () => {
         await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/api/api-keys/minted'));
         expect(screen.queryByTestId('api-key-secret')).toBeNull();
         expect(document.body.textContent).not.toContain('bcms_UNLIMITED');
+    });
+});
+
+describe('key state', () => {
+    const base = {
+        scopes: ['content:read'],
+        tenantSlug: 'default',
+        expiresAt: null,
+        lastUsedAt: null,
+        createdAt: new Date().toISOString(),
+    };
+    const envelope = (items: unknown[]) => ({
+        data: { items, page: 1, pageSize: 20, totalItems: items.length, totalPages: 1, hasNextPage: false },
+    });
+
+    async function renderKeys(keys: unknown[]) {
+        vi.mocked(api.get).mockReset();
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/api-keys') return envelope(keys);
+            if (url === '/api/meta') return { data: { version: '5.6.0', swaggerEnabled: false } };
+            throw new Error(`unexpected GET ${url}`);
+        });
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(React.createElement(QueryClientProvider, { client }, React.createElement(ApiKeysPage)));
+        await screen.findByRole('columnheader', { name: 'State' });
+    }
+
+    it('a revoked key shows as revoked and cannot be rotated', async () => {
+        await renderKeys([
+            { ...base, id: 'k1', name: 'Live key', prefix: 'bk_live_aaaa', revoked: false },
+            { ...base, id: 'k2', name: 'Old key', prefix: 'bk_live_bbbb', revoked: true },
+        ]);
+        const rows = screen.getAllByRole('row');
+        expect(rows).toHaveLength(3);
+        const revoked = rows[2];
+        expect(within(revoked).getByText('Revoked')).toBeInTheDocument();
+        expect(within(revoked).getByRole('button', { name: 'Rotate Old key' })).toBeDisabled();
+        expect(within(revoked).queryByRole('button', { name: 'Revoke Old key' })).toBeNull();
+        expect(within(rows[1]).getByRole('button', { name: 'Rotate Live key' })).toBeEnabled();
+        expect(within(rows[1]).getByRole('button', { name: 'Revoke Live key' })).toBeEnabled();
+    });
+
+    it('puts the prefix under the name and has no separate Key column of its own', async () => {
+        await renderKeys([{ ...base, id: 'k1', name: 'Live key', prefix: 'bk_live_aaaa', revoked: false }]);
+        const row = screen.getAllByRole('row')[1];
+        expect(within(row).getAllByRole('cell')[0]).toHaveTextContent('Live keybk_live_aaaa');
+        expect(screen.getAllByRole('columnheader').filter((h) => h.textContent === 'Key')).toHaveLength(1);
+        expect(screen.queryByRole('columnheader', { name: 'Name' })).toBeNull();
+        expect(screen.queryByRole('columnheader', { name: 'Status' })).toBeNull();
+    });
+
+    it('draws last used in the short form, and never for a key not used', async () => {
+        await renderKeys([
+            { ...base, id: 'k1', name: 'Busy', prefix: 'bk_live_aaaa', revoked: false, lastUsedAt: new Date(Date.now() - 12_000).toISOString() },
+            { ...base, id: 'k2', name: 'Idle', prefix: 'bk_live_bbbb', revoked: false },
+        ]);
+        const rows = screen.getAllByRole('row');
+        expect(rows[1]).toHaveTextContent('12 s ago');
+        expect(rows[2]).toHaveTextContent('never');
     });
 });

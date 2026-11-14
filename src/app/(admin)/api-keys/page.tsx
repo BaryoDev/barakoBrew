@@ -10,6 +10,8 @@ import {
   supportsKeyContentTypes,
   inOverlap,
   timeLeft,
+  lastUsedLabel,
+  canRotate,
   type ApiKey,
   API_KEY_SCOPES,
   DESTRUCTIVE_API_KEY_SCOPES,
@@ -322,7 +324,7 @@ export default function ApiKeysPage() {
     <>
       <PageHeader
         title="API keys"
-        description="Long-lived keys for machine callers — SDKs, CI, integrations — scoped to the content API."
+        description="A key is shown once. Rotation keeps the old key alive for an overlap window so nothing breaks mid-deploy."
         actions={newButton}
       />
 
@@ -342,21 +344,24 @@ export default function ApiKeysPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
                 <TableHead>Key</TableHead>
                 <TableHead>Scopes</TableHead>
-                {limitable && <TableHead>Content types</TableHead>}
+                {limitable && <TableHead>Types</TableHead>}
                 <TableHead>Last used</TableHead>
                 <TableHead>Expires</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>State</TableHead>
                 <TableHead className="w-32" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {keys.map((k) => (
-                <TableRow key={k.id}>
-                  <TableCell className="font-medium">{k.name}</TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-xs">{k.prefix}…</TableCell>
+                <TableRow key={k.id} data-state={k.revoked ? 'revoked' : undefined} className={k.revoked ? 'bg-muted/40' : undefined}>
+                  <TableCell>
+                    <div className="grid min-w-0">
+                      <span className={k.revoked ? 'text-muted-foreground font-semibold line-through' : 'font-semibold'}>{k.name}</span>
+                      <span className="text-muted-foreground font-mono text-[11px]">{k.prefix}…</span>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {k.scopes.map((s) => (
@@ -381,18 +386,23 @@ export default function ApiKeysPage() {
                       )}
                     </TableCell>
                   )}
-                  <TableCell className="text-muted-foreground text-xs">{formatDate(k.lastUsedAt)}</TableCell>
+                  <TableCell className="text-muted-foreground font-mono text-xs">{lastUsedLabel(k.lastUsedAt, now)}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.expiresAt)}</TableCell>
                   <TableCell>
                     <KeyState apiKey={k} now={now} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                    {!k.revoked && !isExpired(k, now) && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => setRotatingIn({ tenant, key: k })} aria-label={`Rotate ${k.name}`}>
-                        Rotate
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!canRotate(k, now)}
+                      onClick={() => setRotatingIn({ tenant, key: k })}
+                      aria-label={`Rotate ${k.name}`}
+                    >
+                      Rotate
+                    </Button>
                     {!k.revoked && (
                       <Button
                         type="button"

@@ -29,7 +29,7 @@ export default function ActivityPage() {
       <PageHeader
         title="Activity"
         description="What happened in this tenant, newest first."
-        badge={
+        actions={
           <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-1 font-mono text-xs">
             GET /api/activity?since=&amp;kinds=
           </span>

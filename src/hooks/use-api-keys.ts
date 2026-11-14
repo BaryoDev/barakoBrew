@@ -148,6 +148,25 @@ export function inOverlap(key: ApiKey, now: number): boolean {
   return Number.isFinite(at) && at > now;
 }
 
+/** A revoked or expired key cannot be rotated: the API answers 400. The screen disables the button for it. */
+export function canRotate(key: ApiKey, now: number): boolean {
+  return !key.revoked && !(key.expiresAt && Date.parse(key.expiresAt) <= now);
+}
+
+/** "12 s ago", "5 min ago", "3 h ago", "41 d ago", or "never" for a key not yet used. */
+export function lastUsedLabel(value: string | null | undefined, now: number): string {
+  if (!value) return 'never';
+  const then = Date.parse(value);
+  if (!Number.isFinite(then)) return 'never';
+  const seconds = Math.max(0, Math.round((now - then) / 1000));
+  if (seconds < 60) return `${seconds} s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}
+
 export interface RotateApiKeyInput {
   id: string;
   overlapMinutes: number;
