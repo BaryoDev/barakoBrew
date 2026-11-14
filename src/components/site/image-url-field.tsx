@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { FILES_PAGE_SIZE, isForbidden, useFiles } from '@/hooks/use-files';
-import { getApiUrl, isNotFound } from '@/lib/api';
+import { FILES_PAGE_SIZE, useFiles } from '@/hooks/use-files';
+import { getApiUrl, isForbidden, isNotFound } from '@/lib/api';
 import { publicFileLink } from '@/lib/files';
 import { isAbsoluteHttpUrl } from '@/lib/site-settings';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
