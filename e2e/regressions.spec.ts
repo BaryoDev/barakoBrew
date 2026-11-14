@@ -74,13 +74,15 @@ test.describe('P.2 — Tenants admin page', () => {
 
         await page.goto('/tenants');
         await expect(page.getByRole('heading', { name: 'Tenants' })).toBeVisible();
-        await expect(page.getByRole('cell', { name: 'Acme', exact: true })).toBeVisible({ timeout: 10000 });
+        // The name sits in a button with the handle under it, so the cell's name is "Acme acme".
+        await expect(page.getByRole('cell', { name: /^Acme/ })).toBeVisible({ timeout: 10000 });
 
+        // New tenant opens the right rail, which is a dialog.
         await page.getByRole('button', { name: 'New tenant' }).first().click();
         await expect(page.getByRole('dialog')).toBeVisible();
         // Handle derives from the name.
-        await page.getByLabel('Name').fill('New Club');
-        await expect(page.getByLabel('Handle')).toHaveValue('new-club');
+        await page.getByLabel('Name', { exact: true }).fill('New Club');
+        await expect(page.getByLabel('Handle', { exact: true })).toHaveValue('new-club');
     });
 
     test('rejects an invalid handle before submit', async ({ page }) => {

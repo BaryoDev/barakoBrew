@@ -5,8 +5,8 @@ import {
     domainProblems,
     MAX_TENANT_DOMAINS,
     switchTenantBody,
-    tenantDomainsBody,
     tenantStatusLabel,
+    tenantWriteBody,
     type Tenant,
 } from './use-tenants';
 
@@ -18,67 +18,53 @@ const TENANT: Tenant = {
     isActive: true,
 };
 
-/** A tenant as an API before 4.6 answered it, with the profile still on the record. */
-const OLDER_TENANT = {
-    ...TENANT,
-    about: 'Service above self',
-    logoUrl: 'https://rckoronadal.org/logo.png',
-    email: 'club@rckoronadal.org',
-    location: 'Koronadal',
-    locationUrl: 'https://maps.example/koronadal',
-    socialHandle: '@rckoronadal',
-    contactUrl: null,
-} as Tenant;
-
-describe('tenantDomainsBody', () => {
-    it('sends no profile field to API 4.6, which refuses a value in one and keeps what is left out', () => {
-        const body = tenantDomainsBody(TENANT, ['rckoronadal.org', ' www.rckoronadal.org ']);
+describe('tenantWriteBody', () => {
+    it('sends only the fields the API accepts, with the domains trimmed', () => {
+        const body = tenantWriteBody({
+            name: ' Rotary Club of Koronadal ',
+            status: 'Active',
+            signUp: 'InviteOnly',
+            domains: ['rckoronadal.org', ' www.rckoronadal.org '],
+        });
 
         expect(body).toEqual({
-            Handle: 'rckoronadal',
             Name: 'Rotary Club of Koronadal',
-            IsActive: true,
+            Status: 'Active',
+            SignUp: 'InviteOnly',
             Domains: ['rckoronadal.org', 'www.rckoronadal.org'],
         });
     });
 
-    it('sends the profile back to an older API that answered with it, so a domain edit wipes nothing', () => {
-        const body = tenantDomainsBody(OLDER_TENANT, ['rckoronadal.org']);
-
-        expect(body).toEqual({
-            Handle: 'rckoronadal',
-            Name: 'Rotary Club of Koronadal',
-            LogoUrl: 'https://rckoronadal.org/logo.png',
-            About: 'Service above self',
-            Location: 'Koronadal',
-            LocationUrl: 'https://maps.example/koronadal',
-            SocialHandle: '@rckoronadal',
-            Email: 'club@rckoronadal.org',
-            ContactUrl: null,
-            IsActive: true,
-            Domains: ['rckoronadal.org'],
-        });
-    });
-
-    it('sends the status of a contract 8 tenant back as read, in place of the obsolete flag', () => {
-        // Contract 8 refuses a flag that disagrees with the status, so the two never go together.
-        const archived: Tenant = { ...TENANT, isActive: false, status: 'Archived' };
-
-        const body = tenantDomainsBody(archived, ['rckoronadal.org']);
+    it('sends the status, never the obsolete flag', () => {
+        const body = tenantWriteBody({ name: TENANT.name, status: 'Archived', domains: [] });
 
         expect(body.Status).toBe('Archived');
         expect(body).not.toHaveProperty('IsActive');
     });
 
+    it('sends a role id only with an Open sign-up, which is the only policy the API accepts one with', () => {
+        const closed = tenantWriteBody({ name: 'A', status: 'Active', signUp: 'Closed', signUpRoleId: 'r-1', domains: [] });
+        const open = tenantWriteBody({ name: 'A', status: 'Active', signUp: 'Open', signUpRoleId: 'r-1', domains: [] });
+
+        expect(closed).not.toHaveProperty('SignUpRoleId');
+        expect(open.SignUpRoleId).toBe('r-1');
+    });
+
     it('sends the flag, not a status, to an API before contract 8, which reports none', () => {
-        const body = tenantDomainsBody({ ...TENANT, isActive: false }, ['rckoronadal.org']);
+        const body = tenantWriteBody({ name: TENANT.name, status: 'Suspended', domains: ['rckoronadal.org'], legacyFlag: true });
 
         expect(body.IsActive).toBe(false);
         expect(body).not.toHaveProperty('Status');
+        expect(tenantWriteBody({ name: 'A', status: 'Active', domains: [], legacyFlag: true }).IsActive).toBe(true);
     });
 
     it('sends an empty list to clear the domains, not null, which the API reads as keep', () => {
-        expect(tenantDomainsBody(TENANT, []).Domains).toEqual([]);
+        expect(tenantWriteBody({ name: 'A', status: 'Active', domains: [] }).Domains).toEqual([]);
+    });
+
+    it('names the handle only on a create', () => {
+        expect(tenantWriteBody({ handle: 'south', name: 'A', status: 'Active', domains: [] }).Handle).toBe('south');
+        expect(tenantWriteBody({ name: 'A', status: 'Active', domains: [] })).not.toHaveProperty('Handle');
     });
 });
 
