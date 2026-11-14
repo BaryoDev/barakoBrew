@@ -1314,9 +1314,11 @@ describe('the run opened by default across the poll', () => {
       await client.refetchQueries({ queryKey: ['workflow-runs'] });
     });
 
+    // The list is told of new data on a later tick than the refetch resolves, so wait for the row.
+    const rowsOf = () => within(screen.getByRole('list', { name: 'Runs', hidden: true })).getAllByRole('button', { hidden: true });
+    await waitFor(() => expect(rowsOf()).toHaveLength(2));
     expect(screen.getByRole('alertdialog')).toBe(dialog);
-    const rows = within(screen.getByRole('list', { name: 'Runs', hidden: true })).getAllByRole('button', { hidden: true });
-    expect(rows).toHaveLength(2);
+    const rows = rowsOf();
     expect(rows[0]).toHaveAttribute('aria-pressed', 'false');
     expect(rows[1]).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('heading', { name: 'Charge the card', hidden: true })).toBeInTheDocument();
