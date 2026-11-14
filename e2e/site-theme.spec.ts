@@ -142,13 +142,17 @@ test('a domain another tenant holds is refused inline with the API sentence', as
     });
 
     await page.goto('/tenants');
-    await page.getByRole('button', { name: 'Edit domains for Baryo' }).click();
-    await page.getByRole('textbox', { name: 'Domains' }).fill('baryo.dev\nrckoronadal.org');
-    await page.getByRole('button', { name: 'Save domains' }).click();
+    // Open the tenant's rail from its row, add the domain there and save.
+    await page.getByRole('button', { name: /^Baryo/ }).click();
+    const rail = page.getByRole('dialog');
+    await rail.getByRole('textbox', { name: 'Add a domain' }).fill('rckoronadal.org');
+    await rail.getByRole('button', { name: 'Add', exact: true }).click();
+    await rail.getByRole('button', { name: 'Save', exact: true }).click();
 
-    await expect(page.getByRole('dialog').getByRole('alert')).toHaveText(message);
+    await expect(rail.getByRole('alert')).toHaveText(message);
     expect(puts).toHaveLength(1);
-    expect(puts[0]).toMatchObject({ Handle: 'baryo', Name: 'Baryo', IsActive: true, Domains: ['baryo.dev', 'rckoronadal.org'] });
+    // The update names no handle (it is in the path). A tenant read without a status sends the flag.
+    expect(puts[0]).toMatchObject({ Name: 'Baryo', IsActive: true, Domains: ['baryo.dev', 'rckoronadal.org'] });
 });
 
 const THEMED_SITE_TYPE = {

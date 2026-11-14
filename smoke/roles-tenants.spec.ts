@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext, type APIResponse } from '@playwright/test';
 import { smokeApiUrl } from './api-url';
 import { isGlobalRoleCandidate, roleOwner, type Role } from '../src/types/rbac';
-import { TENANT_STATUSES, tenantDomainsBody, tenantStatusLabel, type Tenant } from '../src/types/tenant';
+import { TENANT_STATUSES, tenantStatusLabel, tenantWriteBody, type Tenant } from '../src/types/tenant';
 
 /**
  * The role and tenant shapes the console reads, and the tenant write it sends, against the real API.
@@ -128,11 +128,11 @@ test('a tenant reads its status from contract 8, and a domains edit keeps it', a
         expect(tenantStatusLabel(read!)).toBe('Inactive');
     }
 
-    // The console's own body. On contract 8 a write naming neither the status nor the flag makes the
-    // tenant Active, so a body that dropped both would switch the tenant back on here.
+    // The console's own body. On contract 8 a write naming no status makes the tenant Active, so a
+    // body that dropped it would switch the tenant back on here.
     const saved = await request.put(`${API}/api/tenants/${handle}`, {
         headers,
-        data: tenantDomainsBody(read!, [`${handle}.example`]),
+        data: tenantWriteBody({ name: read!.name, status: read!.status ?? 'Suspended', legacyFlag: read!.status === undefined, domains: [`${handle}.example`] }),
     });
     expect(saved.status(), `the domains edit answered ${await saved.text()}`).toBe(200);
     const after: Tenant = await saved.json();

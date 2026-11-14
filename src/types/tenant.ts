@@ -16,7 +16,27 @@ export interface Tenant {
      * its own signed-in callers. Absent from an API before contract 8, which has only `isActive`.
      */
     status?: TenantStatus;
+    /** Members of the tenant. Null or absent when the API does not count them. */
+    memberCount?: number | null;
+    /** Live, Holding or Private. Read-only here: the tenants PUT cannot set it. Null when unset. */
+    siteMode?: string | null;
+    /** One entry per domain, with its ownership check. Absent from an API before domain checks. */
+    domainStates?: DomainState[];
+    /** NotSet, Closed, InviteOnly or Open. Null or absent when the API does not report it. */
+    signUp?: string | null;
+    /** The role a sign-up joins with. Set only when `signUp` is Open. */
+    signUpRoleId?: string | null;
 }
+
+export interface DomainState {
+    domain: string;
+    status: 'Pending' | 'Verified' | string;
+    txtName?: string | null;
+    txtValue?: string | null;
+    verifiedAt?: string | null;
+}
+
+export const SIGN_UPS = ['NotSet', 'Closed', 'InviteOnly', 'Open'] as const;
 
 export const TENANT_STATUSES = ['Active', 'Suspended', 'Archived'] as const;
 export type TenantStatus = (typeof TENANT_STATUSES)[number];
@@ -26,38 +46,35 @@ export function tenantStatusLabel(tenant: Pick<Tenant, 'isActive' | 'status'>): 
     return tenant.status ?? (tenant.isActive ? 'Active' : 'Inactive');
 }
 
-/**
- * The profile fields an API before 4.6 kept on the tenant record, as it answered them and as its
- * update takes them. barakoCMS 4.6 moved them to the tenant's site entry (BaryoDev/barakoCMS#885).
- */
-const LEGACY_PROFILE = [
-    ['logoUrl', 'LogoUrl'],
-    ['about', 'About'],
-    ['location', 'Location'],
-    ['locationUrl', 'LocationUrl'],
-    ['socialHandle', 'SocialHandle'],
-    ['email', 'Email'],
-    ['contactUrl', 'ContactUrl'],
-] as const;
+/** The fields the tenants write accepts. Anything else is left out of the body. */
+export interface TenantWrite {
+    /** Create only. A tenant's handle cannot change. */
+    handle?: string;
+    name: string;
+    status: TenantStatus;
+    signUp?: string | null;
+    signUpRoleId?: string | null;
+    domains: readonly string[];
+    /** True when the tenant as read had no `status`, so the API is older than contract 8. */
+    legacyFlag?: boolean;
+}
 
 /**
- * The body of `PUT /api/tenants/{handle}` that changes only the domains.
- *
- * The name and the status (before contract 8, the active flag) go back as they were read. A profile
- * field goes back only when the tenant answer carried it: an API before 4.6 overwrites every profile
- * field with what it is sent, so leaving one out there would blank it, and API 4.6 answers with none
- * of them and keeps what the record holds when they are left out.
+ * The body of `POST /api/tenants` and `PUT /api/tenants/{handle}`: Handle (create), Name, Status,
+ * SignUp, SignUpRoleId and Domains, and nothing else. The status goes alone, never with the obsolete
+ * active flag, which contract 8 refuses when the two disagree. An API before contract 8 knows only the
+ * flag, so for a tenant read without a status (`legacyFlag`) the body carries `IsActive` and no `Status`. The profile fields are not sent: the
+ * API refuses a value in one. A role id goes only with Open, which is the only sign-up that takes one.
+ * An empty domain list clears the domains; leaving the field out would keep them.
  */
-export function tenantDomainsBody(tenant: Tenant, domains: readonly string[]): Record<string, unknown> {
-    const read = tenant as Tenant & Record<string, unknown>;
-    const body: Record<string, unknown> = { Handle: tenant.slug, Name: tenant.name };
-    for (const [answered, sent] of LEGACY_PROFILE) {
-        if (answered in read) body[sent] = read[answered] ?? null;
-    }
-    // From contract 8 a write naming neither the status nor the flag makes the tenant Active, and the
-    // flag is obsolete, so the status goes back as read. An older API reports only the flag.
-    if (tenant.status) body.Status = tenant.status;
-    else body.IsActive = tenant.isActive;
-    body.Domains = domains.map((d) => d.trim());
+export function tenantWriteBody(input: TenantWrite): Record<string, unknown> {
+    const body: Record<string, unknown> = {};
+    if (input.handle !== undefined) body.Handle = input.handle;
+    body.Name = input.name.trim();
+    if (input.legacyFlag) body.IsActive = input.status === 'Active';
+    else body.Status = input.status;
+    if (input.signUp) body.SignUp = input.signUp;
+    if (input.signUp === 'Open' && input.signUpRoleId) body.SignUpRoleId = input.signUpRoleId;
+    body.Domains = input.domains.map((d) => d.trim());
     return body;
 }
