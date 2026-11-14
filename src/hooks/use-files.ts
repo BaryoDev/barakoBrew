@@ -86,7 +86,7 @@ export function useDeleteFile() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async ({ id, force = false }: { id: string; force?: boolean }) => {
-            await api.delete(`/api/files/${id}`, { params: force ? { force: true } : undefined });
+            await api.delete(`/api/files/${encodeURIComponent(id)}`, { params: force ? { force: true } : undefined });
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['files'] }),
     });
@@ -98,10 +98,6 @@ export function deleteRefusal(error: unknown): DeleteRefusal | null {
     const data = error.response.data as Partial<DeleteRefusal> | undefined;
     if (typeof data?.total !== 'number') return null;
     return { message: data.message ?? '', total: data.total, usages: data.usages ?? [] };
-}
-
-export function isForbidden(error: unknown): boolean {
-    return axios.isAxiosError(error) && error.response?.status === 403;
 }
 
 /**

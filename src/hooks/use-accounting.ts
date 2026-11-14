@@ -83,10 +83,16 @@ export function useBalances(asOf?: string) {
 }
 
 /** The full chart of accounts. */
-export function useAccounts() {
+export function useAccounts(params: { pageSize?: number } = {}) {
+  const { pageSize } = params;
   return useQuery({
-    queryKey: ['accounting', 'accounts'],
-    queryFn: async () => (await api.get<Paginated<Account>>('/api/accounting/accounts')).data.items,
+    queryKey: pageSize ? ['accounting', 'accounts', { pageSize }] : ['accounting', 'accounts'],
+    queryFn: async () =>
+      (
+        await api.get<Paginated<Account>>('/api/accounting/accounts', {
+          params: pageSize ? { pageSize } : undefined,
+        })
+      ).data.items,
   });
 }
 
