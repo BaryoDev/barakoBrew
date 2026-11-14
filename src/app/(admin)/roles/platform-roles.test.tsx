@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -35,7 +35,7 @@ const ADMIN = {
     id: 'r-admin',
     name: 'Admin',
     permissions: [],
-    systemCapabilities: [],
+    systemCapabilities: ['manage_users'],
     isSystem: false,
     isPlatform: true,
     tenantSlug: null,
@@ -109,6 +109,8 @@ describe('editing a platform role against contract 8', () => {
 
         expect(await screen.findByRole('note')).toHaveTextContent('platform role');
         expect(screen.getByRole('button', { name: 'Save role' })).toBeDisabled();
+        const rail = screen.getByRole('complementary', { name: 'Reads back as' });
+        expect(await within(rail).findByText('Admin can manage user accounts.')).toBeInTheDocument();
     });
 
     it('offers the save to a caller holding manage_platform_roles', async () => {

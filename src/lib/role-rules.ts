@@ -171,7 +171,9 @@ export function ruleSentence(role: string, verb: string, plural: string, rows: r
     if (rows.length === 0) return `${who} can ${verb} every ${plural}.`;
     const parts = rows.map((row) => {
         const field = row.key.trim() || 'a field';
-        const value = row.value.trim() === '$CURRENT_USER' ? 'the current user' : row.value.trim() || 'a value';
+        // The API swaps in the current user for _eq and _ne only. In a list it is plain text.
+        const substituted = row.operator === '_eq' || row.operator === '_ne';
+        const value = substituted && row.value.trim() === '$CURRENT_USER' ? 'the current user' : row.value.trim() || 'a value';
         return `${field} ${OPERATOR_LABELS[row.operator]} ${value}`;
     });
     return `${who} can ${verb} ${plural} where ${parts.join(' and ')}.`;
