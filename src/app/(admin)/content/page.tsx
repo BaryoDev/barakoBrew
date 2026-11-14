@@ -5,7 +5,6 @@ import axios from 'axios';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSchemas } from '@/hooks/use-schemas';
-import { useUsers } from '@/hooks/use-rbac';
 import {
   useContents,
   useContentCounts,
@@ -105,12 +104,8 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
   // Updated is a sentence about when, so it reads in the body font. Mono stays for the machine
   // values (type, version).
   updated: {
-    head: `${HEAD} hidden sm:table-cell`,
-    cell: 'text-muted-foreground hidden py-3.5 text-[13px] sm:table-cell',
-  },
-  author: {
-    head: `${HEAD} hidden pr-6 md:table-cell`,
-    cell: 'text-muted-foreground hidden py-3.5 pr-6 text-[13px] md:table-cell',
+    head: `${HEAD} hidden pr-6 sm:table-cell`,
+    cell: 'text-muted-foreground hidden py-3.5 pr-6 text-[13px] sm:table-cell',
   },
 };
 
@@ -129,8 +124,7 @@ interface Selection {
 function entryColumns(
   privateTypes: ReadonlySet<string>,
   typeIcons: ReadonlyMap<string, ContentTypeIcon | null | undefined>,
-  selection: Selection,
-  authorNames: ReadonlyMap<string, string>
+  selection: Selection
 ) {
   return column.columns([
     column.display({
@@ -210,24 +204,6 @@ function entryColumns(
           {relativeTime(getValue())}
         </time>
       ),
-    }),
-    column.display({
-      id: 'author',
-      header: 'Author',
-      cell: ({ row }) => {
-        // The list row names the last editor by id when the API sends it. An id with no user behind
-        // it (deleted, or one this caller may not list) and a row with no id both show a muted dash,
-        // never the raw id, which would read as a name.
-        const id = row.original.lastModifiedBy;
-        const name = id ? authorNames.get(id) : undefined;
-        return name ? (
-          <span className="block max-w-[10rem] truncate" title={name}>
-            {name}
-          </span>
-        ) : (
-          <span aria-label="No author">-</span>
-        );
-      },
     }),
   ]);
 }
@@ -383,18 +359,9 @@ function ContentListInner() {
     [selected, allOnPage, selectedItems.length, items, setSelected]
   );
 
-  // Author names, only fetched when a row names an editor. A caller who may not list users gets a
-  // failed query and so a dash, which is the same answer as a user who no longer exists.
-  const hasEditors = items.some((item) => !!item.lastModifiedBy);
-  const { data: users } = useUsers({ page: 1, pageSize: 100 }, hasEditors);
-  const authorNames = useMemo(
-    () => new Map((users?.items ?? []).map((u) => [u.id, u.username] as const)),
-    [users]
-  );
-
   const columns = useMemo(
-    () => entryColumns(privateTypes, typeIcons, selection, authorNames),
-    [privateTypes, typeIcons, selection, authorNames]
+    () => entryColumns(privateTypes, typeIcons, selection),
+    [privateTypes, typeIcons, selection]
   );
   const table = useTable({
     features,

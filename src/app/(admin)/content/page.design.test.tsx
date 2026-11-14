@@ -7,7 +7,7 @@ import { ContentStatus, SensitivityLevel } from '@/types/content';
 
 /**
  * The Entries list as the round 3 design draws it (#287): type tabs, status chips with counts,
- * a checkbox column, an Author column and relative times.
+ * a checkbox column and relative times.
  */
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -84,7 +84,7 @@ function row(
   id: string,
   title: string,
   status: string,
-  extra: { updatedAt?: string; contentType?: string; lastModifiedBy?: string } = {}
+  extra: { updatedAt?: string; contentType?: string } = {}
 ) {
   return {
     id,
@@ -95,7 +95,6 @@ function row(
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: extra.updatedAt ?? '2026-01-01T00:00:00Z',
-    ...(extra.lastModifiedBy ? { lastModifiedBy: extra.lastModifiedBy } : {}),
   };
 }
 
@@ -645,7 +644,7 @@ describe('counts that leave types out', () => {
 });
 
 describe('the table head and the page header', () => {
-  it('names the columns in sentence case, Author last', async () => {
+  it('names the columns in sentence case', async () => {
     renderList();
     await screen.findByText('Alpha');
 
@@ -653,7 +652,7 @@ describe('the table head and the page header', () => {
       .getAllByRole('columnheader')
       .map((head) => head.textContent)
       .filter(Boolean);
-    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated', 'Author']);
+    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated']);
   });
 
   it('has no count chip or description line under the title', async () => {
@@ -702,54 +701,5 @@ describe('the status counts', () => {
     const group = screen.getByRole('group', { name: 'Filter by status' });
     expect(await within(group).findByRole('button', { name: 'All 148' })).toBeTruthy();
     expect(within(group).getByRole('button', { name: 'Draft 60' })).toBeTruthy();
-  });
-});
-
-describe('the Author column', () => {
-  const withUsers = (items: { id: string; username: string }[] | Error) => {
-    const base = vi.mocked(api.get).getMockImplementation()!;
-    vi.mocked(api.get).mockImplementation(async (url: string, config?: unknown) => {
-      if (url === '/api/users') {
-        if (items instanceof Error) throw items;
-        return { data: { items, page: 1, pageSize: 100, totalItems: items.length } };
-      }
-      return base(url, config as never);
-    });
-  };
-
-  it('shows the name of the last editor', async () => {
-    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: 'u1' })];
-    withUsers([{ id: 'u1', username: 'maria' }]);
-    renderList();
-
-    expect(await screen.findByText('maria')).toBeTruthy();
-  });
-
-  it('shows a dash for a user who no longer exists, never the raw id', async () => {
-    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: 'gone-id' })];
-    withUsers([{ id: 'u1', username: 'maria' }]);
-    renderList();
-    await screen.findByText('Alpha');
-
-    await waitFor(() => expect(vi.mocked(api.get)).toHaveBeenCalledWith('/api/users', expect.anything()));
-    expect(screen.queryByText('gone-id')).toBeNull();
-    expect(within(bodyRows()[0]).getByLabelText('No author').textContent).toBe('-');
-  });
-
-  it('shows a dash when the list sends no editor, and does not ask for users', async () => {
-    renderList();
-    await screen.findByText('Alpha');
-
-    expect(within(bodyRows()[0]).getByLabelText('No author')).toBeTruthy();
-    expect(vi.mocked(api.get).mock.calls.some((c) => c[0] === '/api/users')).toBe(false);
-  });
-
-  it('shows a dash when the caller may not list users', async () => {
-    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: 'u1' })];
-    withUsers(new Error('403'));
-    renderList();
-    await screen.findByText('Alpha');
-
-    expect(within(bodyRows()[0]).getByLabelText('No author')).toBeTruthy();
   });
 });
