@@ -3,8 +3,8 @@
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { FILES_PAGE_SIZE, isForbidden, uploadFile, useFiles, type StoredFile, type UploadedFile } from '@/hooks/use-files';
-import { api, apiErrorMessage, isNotFound } from '@/lib/api';
+import { FILES_PAGE_SIZE, uploadFile, useFiles, type StoredFile, type UploadedFile } from '@/hooks/use-files';
+import { api, apiErrorMessage, isForbidden, isNotFound } from '@/lib/api';
 import { contentProblem, formatBytes, UPLOAD_RULES, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';

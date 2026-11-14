@@ -3,4 +3,5 @@ date	repo	pr	confirmed	refuted	blockers	categories	caught_elsewhere_first	pre_pu
 2026-11-11	BaryoDev/barakoBrew	294	11	1	2	secret,confirm,routing,tenant,shape	none	0	0	0	0
 2026-11-11	BaryoDev/barakoBrew	295	12	0	2	data-loss,svg,concurrency,tenant	none	0	0	0	0
 2026-11-12	BaryoDev/barakoBrew	296	8	2	0	correctness,contract,stale-state,validation	none	0	0	0	0
+2026-11-12	BaryoDev/barakoBrew	297	16	12	0	tests,a11y,copy,permissions,dup	none	0	0	0	0
 2026-11-12	BaryoDev/barakoBrew	299	10	1	0	value-kind,copy,a11y,tests	none	0	0	0	0
