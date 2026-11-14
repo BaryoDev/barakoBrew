@@ -195,7 +195,7 @@ export function AppSidebar() {
             <button
               type="button"
               onClick={() => setAboutOpen(true)}
-              className="ml-auto shrink-0 rounded-sm font-mono text-[10.5px] tabular-nums text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="ml-auto min-w-0 truncate rounded-sm font-mono text-[10.5px] tabular-nums text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               {version}
               <span className="sr-only"> (about this instance)</span>

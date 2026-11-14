@@ -151,6 +151,13 @@ describe('the rail', () => {
         expect(all.className).toContain('font-semibold');
     });
 
+    it('counts the Modules group without the All modules link', async () => {
+        renderRail({ capabilities: ['view_modules'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
+
+        expect(screen.getByRole('button', { name: /^Modules/ })).toHaveTextContent(/^Modules0$/);
+    });
+
     it('sizes the main nav to 36px rows and the module rows to 34px', async () => {
         renderRail({ capabilities: ['view_modules'] });
         await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
@@ -178,6 +185,8 @@ describe('the rail', () => {
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
         const button = within(rail()).getByRole('button', { name: "What's new" });
         expect(button.className).toContain('size-[34px]');
+        expect(button.closest('[data-slot="sidebar-footer"]')).not.toBeNull();
+        expect(button.closest('[data-slot="sidebar-header"]')).toBeNull();
     });
 
     it('keeps What\'s new in the drawer too', async () => {
