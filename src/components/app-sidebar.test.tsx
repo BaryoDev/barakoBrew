@@ -173,11 +173,11 @@ describe('the rail', () => {
         expect(within(landmarks[0]).getByRole('link', { name: /^Overview/ })).toBeInTheDocument();
     });
 
-    it('keeps What\'s new in the rail, beside the version', async () => {
+    it('keeps What\'s new in the rail, in the footer beside the theme row', async () => {
         renderRail({ capabilities: [] });
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
         const button = within(rail()).getByRole('button', { name: "What's new" });
-        expect(button.className).toContain('size-7');
+        expect(button.className).toContain('size-[34px]');
     });
 
     it('keeps What\'s new in the drawer too', async () => {

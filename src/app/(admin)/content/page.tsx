@@ -77,9 +77,8 @@ const STATUS_FILTERS: { label: string; value: ContentStatus | undefined }[] = [
   })),
 ];
 
-/** 10.5px, 800, uppercase, on the sunken tint. The Signal column head. */
-const HEAD =
-  'h-auto bg-background py-3 text-[10.5px] font-extrabold tracking-[0.12em] uppercase text-[var(--faint)]';
+/** On the sunken tint. The type comes from TableHead: 12px, muted, sentence case. */
+const HEAD = 'h-auto bg-background py-3';
 
 /** Machine-produced cell values: mono, tabular, muted. Types, versions, timestamps. */
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
@@ -533,7 +532,7 @@ function ContentListInner() {
           contentType
             ? (schema?.description ??
               `Everything written as ${schema?.displayName ?? contentType}.`)
-            : 'Everything written in your CMS, filterable by content type.'
+            : 'Everything written, by content type.'
         }
         badge={
           contents ? (
