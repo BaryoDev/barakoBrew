@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Paginated, type PageParams } from '@/lib/api';
-import type { User, Role, RoleRequest } from '@/types/rbac';
+import type { User, Role, RoleRequest, RolePreviewRequest, RolePreviewResponse } from '@/types/rbac';
 
 // Users
 
@@ -61,6 +61,18 @@ export function useUpdateRole() {
             queryClient.invalidateQueries({ queryKey: ['roles'] });
             queryClient.invalidateQueries({ queryKey: ['roles', 'detail', id] });
         },
+    });
+}
+
+/**
+ * Runs the editor's unsaved rules against real entries as one user. A mutation rather than a query:
+ * it is a POST the operator asks for with a button, and it changes nothing on the server, so
+ * there is no cache to invalidate.
+ */
+export function useRolePreview() {
+    return useMutation({
+        mutationFn: async (data: RolePreviewRequest) =>
+            (await api.post<RolePreviewResponse>('/api/roles/preview', data)).data,
     });
 }
 

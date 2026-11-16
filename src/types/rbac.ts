@@ -56,6 +56,42 @@ export interface RoleRequest {
     systemCapabilities: string[];
 }
 
+/** Why an entry is hidden from the previewed user. The server's own words, sent as they are. */
+export type RolePreviewReason =
+    | 'outside branch scope'
+    | 'no read rule'
+    | 'condition not met'
+    | 'field rules hide it';
+
+/** `POST /api/roles/preview` (contract 15). Nothing in it is saved. */
+export interface RolePreviewRequest {
+    userId: string;
+    contentType: string;
+    /** The draft rules, the same shape a role save sends. */
+    permissions: ContentTypePermission[];
+    /** The stored role being edited. Left out for a role that does not exist yet. */
+    roleId?: string;
+    systemCapabilities?: string[];
+    name?: string;
+    take?: number;
+}
+
+export interface RolePreviewItem {
+    id: string;
+    title: string;
+    visible: boolean;
+    /** Null when the entry is visible. */
+    reason: RolePreviewReason | null;
+    /** The JSON of the rule condition the entry failed, when the reason is a condition. */
+    condition?: string | null;
+    /** Null means every field. */
+    readableFields: string[] | null;
+}
+
+export interface RolePreviewResponse {
+    items: RolePreviewItem[];
+}
+
 export interface User {
     id: string;
     username: string;

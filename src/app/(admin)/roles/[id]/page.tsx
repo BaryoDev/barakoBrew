@@ -46,6 +46,7 @@ export default function EditRolePage({ params }: { params: Promise<{ id: string 
         description="Changes apply to every user holding this role as soon as you save."
       />
       <RoleEditor
+        roleId={role.id}
         initial={{
           name: role.name,
           description: role.description,

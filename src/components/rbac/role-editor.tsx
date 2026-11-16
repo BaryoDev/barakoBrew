@@ -8,6 +8,7 @@ import { getContractServerState, getContractState, subscribeToContract } from '@
 import { KNOWN_CAPABILITIES, holdsCapability, isPlatformCapability } from '@/lib/capabilities';
 import { conditionProblem, isEmptyPermission, transitionKey, writeConditions } from '@/lib/role-rules';
 import { ReadsBackAs } from '@/components/rbac/reads-back-as';
+import { RolePreviewPanel } from '@/components/rbac/role-preview-panel';
 import { roleSentences } from '@/lib/role-sentences';
 import { PermissionDetails, type ConditionDraft } from '@/components/rbac/permission-details';
 import { Button } from '@/components/ui/button';
@@ -36,12 +37,17 @@ const ACTIONS: PermissionAction[] = ['create', 'read', 'update', 'delete'];
  */
 const RULE_DETAILS_CONTRACT = 6;
 
+/** `POST /api/roles/preview` arrived with API contract 15 (barakoCMS 5.7). An older API has no such route. */
+const ROLE_PREVIEW_CONTRACT = 15;
+
 function splitKey(key: string): [string, PermissionAction] {
   const at = key.lastIndexOf(':');
   return [key.slice(0, at), key.slice(at + 1) as PermissionAction];
 }
 
 interface RoleEditorProps {
+  /** The stored role being edited. Sent to the preview so it starts from that role. Absent for a new role. */
+  roleId?: string;
   initial?: RoleRequest;
   submitLabel: string;
   /** Why this caller cannot save the role. Set, the form says so and offers no save. */
@@ -57,6 +63,7 @@ interface RoleEditorProps {
 }
 
 export function RoleEditor({
+  roleId,
   initial,
   submitLabel,
   locked,
@@ -76,6 +83,7 @@ export function RoleEditor({
   const [transitionDrafts, setTransitionDrafts] = useState<Record<string, Record<string, ConditionDraft>>>({});
   const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
   const detailsSupported = contract.kind === 'ok' && contract.version >= RULE_DETAILS_CONTRACT;
+  const previewSupported = contract.kind === 'ok' && contract.version >= ROLE_PREVIEW_CONTRACT;
 
   const permissionFor = (slug: string) =>
     permissions.find((p) => p.contentTypeSlug === slug) ?? emptyPermission(slug);
@@ -187,6 +195,7 @@ export function RoleEditor({
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid min-w-0 gap-6">
     <form onSubmit={handleSubmit} className="max-w-2xl min-w-0 space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -416,6 +425,17 @@ export function RoleEditor({
         </Button>
       </div>
     </form>
+    {previewSupported && (
+      <div className="max-w-2xl min-w-0">
+        <RolePreviewPanel
+          roleId={roleId}
+          name={name}
+          permissions={withConditions(permissions)}
+          systemCapabilities={capabilities}
+        />
+      </div>
+    )}
+    </div>
     <ReadsBackAs sentences={sentences} />
     </div>
   );
