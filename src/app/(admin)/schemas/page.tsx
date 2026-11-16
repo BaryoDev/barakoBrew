@@ -217,35 +217,36 @@ function TypeRow({
     <div
       data-selected={selected || undefined}
       className={cn(
-        'flex items-center gap-1 rounded-[10px] pr-1.5',
+        'relative flex items-center gap-2.5 rounded-[10px] py-2.5 pr-1.5 pl-3',
         selected ? 'bg-primary/10' : 'hover:bg-muted'
       )}
     >
-      <Link
-        href={openHref(schema)}
-        // Named outright: the name and slug spans read back run together, as "Staffstaff".
-        aria-label={`${schema.displayName} entries`}
-        className="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] py-2.5 pl-3 outline-none focus-visible:ring-[3px]"
+      <span
+        className={cn(
+          'grid size-[30px] shrink-0 place-items-center rounded-lg',
+          selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+        )}
       >
-        <span
-          className={cn(
-            'grid size-[30px] shrink-0 place-items-center rounded-lg',
-            selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
-          )}
+        <TypeIcon icon={schema.icon} fallback={IconContentTypes} className="size-4" aria-hidden />
+      </span>
+      <span className="grid min-w-0 flex-1">
+        {/* The link holds the name alone, so its accessible name is the text it shows; the slug
+            beside it would run into the name ("Staffstaff"). Its ::after covers the row, so the
+            whole row still opens the entries. */}
+        <Link
+          href={openHref(schema)}
+          className="focus-visible:after:ring-ring block truncate text-[14.5px] font-semibold outline-none after:absolute after:inset-0 after:rounded-[10px] after:content-[''] focus-visible:after:ring-[3px]"
         >
-          <TypeIcon icon={schema.icon} fallback={IconContentTypes} className="size-4" aria-hidden />
-        </span>
-        <span className="grid min-w-0 flex-1">
-          <span className="truncate text-[14.5px] font-semibold">{schema.displayName}</span>
-          <span className="text-muted-foreground truncate font-mono text-[11.5px]">{schema.name}</span>
-        </span>
-      </Link>
+          {schema.displayName}
+        </Link>
+        <span className="text-muted-foreground truncate font-mono text-[11.5px]">{schema.name}</span>
+      </span>
       <button
         type="button"
         onClick={onSelect}
         aria-pressed={selected}
         aria-label={`${fields} of ${schema.displayName}`}
-        className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-ring shrink-0 rounded-md px-2 py-1.5 font-mono text-[11px] tabular-nums outline-none focus-visible:ring-[3px]"
+        className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-ring relative z-10 shrink-0 rounded-md px-2 py-1.5 font-mono text-[11px] tabular-nums outline-none focus-visible:ring-[3px]"
       >
         {fields}
       </button>
