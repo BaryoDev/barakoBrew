@@ -12,6 +12,7 @@ import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { Button } from '@/components/ui/button';
 import { LiveSwitch } from '@/components/patterns/live-switch';
 import { cn } from '@/lib/utils';
+import { exactTime, momentLabel } from '@/lib/relative-time';
 import { IconWorkflows } from '@/components/icons';
 import { RunProgressStrip } from '@/components/workflow/run-progress';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
@@ -46,23 +47,27 @@ const CARD = 'min-w-0 bg-card rounded-xl border p-6 shadow-[var(--shadow-card)]'
 
 function formatMoment(value: string | null | undefined): string {
   if (!value) return '';
-  const at = new Date(value);
-  return Number.isNaN(at.getTime()) ? '' : at.toLocaleString();
+  return Number.isNaN(new Date(value).getTime()) ? '' : momentLabel(value);
+}
+
+/** The full timestamp for a title, or nothing for a date nobody has. */
+function momentTitle(value: string | null | undefined): string | undefined {
+  return formatMoment(value) ? exactTime(value!) : undefined;
 }
 
 function RunFacts({ run }: { run: WorkflowRun }) {
-  const facts: { label: string; value: string }[] = [
+  const facts: { label: string; value: string; title?: string }[] = [
     { label: 'Trigger', value: triggerLabel(run.triggerEvent) },
     { label: 'Content type', value: run.contentType },
     { label: 'Content', value: run.contentId },
-    { label: 'Started', value: formatMoment(run.createdAt) || 'n/a' },
+    { label: 'Started', value: formatMoment(run.createdAt) || 'n/a', title: momentTitle(run.createdAt) },
   ];
 
   const completed = formatMoment(run.completedAt);
-  if (completed) facts.push({ label: 'Finished', value: completed });
+  if (completed) facts.push({ label: 'Finished', value: completed, title: momentTitle(run.completedAt) });
 
   const abandoned = formatMoment(run.abandonedAt);
-  if (abandoned) facts.push({ label: 'Abandoned', value: abandoned });
+  if (abandoned) facts.push({ label: 'Abandoned', value: abandoned, title: momentTitle(run.abandonedAt) });
   if (run.compensation) facts.push({ label: 'Rollback', value: run.compensation });
   facts.push({ label: 'Runs on', value: run.executor || 'built-in runner' });
   facts.push({ label: 'Run', value: run.id });
@@ -72,7 +77,9 @@ function RunFacts({ run }: { run: WorkflowRun }) {
       {facts.map((fact) => (
         <div key={fact.label} className="border-border flex justify-between gap-3 border-b pb-1.5">
           <dt className="text-muted-foreground shrink-0">{fact.label}</dt>
-          <dd className="min-w-0 text-right font-mono break-words">{fact.value}</dd>
+          <dd title={fact.title} className="min-w-0 text-right font-mono break-words">
+            {fact.value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -200,13 +207,15 @@ function RunRow({ row, selected, onSelect }: { row: WorkflowRun; selected: boole
       onClick={() => onSelect(row.id)}
       className={cn(
         'grid w-full gap-1.5 rounded-xl border p-3 text-left outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring/50',
-        selected ? 'border-primary bg-accent' : 'hover:bg-secondary',
+        selected ? 'border-primary bg-accent' : 'border-transparent hover:bg-secondary',
       )}
     >
       <span className="flex flex-wrap items-center gap-1.5">
         <StatusBadge tone={toneForRunStatus(row.status)}>{runStatusLabel(row.status)}</StatusBadge>
         <RunFailureKind run={row} />
-        <span className="text-muted-foreground ml-auto text-[12px] whitespace-nowrap">{formatMoment(row.createdAt) || 'n/a'}</span>
+        <span title={momentTitle(row.createdAt)} className="text-muted-foreground ml-auto text-[12px] whitespace-nowrap">
+          {formatMoment(row.createdAt) || 'n/a'}
+        </span>
       </span>
       <span className="min-w-0 text-[13.5px]">
         <span className="font-bold">{row.workflowName}</span>
@@ -232,13 +241,16 @@ export default function WorkflowRunsPage() {
   const linked = searchParams.get('run');
   // An id in the address that is not shaped like a run id is answered with "not found" here. The
   // API would answer 400 to it, and there is nothing to ask.
-  const [selectedId, setSelectedId] = useState<string | null>(linked ? parseRunId(linked) : null);
+  const [pickedId, setSelectedId] = useState<string | null>(linked ? parseRunId(linked) : null);
   const [badLink, setBadLink] = useState(!!linked && parseRunId(linked) === null);
   // Live or Paused, the person's choice. Paused stops the poll and nothing else: every guard on a
   // retry, cancel or abandon works the same either way.
   const [live, setLive] = useState(true);
   const detail = useRef<HTMLElement | null>(null);
-  const picked = useRef(false);
+  // Counts picks, so clicking the run that is already open still scrolls to it on one column.
+  const [picks, setPicks] = useState(0);
+  // The run opened by default, remembered so a poll that puts a newer run first does not change it.
+  const [defaultId, setDefaultId] = useState<string | null>(null);
   // Held here, not inside the run's panel, so a poll that changes the run cannot unmount an open dialog.
   const [confirming, setConfirming] = useState<{ kind: 'cancel' | 'abandon'; id: string; name: string } | null>(null);
   // What the dialog says, kept through its closing animation once `confirming` is cleared.
@@ -259,14 +271,11 @@ export default function WorkflowRunsPage() {
     setSeenLink(linked);
     // The address catching up with a pick made here is not a new link. The list gave that id, so it
     // is not checked for shape, and the radio stays on the run that was chosen.
-    if (!linked || linked !== selectedId) {
+    if (!linked || linked !== pickedId) {
       setBadLink(!!linked && parseRunId(linked) === null);
       setSelectedId(linked ? parseRunId(linked) : null);
     }
   }
-
-  // A question about one run must not stay up once another is picked.
-  if (confirming && confirming.id !== selectedId) setConfirming(null);
 
   // Put the canonical id in the address when the link spelled it another way.
   const canonical = linked ? parseRunId(linked) : null;
@@ -280,20 +289,11 @@ export default function WorkflowRunsPage() {
   function select(id: string) {
     setSelectedId(id);
     setBadLink(false);
-    picked.current = true;
+    setPicks((n) => n + 1);
     const next = new URLSearchParams(window.location.search);
     next.set('run', id);
     window.history.replaceState(null, '', `${window.location.pathname}?${next.toString()}${window.location.hash}`);
   }
-
-  // On one column the detail sits below the list, so a pick scrolls to it. After the render, once
-  // the section holds the run, and not from a timer.
-  useEffect(() => {
-    if (!picked.current || !selectedId) return;
-    picked.current = false;
-    if (typeof window.matchMedia === 'function' && !window.matchMedia('(max-width: 1179px)').matches) return;
-    detail.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  }, [selectedId]);
 
   const access = useAccess();
   const canRetry = access.can(RUN_CAPABILITIES.retry, RUN_LEGACY_ROLES);
@@ -301,12 +301,30 @@ export default function WorkflowRunsPage() {
   const canCancel = access.can(RUN_CAPABILITIES.cancel, RUN_LEGACY_ROLES);
 
   const runs = useWorkflowRuns({ page, pageSize: 25, status }, { live });
+  const rows = runs.data?.items ?? [];
+  // Nothing picked and no link in the address: the first run in the list is open, so the detail is
+  // never an empty "Choose a run" beside a list that has runs. The default sticks to the run it
+  // chose: a newer run landing at the top of a live list does not swap the detail under the reader,
+  // and it is only chosen again once that run leaves the list (a filter or status change). A link,
+  // good or bad, is never overridden, and the default is not written to the address.
+  const defaultListed = defaultId !== null && rows.some((row) => row.id === defaultId);
+  const firstId = rows[0]?.id ?? null;
+  if (!defaultListed && firstId !== defaultId && firstId !== null) setDefaultId(firstId);
+  const selectedId = pickedId ?? (linked ? null : defaultListed ? defaultId : firstId);
+  // A question about one run must not stay up once another is picked.
+  if (confirming && confirming.id !== selectedId) setConfirming(null);
   const run = useWorkflowRun(selectedId);
+
+  // On one column the detail sits below the list, so a pick scrolls to it. After the render, once
+  // the section holds the run, and not from a timer.
+  useEffect(() => {
+    if (picks === 0) return;
+    if (typeof window.matchMedia === 'function' && !window.matchMedia('(max-width: 1179px)').matches) return;
+    detail.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [picks]);
   const retry = useRetryAttempt();
   const cancel = useCancelRun();
   const abandon = useAbandonRun();
-
-  const rows = runs.data?.items ?? [];
 
   // A ref, not `retry.isPending`. The second click of a double click arrives before React has
   // rendered the pending state, and a button in a closing dialog never reads it at all, so only a
@@ -396,8 +414,7 @@ export default function WorkflowRunsPage() {
       </div>
 
       <div className="grid items-start gap-4 grid-cols-1 min-[1180px]:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
-        <section className={CARD}>
-          <h2 className="text-[15px] font-bold">Runs</h2>
+        <section aria-label="Runs" className="min-w-0">
           {runs.pause && <PauseNote pause={runs.pause} updatedAt={runs.dataUpdatedAt} />}
           {runs.isError && runs.data && (
             <p role="alert" className="text-destructive mt-3 text-[12px]">
@@ -432,7 +449,7 @@ export default function WorkflowRunsPage() {
             />
           ) : (
             <>
-              <ul aria-label="Runs" className="mt-4 grid gap-2">
+              <ul aria-label="Runs" className="grid gap-2">
                 {rows.map((row) => (
                   <li key={row.id}>
                     <RunRow row={row} selected={row.id === selectedId} onSelect={select} />
@@ -492,7 +509,7 @@ export default function WorkflowRunsPage() {
                     disabled={abandon.isPending}
                     onClick={(event) => ask('abandon', run.data!, event.currentTarget)}
                   >
-                    {abandon.isPending ? 'Abandoning...' : 'Abandon run'}
+                    {abandon.isPending ? 'Abandoning...' : 'Abandon'}
                   </Button>
                 )}
               </div>

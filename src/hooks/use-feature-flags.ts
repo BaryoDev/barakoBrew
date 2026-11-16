@@ -25,7 +25,7 @@ export function useToggleFeatureFlag() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (key: string) => {
-      await api.post(`/api/feature-flags/admin/${key}/toggle`, {});
+      await api.post(`/api/feature-flags/admin/${encodeURIComponent(key)}/toggle`, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-flags'] });

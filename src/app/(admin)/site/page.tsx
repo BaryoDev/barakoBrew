@@ -30,7 +30,7 @@ export default function SitePage() {
     return (
         <SiteForm
             title="Site settings"
-            description="This tenant's name, mode, profile, images, header, footer and social links, read by the site on each request."
+            description="barakoPress reads these on each request. Saving purges the site's cache."
             problem={siteProblem}
         >
             {({ values, set, entry, schema }) =>

@@ -122,7 +122,7 @@ export default function SchemasPage() {
     <>
       <PageHeader
         title="Content types"
-        description="The shapes your content can take. Open one to write its entries."
+        description="The shapes your content can take."
         actions={
           <Button asChild size="sm">
             <Link href="/schemas/new">

@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
   deleteRefusal,
-  isForbidden,
   useDeleteFile,
   useFiles,
   type DeleteRefusal,
@@ -13,7 +12,7 @@ import {
 } from '@/hooks/use-files';
 import { useAuth } from '@/hooks/use-auth';
 import { useAccess } from '@/hooks/use-access';
-import { apiErrorMessage, getApiUrl } from '@/lib/api';
+import { apiErrorMessage, getApiUrl, isForbidden } from '@/lib/api';
 import { UPLOAD_RULES, canDeleteFile, contentProblem, formatBytes, publicFileLink, uploadProblem } from '@/lib/files';
 import { FileThumbnail } from '@/components/patterns/file-thumbnail';
 import { ImageViewer, isViewableImage } from '@/components/patterns/image-viewer';
@@ -56,8 +55,7 @@ import {
 } from '@/components/ui/table';
 import { IconArchive, IconCopy, IconLock, IconPlus, IconTrash } from '@/components/icons';
 
-const HEAD =
-  'h-auto bg-background py-3 text-[10.5px] font-extrabold tracking-[0.12em] uppercase text-[var(--faint)]';
+const HEAD = 'h-auto bg-background py-3';
 
 const META = 'text-muted-foreground font-mono text-[11.5px] tabular-nums';
 
