@@ -90,21 +90,25 @@ function SchemasInner() {
   const [search, setSearch] = useState('');
   const detailRef = useRef<HTMLElement>(null);
 
+  // Sorted on a copy: the array is the query cache's, and sorting it in place reorders what every
+  // other screen reading the same key sees.
+  const sorted = useMemo(
+    () => [...(schemas ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [schemas]
+  );
+
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    // Sorted on a copy: the array is the query cache's, and sorting it in place reorders what every
-    // other screen reading the same key sees.
-    return [...(schemas ?? [])]
-      .filter(
-        (s) => s.displayName.toLowerCase().includes(needle) || s.name.toLowerCase().includes(needle)
-      )
-      .sort((a, b) => a.displayName.localeCompare(b.displayName));
-  }, [schemas, search]);
+    return sorted.filter(
+      (s) => s.displayName.toLowerCase().includes(needle) || s.name.toLowerCase().includes(needle)
+    );
+  }, [sorted, search]);
 
-  // A name in the URL that no type has, such as a deleted one, falls back to the first rather than
-  // leaving the right side empty.
+  // A name in the URL that no type has, such as a deleted one, falls back to the top of the list
+  // rather than leaving the right side empty. The top of the sorted list, not the API's first, so
+  // the tinted row and the detail agree.
   const wanted = searchParams.get('type');
-  const selected = (schemas ?? []).find((s) => s.name === wanted) ?? schemas?.[0];
+  const selected = sorted.find((s) => s.name === wanted) ?? sorted[0];
 
   const select = (name: string) => {
     const params = new URLSearchParams(searchParams.toString());

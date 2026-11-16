@@ -173,4 +173,19 @@ describe('the content types screen', () => {
     await renderPage();
     expect(await screen.findByRole('region', { name: 'Articles fields' })).toBeInTheDocument();
   });
+
+  it('selects the top row of the sorted list, not the first type the API sends', async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url === '/api/content-types') {
+        const items = [TYPES[1], TYPES[0]];
+        return { data: { items, page: 1, pageSize: 20, totalItems: items.length } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+    await renderPage();
+    const rows = within(await screen.findByRole('list', { name: 'Content types' })).getAllByRole('button');
+    expect(within(rows[0]).getByText('Articles')).toBeInTheDocument();
+    expect(rows[0]).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('region', { name: 'Articles fields' })).toBeInTheDocument();
+  });
 });
