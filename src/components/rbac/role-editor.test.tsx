@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { RoleRequest } from '@/types/rbac';
 
@@ -16,6 +16,7 @@ globalThis.ResizeObserver ??= class {
 };
 
 const { api } = await import('@/lib/api');
+const { AxiosError, AxiosHeaders } = await import('axios');
 const { recordContractVersion, __resetContractForTests } = await import('@/lib/api-contract');
 const { RoleEditor } = await import('./role-editor');
 
@@ -63,6 +64,7 @@ const ROLE: RoleRequest = {
 
 beforeEach(() => {
     vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
     vi.mocked(api.get).mockResolvedValue({ data: { items: [RECORD], page: 1, pageSize: 20, totalItems: 1 } });
     __resetContractForTests();
     recordContractVersion('6');
@@ -404,5 +406,176 @@ describe('the Reads back as rail', () => {
         const rail = screen.getByRole('complementary', { name: 'Reads back as' });
         expect(within(rail).getByText('Teacher can run approve on every Record.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Save role' })).toBeDisabled();
+    });
+});
+
+describe('the Preview as panel', () => {
+    const USER = { id: '11111111-1111-1111-1111-111111111111', username: 'marta', email: 'm@example.com', roleIds: [], groupIds: [], createdAt: '' };
+
+    function refusal(status: number, data: unknown = {}) {
+        return new AxiosError('refused', 'ERR_BAD_REQUEST', undefined, undefined, {
+            status,
+            statusText: '',
+            data,
+            headers: {},
+            config: { headers: new AxiosHeaders() },
+        });
+    }
+
+    async function renderWithPreview(roleId?: string, initial?: RoleRequest) {
+        vi.mocked(api.get).mockImplementation(async (url: string) => ({
+            data:
+                url === '/api/users'
+                    ? { items: [USER], page: 1, pageSize: 100, totalItems: 1 }
+                    : { items: [RECORD], page: 1, pageSize: 20, totalItems: 1 },
+        }));
+        recordContractVersion('15');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor roleId={roleId} initial={initial} submitLabel="Save role" isPending={false} onSubmit={vi.fn()} onCancel={() => {}} />
+            </QueryClientProvider>,
+        );
+        await waitFor(() => expect(screen.getByRole('option', { name: 'marta' })).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('option', { name: 'Record' })).toBeInTheDocument());
+    }
+
+    function pick() {
+        fireEvent.change(screen.getByLabelText('User'), { target: { value: USER.id } });
+        fireEvent.change(screen.getByLabelText('Content type'), { target: { value: 'record' } });
+    }
+
+    it('sends roleId, name and capabilities from the editor state when editing a stored role', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: { items: [] } });
+        await renderWithPreview('role-9', ROLE);
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Teacher B' } });
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Read Sensitive fields' }));
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        const [url, body] = vi.mocked(api.post).mock.calls[0] as [string, Record<string, unknown>];
+        expect(url).toBe('/api/roles/preview');
+        expect(body.roleId).toBe('role-9');
+        expect(body.name).toBe('Teacher B');
+        expect(body.userId).toBe(USER.id);
+        expect(body.contentType).toBe('record');
+        expect(body.systemCapabilities).toEqual(['view_sensitive']);
+        expect(body.permissions).toEqual(ROLE.permissions);
+    });
+
+    it('leaves roleId out for a role that is not saved yet', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: { items: [] } });
+        await renderWithPreview();
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Nurse' } });
+        fireEvent.click(screen.getByLabelText('Allow read on Record'));
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        const body = vi.mocked(api.post).mock.calls[0][1] as Record<string, unknown>;
+        expect('roleId' in body).toBe(false);
+        expect(body.name).toBe('Nurse');
+        expect(body.systemCapabilities).toEqual([]);
+        expect((body.permissions as { contentTypeSlug: string }[]).map((p) => p.contentTypeSlug)).toEqual(['record']);
+    });
+
+    it('says nothing is saved', async () => {
+        await renderWithPreview();
+        expect(screen.getByText(/Nothing is saved\./)).toBeInTheDocument();
+    });
+
+    it('shows the reason and the failed condition for a hidden entry, and the fields of a visible one', async () => {
+        vi.mocked(api.post).mockResolvedValue({
+            data: {
+                items: [
+                    { id: 'a', title: 'Hidden one', visible: false, reason: 'condition not met', condition: '{"Seats":{"_eq":4}}', readableFields: null },
+                    { id: 'b', title: 'Shown one', visible: true, reason: null, condition: null, readableFields: ['Name', 'Grade'] },
+                ],
+            },
+        });
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByText('Hidden one')).toBeInTheDocument();
+        expect(screen.getByText('Hidden')).toBeInTheDocument();
+        expect(screen.getByText('The read condition is not met by this entry.')).toBeInTheDocument();
+        expect(screen.getByText('{"Seats":{"_eq":4}}')).toBeInTheDocument();
+        expect(screen.getByText('Visible')).toBeInTheDocument();
+        expect(screen.getByText('Name, Grade')).toBeInTheDocument();
+    });
+
+    it('shows a readable message for a 403', async () => {
+        vi.mocked(api.post).mockRejectedValue(refusal(403));
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('You cannot preview this role.');
+        expect(screen.getByRole('alert')).toHaveTextContent('manage_platform_roles');
+    });
+
+    it('shows a readable message for a 404', async () => {
+        vi.mocked(api.post).mockRejectedValue(refusal(404));
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('That user or role was not found.');
+    });
+
+    it('is not offered against contract 14, which has no preview route', async () => {
+        await renderWithPreview('role-9', ROLE);
+        expect(screen.getByRole('heading', { name: 'Preview as' })).toBeInTheDocument();
+        cleanup();
+        __resetContractForTests();
+        recordContractVersion('14');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor roleId="role-9" initial={ROLE} submitLabel="Save role" isPending={false} onSubmit={vi.fn()} onCancel={() => {}} />
+            </QueryClientProvider>,
+        );
+        await waitFor(() => expect(screen.getByText('Record')).toBeInTheDocument());
+        expect(screen.queryByRole('heading', { name: 'Preview as' })).toBeNull();
+    });
+
+    it('clears the old entries when the user changes after a run', async () => {
+        vi.mocked(api.post).mockResolvedValue({
+            data: { items: [{ id: 'a', title: 'First entry', visible: true, reason: null, condition: null, readableFields: null }] },
+        });
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+        expect(await screen.findByText('First entry')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('User'), { target: { value: '' } });
+        expect(screen.queryByText('First entry')).toBeNull();
+    });
+
+    it('disables Preview while a condition row has a problem, and says why', async () => {
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Conditions and field limits for Record' }));
+        const read = screen.getByText('Read only entries where').parentElement!;
+        fireEvent.click(within(read).getByRole('button', { name: 'Add condition' }));
+        fireEvent.change(within(read).getByLabelText('Condition 1 field'), { target: { value: 'Class.Teacher.User' } });
+
+        expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
+        expect(screen.getByText('Fix the condition marked above first.')).toBeInTheDocument();
+    });
+
+    it('shows a reason it does not know exactly as the server sent it', async () => {
+        vi.mocked(api.post).mockResolvedValue({
+            data: { items: [{ id: 'a', title: 'Odd one', visible: false, reason: 'frozen by policy', condition: null, readableFields: null }] },
+        });
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByText('frozen by policy')).toBeInTheDocument();
     });
 });
