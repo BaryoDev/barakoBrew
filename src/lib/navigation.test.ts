@@ -503,10 +503,11 @@ describe('the rail after the prototype match', () => {
         }
     });
 
-    it('keeps the primary list to the prototype\'s: the seven, then Activity', () => {
+    it('keeps the primary list to the canvas\'s: the seven, Activity, then Tenants, Roles and API keys', () => {
         const titles = NAV_GROUPS[0].items.filter((i) => !i.parent).map((i) => i.title);
         expect(titles).toEqual([
             'Overview', 'Entries', 'Content types', 'Workflows', 'Workflow runs', 'Analytics', 'Site settings', 'Activity',
+            'Tenants', 'Roles', 'API keys',
         ]);
     });
 
