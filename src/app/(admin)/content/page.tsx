@@ -107,6 +107,10 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
     head: `${HEAD} hidden pr-6 sm:table-cell`,
     cell: 'text-muted-foreground hidden py-3.5 pr-6 text-[13px] sm:table-cell',
   },
+  author: {
+    head: `${HEAD} hidden pr-6 md:table-cell`,
+    cell: 'hidden py-3.5 pr-6 text-[13px] md:table-cell',
+  },
 };
 
 const NO_ROWS: ContentListItem[] = [];
@@ -204,6 +208,19 @@ function entryColumns(
           {relativeTime(getValue())}
         </time>
       ),
+    }),
+    column.display({
+      id: 'author',
+      header: 'Author',
+      // The last editor. A null or missing name is a deleted user, another tenant or an older core.
+      cell: ({ row }) => {
+        const name = row.original.lastModifiedByName?.trim();
+        return name ? (
+          <span className="truncate">{name}</span>
+        ) : (
+          <span className="text-muted-foreground">Unknown</span>
+        );
+      },
     }),
   ]);
 }
