@@ -49,7 +49,7 @@ test.describe('Admin flows (mocked API)', () => {
         // That made this fail under the full parallel pack and pass every time on its own.
         await page.locator('a[data-sidebar="menu-button"][href="/schemas"]').click();
         await expect(page).toHaveURL('/schemas');
-        await expect(page.getByRole('button', { name: /^Blog post/ })).toBeVisible();
+        await expect(page.getByRole('link', { name: /^Blog post/ })).toBeVisible();
     });
 
     test('creating a content type posts to /api/content-types with PascalCase fields', async ({ page }) => {

@@ -57,16 +57,11 @@ test.beforeEach(async ({ page }) => {
 test('a content type opens its entries, an entry opens from there, and both lead back', async ({ page, isMobile }) => {
     await page.goto('/schemas');
 
-    // A type is a row in the list and its entries are a link in the detail beside it. Both are
-    // reached with Enter alone, so a screen that needed a mouse fails here rather than in a report
-    // nobody reads.
-    const row = page.getByRole('button', { name: /^Blog posts/ });
+    // The type's name is a link, so Enter on it is the whole interaction. A row that needed a mouse,
+    // or a second click in the detail, would fail here rather than in a report nobody reads.
+    const row = page.getByRole('link', { name: /^Blog posts/ });
     await expect(row).toBeVisible();
     await row.focus();
-    await page.keyboard.press('Enter');
-
-    const entries = page.getByRole('region', { name: 'Blog posts fields' }).getByRole('link', { name: 'Entries' });
-    await entries.focus();
     await page.keyboard.press('Enter');
 
     await page.waitForURL('**/content?type=blogpost');
@@ -86,7 +81,7 @@ test('a content type opens its entries, an entry opens from there, and both lead
 
     await page.getByRole('link', { name: 'Content types' }).first().click();
     await page.waitForURL('**/schemas');
-    await expect(page.getByRole('button', { name: /^Blog posts/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Blog posts/ })).toBeVisible();
 });
 
 test('the entries of a type are in the URL, so the same link opens the same screen', async ({ page }) => {
@@ -123,7 +118,7 @@ test('the content types screen fits a phone without sideways scrolling', async (
     test.skip(!isMobile, 'this is the phone-width check; the desktop projects have room');
 
     await page.goto('/schemas');
-    await expect(page.getByRole('button', { name: /^Blog posts/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Blog posts/ })).toBeVisible();
 
     const overflows = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth

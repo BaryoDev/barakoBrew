@@ -125,7 +125,7 @@ function SchemasInner() {
     <>
       <PageHeader
         title="Content types"
-        description="The shapes your content can take. Pick one to see its fields."
+        description="The shapes your content can take. Open one for its entries, or its field count for its fields."
         actions={
           <Button asChild size="sm">
             <Link href="/schemas/new">
@@ -194,7 +194,13 @@ function SchemasInner() {
   );
 }
 
-/** One row of the list: icon tile, name, slug, field count. The selected row is tinted. */
+/**
+ * One row of the list: icon tile, name, slug, field count. The selected row is tinted.
+ *
+ * The name opens the type's entries in one click, as the cards did: editors come here to write,
+ * and a click that only selected the row left them a second click from it. The field count is
+ * its own button and shows the fields beside the list.
+ */
 function TypeRow({
   schema,
   selected,
@@ -204,35 +210,44 @@ function TypeRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const count = schema.fields.length;
+  const fields = `${count} ${count === 1 ? 'field' : 'fields'}`;
+
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-current={selected ? 'true' : undefined}
+    <div
+      data-selected={selected || undefined}
       className={cn(
-        'focus-visible:ring-ring flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-left outline-none focus-visible:ring-[3px]',
+        'flex items-center gap-1 rounded-[10px] pr-1.5',
         selected ? 'bg-primary/10' : 'hover:bg-muted'
       )}
     >
-      <span
-        className={cn(
-          'grid size-[30px] shrink-0 place-items-center rounded-lg',
-          selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
-        )}
+      <Link
+        href={openHref(schema)}
+        className="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] py-2.5 pl-3 outline-none focus-visible:ring-[3px]"
       >
-        <TypeIcon icon={schema.icon} fallback={IconContentTypes} className="size-4" aria-hidden />
-      </span>
-      <span className="grid min-w-0 flex-1">
-        <span className="truncate text-[14.5px] font-semibold">{schema.displayName}</span>
-        <span className="text-muted-foreground truncate font-mono text-[11.5px]">{schema.name}</span>
-      </span>
-      <span
-        className="text-muted-foreground font-mono text-[11px] tabular-nums"
-        aria-label={`${schema.fields.length} ${schema.fields.length === 1 ? 'field' : 'fields'}`}
+        <span
+          className={cn(
+            'grid size-[30px] shrink-0 place-items-center rounded-lg',
+            selected ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+          )}
+        >
+          <TypeIcon icon={schema.icon} fallback={IconContentTypes} className="size-4" aria-hidden />
+        </span>
+        <span className="grid min-w-0 flex-1">
+          <span className="truncate text-[14.5px] font-semibold">{schema.displayName}</span>
+          <span className="text-muted-foreground truncate font-mono text-[11.5px]">{schema.name}</span>
+        </span>
+      </Link>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={selected}
+        className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-ring shrink-0 rounded-md px-2 py-1.5 font-mono text-[11px] tabular-nums outline-none focus-visible:ring-[3px]"
       >
-        {schema.fields.length}
-      </span>
-    </button>
+        {fields}
+        <span className="sr-only"> of {schema.displayName}</span>
+      </button>
+    </div>
   );
 }
 

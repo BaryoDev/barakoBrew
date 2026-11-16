@@ -99,18 +99,26 @@ describe('the content types screen', () => {
   it('lists each type with its slug and field count', async () => {
     await renderPage();
     const list = await screen.findByRole('list', { name: 'Content types' });
-    const rows = within(list).getAllByRole('button');
+    const rows = within(list).getAllByRole('listitem');
     expect(rows).toHaveLength(2);
     expect(within(rows[1]).getByText('staff')).toBeInTheDocument();
-    expect(within(rows[1]).getByLabelText('3 fields')).toBeInTheDocument();
+    expect(within(rows[1]).getByRole('button', { name: '3 fields of Staff' })).toBeInTheDocument();
+  });
+
+  it('opens a type\'s entries from its name in one click', async () => {
+    await renderPage();
+    const list = await screen.findByRole('list', { name: 'Content types' });
+    expect(within(list).getByRole('link', { name: /^Staff/ })).toHaveAttribute('href', '/content?type=staff');
+    expect(within(list).getByRole('link', { name: /^Articles/ })).toHaveAttribute('href', '/content?type=article');
   });
 
   it('shows the first type selected and tinted when the URL names none', async () => {
     await renderPage();
-    const rows = within(await screen.findByRole('list', { name: 'Content types' })).getAllByRole('button');
-    expect(rows[0]).toHaveAttribute('aria-current', 'true');
+    const list = await screen.findByRole('list', { name: 'Content types' });
+    const rows = within(list).getAllByRole('listitem').map((item) => item.firstElementChild!);
+    expect(within(list).getByRole('button', { name: '2 fields of Articles' })).toHaveAttribute('aria-pressed', 'true');
     expect(rows[0].className).toContain('bg-primary/10');
-    expect(rows[1]).not.toHaveAttribute('aria-current');
+    expect(within(list).getByRole('button', { name: '3 fields of Staff' })).toHaveAttribute('aria-pressed', 'false');
     expect(rows[1].className).not.toContain('bg-primary/10');
     expect(await screen.findByRole('heading', { name: 'Articles' })).toBeInTheDocument();
   });
@@ -118,7 +126,7 @@ describe('the content types screen', () => {
   it('selecting a type shows its fields with Required and sensitivity', async () => {
     const user = userEvent.setup();
     await renderPage();
-    await user.click(await screen.findByRole('button', { name: /Staff/ }));
+    await user.click(await screen.findByRole('button', { name: '3 fields of Staff' }));
 
     const detail = await screen.findByRole('region', { name: 'Staff fields' });
     const rows = within(detail).getAllByRole('row').slice(1);
@@ -134,7 +142,7 @@ describe('the content types screen', () => {
   it('keeps the selection when the page is reloaded', async () => {
     const user = userEvent.setup();
     const first = await renderPage();
-    await user.click(await screen.findByRole('button', { name: /Staff/ }));
+    await user.click(await screen.findByRole('button', { name: '3 fields of Staff' }));
     await screen.findByRole('region', { name: 'Staff fields' });
     first.unmount();
 
@@ -153,7 +161,7 @@ describe('the content types screen', () => {
     await user.click(within(detail).getByRole('button', { name: 'Text' }));
     await user.type(within(detail).getByLabelText('Label'), 'Teaser');
 
-    await user.click(screen.getByRole('button', { name: /Staff/ }));
+    await user.click(screen.getByRole('button', { name: '3 fields of Staff' }));
     const next = await screen.findByRole('region', { name: 'Staff fields' });
     expect(within(next).queryByRole('region', { name: 'Add a field' })).not.toBeInTheDocument();
     await user.click(within(next).getByRole('button', { name: 'Add a field' }));
@@ -183,9 +191,9 @@ describe('the content types screen', () => {
       throw new Error(`unexpected GET ${url}`);
     });
     await renderPage();
-    const rows = within(await screen.findByRole('list', { name: 'Content types' })).getAllByRole('button');
+    const rows = within(await screen.findByRole('list', { name: 'Content types' })).getAllByRole('listitem');
     expect(within(rows[0]).getByText('Articles')).toBeInTheDocument();
-    expect(rows[0]).toHaveAttribute('aria-current', 'true');
+    expect(within(rows[0]).getByRole('button', { name: '2 fields of Articles' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('region', { name: 'Articles fields' })).toBeInTheDocument();
   });
 });

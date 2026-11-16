@@ -432,7 +432,7 @@ test.describe('accessibility', () => {
         await stubContentTypes(page, [SCHEMA]);
 
         await page.goto('/schemas');
-        await expect(page.getByRole('button', { name: /^Article/ })).toBeVisible({ timeout: 15000 });
+        await expect(page.getByRole('link', { name: /^Article/ })).toBeVisible({ timeout: 15000 });
         await scan(page);
     });
 
