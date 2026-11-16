@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { WorkflowActionMetadata } from '@/types/workflow';
 import {
+    actionLabel,
+    extraActionLabel,
     isSecretParameter,
     optionalParameters,
     parameterFields,
@@ -96,5 +98,30 @@ describe('credential words from the API', () => {
     it('stops masking a word the API no longer lists', () => {
         expect(parameterFields(WEBHOOK, { Password: '' }, ['secret']).find((f) => f.name === 'Password')?.secret).toBe(false);
         expect(isSecretParameter('Password')).toBe(true);
+    });
+});
+
+describe('actionLabel', () => {
+    it('spells a kind as words', () => {
+        expect(actionLabel('SendEmail')).toBe('Send email');
+        expect(actionLabel('HttpRequest')).toBe('Http request');
+        expect(actionLabel('HTTPRequest')).toBe('HTTP request');
+        expect(actionLabel('OAuth2Login')).toBe('OAuth2 login');
+        expect(actionLabel('SMS')).toBe('SMS');
+        expect(actionLabel('SendSMS')).toBe('Send SMS');
+        expect(actionLabel('WebhookAction')).toBe('Webhook');
+        expect(actionLabel('Log')).toBe('Log');
+    });
+
+    it('keeps the kind when there is nothing left to say', () => {
+        expect(actionLabel('Action')).toBe('Action');
+        expect(actionLabel('')).toBe('');
+    });
+});
+
+describe('extraActionLabel', () => {
+    it('gives a label only when it adds something to the kind', () => {
+        expect(extraActionLabel('SendEmail')).toBe('Send email');
+        expect(extraActionLabel('Webhook')).toBeNull();
     });
 });
