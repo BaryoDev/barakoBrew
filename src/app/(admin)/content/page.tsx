@@ -107,6 +107,10 @@ const COLUMN_CLASSES: Record<string, { head: string; cell: string }> = {
     head: `${HEAD} hidden pr-6 sm:table-cell`,
     cell: 'text-muted-foreground hidden py-3.5 pr-6 text-[13px] sm:table-cell',
   },
+  author: {
+    head: `${HEAD} hidden pr-6 md:table-cell`,
+    cell: 'hidden py-3.5 pr-6 text-[13px] md:table-cell',
+  },
 };
 
 const NO_ROWS: ContentListItem[] = [];
@@ -204,6 +208,22 @@ function entryColumns(
           {relativeTime(getValue())}
         </time>
       ),
+    }),
+    column.display({
+      id: 'author',
+      header: 'Author',
+      // The last editor. A null name is a deleted user or one from another tenant, so Unknown. A
+      // missing field is an older core that does not say, and an empty cell claims nothing.
+      cell: ({ row }) => {
+        const raw = row.original.lastModifiedByName;
+        if (raw === undefined) return null;
+        const name = raw?.trim();
+        return name ? (
+          <span className="truncate">{name}</span>
+        ) : (
+          <span className="text-muted-foreground">Unknown</span>
+        );
+      },
     }),
   ]);
 }

@@ -22,10 +22,14 @@ export interface ContentListItem {
     // which is why it is optional and why the cell renders nothing rather than a zero: a row showing
     // v0 is a claim about the entry, and "the server did not say" is not the same claim.
     version?: number;
+    // Who last edited the entry, not who created it. Both are null when the editor is a deleted
+    // user, belongs to another tenant, or was never recorded. Absent against a core that does not
+    // send them yet, and that reads as unknown too.
+    lastModifiedBy?: string | null;
+    lastModifiedByName?: string | null;
 }
 
 export interface ContentDetail extends ContentListItem {
-    lastModifiedBy?: string;
     version: number; // echo back on update, the backend enforces optimistic concurrency (412)
     // Null when nothing is armed. Both UTC with a zone, so new Date() reads them correctly wherever
     // the browser is.
