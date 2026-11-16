@@ -659,7 +659,7 @@ describe('the table head and the page header', () => {
       .getAllByRole('columnheader')
       .map((head) => head.textContent)
       .filter(Boolean);
-    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated', 'Author']);
+    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated', 'Edited by']);
   });
 
   it('has no count chip or description line under the title', async () => {
@@ -683,7 +683,7 @@ describe('the table head and the page header', () => {
   });
 });
 
-describe('the Author column', () => {
+describe('the Edited by column', () => {
   it('shows the last editor name', async () => {
     rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedByName: 'Maria Santos' })];
     renderList();

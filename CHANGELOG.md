@@ -13,6 +13,8 @@ moved. Which API a console works against is stated per release instead.
 
 - The console accepts API contract 15 (barakoCMS 5.7.0, which adds the role preview route). It still
   works against 1 to 14.
+- The Entries list column for the last editor is headed **Edited by**, not Author. It shows who last
+  changed the entry, which sits next to Updated, and Author read as the person who created it.
 
 ### Fixed
 
