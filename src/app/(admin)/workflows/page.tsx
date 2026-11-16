@@ -84,7 +84,7 @@ export default function WorkflowsPage() {
     <>
       <PageHeader
         title="Workflows"
-        description="Automations that react to content events: send email, call webhooks, update fields, and more."
+        description="Automations that react to content events."
         actions={
           <Button asChild size="sm">
             <Link href="/workflows/new">
