@@ -692,16 +692,20 @@ describe('the Author column', () => {
     expect(within(bodyRows()[0]).getByText('Maria Santos')).toBeTruthy();
   });
 
-  it('shows Unknown when the name is null or missing', async () => {
-    rows = [
-      row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: null, lastModifiedByName: null }),
-      row('b', 'Beta', ContentStatus.Draft),
-    ];
+  it('shows Unknown when the core says there is no name', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: null, lastModifiedByName: null })];
     renderList();
     await screen.findByText('Alpha');
 
     expect(within(bodyRows()[0]).getByText('Unknown')).toBeTruthy();
-    expect(within(bodyRows()[1]).getByText('Unknown')).toBeTruthy();
+  });
+
+  it('leaves the cell empty when an older core does not send the field', async () => {
+    rows = [row('b', 'Beta', ContentStatus.Draft)];
+    renderList();
+    await screen.findByText('Beta');
+
+    expect(within(bodyRows()[0]).queryByText('Unknown')).toBeNull();
   });
 });
 
