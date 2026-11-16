@@ -1,4 +1,5 @@
 import { triggerLabel } from '@/hooks/use-workflow-runs';
+import { extraActionLabel } from '@/lib/workflow-parameters';
 import type { WorkflowDefinition } from '@/types/workflow';
 
 /** What an action is set up with, on one line: its parameters, and that a secret is held without showing it. */
@@ -37,7 +38,12 @@ export function WorkflowTimeline({ workflow }: { workflow: WorkflowDefinition })
                   <span className="bg-border min-h-3.5 w-0.5 flex-1 group-last:hidden" />
                 </div>
                 <div className="bg-background border-border my-2.5 grid min-w-0 gap-1 rounded-xl border px-3.5 py-3">
-                  <span className="text-primary font-mono text-[12px]">{action.type}</span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-primary font-mono text-[12px]">{action.type}</span>
+                    {extraActionLabel(action.type) && (
+                      <span className="text-[14.5px] font-semibold">{extraActionLabel(action.type)}</span>
+                    )}
+                  </span>
                   {detail && <span className="text-muted-foreground font-mono text-[13px] break-words">{detail}</span>}
                 </div>
               </li>

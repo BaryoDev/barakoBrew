@@ -6,6 +6,8 @@ import { StatusBadge } from '@/components/patterns/status-badge';
 import { Button } from '@/components/ui/button';
 import { IconRefresh } from '@/components/icons';
 import { cn } from '@/lib/utils';
+import { exactTime, momentLabel } from '@/lib/relative-time';
+import { extraActionLabel } from '@/lib/workflow-parameters';
 import {
   FAILURE_KINDS,
   failureKind,
@@ -20,8 +22,12 @@ import {
 /** A timestamp in the reader's locale, or nothing at all. A row for a date nobody has is noise. */
 function formatMoment(value: string | null | undefined): string {
   if (!value) return '';
-  const at = new Date(value);
-  return Number.isNaN(at.getTime()) ? '' : at.toLocaleString();
+  return Number.isNaN(new Date(value).getTime()) ? '' : momentLabel(value);
+}
+
+/** The full timestamp for a title, or nothing when there is no date. */
+function momentTitle(value: string | null | undefined): string | undefined {
+  return formatMoment(value) ? exactTime(value!) : undefined;
 }
 
 interface AttemptCardProps {
@@ -71,7 +77,7 @@ function RetryButton({
  * the same one: the server works out for its audit entry whether the failure was permanent.
  */
 export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: AttemptCardProps) {
-  const facts: { label: string; value: string }[] = [
+  const facts: { label: string; value: string; title?: string }[] = [
     { label: 'Attempts', value: String(attempt.attempts) },
     { label: 'Took', value: formatDuration(attempt.durationMs) },
   ];
@@ -81,10 +87,10 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
   }
 
   const finished = formatMoment(attempt.completedAt);
-  if (finished) facts.push({ label: 'Finished', value: finished });
+  if (finished) facts.push({ label: 'Finished', value: finished, title: momentTitle(attempt.completedAt) });
 
   const next = formatMoment(attempt.nextAttemptAt);
-  if (next) facts.push({ label: 'Next attempt', value: next });
+  if (next) facts.push({ label: 'Next attempt', value: next, title: momentTitle(attempt.nextAttemptAt) });
 
   if (attempt.onFailure === 'Halt') facts.push({ label: 'If it fails', value: 'Stops the run' });
   if (typeof attempt.haltedBy === 'number') {
@@ -130,6 +136,9 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
       <div className="mb-3 min-w-0 rounded-xl border p-4 group-last:mb-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-primary font-mono text-[12px] font-medium">{attempt.actionType}</span>
+          {extraActionLabel(attempt.actionType) && (
+            <span className="text-[14.5px] font-semibold">{extraActionLabel(attempt.actionType)}</span>
+          )}
           <StatusBadge tone={toneForAttemptStatus(attempt.status)}>{attempt.status}</StatusBadge>
 
           {kind && (
@@ -156,7 +165,9 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
           {facts.map((fact) => (
             <div key={fact.label} className="flex min-w-0 justify-between gap-3">
               <dt className="text-muted-foreground">{fact.label}</dt>
-              <dd className="min-w-0 text-right font-mono tabular-nums break-words">{fact.value}</dd>
+              <dd title={fact.title} className="min-w-0 text-right font-mono tabular-nums break-words">
+                {fact.value}
+              </dd>
             </div>
           ))}
         </dl>
