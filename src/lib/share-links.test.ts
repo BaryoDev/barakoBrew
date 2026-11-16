@@ -121,6 +121,13 @@ describe('shareLinkExpiry', () => {
 });
 
 describe('siteShareScope', () => {
+    it('covers both holding and private sites in its copy', () => {
+        const scope = siteShareScope('https://example.com');
+        expect(scope.description).toMatch(/holding or private/);
+        expect(scope.revokeWarning).toMatch(/holding page again/);
+        expect(scope.revokeWarning).toMatch(/private site answers 404/);
+    });
+
     it('lists, creates and revokes at the site endpoint', () => {
         const scope = siteShareScope('https://example.com');
         expect(scope.path).toBe('/api/site/share-links');

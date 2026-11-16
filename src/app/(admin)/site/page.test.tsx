@@ -123,4 +123,31 @@ describe('the Site screen', () => {
         expect(await screen.findByLabelText('Site name (required)')).toHaveValue('Harbour Club');
         expect(screen.queryByRole('group')).toBeNull();
     });
+
+    it('saves Mode Private through the usual save when the Mode field offers it', async () => {
+        serve([
+            ...BLUEPRINT,
+            {
+                name: 'Mode',
+                displayName: 'Mode',
+                type: 'string',
+                isRequired: false,
+                options: [
+                    { value: 'Live', label: 'Live' },
+                    { value: 'Holding', label: 'Holding' },
+                    { value: 'Private', label: 'Private' },
+                ],
+            },
+        ]);
+        vi.mocked(api.put).mockResolvedValue({ data: { id: ID, version: 4 }, headers: {} });
+        renderPage();
+
+        fireEvent.click(await screen.findByRole('radio', { name: 'Private' }));
+        expect(screen.getByText(/Make one in Share links/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        const body = vi.mocked(api.put).mock.calls[0][1] as { data: Record<string, unknown> };
+        expect(body.data.Mode).toBe('Private');
+    });
 });

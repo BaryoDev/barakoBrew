@@ -12,6 +12,7 @@ import { LinkList, PairList, Section, Structured, TextField } from '@/components
 import { Button } from '@/components/ui/button';
 import { IconPlus, IconTrash } from '@/components/icons';
 import { siteShareScope } from '@/lib/site-mode';
+import { ContentStatus } from '@/types/content';
 import {
     isAbsoluteHttpUrl,
     readFooterColumns,
@@ -74,7 +75,12 @@ export default function SitePage() {
                             />
                         </Section>
 
-                        <SiteModeSection values={values} set={set} schema={schema} />
+                        <SiteModeSection
+                            values={values}
+                            set={set}
+                            schema={schema}
+                            published={entry ? entry.status === ContentStatus.Published : true}
+                        />
 
                         <SiteProfileSection values={values} set={set} schema={schema} />
 
