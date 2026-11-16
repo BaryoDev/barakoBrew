@@ -223,6 +223,8 @@ function TypeRow({
     >
       <Link
         href={openHref(schema)}
+        // Named outright: the name and slug spans read back run together, as "Staffstaff".
+        aria-label={`${schema.displayName} entries`}
         className="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] py-2.5 pl-3 outline-none focus-visible:ring-[3px]"
       >
         <span
@@ -242,10 +244,10 @@ function TypeRow({
         type="button"
         onClick={onSelect}
         aria-pressed={selected}
+        aria-label={`${fields} of ${schema.displayName}`}
         className="text-muted-foreground hover:bg-background hover:text-foreground focus-visible:ring-ring shrink-0 rounded-md px-2 py-1.5 font-mono text-[11px] tabular-nums outline-none focus-visible:ring-[3px]"
       >
         {fields}
-        <span className="sr-only"> of {schema.displayName}</span>
       </button>
     </div>
   );
