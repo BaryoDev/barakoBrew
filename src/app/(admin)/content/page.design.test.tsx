@@ -84,7 +84,12 @@ function row(
   id: string,
   title: string,
   status: string,
-  extra: { updatedAt?: string; contentType?: string } = {}
+  extra: {
+    updatedAt?: string;
+    contentType?: string;
+    lastModifiedBy?: string | null;
+    lastModifiedByName?: string | null;
+  } = {}
 ) {
   return {
     id,
@@ -95,6 +100,8 @@ function row(
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: extra.updatedAt ?? '2026-01-01T00:00:00Z',
+    ...(extra.lastModifiedBy !== undefined && { lastModifiedBy: extra.lastModifiedBy }),
+    ...(extra.lastModifiedByName !== undefined && { lastModifiedByName: extra.lastModifiedByName }),
   };
 }
 
@@ -652,7 +659,7 @@ describe('the table head and the page header', () => {
       .getAllByRole('columnheader')
       .map((head) => head.textContent)
       .filter(Boolean);
-    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated']);
+    expect(heads).toEqual(['Title', 'Type', 'Status', 'V', 'Updated', 'Author']);
   });
 
   it('has no count chip or description line under the title', async () => {
@@ -673,6 +680,32 @@ describe('the table head and the page header', () => {
 
     const time = within(bodyRows()[0]).getByText('just now');
     expect(time.closest('td')?.className).not.toContain('font-mono');
+  });
+});
+
+describe('the Author column', () => {
+  it('shows the last editor name', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedByName: 'Maria Santos' })];
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(within(bodyRows()[0]).getByText('Maria Santos')).toBeTruthy();
+  });
+
+  it('shows Unknown when the core says there is no name', async () => {
+    rows = [row('a', 'Alpha', ContentStatus.Published, { lastModifiedBy: null, lastModifiedByName: null })];
+    renderList();
+    await screen.findByText('Alpha');
+
+    expect(within(bodyRows()[0]).getByText('Unknown')).toBeTruthy();
+  });
+
+  it('leaves the cell empty when an older core does not send the field', async () => {
+    rows = [row('b', 'Beta', ContentStatus.Draft)];
+    renderList();
+    await screen.findByText('Beta');
+
+    expect(within(bodyRows()[0]).queryByText('Unknown')).toBeNull();
   });
 });
 
