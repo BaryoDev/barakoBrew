@@ -9,18 +9,62 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-16
+
+**Speaks API contracts 1 to 15, which covers barakoCMS 4.0.1 to 5.7.0.** barakoCMS 5.7.0 moves the
+admin contract to 15. A console that stops at 14 reports that API as newer than it supports, so deploy
+this console before or with 5.7.0.
+
+### Added
+
+- The role editor has a "Preview as" panel. Pick a user and a content type, and it lists entries of that
+  type with whether the user would see each one under the rules on screen, before you save the role. A
+  hidden entry shows the reason and the condition that failed. A visible one shows the fields the user can
+  read. Nothing is saved. The panel shows only when the API reports contract 15 or later.
+- The role editor reads the role back as sentences in a "Reads back as" rail beside the form. It updates as
+  you edit, unsaved changes included. A rule with conditions the editor cannot draw never reads as "every",
+  and a condition that cannot be saved yet says so.
+- Site settings offers Private mode next to Live and Holding. Private answers 404 on every public route
+  unless the visitor has a site share key or is signed in and may read the site. It is offered only when the
+  site type's Mode field lists it, and it applies once the site entry is published.
+- Modules has a Browse view of published modules on nuget.org, with search, a publisher filter and
+  category chips. A module this deployment lacks shows its install line and a Copy install button.
+- Entries has real status counts, a selection column and a bulk bar to publish or archive several entries
+  at once, with one undo. Each content type shows an icon, which you can pick from 20 glyphs or set with a
+  custom SVG.
+- The content type page can add a field and change a field's sensitivity.
+- The module screen shows real data for feature flags, forms, files, errors and accounts, in a shared table
+  with sort, filter, an enable switch, a row drawer, and list and grid views.
+
 ### Changed
 
+- Round 3 console design, screen by screen.
+  - Sign in: a split layout, tabs for each sign-in method the API offers, and one code step for a new
+    device, an emailed code or an authenticator code.
+  - Shell: the full barakoBrew wordmark, a new nav order and icons, one-line page subtitles and sentence
+    case table heads. What's new sits in the footer.
+  - Overview: a verdict line, a system strip, and Needs you and Live activity read from the API.
+  - Entries: content type tabs and status chips replace the selects, and times read as "3h ago" or
+    "Yesterday".
+  - Content types: a list beside the field detail.
+  - Workflows and Workflow runs: a live switch and status filter, the first run opens on load, and run
+    times read as Today and Yesterday.
+  - Activity and API keys: the key state and the Activity header follow the design. Key rotation is
+    redrawn.
+  - Modules: All modules shows categories, states and install lines, and the console draws first-party
+    modules the API does not list as Not installed.
+  - Tenants: create, edit and domains open in a right rail instead of a dialog.
 - The console accepts API contract 15 (barakoCMS 5.7.0, which adds the role preview route). It still
   works against 1 to 14.
-- The Entries list column for the last editor is headed **Edited by**, not Author. It shows who last
-  changed the entry, which sits next to Updated, and Author read as the person who created it.
+- The Entries list has a column for the last editor, headed **Edited by**. It shows who last
+  changed the entry, which sits next to Updated.
 
 ### Fixed
 
 - The console now reads `packageId`, `packageVersion` and `glyph` from `GET /api/modules`, which is what
   core sends. Module cards show the installed version, and the API glyph is used when it names a known
   one. Older cores that sent `package` and `version` show no version.
+- The configuration card on All modules no longer crashes on a reply it cannot read. It says so instead.
 
 ## [1.11.5] - 2026-11-01
 
@@ -943,6 +987,7 @@ from a commit anyone can point at.
 
 [Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.4...HEAD
 [1.11.4]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.4
+[1.12.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.12.0
 [1.11.3]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.3
 [1.11.2]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.2
 [1.11.1]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.1
