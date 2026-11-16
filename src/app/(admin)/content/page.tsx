@@ -211,7 +211,7 @@ function entryColumns(
     }),
     column.display({
       id: 'author',
-      header: 'Author',
+      header: 'Edited by',
       // The last editor. A null name is a deleted user or one from another tenant, so Unknown. A
       // missing field is an older core that does not say, and an empty cell claims nothing.
       cell: ({ row }) => {
