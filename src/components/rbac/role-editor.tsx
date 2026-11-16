@@ -7,6 +7,8 @@ import { emptyPermission } from '@/types/rbac';
 import { getContractServerState, getContractState, subscribeToContract } from '@/lib/api-contract';
 import { KNOWN_CAPABILITIES, holdsCapability, isPlatformCapability } from '@/lib/capabilities';
 import { conditionProblem, isEmptyPermission, transitionKey, writeConditions } from '@/lib/role-rules';
+import { ReadsBackAs } from '@/components/rbac/reads-back-as';
+import { roleSentences } from '@/lib/role-sentences';
 import { PermissionDetails, type ConditionDraft } from '@/components/rbac/permission-details';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,6 +126,13 @@ export function RoleEditor({
     ...liveTransitionDrafts.map((t) => t.draft),
   ].some((draft) => draft.rows.some((row) => conditionProblem(row) !== null));
 
+  const invalid = new Set([
+    ...liveDrafts.filter(([, d]) => d.rows.some((r) => conditionProblem(r) !== null)).map(([key]) => key),
+    ...liveTransitionDrafts
+      .filter((t) => t.draft.rows.some((r) => conditionProblem(r) !== null))
+      .map((t) => `${t.slug}:transition:${t.name}`),
+  ]);
+
   const withConditions = (list: ContentTypePermission[]) =>
     list.map((permission) => {
       let next = permission;
@@ -168,8 +177,17 @@ export function RoleEditor({
     });
   };
 
+  const sentences = roleSentences({
+    roleName: name,
+    permissions: withConditions(permissions),
+    capabilities,
+    schemas,
+    invalid,
+  });
+
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <form onSubmit={handleSubmit} className="max-w-2xl min-w-0 space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="role-name">Name</Label>
@@ -398,5 +416,7 @@ export function RoleEditor({
         </Button>
       </div>
     </form>
+    <ReadsBackAs sentences={sentences} />
+    </div>
   );
 }

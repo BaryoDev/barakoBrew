@@ -631,7 +631,7 @@ describe('who sees the buttons on a run', () => {
     return {
       retry: screen.queryByRole('button', { name: /Retry action/ }) !== null,
       cancel: screen.queryByRole('button', { name: 'Cancel run' }) !== null,
-      abandon: screen.queryByRole('button', { name: 'Abandon run' }) !== null,
+      abandon: screen.queryByRole('button', { name: 'Abandon' }) !== null,
     };
   }
 
@@ -691,7 +691,7 @@ describe('abandoning a run', () => {
   async function openAndAbandon() {
     renderRuns([PARTLY]);
     fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Abandon run' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(api.post).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes, abandon the run' }));
@@ -714,7 +714,7 @@ describe('abandoning a run', () => {
     const before = detailReads('r1');
     expect(before).toBeGreaterThan(0);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Abandon run' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon' }));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Yes, abandon the run' }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(reason));
@@ -726,7 +726,7 @@ describe('abandoning a run', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Nothing went out/ }));
 
     await screen.findByRole('list', { name: 'Actions' });
-    expect(screen.queryByRole('button', { name: 'Abandon run' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abandon' })).toBeNull();
   });
 });
 
@@ -1073,7 +1073,7 @@ describe('the open run, as the design draws it', () => {
   it('keeps Abandon, the API\'s name for the action the design calls Cancel run', async () => {
     await open();
 
-    expect(screen.getByRole('button', { name: 'Abandon run' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abandon' })).toBeInTheDocument();
   });
 });
 
@@ -1099,7 +1099,7 @@ describe('the open run across the poll', () => {
       </QueryClientProvider>,
     );
     fireEvent.click(await screen.findByRole('button', { name: /Charge the card/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Abandon run' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon' }));
     const dialog = await screen.findByRole('alertdialog');
 
     await act(async () => {
@@ -1237,3 +1237,148 @@ describe('a link to a status', () => {
   });
 });
 
+
+describe('the run open on load', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('opens the first run of the list without a click', async () => {
+    renderPage();
+
+    const list = await screen.findByRole('list', { name: 'Actions' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByRole('heading', { name: 'Announce a post' })).toBeInTheDocument();
+    expect(screen.queryByText('Choose a run')).not.toBeInTheDocument();
+
+    const rows = within(screen.getByRole('list', { name: 'Runs' })).getAllByRole('button');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(rows[1]).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('leaves a run named in the address alone', async () => {
+    searchParams = new URLSearchParams({ run: 'run-temp' });
+    renderPage();
+
+    // The id is not shaped like a run id, so the link is answered as not found and the first run
+    // is not put in its place.
+    expect(await screen.findByText('Run not found')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Actions' })).not.toBeInTheDocument();
+  });
+
+  it('moves the selection to the run that is clicked', async () => {
+    renderPage();
+    await screen.findByRole('list', { name: 'Actions' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Push to the CDN/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Push to the CDN' })).toBeInTheDocument();
+    const rows = within(screen.getByRole('list', { name: 'Runs' })).getAllByRole('button');
+    expect(rows[1]).toHaveAttribute('aria-pressed', 'true');
+    expect(rows[0]).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+describe('the run opened by default across the poll', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('stays open, with its confirm, when a refetch puts a newer run first', async () => {
+    const OPEN = {
+      ...run('r-open', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Failed')]),
+      abandonedAt: null,
+    };
+    const NEWER = run('r-newer', 'Send the digest', 'Failed', [action(1, 'Failed')]);
+    let items: Record<string, unknown>[] = [OPEN];
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf(items) };
+      return { data: [OPEN, NEWER].find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+
+    // Nothing is picked: the first run is open by default, and its Abandon is asked about.
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon' }));
+    const dialog = await screen.findByRole('alertdialog');
+
+    items = [NEWER, OPEN];
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+    });
+
+    // The list is told of new data on a later tick than the refetch resolves, so wait for the row.
+    const rowsOf = () => within(screen.getByRole('list', { name: 'Runs', hidden: true })).getAllByRole('button', { hidden: true });
+    await waitFor(() => expect(rowsOf()).toHaveLength(2));
+    expect(screen.getByRole('alertdialog')).toBe(dialog);
+    const rows = rowsOf();
+    expect(rows[0]).toHaveAttribute('aria-pressed', 'false');
+    expect(rows[1]).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'Charge the card', hidden: true })).toBeInTheDocument();
+  });
+
+  it('chooses again when the open run leaves the list', async () => {
+    const A = run('r-a', 'Alpha run', 'Failed', []);
+    const B = run('r-b', 'Beta run', 'Failed', []);
+    let items: Record<string, unknown>[] = [A];
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf(items) };
+      return { data: [A, B].find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('heading', { name: 'Alpha run' })).toBeInTheDocument();
+
+    items = [B];
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['workflow-runs'] });
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Beta run' })).toBeInTheDocument();
+  });
+});
+
+describe('scrolling on one column', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  it('does not scroll for the run opened by default at load, and scrolls on every pick after', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    setViewportWidth(900);
+    const first = run('r1', 'First run', 'Failed', []);
+    const second = run('r2', 'Second run', 'Failed', []);
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === '/api/workflow-runs') return { data: listOf([first, second]) };
+      return { data: [first, second].find((r) => url.endsWith(`/${r.id}`)) };
+    }) as typeof api.get);
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <WorkflowRunsPage />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'First run' })).toBeInTheDocument();
+    expect(scroll).not.toHaveBeenCalled();
+
+    // Clicking the run that is already open still scrolls to it.
+    fireEvent.click(screen.getByRole('button', { name: /First run/ }));
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /Second run/ }));
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(2));
+  });
+});

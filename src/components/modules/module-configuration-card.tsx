@@ -6,6 +6,7 @@ import { useModuleConfiguration } from '@/hooks/use-module-configuration';
 import type { ModuleConfigurationEntry } from '@/types/modules';
 
 export const REDACTED_MARKER = 'Redacted';
+export const CONFIGURATION_NOTE = 'Set in appsettings or environment, not here: barakoBrew owns none of the rules.';
 
 /**
  * A value is shown as text, never as an input: the card is read only. A redacted value gets an
@@ -86,6 +87,7 @@ export function ModuleConfigurationCard({ name, enabled = true }: { name: string
                         ))}
                     </dl>
                 )}
+                <p className="text-muted-foreground mt-3 text-xs">{CONFIGURATION_NOTE}</p>
             </CardContent>
         </Card>
     );

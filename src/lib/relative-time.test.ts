@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { exactTime, relativeTime } from './relative-time';
+import { exactTime, momentLabel, relativeTime } from './relative-time';
 
 const NOW = new Date('2026-11-10T12:00:00Z');
 const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
@@ -59,5 +59,33 @@ describe('relativeTime', () => {
     expect(exactTime('2026-11-10T09:00:00Z')).toBe(
       new Date('2026-11-10T09:00:00Z').toLocaleString()
     );
+  });
+});
+
+describe('momentLabel', () => {
+  // Built from local parts, so the cases hold in any zone the suite runs in.
+  const at = (y: number, m: number, d: number, h: number, min: number) => new Date(y, m - 1, d, h, min).toISOString();
+  const now = new Date(2026, 10, 14, 9, 30);
+
+  it('says Today with the clock for a time on the same day', () => {
+    expect(momentLabel(at(2026, 11, 14, 8, 51), now)).toBe('Today 08:51');
+  });
+
+  it('says Yesterday for the day before, even a few minutes across midnight', () => {
+    expect(momentLabel(at(2026, 11, 13, 17, 5), now)).toBe('Yesterday 17:05');
+    expect(momentLabel(at(2026, 11, 13, 23, 55), new Date(2026, 10, 14, 0, 5))).toBe('Yesterday 23:55');
+  });
+
+  it('writes the date for an older day this year', () => {
+    expect(momentLabel(at(2026, 11, 9, 14, 20), now)).toBe('Nov 9 14:20');
+    expect(momentLabel(at(2026, 1, 2, 7, 5), now)).toBe('Jan 2 07:05');
+  });
+
+  it('adds the year for another year', () => {
+    expect(momentLabel(at(2025, 12, 31, 22, 0), now)).toBe('Dec 31, 2025 22:00');
+  });
+
+  it('returns what it was given when it is not a date', () => {
+    expect(momentLabel('not a date', now)).toBe('not a date');
   });
 });

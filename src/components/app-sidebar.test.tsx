@@ -151,6 +151,14 @@ describe('the rail', () => {
         expect(all.className).toContain('font-semibold');
     });
 
+    it('counts the Modules group without the All modules link', async () => {
+        renderRail({ capabilities: ['view_modules'] });
+        await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
+
+        // Devices has no capability, so it is the one module row left; All modules is not counted.
+        expect(screen.getByRole('button', { name: /^Modules/ })).toHaveTextContent(/^Modules1$/);
+    });
+
     it('sizes the main nav to 36px rows and the module rows to 34px', async () => {
         renderRail({ capabilities: ['view_modules'] });
         await waitFor(() => expect(screen.getByRole('link', { name: /^All modules/ })).toBeInTheDocument());
@@ -173,11 +181,13 @@ describe('the rail', () => {
         expect(within(landmarks[0]).getByRole('link', { name: /^Overview/ })).toBeInTheDocument();
     });
 
-    it('keeps What\'s new in the rail, beside the version', async () => {
+    it('keeps What\'s new in the rail, in the footer beside the theme row', async () => {
         renderRail({ capabilities: [] });
         await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/me'));
         const button = within(rail()).getByRole('button', { name: "What's new" });
-        expect(button.className).toContain('size-7');
+        expect(button.className).toContain('size-[34px]');
+        expect(button.closest('[data-slot="sidebar-footer"]')).not.toBeNull();
+        expect(button.closest('[data-slot="sidebar-header"]')).toBeNull();
     });
 
     it('keeps What\'s new in the drawer too', async () => {
