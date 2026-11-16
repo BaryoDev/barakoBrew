@@ -57,11 +57,11 @@ test.beforeEach(async ({ page }) => {
 test('a content type opens its entries, an entry opens from there, and both lead back', async ({ page, isMobile }) => {
     await page.goto('/schemas');
 
-    // The card is a link, so Enter on it is the whole interaction. A card that needed a mouse would
-    // fail here rather than in a report nobody reads.
-    const card = page.getByRole('link', { name: 'Blog posts' });
-    await expect(card).toBeVisible();
-    await card.focus();
+    // The type's name is a link, so Enter on it is the whole interaction. A row that needed a mouse,
+    // or a second click in the detail, would fail here rather than in a report nobody reads.
+    const row = page.getByRole('link', { name: /^Blog posts/ });
+    await expect(row).toBeVisible();
+    await row.focus();
     await page.keyboard.press('Enter');
 
     await page.waitForURL('**/content?type=blogpost');
@@ -81,7 +81,7 @@ test('a content type opens its entries, an entry opens from there, and both lead
 
     await page.getByRole('link', { name: 'Content types' }).first().click();
     await page.waitForURL('**/schemas');
-    await expect(page.getByRole('link', { name: 'Blog posts' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Blog posts/ })).toBeVisible();
 });
 
 test('the entries of a type are in the URL, so the same link opens the same screen', async ({ page }) => {
@@ -114,22 +114,11 @@ test('the Entries link in the rail clears a search rather than restoring it', as
         .toBeNull();
 });
 
-test('cards or list is remembered for next time', async ({ page }) => {
-    await page.goto('/schemas');
-
-    await page.getByRole('radio', { name: 'List' }).click();
-    await expect(page.getByRole('table')).toBeVisible();
-
-    await page.reload();
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'List' })).toBeChecked();
-});
-
 test('the content types screen fits a phone without sideways scrolling', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'this is the phone-width check; the desktop projects have room');
 
     await page.goto('/schemas');
-    await expect(page.getByRole('link', { name: 'Blog posts' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Blog posts/ })).toBeVisible();
 
     const overflows = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth
