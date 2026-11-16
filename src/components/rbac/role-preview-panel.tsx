@@ -1,7 +1,7 @@
 'use client';
 
 import axios from 'axios';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRolePreview, useUsers } from '@/hooks/use-rbac';
 import { useSchemas } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
@@ -39,6 +39,8 @@ interface RolePreviewPanelProps {
   name: string;
   permissions: ContentTypePermission[];
   systemCapabilities: string[];
+  /** A condition row in the editor is invalid. The save refuses those rules, so the preview does too. */
+  blocked?: boolean;
 }
 
 function Entry({ item }: { item: RolePreviewItem }) {
@@ -76,12 +78,20 @@ function Entry({ item }: { item: RolePreviewItem }) {
  * "Preview as": runs the editor's unsaved rules against real entries as one user. It sends the
  * editor's current state, so it answers for what is on screen, not for what is stored.
  */
-export function RolePreviewPanel({ roleId, name, permissions, systemCapabilities }: RolePreviewPanelProps) {
+export function RolePreviewPanel({ roleId, name, permissions, systemCapabilities, blocked = false }: RolePreviewPanelProps) {
   const { data: users, isLoading: usersLoading, isError: usersError } = useUsers({ pageSize: 100 });
   const { data: schemas } = useSchemas();
   const preview = useRolePreview();
   const [userId, setUserId] = useState('');
   const [contentType, setContentType] = useState('');
+
+  const { reset } = preview;
+
+  // The rules, the name or the capabilities moved, so the last answer no longer describes what is on screen.
+  const draftKey = JSON.stringify([roleId ?? null, name, permissions, systemCapabilities]);
+  useEffect(() => {
+    reset();
+  }, [draftKey, reset]);
 
   const run = () =>
     preview.mutate({
@@ -94,7 +104,18 @@ export function RolePreviewPanel({ roleId, name, permissions, systemCapabilities
       name: name.trim() || undefined,
     });
 
-  const items = preview.data?.items ?? [];
+  // A response for an earlier choice is never shown under the current one.
+  const current =
+    preview.variables?.userId === userId && preview.variables?.contentType === contentType ? preview.data : undefined;
+  const items = current?.items ?? [];
+  const hidden = items.filter((item) => !item.visible).length;
+  const status = preview.isPending
+    ? 'Running…'
+    : current
+      ? items.length === 0
+        ? 'There are no entries of this type to preview.'
+        : `${items.length} ${items.length === 1 ? 'entry' : 'entries'}, ${hidden} hidden`
+      : '';
 
   return (
     <section aria-labelledby="role-preview" className="border-border bg-card grid gap-3 rounded-2xl border p-5">
@@ -126,7 +147,10 @@ export function RolePreviewPanel({ roleId, name, permissions, systemCapabilities
               className={SELECT_CLASS}
               value={userId}
               disabled={usersLoading}
-              onChange={(e) => setUserId(e.target.value)}
+              onChange={(e) => {
+                reset();
+                setUserId(e.target.value);
+              }}
             >
               <option value="">{usersLoading ? 'Loading users…' : 'Pick a user'}</option>
               {users?.items.map((user) => (
@@ -142,7 +166,10 @@ export function RolePreviewPanel({ roleId, name, permissions, systemCapabilities
               id="preview-type"
               className={SELECT_CLASS}
               value={contentType}
-              onChange={(e) => setContentType(e.target.value)}
+              onChange={(e) => {
+                reset();
+                setContentType(e.target.value);
+              }}
             >
               <option value="">Pick a content type</option>
               {schemas.map((schema) => (
@@ -160,31 +187,32 @@ export function RolePreviewPanel({ roleId, name, permissions, systemCapabilities
           type="button"
           variant="outline"
           size="sm"
-          disabled={!userId || !contentType || preview.isPending}
+          disabled={!userId || !contentType || preview.isPending || blocked}
           onClick={run}
         >
           {preview.isPending ? 'Running…' : 'Preview'}
         </Button>
       </div>
 
-      <div aria-live="polite" className="min-w-0">
-        {preview.isPending ? (
-          <TableSkeleton rows={3} />
-        ) : preview.isError ? (
-          <p role="alert" className="text-warning flex items-start gap-2 text-[13px]">
-            <IconWarning aria-hidden className="mt-0.5 size-4 shrink-0" />
-            <span>{previewErrorMessage(preview.error)}</span>
-          </p>
-        ) : preview.data && items.length === 0 ? (
-          <p className="text-muted-foreground text-sm">There are no entries of this type to preview.</p>
-        ) : preview.data ? (
-          <ul className="grid gap-2">
-            {items.map((item) => (
-              <Entry key={item.id} item={item} />
-            ))}
-          </ul>
-        ) : null}
-      </div>
+      {blocked && <p className="text-muted-foreground text-xs">Fix the condition marked above first.</p>}
+
+      <p aria-live="polite" className="text-muted-foreground min-h-5 text-sm">
+        {status}
+      </p>
+      {preview.isPending && <TableSkeleton rows={3} />}
+      {preview.isError && !preview.isPending && (
+        <p role="alert" className="text-warning flex items-start gap-2 text-[13px]">
+          <IconWarning aria-hidden className="mt-0.5 size-4 shrink-0" />
+          <span>{previewErrorMessage(preview.error)}</span>
+        </p>
+      )}
+      {items.length > 0 && (
+        <ul className="grid gap-2">
+          {items.map((item) => (
+            <Entry key={item.id} item={item} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

@@ -432,6 +432,7 @@ export function RoleEditor({
           name={name}
           permissions={withConditions(permissions)}
           systemCapabilities={capabilities}
+          blocked={conditionsBlocked}
         />
       </div>
     )}

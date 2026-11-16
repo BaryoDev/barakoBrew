@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { RoleRequest } from '@/types/rbac';
 
@@ -523,5 +523,59 @@ describe('the Preview as panel', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('That user or role was not found.');
+    });
+
+    it('is not offered against contract 14, which has no preview route', async () => {
+        await renderWithPreview('role-9', ROLE);
+        expect(screen.getByRole('heading', { name: 'Preview as' })).toBeInTheDocument();
+        cleanup();
+        __resetContractForTests();
+        recordContractVersion('14');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor roleId="role-9" initial={ROLE} submitLabel="Save role" isPending={false} onSubmit={vi.fn()} onCancel={() => {}} />
+            </QueryClientProvider>,
+        );
+        await waitFor(() => expect(screen.getByText('Record')).toBeInTheDocument());
+        expect(screen.queryByRole('heading', { name: 'Preview as' })).toBeNull();
+    });
+
+    it('clears the old entries when the user changes after a run', async () => {
+        vi.mocked(api.post).mockResolvedValue({
+            data: { items: [{ id: 'a', title: 'First entry', visible: true, reason: null, condition: null, readableFields: null }] },
+        });
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+        expect(await screen.findByText('First entry')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('User'), { target: { value: '' } });
+        expect(screen.queryByText('First entry')).toBeNull();
+    });
+
+    it('disables Preview while a condition row has a problem, and says why', async () => {
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Conditions and field limits for Record' }));
+        const read = screen.getByText('Read only entries where').parentElement!;
+        fireEvent.click(within(read).getByRole('button', { name: 'Add condition' }));
+        fireEvent.change(within(read).getByLabelText('Condition 1 field'), { target: { value: 'Class.Teacher.User' } });
+
+        expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
+        expect(screen.getByText('Fix the condition marked above first.')).toBeInTheDocument();
+    });
+
+    it('shows a reason it does not know exactly as the server sent it', async () => {
+        vi.mocked(api.post).mockResolvedValue({
+            data: { items: [{ id: 'a', title: 'Odd one', visible: false, reason: 'frozen by policy', condition: null, readableFields: null }] },
+        });
+        await renderWithPreview('role-9', ROLE);
+        pick();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByText('frozen by policy')).toBeInTheDocument();
     });
 });
