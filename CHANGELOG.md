@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- The console accepts API contract 15 (barakoCMS 5.7.0, which adds the role preview route). It still
+  works against 1 to 14.
+
 ### Fixed
 
 - The console now reads `packageId`, `packageVersion` and `glyph` from `GET /api/modules`, which is what
