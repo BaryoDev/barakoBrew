@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- The console accepts API contract 16 (barakoCMS 5.8.0, which refuses a computed field that would show
+  more than its inputs and a member profile value the caller does not hold). It still works against 1 to 15.
+
 ## [1.12.0] - 2026-11-16
 
 **Speaks API contracts 1 to 15, which covers barakoCMS 4.0.1 to 5.7.0.** barakoCMS 5.7.0 moves the
