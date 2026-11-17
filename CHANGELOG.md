@@ -9,6 +9,12 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-17
+
+**Speaks API contracts 1 to 16, which covers barakoCMS 4.0.1 to 5.8.0.** barakoCMS 5.8.0 moves the
+admin contract to 16. A console that stops at 15 reports that API as newer than it supports, so deploy
+this console before or with 5.8.0.
+
 ### Changed
 
 - The console accepts API contract 16 (barakoCMS 5.8.0, which refuses a computed field that would show
@@ -992,6 +998,7 @@ from a commit anyone can point at.
 
 [Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.4...HEAD
 [1.11.4]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.4
+[1.13.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.13.0
 [1.12.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.12.0
 [1.11.3]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.3
 [1.11.2]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.2
