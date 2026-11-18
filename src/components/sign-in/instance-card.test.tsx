@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { InstanceCard, hostInitials, nameInitials, reachabilityLabel } from './instance-card';
+import { InstanceCard, checkedLabel, hostInitials, nameInitials, reachabilityLabel } from './instance-card';
 
 describe('InstanceCard before sign in', () => {
     it('shows the host and that it answers, and nothing from inside the tenant', () => {
@@ -111,5 +111,48 @@ describe('nameInitials', () => {
     it('takes the first letters of the first two words, else the first two letters', () => {
         expect(nameInitials('Kapé Ana')).toBe('KA');
         expect(nameInitials('Cafe')).toBe('CA');
+    });
+});
+
+describe('Checked just now', () => {
+    const remembered = {
+        origin: 'https://api.cafe.example',
+        name: 'Kapé Ana',
+        version: '5.1.0',
+        modules: 16,
+        seenAt: '2026-11-11T09:00:00.000Z',
+    };
+    const now = new Date('2026-11-11T12:00:00.000Z');
+
+    it('ends the facts line after a past sign-in', () => {
+        const { container } = render(
+            <InstanceCard
+                host="api.cafe.example"
+                reachability={{ reachable: true, ms: 42 }}
+                remembered={remembered}
+                checkedAt={now.getTime() - 5_000}
+                now={now}
+            />
+        );
+        expect(container).toHaveTextContent('barakoCMS 5.1.0 · 16 modules · Checked just now');
+    });
+
+    it('is not shown on a first visit, even with a check time', () => {
+        const { container } = render(
+            <InstanceCard host="api.cafe.example" reachability={{ reachable: true, ms: 42 }} checkedAt={now.getTime()} now={now} />
+        );
+        expect(container.textContent).not.toMatch(/checked/i);
+    });
+
+    it('is not shown before the first answer', () => {
+        const { container } = render(
+            <InstanceCard host="api.cafe.example" reachability={undefined} remembered={remembered} checkedAt={0} now={now} />
+        );
+        expect(container.textContent).not.toMatch(/checked/i);
+    });
+
+    it('ages as the check gets old', () => {
+        expect(checkedLabel(now.getTime() - 3 * 60_000, now)).toBe('Checked 3 min ago');
+        expect(checkedLabel(undefined, now)).toBe('');
     });
 });

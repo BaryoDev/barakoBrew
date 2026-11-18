@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Mail, ShieldCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FieldError } from './field-error';
@@ -156,8 +156,24 @@ export function CodeStep({
                         {resending ? 'Sending…' : sentAgain ? 'Sent again' : 'Send a new code'}
                     </LinkButton>
                 )}
-                {onSwap ? <LinkButton onClick={onSwap}>{totp ? 'Email me a code' : 'Use authenticator'}</LinkButton> : null}
+                <LinkButton onClick={onBack} disabled={pending} muted>
+                    Not you? Go back
+                </LinkButton>
             </div>
+
+            {onSwap ? (
+                <div className="bg-secondary text-secondary-foreground flex items-center gap-2.5 rounded-xl px-3.5 py-3 text-[13px] leading-normal">
+                    {totp ? (
+                        <Mail aria-hidden className="text-muted-foreground size-4 shrink-0" />
+                    ) : (
+                        <ShieldCheck aria-hidden className="text-muted-foreground size-4 shrink-0" />
+                    )}
+                    <span className="flex-1">{swapText(totp, email)}</span>
+                    <LinkButton onClick={onSwap} nowrap>
+                        {totp ? 'Email me a code' : 'Use authenticator'}
+                    </LinkButton>
+                </div>
+            ) : null}
 
             {!totp && (
                 <p className="text-[var(--faint)] bg-secondary rounded-lg px-3 py-2.5 text-xs leading-snug">
@@ -166,20 +182,28 @@ export function CodeStep({
                 </p>
             )}
 
-            <Button type="button" variant="ghost" className="h-10 w-full" onClick={onBack} disabled={pending}>
-                Not you? Go back
-            </Button>
         </form>
     );
+}
+
+/** The sentence in the swap row, written for where the person is stuck. */
+export function swapText(totp: boolean, email?: string): string {
+    if (!totp) return 'Have an authenticator app enrolled? Use that instead; nothing has to arrive by email.';
+    return email ? `Phone not with you? We can email a code to ${email} instead.` : 'Phone not with you? We can email a code instead.';
 }
 
 function LinkButton({
     onClick,
     disabled,
+    muted,
+    nowrap,
     children,
 }: {
     onClick?: () => void;
     disabled?: boolean;
+    /** The quiet link ("Not you? Go back"), in the muted colour rather than the accent. */
+    muted?: boolean;
+    nowrap?: boolean;
     children: React.ReactNode;
 }) {
     return (
@@ -187,7 +211,11 @@ function LinkButton({
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className="text-accent-foreground font-semibold hover:underline disabled:opacity-50"
+            className={
+                (muted ? 'text-muted-foreground' : 'text-accent-foreground') +
+                ' font-semibold hover:underline disabled:opacity-50' +
+                (nowrap ? ' whitespace-nowrap' : '')
+            }
         >
             {children}
         </button>

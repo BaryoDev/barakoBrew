@@ -34,11 +34,20 @@ export function BrandWordmark({ className }: { className?: string }) {
 export function BrandBean({
   className,
   decorative = false,
+  flat = false,
+  highlight,
   title = 'BarakoCMS',
 }: {
   className?: string;
   /** Drop the highlight and the accessible name. For the watermark, which carries no meaning. */
   decorative?: boolean;
+  /**
+   * The canvas bean on the dark sign-in panel: a flat #8E7DF5 body and a #14162A seam, no gradient.
+   * The gradient goes dark at one corner, which reads as a smudge on the panel.
+   */
+  flat?: boolean;
+  /** Draw the highlight. Defaults to on unless `decorative`. The large bean on the panel turns it on. */
+  highlight?: boolean;
   title?: string;
 }) {
   const gradientId = `bean-${useId()}`;
@@ -59,13 +68,15 @@ export function BrandBean({
         </linearGradient>
       </defs>
       <g transform="rotate(-32 64 64)">
-        <ellipse cx="64" cy="64" rx="33" ry="50" fill={`url(#${gradientId})`} />
-        {!decorative && <ellipse cx="52" cy="44" rx="9" ry="17" fill="#c9c1f5" opacity="0.35" />}
+        <ellipse cx="64" cy="64" rx="33" ry="50" fill={flat ? '#8e7df5' : `url(#${gradientId})`} />
+        {(highlight ?? !decorative) && (
+          <ellipse cx="52" cy="44" rx="9" ry="17" fill={flat ? '#e6e1ff' : '#c9c1f5'} opacity="0.35" />
+        )}
         <path
           d="M64 17 C 51 41, 77 55, 64 64 C 51 73, 77 87, 64 111"
           fill="none"
-          stroke="var(--accent-deep)"
-          strokeWidth="6.5"
+          stroke={flat ? '#14162a' : 'var(--accent-deep)'}
+          strokeWidth={flat ? 7 : 6.5}
           strokeLinecap="round"
         />
       </g>
