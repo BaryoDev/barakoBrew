@@ -123,7 +123,7 @@ export function CommandMenu({ trigger = 'rail' }: { trigger?: 'rail' | 'bar' }) 
           onValueChange={setQuery}
         />
         <CommandList>
-          {nothing && !(q && entries.isFetching) && (
+          {nothing && !(q && (q !== settled || entries.isFetching)) && (
             <div className="text-muted-foreground py-6 text-center text-sm">Nothing matches that search.</div>
           )}
           {shownScreens.length > 0 && (

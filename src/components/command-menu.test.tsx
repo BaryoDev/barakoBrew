@@ -49,7 +49,7 @@ describe('the command palette', () => {
         expect(screen.getByPlaceholderText('Jump to a screen or entry')).toBeInTheDocument();
     });
 
-    it('searches entries after the debounce, tenant scoped, and opens one', async () => {
+    it('searches entries after the debounce and opens one', async () => {
         vi.mocked(api.get).mockResolvedValue({ data: { items: [entry(1)], total: 1, page: 1, pageSize: PALETTE_CAP } } as never);
         const user = open();
         await user.click(screen.getByRole('button', { name: /search or jump to/i }));
@@ -63,6 +63,16 @@ describe('the command palette', () => {
 
         await user.click(row);
         expect(push).toHaveBeenCalledWith('/content/e1');
+    });
+
+    it('does not say nothing matches while an entry search is still on its way', async () => {
+        vi.mocked(api.get).mockReturnValue(new Promise(() => undefined) as never);
+        const user = open();
+        await user.click(screen.getByRole('button', { name: /search or jump to/i }));
+        await user.type(screen.getByPlaceholderText('Jump to a screen or entry'), 'mango');
+        expect(screen.queryByText(/nothing matches/i)).not.toBeInTheDocument();
+        await waitFor(() => expect(api.get).toHaveBeenCalled());
+        expect(screen.queryByText(/nothing matches/i)).not.toBeInTheDocument();
     });
 
     it('sends nothing before a query is typed', async () => {
