@@ -185,6 +185,7 @@ describe('the system strip from GET /api/overview', () => {
         expect(href('API')).toHaveAttribute('href', '/ops/health');
         expect(href('Mail')).toHaveAttribute('href', '/email-events');
         expect(href('Storage')).toBeNull();
-        expect(within(strip()).getByRole('link', { name: 'All systems normal' })).toHaveAttribute('href', '/ops/health');
+        // Mail is off in this block's summary, so the pill points at mail, on its old screen.
+        expect(within(strip()).getByRole('link', { name: '1 warning' })).toHaveAttribute('href', '/email-events');
     });
 });
