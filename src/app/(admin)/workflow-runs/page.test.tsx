@@ -162,7 +162,7 @@ describe('the workflow runs screen and the kind of a failure', () => {
     expect(dialog).toHaveTextContent(QUESTION);
     expect(retryCalls()).toHaveLength(0);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(retryCalls()).toHaveLength(0);
