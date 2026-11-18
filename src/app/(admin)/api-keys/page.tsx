@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/patterns/status-badge';
 import { RotateRail } from './rotate-rail';
+import { ConnectPhone } from './connect-phone';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -325,7 +326,12 @@ export default function ApiKeysPage() {
       <PageHeader
         title="API keys"
         description="A key is shown once. Rotation keeps the old key alive for an overlap window so nothing breaks mid-deploy."
-        actions={newButton}
+        actions={
+          <div className="flex items-center gap-2">
+            <ConnectPhone />
+            {newButton}
+          </div>
+        }
       />
 
       {isLoading ? (

@@ -210,3 +210,51 @@ export function useRevokeApiKey() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   });
 }
+
+/** The reply of POST /api/api-keys/pairings. The code is shown once, so it is only ever held in state. */
+export const pairingStartSchema = z.looseObject({
+  id: z.string().min(1),
+  code: z.string().min(1),
+  expiresAt: z.string().min(1),
+});
+
+/** The reply of GET /api/api-keys/pairings/{id}. */
+export const pairingStatusSchema = z.looseObject({
+  id: z.string(),
+  expiresAt: z.string(),
+  redeemedAt: z.string().nullable(),
+  keyId: z.string().nullable().optional(),
+});
+
+export type PairingStart = z.output<typeof pairingStartSchema>;
+export type PairingStatus = z.output<typeof pairingStatusSchema>;
+
+/** Starts a pairing. The result holds the one-time code, so it carries the secret mutation options. */
+export function useStartPairing() {
+  return useMutation({
+    mutationFn: async (name: string): Promise<PairingStart> =>
+      parseResponse(
+        pairingStartSchema,
+        (await api.post<unknown>('/api/api-keys/pairings', { name })).data,
+        'POST /api/api-keys/pairings',
+      ),
+    ...SECRET_MUTATION,
+  });
+}
+
+/** Polls a pairing every two seconds while `enabled`. The key never holds the code. */
+export function usePairingStatus(id: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['api-key-pairing', id],
+    enabled: enabled && !!id,
+    // Stops on its own once the phone has redeemed.
+    refetchInterval: (query) => (query.state.data?.redeemedAt ? false : 2000),
+    retry: false,
+    queryFn: async (): Promise<PairingStatus> =>
+      parseResponse(
+        pairingStatusSchema,
+        (await api.get<unknown>(`/api/api-keys/pairings/${id}`)).data,
+        'GET /api/api-keys/pairings/{id}',
+      ),
+  });
+}
