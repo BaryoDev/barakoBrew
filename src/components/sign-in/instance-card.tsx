@@ -37,6 +37,17 @@ export function factsLine(r: Pick<RememberedInstance, 'version' | 'modules'>): s
 }
 
 /**
+ * "Checked just now", the last part of the facts line. Empty until a check has come back, since
+ * "just now" before there is an answer would be a claim about nothing.
+ */
+export function checkedLabel(checkedAt: number | undefined, now: Date = new Date()): string {
+    if (!checkedAt) return '';
+    // A clock set back after the check would read as a date in the future; call it just now.
+    const at = Math.min(checkedAt, now.getTime());
+    return `Checked ${relativeTime(new Date(at).toISOString(), now)}`;
+}
+
+/**
  * "You are signing in to", on the brand panel.
  *
  * A first visit knows the host the console was pointed at and whether it answers, and nothing else:
@@ -50,12 +61,15 @@ export function InstanceCard({
     reachability,
     remembered,
     onForget,
+    checkedAt,
     now,
 }: {
     host: string | null;
     reachability: Reachability | undefined;
     remembered?: RememberedInstance | null;
     onForget?: () => void;
+    /** When the reachability answer last came in, in epoch milliseconds. Shown only with the remembered facts. */
+    checkedAt?: number;
     now?: Date;
 }) {
     const up = reachability?.reachable === true;
@@ -67,6 +81,9 @@ export function InstanceCard({
     const headingRef = useRef<HTMLParagraphElement>(null);
     const initials = known?.name ? nameInitials(known.name) : hostInitials(host);
     const facts = known ? factsLine(known) : '';
+    // Same ruling as the facts it sits beside: a first visit shows none of it.
+    const checked = known && reachability ? checkedLabel(checkedAt, now) : '';
+    const factsWithCheck = [facts, checked].filter(Boolean).join(' · ');
     return (
         <div
             data-testid="instance-card"
@@ -103,7 +120,7 @@ export function InstanceCard({
             {known ? (
                 <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-[12.5px] text-[#c8cbe3]">
                     <span className="min-w-0">
-                        {facts ? <span className="block truncate">{facts}</span> : null}
+                        {factsWithCheck ? <span className="block truncate" title={factsWithCheck}>{factsWithCheck}</span> : null}
                         <span className="block text-[#9a9fc0]">Last seen {relativeTime(known.seenAt, now)}</span>
                     </span>
                     {onForget ? (

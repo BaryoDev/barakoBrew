@@ -12,22 +12,25 @@ export function BrandPanel({
     reachability,
     remembered,
     onForget,
+    checkedAt,
 }: {
     host: string | null;
     reachability: Reachability | undefined;
     remembered?: RememberedInstance | null;
     onForget?: () => void;
+    /** When the reachability answer last came in, in epoch milliseconds. */
+    checkedAt?: number;
 }) {
     return (
         <aside className="sticky top-0 hidden h-svh flex-col justify-between bg-[var(--code)] px-[clamp(28px,4vw,64px)] py-8 text-[#eeeff8] min-[900px]:flex min-[900px]:w-[45%] min-[900px]:max-w-[656px]">
             <div className="flex items-center gap-3">
-                <BrandBean className="size-7" decorative />
+                <BrandBean className="size-7" decorative flat />
                 <BrandWordmark className="text-[#eeeff8] [&>span]:text-[#b9aeff]" />
             </div>
 
             <div>
                 <div className="flex items-center gap-5">
-                    <BrandBean className="size-16 shrink-0" decorative />
+                    <BrandBean className="size-16 shrink-0" decorative flat highlight />
                     <h2 className="font-display text-[clamp(26px,2.8vw,38px)] leading-[1.05] font-semibold tracking-[-0.03em]">
                         Know what your site is doing before anyone asks.
                     </h2>
@@ -38,7 +41,7 @@ export function BrandPanel({
                 </p>
             </div>
 
-            <InstanceCard host={host} reachability={reachability} remembered={remembered} onForget={onForget} />
+            <InstanceCard host={host} reachability={reachability} remembered={remembered} onForget={onForget} checkedAt={checkedAt} />
         </aside>
     );
 }
