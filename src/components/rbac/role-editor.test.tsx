@@ -375,7 +375,7 @@ describe('transition permissions', () => {
 });
 
 describe('the Read and Write grid, the tabs and the chips', () => {
-    it('write_is_disabled_until_read_is_ticked_and_unticking_read_clears_write', async () => {
+    it('unticking_read_leaves_write_unchanged', async () => {
         const onSubmit = await renderEditor({
             ...ROLE,
             permissions: [
@@ -387,20 +387,66 @@ describe('the Read and Write grid, the tabs and the chips', () => {
             ],
         });
 
-        expect(screen.getByRole('checkbox', { name: 'Write Grade' })).toBeDisabled();
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Read Grade' }));
-        expect(screen.getByRole('checkbox', { name: 'Write Grade' })).toBeEnabled();
-        expect(screen.getByRole('checkbox', { name: 'Write Grade' })).not.toBeChecked();
-
-        expect(screen.getByRole('checkbox', { name: 'Write Name' })).toBeChecked();
         fireEvent.click(screen.getByRole('checkbox', { name: 'Read Name' }));
-        expect(screen.getByRole('checkbox', { name: 'Write Name' })).not.toBeChecked();
-        expect(screen.getByRole('checkbox', { name: 'Write Name' })).toBeDisabled();
-
+        expect(screen.getByRole('checkbox', { name: 'Read Name' })).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Name' })).toBeChecked();
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
         const [permission] = submitted(onSubmit).permissions;
-        expect(permission.read.readableFields).toEqual(['Attendance', 'Grade']);
+        expect(permission.read.readableFields).toEqual(['Attendance']);
+        expect(permission.update.writableFields).toEqual(['Name', 'Attendance']);
+    });
+
+    it('a_create_only_role_can_tick_write_back', async () => {
+        const onSubmit = await renderEditor({
+            ...ROLE,
+            permissions: [
+                {
+                    ...ROLE.permissions[0],
+                    read: { enabled: false },
+                    update: { enabled: false },
+                    create: { enabled: true, writableFields: ['Name', 'Attendance'] },
+                },
+            ],
+        });
+
+        const attendance = screen.getByRole('checkbox', { name: 'Write Attendance' });
+        expect(attendance).toBeEnabled();
+        fireEvent.click(attendance);
+        expect(attendance).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Name' })).toBeDisabled();
+        expect(screen.getByRole('checkbox', { name: 'Read Name' })).toBeDisabled();
+        expect(screen.getByText(/Turn on Read/)).toBeInTheDocument();
+
+        fireEvent.click(attendance);
+        expect(attendance).toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].create.writableFields).toEqual(['Name', 'Attendance']);
+    });
+
+    it('update_and_create_write_sets_are_edited_separately', async () => {
+        const onSubmit = await renderEditor({
+            ...ROLE,
+            permissions: [
+                {
+                    ...ROLE.permissions[0],
+                    read: { enabled: true },
+                    update: { enabled: true, writableFields: ['Attendance', 'Grade'] },
+                    create: { enabled: true, writableFields: ['Name', 'Grade'] },
+                },
+            ],
+        });
+
+        expect(screen.getByRole('checkbox', { name: 'Write Name (Update)' })).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Name (Create)' })).toBeChecked();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Write Grade (Update)' }));
+        expect(screen.getByRole('checkbox', { name: 'Write Grade (Create)' })).toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
         expect(permission.update.writableFields).toEqual(['Attendance']);
+        expect(permission.create.writableFields).toEqual(['Name', 'Grade']);
     });
 
     function narrow(read: string[], update: string[] | null) {
@@ -438,21 +484,6 @@ describe('the Read and Write grid, the tabs and the chips', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
 
         expect(submitted(onSubmit).permissions[0].update.writableFields).toEqual(['Attendance']);
-    });
-
-    it('read_cannot_be_unticked_on_the_only_writable_field', async () => {
-        const onSubmit = await renderEditor(narrow(['Name', 'Attendance'], ['Attendance']));
-
-        const read = screen.getByRole('checkbox', { name: 'Read Attendance' });
-        expect(read).toBeDisabled();
-        expect(read).toHaveAccessibleDescription('At least one field. Turn off Update to allow none.');
-        expect(screen.getByRole('checkbox', { name: 'Read Name' })).toBeEnabled();
-        fireEvent.click(read);
-        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
-
-        const [permission] = submitted(onSubmit).permissions;
-        expect(permission.read.readableFields).toEqual(['Name', 'Attendance']);
-        expect(permission.update.writableFields).toEqual(['Attendance']);
     });
 
     it('round_trips_readable_and_writable_fields_through_the_grid', async () => {
@@ -601,6 +632,55 @@ describe('transition condition presets', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
 
         expect(submitted(onSubmit).permissions[0].transitions).toEqual({ Explain: { enabled: true, conditions: null } });
+    });
+
+    it('only_their_own_writes_the_createdBy_system_key', async () => {
+        const onSubmit = await open(held());
+
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'own' } });
+        fireEvent.change(screen.getByLabelText('Field for Explain'), { target: { value: '$createdBy' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({
+            Explain: { enabled: true, conditions: { $createdBy: { _eq: '$CURRENT_USER' } } },
+        });
+    });
+
+    it('reads_a_stored_dollar_createdby_as_only_their_own', async () => {
+        const onSubmit = await open(held({ $CreatedBy: { _eq: '$CURRENT_USER' } }));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('own');
+        expect(screen.getByLabelText('Field for Explain')).toHaveValue('$CreatedBy');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({
+            Explain: { enabled: true, conditions: { $CreatedBy: { _eq: '$CURRENT_USER' } } },
+        });
+    });
+
+    it('switching_to_any_and_back_restores_the_custom_condition', async () => {
+        const stored = { Owner: { _eq: '$CURRENT_USER.team' }, Seats: { _eq: 4 } };
+        const onSubmit = await open(held(stored));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('custom');
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'any' } });
+        expect(screen.queryByLabelText('Condition 1 field')).toBeNull();
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'custom' } });
+        expect(screen.getByLabelText('Condition 1 field')).toHaveValue('Owner');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({ Explain: { enabled: true, conditions: stored } });
+    });
+
+    it('an_owner_field_condition_stays_custom', async () => {
+        const stored = { Owner: { _eq: '$CURRENT_USER' } };
+        const onSubmit = await open(held(stored));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('custom');
+        expect(screen.getByLabelText('Condition 1 field')).toHaveValue('Owner');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({ Explain: { enabled: true, conditions: stored } });
     });
 
     it('a_stored_condition_of_another_shape_opens_on_custom_unchanged', async () => {

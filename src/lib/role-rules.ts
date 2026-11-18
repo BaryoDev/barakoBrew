@@ -170,7 +170,8 @@ export function ruleSentence(role: string, verb: string, plural: string, rows: r
     const who = role.trim() || 'This role';
     if (rows.length === 0) return `${who} can ${verb} every ${plural}.`;
     const parts = rows.map((row) => {
-        const field = row.key.trim() || 'a field';
+        const typedKey = row.key.trim();
+        const field = typedKey.toLowerCase() === '$createdby' ? 'Created by' : typedKey || 'a field';
         // The API swaps in the current user for _eq and _ne only. In a list it is plain text.
         const substituted = row.operator === '_eq' || row.operator === '_ne';
         const typed = row.value.trim();
@@ -246,7 +247,9 @@ export function conditionPreset(draft: { rows: readonly ConditionRow[]; kept: Re
     if (draft.rows.length !== 1) return 'custom';
     const [row] = draft.rows;
     if (row.operator !== '_eq') return 'custom';
-    if (row.value === CURRENT_USER) return 'own';
+    // Only the owner system key is "their own". Core reads a key without the dollar as a content
+    // field, so any other key holding the caller stays custom and is sent as stored.
+    if (row.value === CURRENT_USER) return row.key.toLowerCase() === '$createdby' ? 'own' : 'custom';
     if (row.value === CURRENT_USER_DEPARTMENT) return 'department';
     return 'custom';
 }

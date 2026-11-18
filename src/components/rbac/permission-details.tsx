@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ContentTypePermission, PermissionAction } from '@/types/rbac';
 import type { ContentTypeDefinition } from '@/types/schema';
 import { SensitivityLevel, sensitivityMeta } from '@/types/content';
+import { CREATED_BY_FIELD } from '@/types/schema';
 import {
   CONDITION_OPERATORS,
   CONDITION_RULES,
@@ -147,7 +148,7 @@ const PRESET_LABELS: Record<ConditionPreset, string> = {
 };
 
 /** Fields every entry carries whatever its type declares. */
-const SYSTEM_FIELDS = [{ name: 'CreatedBy', label: 'Created by' }];
+const SYSTEM_FIELDS = [{ name: CREATED_BY_FIELD, label: 'Created by' }];
 
 /**
  * A transition's condition as a choice: any entry, the caller's own, the caller's department, or the
@@ -167,6 +168,7 @@ function TransitionCondition({
   onChange: (draft: ConditionDraft) => void;
 }) {
   const [mode, setMode] = useState<ConditionPreset>(() => conditionPreset(draft));
+  const lastCustom = useRef<ConditionDraft | null>(null);
   const key = draft.rows[0]?.key ?? '';
 
   const choices = [
@@ -180,8 +182,11 @@ function TransitionCondition({
 
   const pick = (next: ConditionPreset) => {
     if (next === mode) return;
+    if (mode === 'custom') lastCustom.current = draft;
     setMode(next);
-    if (next === 'any') onChange({ rows: [], kept: {} });
+    if (next === 'custom') {
+      if (lastCustom.current) onChange(lastCustom.current);
+    } else if (next === 'any') onChange({ rows: [], kept: {} });
     else if (next === 'own' || next === 'department') onChange({ rows: [presetRow(next, key)], kept: {} });
   };
 
@@ -248,9 +253,11 @@ function SensitivityChip({ level }: { level: string }) {
 }
 
 /**
- * One row per field with a Read and a Write box. Read edits the Read rule's readableFields. Write
- * edits the writableFields of each of the Create and Update rules that is on. Write needs Read, so
- * unticking Read also unticks Write. Both sets are stored as before: an empty list removes a limit.
+ * One row per field with a Read box and a Write box for each of the Update and Create rules that is
+ * on. Each box edits only its own rule's set (readableFields, or that rule's writableFields). Read
+ * and Write are separate in the API, so neither needs the other and a click on one never changes the
+ * other. A set is never left empty by a click,
+ * because an empty list means no limit. Ticking every field stores an empty list, which is the same.
  */
 function FieldGrid({
   schema,
@@ -263,9 +270,9 @@ function FieldGrid({
 }) {
   const declared = schema.fields.map((f) => f.name);
   const writeActions = (['update', 'create'] as const).filter((a) => permission[a].enabled);
-  const readSet = permission.read.enabled ? effectiveFields(permission.read, 'readableFields', declared) : [];
-  const shownWrite = writeActions[0];
-  const writeSet = shownWrite ? effectiveFields(permission[shownWrite], 'writableFields', declared) : [];
+  const readOn = permission.read.enabled;
+  const readSet = readOn ? effectiveFields(permission.read, 'readableFields', declared) : [];
+  const writeSets = writeActions.map((a) => effectiveFields(permission[a], 'writableFields', declared));
 
   const stored = [
     ...(hasFieldSet(permission.read, 'readableFields') ? (permission.read.readableFields as string[]) : []),
@@ -274,36 +281,29 @@ function FieldGrid({
   const extras = [...new Set(stored)].filter((n) => !declared.includes(n));
   const names = [...declared, ...extras];
 
+  const readOffId = `${schema.name}-read-off`;
+  const writeOffId = `${schema.name}-write-off`;
+  const noWrite = writeActions.length === 0;
+
   const setRead = (field: string, on: boolean) => {
-    let next = permission;
-    if (permission.read.enabled) {
-      next = {
-        ...next,
-        read: { ...next.read, readableFields: toggleFieldInSet(next.read, 'readableFields', declared, field, on) },
-      };
-    }
-    if (!on) {
-      for (const action of writeActions) {
-        if (!effectiveFields(next[action], 'writableFields', declared).includes(field)) continue;
-        next = {
-          ...next,
-          [action]: { ...next[action], writableFields: toggleFieldInSet(next[action], 'writableFields', declared, field, false) },
-        };
-      }
-    }
-    onPermission(next);
+    if (!readOn) return;
+    onPermission({
+      ...permission,
+      read: { ...permission.read, readableFields: toggleFieldInSet(permission.read, 'readableFields', declared, field, on) },
+    });
   };
 
-  const setWrite = (field: string, on: boolean) => {
-    let next = permission;
-    for (const action of writeActions) {
-      next = {
-        ...next,
-        [action]: { ...next[action], writableFields: toggleFieldInSet(next[action], 'writableFields', declared, field, on) },
-      };
-    }
-    onPermission(next);
+  const setWrite = (action: 'update' | 'create', field: string, on: boolean) => {
+    onPermission({
+      ...permission,
+      [action]: {
+        ...permission[action],
+        writableFields: toggleFieldInSet(permission[action], 'writableFields', declared, field, on),
+      },
+    });
   };
+
+  const hintClass = 'text-muted-foreground block text-[11px] leading-tight';
 
   return (
     <div className="space-y-2">
@@ -311,18 +311,26 @@ function FieldGrid({
         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Which fields</p>
         <span className="text-muted-foreground ml-auto font-mono text-xs">readable · writable</span>
       </div>
-      <table className="w-full max-w-lg overflow-hidden rounded-lg border text-sm">
+      <table className="w-full max-w-2xl overflow-hidden rounded-lg border text-sm">
         <thead>
           <tr className="bg-muted text-muted-foreground text-xs">
             <th scope="col" className="px-3 py-2 text-left font-semibold">
               Field
             </th>
-            <th scope="col" className="w-16 px-3 py-2 text-center font-semibold">
+            <th scope="col" className="w-28 px-3 py-2 text-center font-semibold">
               Read
             </th>
-            <th scope="col" className="w-16 px-3 py-2 text-center font-semibold">
-              Write
-            </th>
+            {noWrite ? (
+              <th scope="col" className="w-28 px-3 py-2 text-center font-semibold">
+                Write
+              </th>
+            ) : (
+              writeActions.map((action) => (
+                <th key={action} scope="col" className="w-28 px-3 py-2 text-center font-semibold">
+                  {writeActions.length > 1 ? `Write (${RULE_WORD[action]})` : 'Write'}
+                </th>
+              ))
+            )}
           </tr>
         </thead>
         <tbody>
@@ -330,20 +338,9 @@ function FieldGrid({
             const field = schema.fields.find((f) => f.name === fieldName);
             const label = field?.displayName ?? fieldName;
             const readTicked = readSet.includes(fieldName);
-            const writeTicked = writeSet.includes(fieldName);
-            const onlyWriteIn = writeActions.find((a) => {
-              const held = effectiveFields(permission[a], 'writableFields', declared);
-              return held.length === 1 && held[0] === fieldName;
-            });
             const lastRead = readTicked && readSet.length === 1;
-            const readHint = lastRead
-              ? 'At least one field. Turn off Read to allow none.'
-              : readTicked && onlyWriteIn
-                ? `At least one field. Turn off ${RULE_WORD[onlyWriteIn]} to allow none.`
-                : null;
-            const writeHint = writeTicked && onlyWriteIn ? `At least one field. Turn off ${RULE_WORD[onlyWriteIn]} to allow none.` : null;
+            const readHint = lastRead ? 'At least one field. Turn off Read to allow none.' : null;
             const readHintId = `${schema.name}-read-${fieldName}-hint`;
-            const writeHintId = `${schema.name}-write-${fieldName}-hint`;
             return (
               <tr key={fieldName} className="border-t">
                 <td className="px-3 py-1.5">
@@ -357,38 +354,63 @@ function FieldGrid({
                   <Checkbox
                     aria-label={`Read ${label}`}
                     checked={readTicked}
-                    disabled={!permission.read.enabled || readHint !== null}
-                    aria-describedby={readHint ? readHintId : undefined}
+                    disabled={!readOn || lastRead}
+                    aria-describedby={!readOn ? readOffId : readHint ? readHintId : undefined}
                     onCheckedChange={(checked) => setRead(fieldName, checked === true)}
                   />
                   {readHint && (
-                    <span id={readHintId} className="sr-only">
+                    <span id={readHintId} className={hintClass}>
                       {readHint}
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-1.5 text-center">
-                  <Checkbox
-                    aria-label={`Write ${label}`}
-                    checked={writeTicked}
-                    disabled={writeActions.length === 0 || (!readTicked && !writeTicked) || writeHint !== null}
-                    aria-describedby={writeHint ? writeHintId : undefined}
-                    onCheckedChange={(checked) => setWrite(fieldName, checked === true)}
-                  />
-                  {writeHint && (
-                    <span id={writeHintId} className="sr-only">
-                      {writeHint}
-                    </span>
-                  )}
-                </td>
+                {noWrite ? (
+                  <td className="px-3 py-1.5 text-center">
+                    <Checkbox aria-label={`Write ${label}`} checked={false} disabled aria-describedby={writeOffId} />
+                  </td>
+                ) : (
+                  writeActions.map((action, i) => {
+                    const held = writeSets[i];
+                    const ticked = held.includes(fieldName);
+                    const last = ticked && held.length === 1;
+                    const hint = last ? `At least one field. Turn off ${RULE_WORD[action]} to allow none.` : null;
+                    const hintId = `${schema.name}-write-${action}-${fieldName}-hint`;
+                    return (
+                      <td key={action} className="px-3 py-1.5 text-center">
+                        <Checkbox
+                          aria-label={writeActions.length > 1 ? `Write ${label} (${RULE_WORD[action]})` : `Write ${label}`}
+                          checked={ticked}
+                          disabled={last}
+                          aria-describedby={hint ? hintId : undefined}
+                          onCheckedChange={(checked) => setWrite(action, fieldName, checked === true)}
+                        />
+                        {hint && (
+                          <span id={hintId} className={hintClass}>
+                            {hint}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })
+                )}
               </tr>
             );
           })}
         </tbody>
       </table>
+      {!readOn && (
+        <p id={readOffId} className="text-muted-foreground text-xs">
+          Read is off. Turn on Read to choose which fields it shows.
+        </p>
+      )}
+      {noWrite && (
+        <p id={writeOffId} className="text-muted-foreground text-xs">
+          Update and Create are off. Turn on Update or Create to choose which fields they set.
+        </p>
+      )}
       <p className="text-muted-foreground text-xs">
-        Sensitivity is the default a reader gets with no rule. Write needs Read. Ticking every field removes the limit.
-        To allow none, turn the action off. Sensitive fields stay masked for a role that cannot read them.
+        Sensitivity is the default a reader gets with no rule. Ticking every field removes the limit. To allow none,
+        turn the action off. Sensitive fields stay masked for a role that cannot read them.
       </p>
     </div>
   );
