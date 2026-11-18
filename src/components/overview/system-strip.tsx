@@ -124,7 +124,8 @@ export function SystemStrip() {
   // The module screen when the module list says the deployment runs it. A caller who cannot read the
   // list (or a deployment without the module) keeps the old screen, so no cell opens a dead page.
   const target = (cell: string): string | undefined => {
-    const name = STRIP_MODULES[cell]?.find((n) => isModuleEnabled(modules, n));
+    // /modules is for SuperAdmin and Admin with view_modules, so a caller who cannot see it gets the old target.
+    const name = visible.has('/modules') ? STRIP_MODULES[cell]?.find((n) => isModuleEnabled(modules, n)) : undefined;
     if (name) return moduleHref(name);
     const old = STRIP_HREF[cell];
     return cell === 'API' || cell === 'Database' ? old : old ? link(old) : undefined;

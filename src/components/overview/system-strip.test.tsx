@@ -32,7 +32,7 @@ beforeEach(() => {
     entries = healthy;
     metrics = { recentBounces: { value: 0, atLeast: false } };
     runs = { rows: [{ status: 'Succeeded' }] };
-    hrefs = ['/email-events', '/workflow-runs'];
+    hrefs = ['/email-events', '/workflow-runs', '/modules'];
 });
 
 const strip = () => screen.getByRole('group', { name: 'System status' });
@@ -170,5 +170,19 @@ describe('the system strip from GET /api/overview', () => {
         report = { kind: 'unreadable' };
         render(<SystemStrip />);
         expect(within(strip()).getByText('API').closest('a')).toHaveAttribute('href', '/ops/health');
+    });
+
+    it('keeps the old targets when the caller cannot see Modules', () => {
+        hrefs = ['/email-events', '/workflow-runs'];
+        report = {
+            kind: 'modules',
+            modules: ['Diagnostics', 'Files.S3', 'Email.Resend'].map((name) => ({ name, enabled: true })),
+        };
+        render(<SystemStrip />);
+        const href = (label: string) => within(strip()).getByText(label).closest('a');
+        expect(href('API')).toHaveAttribute('href', '/ops/health');
+        expect(href('Mail')).toHaveAttribute('href', '/email-events');
+        expect(href('Storage')).toBeNull();
+        expect(within(strip()).getByRole('link', { name: 'All systems normal' })).toHaveAttribute('href', '/ops/health');
     });
 });
