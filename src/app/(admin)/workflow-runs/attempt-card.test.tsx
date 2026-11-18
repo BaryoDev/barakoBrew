@@ -280,3 +280,16 @@ describe('undoText', () => {
     expect(dd.parentElement).toHaveClass('min-w-0');
   });
 });
+
+describe('AttemptCard heading', () => {
+  it('shows the label core sent for the action in place of the catalog label', () => {
+    renderCard(attempt({ label: 'Post to Slack' }));
+    expect(screen.getByText('Post to Slack')).toBeInTheDocument();
+  });
+
+  it('falls back to the catalog label when no label is sent', () => {
+    renderCard(attempt({ actionType: 'Webhook', label: null }));
+    expect(screen.queryByText('Post to Slack')).toBeNull();
+    expect(screen.getByText('Webhook')).toBeInTheDocument();
+  });
+});

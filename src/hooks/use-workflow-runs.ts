@@ -51,6 +51,11 @@ export const RUN_STATUSES = ['Pending', 'Running', 'Succeeded', 'Failed', 'Parti
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
 export interface WorkflowActionAttempt {
+  /**
+   * The workflow's label for this action as it was when the run was queued (barakoCMS#1314). Null
+   * when the action had none, absent from an API before that.
+   */
+  label?: string | null;
   ordinal: number;
   actionType: string;
   status: string;
@@ -116,6 +121,11 @@ export interface WorkflowRun {
   workflowName: string;
   contentId: string;
   contentType: string;
+  /**
+   * The entry's title as this caller may read it (barakoCMS#1314). Null when they may not read it,
+   * the entry was erased or it has no title; absent from an API before that. Untrusted text.
+   */
+  contentTitle?: string | null;
   triggerEvent: string;
   status: string;
   createdAt: string;
@@ -155,6 +165,7 @@ const attemptEntrySchema = z.looseObject({
 const attemptSchema = z.looseObject({
   ordinal: z.number(),
   actionType: z.string(),
+  label: z.string().nullish(),
   status: z.string(),
   attempts: z.number(),
   nextAttemptAt: z.string().nullish(),
@@ -187,6 +198,7 @@ export const workflowRunSchema = z.looseObject({
   workflowName: z.string(),
   contentId: z.string(),
   contentType: z.string(),
+  contentTitle: z.string().nullish(),
   triggerEvent: z.string(),
   status: z.string(),
   createdAt: z.string(),
@@ -426,6 +438,21 @@ export function toneForRunStatus(status: string): Tone {
 /** A run status in the words people use. The enum name `PartiallyFailed` is never shown. */
 export function runStatusLabel(status: string): string {
   return status === 'PartiallyFailed' ? 'Partly failed' : status;
+}
+
+/**
+ * How a run names its entry: the title core sends (barakoCMS#1314), else the old "{type} {id8}" when
+ * none is sent (an older API, an entry the caller may not read, one with no title).
+ */
+export function runEntryLabel(run: Pick<WorkflowRun, 'contentTitle' | 'contentType' | 'contentId'>): string {
+  const title = run.contentTitle?.trim();
+  return title ? title : `${run.contentType} ${run.contentId.slice(0, 8)}`;
+}
+
+/** An action's name: the label the workflow gave it (barakoCMS#1314), else null so the caller falls back. */
+export function attemptLabel(attempt: Pick<WorkflowActionAttempt, 'label'>): string | null {
+  const label = attempt.label?.trim();
+  return label ? label : null;
 }
 
 /** A trigger as text with no arrow glyph: "Article to In review". */

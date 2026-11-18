@@ -21,6 +21,8 @@ interface ConfirmDialogProps {
   title: string;
   description: string;
   confirmLabel: string;
+  /** The button that backs out. Defaults to Cancel; a dialog about cancelling something says Keep it. */
+  cancelLabel?: string;
   destructive?: boolean;
   onConfirm: () => void;
   /** Where focus goes on close. Needed with `open`, since there is no trigger to return it to. */
@@ -34,6 +36,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = 'Cancel',
   destructive = false,
   onConfirm,
   onCloseAutoFocus,
@@ -47,7 +50,7 @@ export function ConfirmDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             className={destructive ? buttonVariants({ variant: 'destructive' }) : undefined}
             onClick={onConfirm}

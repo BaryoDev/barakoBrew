@@ -192,7 +192,7 @@ describe('the stat card targets', () => {
         expect(await card('Published')).toHaveAttribute('href', '/content?status=Published');
         expect(await card('Drafts')).toHaveAttribute('href', '/content?status=Draft');
         expect(await card('Workflow runs')).toHaveAttribute('href', '/workflow-runs');
-        expect(await card('Failures')).toHaveAttribute('href', '/workflow-runs');
+        expect(await card('Failures')).toHaveAttribute('href', '/workflow-runs?status=Failed');
     });
 
     it('count Failed and Partly failed together in Failures', async () => {
@@ -204,3 +204,18 @@ describe('the stat card targets', () => {
     });
 });
 
+describe('the Failures card target', () => {
+    it('opens Failed when Failed runs are the larger count', async () => {
+        answer({ published: [], drafts: [], runs: [], failed: [daysAgo(1)], partial: [], totals: { failed: 5 } });
+        renderCards(30);
+        await within(await card('Failures')).findByText('5');
+        expect(await card('Failures')).toHaveAttribute('href', '/workflow-runs?status=Failed');
+    });
+
+    it('opens Partly failed when that count is larger', async () => {
+        answer({ published: [], drafts: [], runs: [], failed: [daysAgo(1)], partial: [daysAgo(1), daysAgo(2), daysAgo(3)], totals: { failed: 1 } });
+        renderCards(30);
+        await within(await card('Failures')).findByText('4');
+        expect(await card('Failures')).toHaveAttribute('href', '/workflow-runs?status=PartiallyFailed');
+    });
+});

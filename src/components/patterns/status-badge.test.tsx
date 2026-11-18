@@ -47,3 +47,25 @@ describe('the status badge tones', () => {
     expect(screen.getByText('Archived').className).toContain('text-muted-foreground');
   });
 });
+
+describe('the status badge dot', () => {
+  it('pulses only when asked to', () => {
+    const { container, rerender } = render(<StatusBadge tone="accent">Running</StatusBadge>);
+    expect(container.querySelector('span[aria-hidden] .pulse, .pulse')).toBeNull();
+    rerender(
+      <StatusBadge tone="accent" pulse>
+        Running
+      </StatusBadge>,
+    );
+    expect(container.querySelector('.pulse')).not.toBeNull();
+  });
+
+  it('draws no pulsing dot when the dot is off', () => {
+    const { container } = render(
+      <StatusBadge tone="accent" dot={false} pulse>
+        Running
+      </StatusBadge>,
+    );
+    expect(container.querySelector('.pulse')).toBeNull();
+  });
+});

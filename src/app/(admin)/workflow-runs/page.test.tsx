@@ -1382,3 +1382,82 @@ describe('scrolling on one column', () => {
     await waitFor(() => expect(scroll).toHaveBeenCalledTimes(2));
   });
 });
+
+describe('the entry title and the detail frame', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
+  });
+
+  const RUNNING = {
+    ...run('r-title', 'Notify the team', 'Running', [action(1, 'Running', { label: 'Post to Slack' })]),
+    cancelledAt: null,
+    contentTitle: 'Rainy-day menu',
+  };
+
+  it('names the entry by its title in the row and in Content', async () => {
+    renderRuns([RUNNING]);
+    const row = await screen.findByRole('button', { name: /Notify the team/ });
+    expect(row).toHaveTextContent('Rainy-day menu');
+    expect(row).not.toHaveTextContent('article 11111111');
+    await screen.findByRole('list', { name: 'Actions' });
+    expect(screen.getByText('Rainy-day menu · 11111111-1111-1111-1111-111111111111')).toBeInTheDocument();
+  });
+
+  it('falls back to the type and id when no title is sent', async () => {
+    renderRuns([{ ...RUNNING, contentTitle: null }]);
+    const row = await screen.findByRole('button', { name: /Notify the team/ });
+    expect(row).toHaveTextContent('article 11111111');
+    await screen.findByRole('list', { name: 'Actions' });
+    expect(screen.getByText('11111111-1111-1111-1111-111111111111')).toBeInTheDocument();
+  });
+
+  it('shows the action label core sent on the action card', async () => {
+    renderRuns([RUNNING]);
+    await screen.findByRole('list', { name: 'Actions' });
+    expect(screen.getByText('Post to Slack')).toBeInTheDocument();
+  });
+
+  it('sets the detail title at 22px', async () => {
+    renderRuns([RUNNING]);
+    const title = await screen.findByRole('heading', { name: 'Notify the team' });
+    expect(title.className).toContain('text-[22px]');
+  });
+
+  it('draws Cancel run in red', async () => {
+    renderRuns([RUNNING]);
+    const button = await screen.findByRole('button', { name: 'Cancel run' });
+    expect(button.className).toContain('text-destructive');
+    expect(button.className).toContain('hover:border-destructive');
+  });
+
+  it('pulses the dot of a Running run and not of a finished one', async () => {
+    const done = { ...run('r-done', 'Finished one', 'Succeeded', []), cancelledAt: null };
+    renderRuns([RUNNING, done]);
+    const running = await screen.findByRole('button', { name: /Notify the team/ });
+    expect(running.querySelector('.pulse')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /Finished one/ }).querySelector('.pulse')).toBeNull();
+  });
+
+  it('says Keep it on the cancel question and sends nothing when it is pressed', async () => {
+    renderRuns([RUNNING]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel run' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).queryByRole('button', { name: 'Cancel' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('says what the abandon did in the canvas words', async () => {
+    const partly = {
+      ...run('r-ab', 'Charge the card', 'PartiallyFailed', [action(1, 'Succeeded'), action(2, 'Failed')]),
+      cancelledAt: null,
+      abandonedAt: null,
+    };
+    renderRuns([partly]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Abandon' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Yes, abandon the run' }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Run abandoned. Rollback started, outputs kept.'));
+  });
+});

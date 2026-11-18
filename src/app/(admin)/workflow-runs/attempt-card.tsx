@@ -10,6 +10,7 @@ import { exactTime, momentLabel } from '@/lib/relative-time';
 import { extraActionLabel } from '@/lib/workflow-parameters';
 import {
   FAILURE_KINDS,
+  attemptLabel,
   failureKind,
   formatDuration,
   isRetryable,
@@ -136,8 +137,8 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
       <div className="mb-3 min-w-0 rounded-xl border p-4 group-last:mb-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-primary font-mono text-[12px] font-medium">{attempt.actionType}</span>
-          {extraActionLabel(attempt.actionType) && (
-            <span className="text-[14.5px] font-semibold">{extraActionLabel(attempt.actionType)}</span>
+          {(attemptLabel(attempt) ?? extraActionLabel(attempt.actionType)) && (
+            <span className="text-[14.5px] font-semibold">{attemptLabel(attempt) ?? extraActionLabel(attempt.actionType)}</span>
           )}
           <StatusBadge tone={toneForAttemptStatus(attempt.status)}>{attempt.status}</StatusBadge>
 
