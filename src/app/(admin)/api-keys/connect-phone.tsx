@@ -1,44 +1,63 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
 import QRCode from 'qrcode';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAccess } from '@/hooks/use-access';
-import { useCurrentTenant, useMyTenants } from '@/hooks/use-tenants';
-import { usePairingStatus, useStartPairing, type PairingStart } from '@/hooks/use-api-keys';
-import { apiErrorMessage, getApiUrl } from '@/lib/api';
-import { buildPairingLink, countdownLabel, isSecureForPhone } from '@/lib/pairing-link';
+import { isModuleEnabled, useModules } from '@/hooks/use-modules';
+import { useApiKeys, useStartPairing, type PairingStart } from '@/hooks/use-api-keys';
+import { apiErrorMessage } from '@/lib/api';
+import { countdownLabel, isSecureForPhone } from '@/lib/pairing-link';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-/** The button on the API keys screen. Shown only to a caller who can create keys. */
+/** The module that serves the pairing routes. */
+export const PAIRING_MODULE = 'ApiKeyPairing';
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** "Phone 14:05:09", local time, so each pairing makes a key name the list can be searched for. */
+function pairingName(at: Date): string {
+  return `Phone ${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
+}
+
+/**
+ * The button on the API keys screen. Shown only when the deployment runs the pairing module and
+ * the caller can create keys. A module list that cannot be read hides it.
+ */
 export function ConnectPhone() {
   const canCreate = useAccess().can('manage_api_keys', ['SuperAdmin', 'Admin']);
+  const modules = useModules();
+  const present = isModuleEnabled(modules.data, PAIRING_MODULE) === true;
   const start = useStartPairing();
   const [open, setOpen] = useState(false);
-  const [pairing, setPairing] = useState<PairingStart | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [pairing, setPairing] = useState<{ result: PairingStart; name: string } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   // Set at once on a click, so a second click before the first answer cannot make a second code.
   const inflight = useRef(false);
-  const secure = isSecureForPhone(getApiUrl());
 
-  if (!canCreate) return null;
+  if (!canCreate || !present) return null;
 
   function request() {
-    if (!secure || inflight.current) return;
+    if (inflight.current) return;
     inflight.current = true;
-    setFailed(false);
+    setFailed(null);
     setPairing(null);
-    start.mutate('Phone', {
+    const name = pairingName(new Date());
+    start.mutate(name, {
       onSuccess: (result) => {
-        setPairing(result);
+        setPairing({ result, name });
         // The result holds the code. State has it now, so the mutation drops its copy.
         start.reset();
       },
       onError: (error) => {
-        setFailed(true);
-        toast.error(apiErrorMessage(error, 'Could not make a code.'));
+        const message =
+          axios.isAxiosError(error) && error.response?.status === 429
+            ? 'Too many codes. Wait a minute and try again.'
+            : apiErrorMessage(error, 'Could not make a code.');
+        setFailed(message);
+        toast.error(message);
       },
       onSettled: () => {
         inflight.current = false;
@@ -49,7 +68,7 @@ export function ConnectPhone() {
   function close() {
     setOpen(false);
     setPairing(null);
-    setFailed(false);
+    setFailed(null);
   }
 
   return (
@@ -68,7 +87,6 @@ export function ConnectPhone() {
         <ConnectPhoneDialog
           pairing={pairing}
           failed={failed}
-          secure={secure}
           pending={start.isPending}
           onNewCode={request}
           onClose={close}
@@ -81,36 +99,34 @@ export function ConnectPhone() {
 function ConnectPhoneDialog({
   pairing,
   failed,
-  secure,
   pending,
   onNewCode,
   onClose,
 }: {
-  pairing: PairingStart | null;
-  failed: boolean;
-  secure: boolean;
+  pairing: { result: PairingStart; name: string } | null;
+  failed: string | null;
   pending: boolean;
   onNewCode: () => void;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
-  const tenant = useCurrentTenant();
-  const tenants = useMyTenants();
-  const [qr, setQr] = useState<string | null>(null);
+  const [qr, setQr] = useState<{ link: string; url: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  const slug = tenant ?? 'default';
-  const instanceName =
-    tenants.data?.find((t) => t.slug === slug)?.name ||
-    (typeof window !== 'undefined' ? window.location.hostname : '') ||
-    slug;
-
-  const expiresMs = pairing ? Date.parse(pairing.expiresAt) : NaN;
+  const expiresMs = pairing ? Date.parse(pairing.result.expiresAt) : NaN;
   const msLeft = expiresMs - now;
   const expired = !!pairing && !(msLeft > 0);
+  const secure = !pairing || isSecureForPhone(pairing.result.instanceUrl);
+  const link = pairing && secure ? pairing.result.link : null;
 
-  const status = usePairingStatus(pairing?.id ?? null, !!pairing && !expired);
-  const connected = !!status.data?.redeemedAt;
+  // The server has no status route. The phone's redeem adds a key named after this pairing, so the
+  // list is read every three seconds while the code is live and the row is the answer.
+  const name = pairing?.name;
+  const named = (keys: { name: string }[] | undefined) =>
+    !!name && !!keys?.some((k) => k.name === name || k.name === `${name} (paired)`);
+  const keys = useApiKeys({
+    refetchInterval: (query) => (pairing && !expired && !named(query.state.data) ? 3000 : false),
+  });
+  const connected = named(keys.data);
   const ticking = !!pairing && !connected;
 
   // Tick once a second while there is a code and no phone yet.
@@ -120,26 +136,13 @@ function ConnectPhoneDialog({
     return () => clearInterval(id);
   }, [ticking]);
 
-  // Render the link locally. The code never goes to a QR service.
-  const link = useMemo(
-    () =>
-      pairing && secure
-        ? buildPairingLink({
-            url: getApiUrl(),
-            tenant: slug,
-            name: instanceName,
-            code: pairing.code,
-            expiresAt: pairing.expiresAt,
-          })
-        : null,
-    [pairing, secure, slug, instanceName],
-  );
+  // Draw the server's link locally. The code never goes to a QR service.
   useEffect(() => {
     if (!link) return;
     let cancelled = false;
     QRCode.toDataURL(link, { width: 240, margin: 1 })
       .then((url) => {
-        if (!cancelled) setQr(url);
+        if (!cancelled) setQr({ link, url });
       })
       .catch(() => {
         if (!cancelled) setQr(null);
@@ -149,10 +152,8 @@ function ConnectPhoneDialog({
     };
   }, [link]);
 
-  // The phone redeemed: the new key is in the list now.
-  useEffect(() => {
-    if (connected) void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
-  }, [connected, queryClient]);
+  const shown = qr && qr.link === link ? qr.url : null;
+  const warning = pairing?.result.warning;
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -160,7 +161,7 @@ function ConnectPhoneDialog({
         <DialogHeader>
           <DialogTitle>Connect a phone</DialogTitle>
           <DialogDescription>
-            Scan this code with the app. It works once and stops after five minutes. The phone gets a read-only key.
+            Scan this code with the app. It works once and stops after two minutes. The phone gets a read-only key.
           </DialogDescription>
         </DialogHeader>
 
@@ -174,9 +175,14 @@ function ConnectPhoneDialog({
               Phone connected
             </p>
           ) : failed ? (
-            <p role="alert" className="text-destructive text-sm">
-              Could not make a code.
-            </p>
+            <>
+              <p role="alert" className="text-destructive text-sm">
+                {failed}
+              </p>
+              <Button onClick={onNewCode} disabled={pending}>
+                New code
+              </Button>
+            </>
           ) : expired ? (
             <>
               <p role="status" className="font-semibold">
@@ -184,21 +190,17 @@ function ConnectPhoneDialog({
               </p>
               <Button onClick={onNewCode}>New code</Button>
             </>
-          ) : qr ? (
+          ) : shown ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element -- a data URL made in the browser */}
-              <img src={qr} alt="QR code to connect a phone" width={240} height={240} />
+              <img src={shown} alt="QR code to connect a phone" width={240} height={240} />
               <p className="text-muted-foreground font-mono text-xs" data-testid="pairing-countdown">
                 {countdownLabel(msLeft)}
               </p>
+              {warning && <p className="text-muted-foreground text-xs">{warning}</p>}
             </>
           ) : (
             <p className="text-muted-foreground text-sm">Making a code.</p>
-          )}
-          {failed && !pairing && (
-            <Button onClick={onNewCode} disabled={pending}>
-              New code
-            </Button>
           )}
         </div>
 

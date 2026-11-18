@@ -94,10 +94,14 @@ export const apiKeyRotationSchema = z.looseObject({
   kind: optionalString,
 });
 
-export function useApiKeys() {
+export function useApiKeys(options?: {
+  /** Read the list again on this schedule. Used while a phone is being connected. */
+  refetchInterval?: number | false | ((query: { state: { data: ApiKey[] | undefined } }) => number | false);
+}) {
   const tenant = useCurrentTenant();
   return useQuery({
     queryKey: ['api-keys', tenant],
+    refetchInterval: options?.refetchInterval,
     queryFn: async () => {
       const items = (await api.get<Paginated<ApiKey>>('/api/api-keys')).data.items;
       return items.map((k): ApiKey => {
@@ -211,23 +215,20 @@ export function useRevokeApiKey() {
   });
 }
 
-/** The reply of POST /api/api-keys/pairings. The code is shown once, so it is only ever held in state. */
+/** The reply of POST /api/api-keys/pairings. The code and link are shown once, so they are only ever held in state. */
 export const pairingStartSchema = z.looseObject({
   id: z.string().min(1),
+  instanceUrl: z.string().min(1),
+  tenant: z.string(),
+  instanceName: z.string(),
   code: z.string().min(1),
   expiresAt: z.string().min(1),
-});
-
-/** The reply of GET /api/api-keys/pairings/{id}. */
-export const pairingStatusSchema = z.looseObject({
-  id: z.string(),
-  expiresAt: z.string(),
-  redeemedAt: z.string().nullable(),
-  keyId: z.string().nullable().optional(),
+  expiresInSeconds: z.number(),
+  link: z.string().min(1),
+  warning: z.string().nullable().optional(),
 });
 
 export type PairingStart = z.output<typeof pairingStartSchema>;
-export type PairingStatus = z.output<typeof pairingStatusSchema>;
 
 /** Starts a pairing. The result holds the one-time code, so it carries the secret mutation options. */
 export function useStartPairing() {
@@ -239,22 +240,5 @@ export function useStartPairing() {
         'POST /api/api-keys/pairings',
       ),
     ...SECRET_MUTATION,
-  });
-}
-
-/** Polls a pairing every two seconds while `enabled`. The key never holds the code. */
-export function usePairingStatus(id: string | null, enabled: boolean) {
-  return useQuery({
-    queryKey: ['api-key-pairing', id],
-    enabled: enabled && !!id,
-    // Stops on its own once the phone has redeemed.
-    refetchInterval: (query) => (query.state.data?.redeemedAt ? false : 2000),
-    retry: false,
-    queryFn: async (): Promise<PairingStatus> =>
-      parseResponse(
-        pairingStatusSchema,
-        (await api.get<unknown>(`/api/api-keys/pairings/${id}`)).data,
-        'GET /api/api-keys/pairings/{id}',
-      ),
   });
 }
