@@ -6,11 +6,25 @@ import QRCode from 'qrcode';
 import { toast } from 'sonner';
 import { useAccess } from '@/hooks/use-access';
 import { isModuleEnabled, useModules } from '@/hooks/use-modules';
-import { useApiKeys, useStartPairing, type PairingStart } from '@/hooks/use-api-keys';
+import { useApiKeys, useStartPairing, type ApiKey, type PairingStart } from '@/hooks/use-api-keys';
 import { apiErrorMessage } from '@/lib/api';
 import { countdownLabel, isSecureForPhone } from '@/lib/pairing-link';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+/**
+ * A pairing as this tab holds it. `receivedAt` is this browser's clock when the answer arrived: the
+ * countdown runs from it, because the server's clock and this one need not agree.
+ */
+interface Pairing {
+  result: PairingStart;
+  name: string;
+  receivedAt: number;
+}
+
+/** How long after expiry the list is still read, so a phone that redeemed at the last second is seen. */
+const GRACE_MS = 5000;
+const POLL_MS = 3000;
 
 /** The module that serves the pairing routes. */
 export const PAIRING_MODULE = 'ApiKeyPairing';
@@ -32,7 +46,7 @@ export function ConnectPhone() {
   const present = isModuleEnabled(modules.data, PAIRING_MODULE) === true;
   const start = useStartPairing();
   const [open, setOpen] = useState(false);
-  const [pairing, setPairing] = useState<{ result: PairingStart; name: string } | null>(null);
+  const [pairing, setPairing] = useState<Pairing | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   // Set at once on a click, so a second click before the first answer cannot make a second code.
   const inflight = useRef(false);
@@ -47,7 +61,7 @@ export function ConnectPhone() {
     const name = pairingName(new Date());
     start.mutate(name, {
       onSuccess: (result) => {
-        setPairing({ result, name });
+        setPairing({ result, name, receivedAt: Date.now() });
         // The result holds the code. State has it now, so the mutation drops its copy.
         start.reset();
       },
@@ -103,7 +117,7 @@ function ConnectPhoneDialog({
   onNewCode,
   onClose,
 }: {
-  pairing: { result: PairingStart; name: string } | null;
+  pairing: Pairing | null;
   failed: string | null;
   pending: boolean;
   onNewCode: () => void;
@@ -112,19 +126,27 @@ function ConnectPhoneDialog({
   const [qr, setQr] = useState<{ link: string; url: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  const expiresMs = pairing ? Date.parse(pairing.result.expiresAt) : NaN;
-  const msLeft = expiresMs - now;
+  const lifeMs = pairing ? pairing.result.expiresInSeconds * 1000 : 0;
+  const deadline = pairing ? pairing.receivedAt + lifeMs : NaN;
+  const msLeft = deadline - now;
   const expired = !!pairing && !(msLeft > 0);
   const secure = !pairing || isSecureForPhone(pairing.result.instanceUrl);
   const link = pairing && secure ? pairing.result.link : null;
 
-  // The server has no status route. The phone's redeem adds a key named after this pairing, so the
-  // list is read every three seconds while the code is live and the row is the answer.
+  // The server has no status route. The phone's redeem adds a key named exactly after this pairing,
+  // made after the pairing was. Both times are the server's clock, so they compare with each other
+  // and never with this browser's. The list is read every three seconds until five seconds after
+  // expiry, so a phone that redeems in the last moment still shows.
   const name = pairing?.name;
-  const named = (keys: { name: string }[] | undefined) =>
-    !!name && !!keys?.some((k) => k.name === name || k.name === `${name} (paired)`);
+  const madeAfter = pairing
+    ? Date.parse(pairing.result.expiresAt) - pairing.result.expiresInSeconds * 1000 - GRACE_MS
+    : NaN;
+  const named = (keys: ApiKey[] | undefined) =>
+    !!name &&
+    !!keys?.some((k) => k.name === name && !k.revoked && Date.parse(k.createdAt) >= madeAfter);
   const keys = useApiKeys({
-    refetchInterval: (query) => (pairing && !expired && !named(query.state.data) ? 3000 : false),
+    refetchInterval: (query) =>
+      pairing && !named(query.state.data) && Date.now() + POLL_MS <= deadline + GRACE_MS ? POLL_MS : false,
   });
   const connected = named(keys.data);
   const ticking = !!pairing && !connected;

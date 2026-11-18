@@ -44,14 +44,17 @@ const started = (extra: Record<string, unknown> = {}, ms = 120_000) => ({
     },
 });
 
-const listOf = (names: string[]) => ({
-    data: {
-        items: names.map((name, i) => ({
-            id: `k${i}`, name, prefix: 'bcms_ro', scopes: ['content:read'], tenantSlug: 'acme', revoked: false, createdAt: '2026-11-18T10:00:00Z',
-        })),
-        page: 1, pageSize: 20, totalItems: names.length, totalPages: 1, hasNextPage: false,
-    },
-});
+type Row = { name: string; createdAt?: string; revoked?: boolean };
+const listOf = (rows: (string | Row)[]) => {
+    const items = rows.map((r, i) => {
+        const row = typeof r === 'string' ? { name: r } : r;
+        return {
+            id: `k${i}`, prefix: 'bcms_ro', scopes: ['content:read'], tenantSlug: 'acme', revoked: false,
+            createdAt: new Date(T0 + 1_000).toISOString(), ...row,
+        };
+    });
+    return { data: { items, page: 1, pageSize: 20, totalItems: items.length, totalPages: 1, hasNextPage: false } };
+};
 
 function mount(modules: unknown = { kind: 'modules', modules: [{ name: 'ApiKeyPairing', enabled: true }] }) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -157,7 +160,7 @@ describe('Connect a phone', () => {
         expect(screen.queryByAltText('QR code to connect a phone')).toBeNull();
     });
 
-    it('shows the expired state and stops reading the list when the code runs out', async () => {
+    it('shows the expired state and stops reading the list five seconds after expiry', async () => {
         vi.mocked(api.post).mockResolvedValue(started({}, 10_000));
         mount();
         await openDialog();
@@ -166,11 +169,76 @@ describe('Connect a phone', () => {
         });
         expect(screen.getByText('Code expired')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'New code' })).toBeInTheDocument();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(4_000);
+        });
         const reads = keyReads();
         await act(async () => {
-            await vi.advanceTimersByTimeAsync(10_000);
+            await vi.advanceTimersByTimeAsync(20_000);
         });
         expect(keyReads()).toBe(reads);
+    });
+
+    it('shows connected for a key that appears three seconds after expiry', async () => {
+        vi.mocked(api.post).mockResolvedValue(started({}, 10_000));
+        mount();
+        await openDialog();
+        const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(10_500);
+        });
+        expect(screen.getByText('Code expired')).toBeInTheDocument();
+        vi.mocked(api.get).mockImplementation(async () => listOf(['CI deploy', name]));
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(3_000);
+        });
+        expect(screen.getByText('Phone connected')).toBeInTheDocument();
+        expect(screen.queryByText('Code expired')).toBeNull();
+    });
+
+    it.each([
+        ['ahead', 3 * 60_000],
+        ['behind', -3 * 60_000],
+    ])('counts down from receipt when the server clock is 3 minutes %s', async (_label, skew) => {
+        // The server says it made the code at T0 + skew. This browser's clock says T0.
+        vi.mocked(api.post).mockResolvedValue(started({ expiresAt: new Date(T0 + skew + 120_000).toISOString() }));
+        mount();
+        await openDialog();
+        expect(screen.queryByText('Code expired')).toBeNull();
+        expect(screen.getByTestId('pairing-countdown')).toHaveTextContent('2:00');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(61_000);
+        });
+        expect(screen.getByTestId('pairing-countdown')).toHaveTextContent('0:59');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(60_000);
+        });
+        expect(screen.getByText('Code expired')).toBeInTheDocument();
+    });
+
+    it('does not count a same-name key made before the pairing', async () => {
+        mount();
+        await openDialog();
+        const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
+        vi.mocked(api.get).mockImplementation(async () =>
+            listOf([{ name, createdAt: new Date(T0 - 60_000).toISOString() }]),
+        );
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(6_000);
+        });
+        expect(screen.queryByText('Phone connected')).toBeNull();
+        expect(screen.getByAltText('QR code to connect a phone')).toBeInTheDocument();
+    });
+
+    it('does not count a revoked same-name key', async () => {
+        mount();
+        await openDialog();
+        const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
+        vi.mocked(api.get).mockImplementation(async () => listOf([{ name, revoked: true }]));
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(6_000);
+        });
+        expect(screen.queryByText('Phone connected')).toBeNull();
     });
 
     it('asks for a new code from the expired state', async () => {
