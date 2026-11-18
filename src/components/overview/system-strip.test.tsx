@@ -158,10 +158,12 @@ describe('the system strip from GET /api/overview', () => {
 
     it('opens Diagnostics from the All systems normal pill and Email from a mail warning', () => {
         report = { kind: 'modules', modules: ['Diagnostics', 'Email.Resend'].map((name) => ({ name, enabled: true })) };
+        const mailOff = summary;
+        summary = undefined;
         const { unmount } = render(<SystemStrip />);
         expect(within(strip()).getByRole('link', { name: 'All systems normal' })).toHaveAttribute('href', '/modules/Diagnostics');
         unmount();
-        metrics = { recentBounces: { value: 2, atLeast: false } };
+        summary = mailOff;
         render(<SystemStrip />);
         expect(within(strip()).getByRole('link', { name: '1 warning' })).toHaveAttribute('href', '/modules/Email.Resend');
     });
