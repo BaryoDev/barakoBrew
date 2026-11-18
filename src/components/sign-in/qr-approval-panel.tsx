@@ -147,7 +147,7 @@ export function QrApprovalPanel({ flow, api, text }: QrApprovalPanelProps) {
                     <QrCode drawing={drawing} name={copy.qrName} />
                     <div>
                         <p className="text-muted-foreground text-[12.5px] font-bold">{copy.matchLabel}</p>
-                        <p className="font-mono text-4xl font-semibold tracking-widest tabular-nums">
+                        <p className="font-mono text-4xl font-medium tracking-widest tabular-nums">
                             {request.matchNumber}
                         </p>
                     </div>
