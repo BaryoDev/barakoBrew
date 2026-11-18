@@ -154,5 +154,6 @@ describe('Checked just now', () => {
     it('ages as the check gets old', () => {
         expect(checkedLabel(now.getTime() - 3 * 60_000, now)).toBe('Checked 3 min ago');
         expect(checkedLabel(undefined, now)).toBe('');
+        expect(checkedLabel(now.getTime() + 5 * 60_000, now)).toBe('Checked just now');
     });
 });

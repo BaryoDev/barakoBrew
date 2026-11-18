@@ -42,7 +42,9 @@ export function factsLine(r: Pick<RememberedInstance, 'version' | 'modules'>): s
  */
 export function checkedLabel(checkedAt: number | undefined, now: Date = new Date()): string {
     if (!checkedAt) return '';
-    return `Checked ${relativeTime(new Date(checkedAt).toISOString(), now)}`;
+    // A clock set back after the check would read as a date in the future; call it just now.
+    const at = Math.min(checkedAt, now.getTime());
+    return `Checked ${relativeTime(new Date(at).toISOString(), now)}`;
 }
 
 /**
@@ -118,7 +120,7 @@ export function InstanceCard({
             {known ? (
                 <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-[12.5px] text-[#c8cbe3]">
                     <span className="min-w-0">
-                        {factsWithCheck ? <span className="block truncate">{factsWithCheck}</span> : null}
+                        {factsWithCheck ? <span className="block truncate" title={factsWithCheck}>{factsWithCheck}</span> : null}
                         <span className="block text-[#9a9fc0]">Last seen {relativeTime(known.seenAt, now)}</span>
                     </span>
                     {onForget ? (
