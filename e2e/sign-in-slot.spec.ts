@@ -75,11 +75,14 @@ test.describe('Sign in: registered method slot', () => {
 
     test('expired_request_offers_a_new_code', async ({ page }) => {
         await stubSignIn(page, ['password', 'dev-qr']);
+        // The dev server runs mount effects twice, so more than one request opens on load. Every one
+        // of them is short until the button is pressed.
+        let fresh = false;
         let creates = 0;
         await page.route('**/api/dev-fixture/qr/create', (r) => {
             creates += 1;
             return r.fulfill({
-                json: creates === 1 ? CREATE({ expiresInSeconds: 2 }) : CREATE({ matchNumber: '777000' }),
+                json: fresh ? CREATE({ matchNumber: '777000' }) : CREATE({ expiresInSeconds: 2 }),
             });
         });
         await page.route('**/api/dev-fixture/qr/poll', (r) => r.fulfill({ json: { status: 'pending' } }));
@@ -87,9 +90,11 @@ test.describe('Sign in: registered method slot', () => {
         await openPhoneTab(page);
 
         await expect(page.getByText('This code has expired.')).toBeVisible({ timeout: 10_000 });
+        const before = creates;
+        fresh = true;
         await page.getByRole('button', { name: 'Show a new code' }).click();
         await expect(page.getByText('777000')).toBeVisible();
-        expect(creates).toBe(2);
+        expect(creates).toBe(before + 1);
     });
 
     test('tab_is_absent_when_the_api_does_not_list_the_id', async ({ page }) => {

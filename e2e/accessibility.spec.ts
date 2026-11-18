@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { authed, stubShell, stubContentTypes, EMPTY_PAGE, pageOf } from './helpers';
+import { authed, unauthed, stubShell, stubContentTypes, EMPTY_PAGE, pageOf } from './helpers';
 
 /**
  * Accessibility checks on the routes an editor actually lives in.
@@ -170,6 +170,9 @@ test.describe('accessibility', () => {
     });
 
     test('the sign-in page with a registered method tab open', async ({ page }) => {
+        // Signed out, with the contract version on the first response, as on a real sign-in page.
+        await page.addInitScript(() => window.localStorage.clear());
+        await unauthed(page);
         await stubShell(page);
         await page.route('**/api/auth/methods', (r) => r.fulfill({ json: { methods: ['password', 'dev-qr'] } }));
         await page.route('**/api/dev-fixture/qr/create', (r) =>
