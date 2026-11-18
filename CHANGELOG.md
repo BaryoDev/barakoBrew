@@ -9,6 +9,17 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- Role editor (#146): each content type is a tab showing its name and a `CRUD` summary in mono (for
+  example `CR.D`), with the four actions as pressed chips. Which fields is one Read and Write grid
+  with each field's sensitivity chip; Write is disabled until Read is ticked, and unticking Read
+  unticks Write. The saved `readableFields` and `writableFields` are unchanged.
+- A transition's condition is a select: On any entry, Only their own, Only in their department, or
+  Custom. The two presets write `{ field: { _eq: "$CURRENT_USER" } }` and
+  `{ field: { _eq: "$CURRENT_USER.department" } }`. A stored condition of any other shape opens on
+  Custom with the builder, unchanged.
+
 ## [1.13.0] - 2026-11-17
 
 **Speaks API contracts 1 to 16, which covers barakoCMS 4.0.1 to 5.8.0.** barakoCMS 5.8.0 moves the

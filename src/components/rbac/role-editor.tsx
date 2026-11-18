@@ -1,12 +1,12 @@
 'use client';
 
-import { Fragment, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useSchemas } from '@/hooks/use-schemas';
 import type { ContentTypePermission, PermissionAction, RoleRequest } from '@/types/rbac';
 import { emptyPermission } from '@/types/rbac';
 import { getContractServerState, getContractState, subscribeToContract } from '@/lib/api-contract';
 import { KNOWN_CAPABILITIES, holdsCapability, isPlatformCapability } from '@/lib/capabilities';
-import { conditionProblem, isEmptyPermission, transitionKey, writeConditions } from '@/lib/role-rules';
+import { conditionProblem, crudSummary, isEmptyPermission, transitionKey, writeConditions } from '@/lib/role-rules';
 import { ReadsBackAs } from '@/components/rbac/reads-back-as';
 import { RolePreviewPanel } from '@/components/rbac/role-preview-panel';
 import { roleSentences } from '@/lib/role-sentences';
@@ -18,15 +18,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { IconChevronDown, IconChevronRight, IconTimes } from '@/components/icons';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { IconTimes } from '@/components/icons';
 
 const ACTIONS: PermissionAction[] = ['create', 'read', 'update', 'delete'];
 
@@ -78,12 +71,14 @@ export function RoleEditor({
   const [permissions, setPermissions] = useState<ContentTypePermission[]>(initial?.permissions ?? []);
   const [capabilities, setCapabilities] = useState<string[]>(initial?.systemCapabilities ?? []);
   const [capabilityDraft, setCapabilityDraft] = useState('');
-  const [open, setOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState<string | null>(null);
   const [conditionDrafts, setConditionDrafts] = useState<Record<string, ConditionDraft>>({});
   const [transitionDrafts, setTransitionDrafts] = useState<Record<string, Record<string, ConditionDraft>>>({});
   const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
   const detailsSupported = contract.kind === 'ok' && contract.version >= RULE_DETAILS_CONTRACT;
   const previewSupported = contract.kind === 'ok' && contract.version >= ROLE_PREVIEW_CONTRACT;
+
+  const activeTab = schemas?.find((x) => x.name === tab)?.name ?? schemas?.[0]?.name ?? '';
 
   const permissionFor = (slug: string) =>
     permissions.find((p) => p.contentTypeSlug === slug) ?? emptyPermission(slug);
@@ -232,93 +227,67 @@ export function RoleEditor({
             No content types exist yet, so there is nothing to grant. Create a content type first.
           </p>
         ) : (
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Content type</TableHead>
-                  {ACTIONS.map((action) => (
-                    <TableHead key={action} className="w-20 text-center capitalize">
-                      {action}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {schemas.map((schema) => {
-                  const permission = permissionFor(schema.name);
-                  const expanded = detailsSupported && open === schema.name;
-                  const granted = permissions.find((p) => p.contentTypeSlug === schema.name);
-                  return (
-                    <Fragment key={schema.name}>
-                    <TableRow>
-                      <TableCell>
-                        {detailsSupported && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="mr-1"
-                            aria-expanded={expanded}
-                            aria-label={`Conditions and field limits for ${schema.displayName}`}
-                            onClick={() => setOpen(expanded ? null : schema.name)}
-                          >
-                            {expanded ? <IconChevronDown /> : <IconChevronRight />}
-                          </Button>
-                        )}
-                        <span className="font-medium">{schema.displayName}</span>
-                        <span className="text-muted-foreground ml-2 font-mono text-xs">{schema.name}</span>
-                      </TableCell>
+          <Tabs value={activeTab} onValueChange={setTab}>
+            <TabsList className="h-auto max-w-full flex-wrap justify-start">
+              {schemas.map((schema) => (
+                <TabsTrigger key={schema.name} value={schema.name} className="h-auto flex-none gap-2 py-1.5">
+                  <span>{schema.displayName}</span>
+                  <span className="text-muted-foreground font-mono text-xs">
+                    {crudSummary(permissions.find((p) => p.contentTypeSlug === schema.name))}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {schemas.map((schema) => {
+              const permission = permissionFor(schema.name);
+              return (
+                <TabsContent key={schema.name} value={schema.name} className="mt-3 space-y-5 rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground font-mono text-xs">{schema.name}</p>
+                    <div className="flex flex-wrap gap-2">
                       {ACTIONS.map((action) => (
-                        <TableCell key={action} className="text-center">
-                          <Checkbox
-                            checked={permission[action].enabled}
-                            onCheckedChange={(checked) => toggle(schema.name, action, checked === true)}
-                            aria-label={`Allow ${action} on ${schema.displayName}`}
-                          />
-                        </TableCell>
+                        <Button
+                          key={action}
+                          type="button"
+                          size="sm"
+                          variant={permission[action].enabled ? 'default' : 'outline'}
+                          aria-pressed={permission[action].enabled}
+                          aria-label={`Allow ${action} on ${schema.displayName}`}
+                          className="capitalize"
+                          onClick={() => toggle(schema.name, action, !permission[action].enabled)}
+                        >
+                          {action}
+                        </Button>
                       ))}
-                    </TableRow>
-                    {expanded && (
-                      <TableRow>
-                        <TableCell colSpan={ACTIONS.length + 1} className="bg-muted/30 whitespace-normal">
-                          {granted || schema.lifecycle?.transitions?.length ? (
-                            <PermissionDetails
-                              schema={schema}
-                              permission={permission}
-                              roleName={name}
-                              transitionDrafts={transitionDrafts[schema.name]}
-                              onTransitionDraft={(transition, draft) =>
-                                setTransitionDrafts((prev) => ({
-                                  ...prev,
-                                  [schema.name]: { ...prev[schema.name], [transition]: draft },
-                                }))
-                              }
-                              drafts={{
-                                read: conditionDrafts[`${schema.name}:read`],
-                                update: conditionDrafts[`${schema.name}:update`],
-                                delete: conditionDrafts[`${schema.name}:delete`],
-                              }}
-                              onDraft={(action, draft) =>
-                                setConditionDrafts((prev) => ({ ...prev, [`${schema.name}:${action}`]: draft }))
-                              }
-                              onPermission={replacePermission}
-                            />
-                          ) : (
-                            <p className="text-muted-foreground text-xs">
-                              Allow an action on {schema.displayName} first. Conditions and field limits belong to an
-                              action.
-                            </p>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                    </div>
+                  </div>
+                  {detailsSupported && (
+                    <PermissionDetails
+                      schema={schema}
+                      permission={permission}
+                      roleName={name}
+                      transitionDrafts={transitionDrafts[schema.name]}
+                      onTransitionDraft={(transition, draft) =>
+                        setTransitionDrafts((prev) => ({
+                          ...prev,
+                          [schema.name]: { ...prev[schema.name], [transition]: draft },
+                        }))
+                      }
+                      drafts={{
+                        read: conditionDrafts[`${schema.name}:read`],
+                        update: conditionDrafts[`${schema.name}:update`],
+                        delete: conditionDrafts[`${schema.name}:delete`],
+                      }}
+                      onDraft={(action, draft) =>
+                        setConditionDrafts((prev) => ({ ...prev, [`${schema.name}:${action}`]: draft }))
+                      }
+                      onPermission={replacePermission}
+                    />
+                  )}
+                </TabsContent>
+              );
+            })}
+          </Tabs>
         )}
       </div>
 

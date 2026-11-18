@@ -173,8 +173,85 @@ export function ruleSentence(role: string, verb: string, plural: string, rows: r
         const field = row.key.trim() || 'a field';
         // The API swaps in the current user for _eq and _ne only. In a list it is plain text.
         const substituted = row.operator === '_eq' || row.operator === '_ne';
-        const value = substituted && row.value.trim() === '$CURRENT_USER' ? 'the current user' : row.value.trim() || 'a value';
+        const typed = row.value.trim();
+        const value =
+            substituted && typed === CURRENT_USER
+                ? 'the current user'
+                : substituted && typed === CURRENT_USER_DEPARTMENT
+                  ? "the current user's department"
+                  : typed || 'a value';
         return `${field} ${OPERATOR_LABELS[row.operator]} ${value}`;
     });
     return `${who} can ${verb} ${plural} where ${parts.join(' and ')}.`;
+}
+
+/** The letters of a content type's summary, in Create, Read, Update, Delete order. */
+const CRUD_LETTERS: [PermissionAction, string][] = [
+    ['create', 'C'],
+    ['read', 'R'],
+    ['update', 'U'],
+    ['delete', 'D'],
+];
+
+/** A permission as four mono characters: a letter for each granted action and a dot for each missing one, for example `CR.D`. */
+export function crudSummary(permission: ContentTypePermission | undefined): string {
+    return CRUD_LETTERS.map(([action, letter]) => (permission?.[action]?.enabled ? letter : '.')).join('');
+}
+
+/**
+ * The fields a rule's set lets through: the set it holds, or every field of the type when it holds
+ * none (absent, null and an empty list all mean that).
+ */
+export function effectiveFields(
+    rule: PermissionRule,
+    set: 'readableFields' | 'writableFields',
+    schemaFields: readonly string[],
+): string[] {
+    return hasFieldSet(rule, set) ? (rule[set] as string[]) : [...schemaFields];
+}
+
+/**
+ * The set to store after one field is ticked or unticked. A set that holds every field of the type
+ * (and nothing else) is stored as an empty list, which is how the API removes a limit, and so is a
+ * set with nothing left in it. Both are what the screen wrote before it had a grid.
+ */
+export function toggleFieldInSet(
+    rule: PermissionRule,
+    set: 'readableFields' | 'writableFields',
+    schemaFields: readonly string[],
+    field: string,
+    on: boolean,
+): string[] {
+    const held = effectiveFields(rule, set, schemaFields);
+    const next = on ? (held.includes(field) ? held : [...held, field]) : held.filter((n) => n !== field);
+    const holdsEveryField =
+        schemaFields.every((n) => next.includes(n)) && next.every((n) => schemaFields.includes(n));
+    return holdsEveryField ? [] : next;
+}
+
+/** The value a condition compares to for "their own": the caller. */
+export const CURRENT_USER = '$CURRENT_USER';
+/** The value for "their department": the caller's department. */
+export const CURRENT_USER_DEPARTMENT = '$CURRENT_USER.department';
+
+export type ConditionPreset = 'any' | 'own' | 'department' | 'custom';
+
+/**
+ * Which preset a draft is exactly. No condition is any entry, one `_eq` row holding the caller or
+ * the caller's department is its preset, and every other draft is custom.
+ */
+export function conditionPreset(draft: { rows: readonly ConditionRow[]; kept: Record<string, unknown> }): ConditionPreset {
+    if (Object.keys(draft.kept).length > 0) return 'custom';
+    if (draft.rows.length === 0) return 'any';
+    if (draft.rows.length !== 1) return 'custom';
+    const [row] = draft.rows;
+    if (row.operator !== '_eq') return 'custom';
+    if (row.value === CURRENT_USER) return 'own';
+    if (row.value === CURRENT_USER_DEPARTMENT) return 'department';
+    return 'custom';
+}
+
+/** The one row a preset writes on a field. */
+export function presetRow(preset: 'own' | 'department', key: string): ConditionRow {
+    return { key, operator: '_eq', value: preset === 'own' ? CURRENT_USER : CURRENT_USER_DEPARTMENT };
 }
