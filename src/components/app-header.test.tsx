@@ -11,6 +11,8 @@ vi.mock('@/hooks/use-tenants', () => ({
     useMyTenants: () => ({ data: [{ slug: 'cafe', name: 'Kape Cafe' }] }),
 }));
 vi.mock('@/hooks/use-meta', () => ({ useApiMeta: () => ({ data: undefined }), brewVersion: () => null, adminVersion: () => null }));
+// The header mounts the palette, whose entry search is a query. The header tests never type in it.
+vi.mock('@/hooks/use-contents', () => ({ useContents: () => ({ data: undefined, isFetching: false }) }));
 
 const { AppHeader } = await import('./app-header');
 

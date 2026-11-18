@@ -2,19 +2,28 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { NAV_GROUPS } from '@/lib/navigation';
-import { IconPlus } from '@/components/icons';
+import { contentTitle } from '@/lib/content-title';
+import { IconContent, IconMoon, IconPlus, IconSun } from '@/components/icons';
+import { useContents } from '@/hooks/use-contents';
+import { useDebounced } from '@/hooks/use-debounced';
 import { Button } from '@/components/ui/button';
 import { useIsSidebarDrawer } from '@/hooks/use-mobile';
 import {
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command';
+
+/** The canvas shows at most nine rows once a query is typed. */
+export const PALETTE_CAP = 9;
+const ENTRY_DEBOUNCE_MS = 250;
+
+const matches = (label: string, q: string) => !q || label.toLowerCase().includes(q.toLowerCase());
 
 /**
  * The palette. `trigger="rail"` is the full-width field in the sidebar; `trigger="bar"` is the 44px
@@ -27,6 +36,17 @@ export function CommandMenu({ trigger = 'rail' }: { trigger?: 'rail' | 'bar' }) 
   const router = useRouter();
   const drawer = useIsSidebarDrawer();
   const ownsShortcut = trigger === 'bar' ? true : !drawer;
+  const [query, setQuery] = useState('');
+  const { resolvedTheme, setTheme } = useTheme();
+  const dark = resolvedTheme === 'dark';
+  const q = query.trim();
+  // Entries come from the same list call as the Entries screen, which is tenant-keyed. Nothing is
+  // sent until the palette is open and something is typed, so an empty palette costs no request.
+  const settled = useDebounced(q, ENTRY_DEBOUNCE_MS);
+  const entries = useContents(
+    { search: settled, page: 1, pageSize: PALETTE_CAP },
+    open && settled.length > 0
+  );
 
   useEffect(() => {
     if (!ownsShortcut) return;
@@ -44,6 +64,32 @@ export function CommandMenu({ trigger = 'rail' }: { trigger?: 'rail' | 'bar' }) 
     setOpen(false);
     command();
   }, []);
+
+  const onOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    if (!next) setQuery('');
+  }, []);
+
+  // cmdk's own filter is off: it would hide an entry the server matched on a field other than the
+  // title, and it cannot hold the canvas's nine row cap. Order is the canvas's: screens, entries,
+  // create actions, then the theme action. A typed query is capped at nine rows in that order.
+  const screens = NAV_GROUPS.flatMap((g) => g.items).filter((item) => matches(item.title, q));
+  const entryRows = settled === q && q ? (entries.data?.items ?? []) : [];
+  const create = [
+    { label: 'New content type', href: '/schemas/new' },
+    { label: 'New entry', href: '/content/new' },
+    { label: 'New workflow', href: '/workflows/new' },
+  ].filter((c) => matches(c.label, q));
+  const themeLabel = 'Toggle dark mode';
+  const showTheme = matches(themeLabel, q);
+
+  const limit = q ? PALETTE_CAP : Infinity;
+  const shownScreens = screens.slice(0, limit);
+  const shownEntries = entryRows.slice(0, Math.max(0, limit - shownScreens.length));
+  const shownCreate = create.slice(0, Math.max(0, limit - shownScreens.length - shownEntries.length));
+  const shownTheme =
+    showTheme && shownScreens.length + shownEntries.length + shownCreate.length < limit;
+  const nothing = !shownScreens.length && !shownEntries.length && !shownCreate.length && !shownTheme;
 
   return (
     <>
@@ -70,33 +116,63 @@ export function CommandMenu({ trigger = 'rail' }: { trigger?: 'rail' | 'bar' }) 
           </kbd>
         </Button>
       )}
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Go to a page or run an action…" />
+      <CommandDialog open={open} onOpenChange={onOpenChange} shouldFilter={false}>
+        <CommandInput
+          placeholder="Jump to a screen or entry"
+          value={query}
+          onValueChange={setQuery}
+        />
         <CommandList>
-          <CommandEmpty>Nothing matches that search.</CommandEmpty>
-          <CommandGroup heading="Go to">
-            {NAV_GROUPS.flatMap((g) => g.items).map((item) => (
-              <CommandItem key={item.href} onSelect={() => run(() => router.push(item.href))}>
-                <item.icon />
-                {item.title}
+          {nothing && !(q && (q !== settled || entries.isFetching)) && (
+            <div className="text-muted-foreground py-6 text-center text-sm">Nothing matches that search.</div>
+          )}
+          {shownScreens.length > 0 && (
+            <CommandGroup heading="Go to">
+              {shownScreens.map((item) => (
+                <CommandItem key={item.href} value={`go ${item.href}`} onSelect={() => run(() => router.push(item.href))}>
+                  <item.icon />
+                  {item.title}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {shownEntries.length > 0 && (
+            <CommandGroup heading="Entries">
+              {shownEntries.map((entry) => (
+                <CommandItem
+                  key={entry.id}
+                  value={`entry ${entry.id}`}
+                  onSelect={() => run(() => router.push(`/content/${entry.id}`))}
+                >
+                  <IconContent />
+                  <span className="flex-1 truncate">{contentTitle(entry.data, entry.id)}</span>
+                  <span className="text-muted-foreground text-xs">{entry.contentType}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {shownCreate.length > 0 && (
+            <>
+              {(shownScreens.length > 0 || shownEntries.length > 0) && <CommandSeparator />}
+              <CommandGroup heading="Create">
+                {shownCreate.map((c) => (
+                  <CommandItem key={c.href} value={`create ${c.href}`} onSelect={() => run(() => router.push(c.href))}>
+                    <IconPlus />
+                    {c.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
+          {shownTheme && (
+            <CommandGroup heading="Action">
+              <CommandItem value="action theme" onSelect={() => run(() => setTheme(dark ? 'light' : 'dark'))}>
+                {dark ? <IconSun /> : <IconMoon />}
+                {themeLabel}
+                <span className="text-muted-foreground ml-auto text-xs">{dark ? 'Light' : 'Dark'}</span>
               </CommandItem>
-            ))}
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading="Create">
-            <CommandItem onSelect={() => run(() => router.push('/schemas/new'))}>
-              <IconPlus />
-              New content type
-            </CommandItem>
-            <CommandItem onSelect={() => run(() => router.push('/content/new'))}>
-              <IconPlus />
-              New entry
-            </CommandItem>
-            <CommandItem onSelect={() => run(() => router.push('/workflows/new'))}>
-              <IconPlus />
-              New workflow
-            </CommandItem>
-          </CommandGroup>
+            </CommandGroup>
+          )}
         </CommandList>
       </CommandDialog>
     </>
