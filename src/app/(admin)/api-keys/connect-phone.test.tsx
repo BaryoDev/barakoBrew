@@ -27,7 +27,7 @@ const { MODULES_KEY } = await import('@/hooks/use-modules');
 const { ConnectPhone } = await import('./connect-phone');
 
 const T0 = new Date('2026-11-18T10:00:00Z').getTime();
-const LINK = 'togo://connect?v=2&url=https%3A%2F%2Fcms.example.com&tenant=acme&name=Acme&code=SERVERCODE12&exp=1';
+const LINK = 'app://connect?v=2&url=https%3A%2F%2Fcms.example.com&tenant=acme&name=Acme&code=SERVERCODE12&exp=1';
 
 const started = (extra: Record<string, unknown> = {}, ms = 120_000) => ({
     data: {
@@ -248,13 +248,13 @@ describe('Connect a phone', () => {
         await act(async () => {
             await vi.advanceTimersByTimeAsync(6_000);
         });
-        vi.mocked(api.post).mockResolvedValueOnce(started({ id: 'p2', link: 'togo://connect?v=2&code=NEW' }, 126_000));
+        vi.mocked(api.post).mockResolvedValueOnce(started({ id: 'p2', link: 'app://connect?v=2&code=NEW' }, 126_000));
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: 'New code' }));
         });
         await flush();
         expect(api.post).toHaveBeenCalledTimes(2);
-        expect(toDataURL).toHaveBeenLastCalledWith('togo://connect?v=2&code=NEW');
+        expect(toDataURL).toHaveBeenLastCalledWith('app://connect?v=2&code=NEW');
         expect(screen.getByAltText('QR code to connect a phone')).toBeInTheDocument();
     });
 
