@@ -64,7 +64,7 @@ export default function LoginPage() {
   const requestCode = useRequestSignInCode();
   const { data: providers } = useAuthProviders();
   const { data: listed, isError: methodsFailed } = useSignInMethods();
-  const { data: reachability } = useInstanceReachability();
+  const { data: reachability, dataUpdatedAt: reachabilityCheckedAt } = useInstanceReachability();
 
   const [step, setStep] = useState<Step>('form');
   const [method, setMethod] = useState('password');
@@ -207,7 +207,13 @@ export default function LoginPage() {
 
   return (
     <div className="bg-background flex min-h-svh">
-      <BrandPanel host={apiHost} reachability={reachability} remembered={remembered} onForget={forget} />
+      <BrandPanel
+        host={apiHost}
+        reachability={reachability}
+        remembered={remembered}
+        onForget={forget}
+        checkedAt={reachabilityCheckedAt}
+      />
 
       <main className="relative flex min-h-svh flex-1 flex-col items-center justify-center overflow-hidden px-6 py-10">
         <div className="w-full max-w-[400px]">
