@@ -16,11 +16,19 @@ export const SIGN_IN_METHODS: Record<string, SignInMethodEntry> = {
     'email-code': { id: 'email-code', label: 'Email code', icon: IconEnvelope, Panel: EmailCodePanel },
 };
 
-/** A function, or a forwardRef, memo or lazy component: an object tagged with a `$$typeof` symbol. */
+const FORWARD_REF = Symbol.for('react.forward_ref');
+const MEMO = Symbol.for('react.memo');
+
+/** A function, or a forwardRef or memo component. A lazy component, an element or a context is not one. */
 function isComponent(value: unknown): boolean {
     if (typeof value === 'function') return true;
-    return !!value && typeof value === 'object' && typeof (value as { $$typeof?: unknown }).$$typeof === 'symbol';
+    if (!value || typeof value !== 'object') return false;
+    const tag = (value as { $$typeof?: unknown }).$$typeof;
+    return tag === FORWARD_REF || tag === MEMO;
 }
+
+/** The ids the console itself draws. A package cannot replace them. */
+const BUILT_IN_IDS: readonly string[] = ['password', 'email-code'];
 
 /**
  * Entries are components registered from code. Anything else (a string, a URL, a record without a
@@ -34,6 +42,7 @@ export function registerSignInMethod(entry: SignInMethodEntry): void {
         entry.id !== '' &&
         entry.id === entry.id.trim().toLowerCase() &&
         entry.id !== '__proto__' &&
+        !BUILT_IN_IDS.includes(entry.id) &&
         typeof entry.label === 'string' &&
         isComponent(entry.icon) &&
         isComponent(entry.Panel);

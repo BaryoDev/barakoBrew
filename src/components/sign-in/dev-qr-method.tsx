@@ -1,13 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { IconMobile } from '@/components/icons';
 import { createQrApprovalApi } from '@/hooks/use-qr-approval';
 import { QrApprovalPanel } from './qr-approval-panel';
 import type { SignInMethodEntry, SignInPanelProps } from './types';
 
-const api = createQrApprovalApi({ createPath: '/api/dev-fixture/qr/create', pollPath: '/api/dev-fixture/qr/poll' });
-
 function DevQrPanel({ flow }: SignInPanelProps) {
+    const [api] = useState(() =>
+        createQrApprovalApi({ createPath: '/api/dev-fixture/qr/create', pollPath: '/api/dev-fixture/qr/poll' }),
+    );
     return <QrApprovalPanel flow={flow} api={api} />;
 }
 

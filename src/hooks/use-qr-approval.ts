@@ -11,7 +11,15 @@ export const POLL_FLOOR_MS = 1000;
 const DEFAULT_INTERVAL_MS = 2000;
 const MAX_BACKOFF_MS = 30_000;
 
-export type QrApprovalPhase = 'creating' | 'waiting' | 'scanned' | 'approved' | 'denied' | 'expired' | 'error';
+export type QrApprovalPhase =
+    | 'creating'
+    | 'waiting'
+    | 'scanned'
+    | 'approved'
+    | 'denied'
+    | 'expired'
+    | 'error'
+    | 'undrawable';
 
 export interface QrRequestView {
     /** What the QR encodes, as the server said. */
@@ -44,6 +52,11 @@ export function createQrApprovalApi(routes: { createPath: string; pollPath: stri
     };
 }
 
+/** Every wait between polls sits between the floor and the ceiling, whatever the server said. */
+function clampWait(ms: number): number {
+    return Math.min(MAX_BACKOFF_MS, Math.max(POLL_FLOOR_MS, ms));
+}
+
 function retryAfterMs(error: unknown): number {
     const header = isAxiosError(error) ? error.response?.headers?.['retry-after'] : undefined;
     const seconds = Number(header);
@@ -74,6 +87,7 @@ export class QrApprovalRun {
     constructor(private readonly emit: (state: QrApprovalState) => void) {}
 
     private view: QrRequestView | null = null;
+    private phase: QrApprovalPhase = 'creating';
 
     configure(api: QrApprovalApi, onApproved: (tokens: SignInTokens) => void) {
         this.api = api;
@@ -81,6 +95,7 @@ export class QrApprovalRun {
     }
 
     private set(phase: QrApprovalPhase) {
+        this.phase = phase;
         this.emit({ phase, request: this.view });
     }
 
@@ -122,7 +137,7 @@ export class QrApprovalRun {
         const expiresAt = Date.now() + created.expiresInSeconds * 1000;
         this.held = { secret: created.secret, requestId: created.requestId, expiresAt };
         this.view = { qrPayload: created.qrPayload, matchNumber: created.matchNumber, expiresAt };
-        this.intervalMs = Math.max(POLL_FLOOR_MS, (created.intervalSeconds ?? DEFAULT_INTERVAL_MS / 1000) * 1000);
+        this.intervalMs = clampWait((created.intervalSeconds ?? DEFAULT_INTERVAL_MS / 1000) * 1000);
         this.backoffMs = 0;
         this.set('waiting');
         this.arm(run);
@@ -137,6 +152,14 @@ export class QrApprovalRun {
         } else {
             void this.start();
         }
+    }
+
+    /** The panel could not draw the QR it was given. Stop, so nothing polls for a code nobody can scan. */
+    undrawable() {
+        if (this.view === null || this.phase === 'undrawable') return;
+        this.halt();
+        this.held = null;
+        this.set('undrawable');
     }
 
     private arm(run: number) {
@@ -154,7 +177,7 @@ export class QrApprovalRun {
     }
 
     private schedule(run: number, delay: number) {
-        this.pollTimer = setTimeout(() => void this.tick(run), delay);
+        this.pollTimer = setTimeout(() => void this.tick(run), clampWait(delay));
     }
 
     private async tick(run: number) {
@@ -196,7 +219,7 @@ export class QrApprovalRun {
             return;
         }
         this.backoffMs = 0;
-        if (parsed.intervalSeconds) this.intervalMs = Math.max(POLL_FLOOR_MS, parsed.intervalSeconds * 1000);
+        if (parsed.intervalSeconds) this.intervalMs = clampWait(parsed.intervalSeconds * 1000);
         if (parsed.status === 'approved' && parsed.tokens) {
             this.finish(run, 'approved');
             this.onApproved?.(parsed.tokens);
@@ -234,5 +257,7 @@ export function useQrApproval(approvalApi: QrApprovalApi, onApproved: (tokens: S
         /** Open a new request. */
         showNewCode: () => void run.start(),
         retry: () => run.retry(),
+        /** Report that the QR could not be drawn. */
+        reportUndrawable: () => run.undrawable(),
     };
 }

@@ -29,6 +29,12 @@ function tooManyRequests() {
     });
 }
 
+function tooManyRequestsAfter(seconds: string) {
+    const error = tooManyRequests();
+    (error.response as { headers: Record<string, string> }).headers = { 'retry-after': seconds };
+    return error;
+}
+
 function setup(overrides: Partial<typeof CREATE> = {}) {
     const create = vi.fn().mockResolvedValue({ ...CREATE, ...overrides });
     const poll = vi.fn().mockResolvedValue({ status: 'pending' });
@@ -137,5 +143,61 @@ describe('useQrApproval', () => {
         await advance(10_000);
         expect(result.current.phase).toBe('error');
         expect(poll).not.toHaveBeenCalled();
+    });
+
+    it('clamps_a_huge_interval_to_thirty_seconds', async () => {
+        const { poll } = setup({ intervalSeconds: 3_000_000 });
+        await flush();
+
+        await advance(29_999);
+        expect(poll).not.toHaveBeenCalled();
+        await advance(1);
+        expect(poll).toHaveBeenCalledTimes(1);
+
+        poll.mockResolvedValue({ status: 'pending', intervalSeconds: 3_000_000 });
+        await advance(30_000);
+        expect(poll).toHaveBeenCalledTimes(2);
+        await advance(29_999);
+        expect(poll).toHaveBeenCalledTimes(2);
+    });
+
+    it('a_new_code_while_a_poll_is_open_does_not_start_a_second_poll', async () => {
+        const { poll, create, onApproved, result } = setup();
+        let answerOld: (value: unknown) => void = () => {};
+        poll.mockImplementationOnce(() => new Promise((resolve) => (answerOld = resolve)));
+        await flush();
+        await advance(2000);
+        expect(poll).toHaveBeenCalledTimes(1);
+
+        create.mockResolvedValue({ ...CREATE, qrPayload: 'request:r2', requestId: 'r2' });
+        act(() => result.current.showNewCode());
+        await flush();
+        await advance(20_000);
+        // The old poll is still open, so the new request waits rather than run a second one.
+        expect(poll).toHaveBeenCalledTimes(1);
+
+        await act(async () => answerOld({ status: 'approved', token: 'stale-token' }));
+        expect(onApproved).not.toHaveBeenCalled();
+        await advance(2000);
+        expect(poll).toHaveBeenCalledTimes(2);
+        expect(poll).toHaveBeenLastCalledWith({ secret: 'browser-secret', requestId: 'r2' });
+    });
+
+    it('honours_retry_after_and_caps_it', async () => {
+        const { poll } = setup();
+        poll.mockRejectedValueOnce(tooManyRequestsAfter('20')).mockRejectedValueOnce(tooManyRequestsAfter('99999'));
+        await flush();
+
+        await advance(2000);
+        expect(poll).toHaveBeenCalledTimes(1);
+        await advance(19_999);
+        expect(poll).toHaveBeenCalledTimes(1);
+        await advance(1);
+        expect(poll).toHaveBeenCalledTimes(2);
+
+        await advance(29_999);
+        expect(poll).toHaveBeenCalledTimes(2);
+        await advance(1);
+        expect(poll).toHaveBeenCalledTimes(3);
     });
 });

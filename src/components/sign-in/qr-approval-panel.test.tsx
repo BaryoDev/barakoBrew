@@ -153,6 +153,31 @@ describe('QrApprovalPanel', () => {
         expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     });
 
+    it('shows_an_error_when_the_code_cannot_be_drawn', async () => {
+        const { poll, create } = setup({ qrPayload: '\u00e9'.repeat(1300) });
+        await flush();
+
+        expect(screen.getByRole('status')).toHaveTextContent('This code could not be drawn.');
+        expect(screen.queryByRole('img')).toBeNull();
+        await advance(10_000);
+        expect(poll).not.toHaveBeenCalled();
+
+        create.mockResolvedValue(CREATE);
+        const again = screen.getByRole('button', { name: 'Show a new code' });
+        fireEvent.click(again);
+        expect(screen.getByRole('status')).toHaveFocus();
+        await flush();
+        expect(screen.getByRole('img', { name: /QR code/i })).toBeInTheDocument();
+    });
+
+    it('moves_focus_to_the_status_line_after_try_again', async () => {
+        const { create } = setup({ matchNumber: 'bad' });
+        await flush();
+        create.mockResolvedValue(CREATE);
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+        expect(screen.getByRole('status')).toHaveFocus();
+    });
+
     it('shows_the_network_error_for_a_malformed_create_reply_and_retries', async () => {
         const { create } = setup({ matchNumber: 'not a number' });
         await flush();

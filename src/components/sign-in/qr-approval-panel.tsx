@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Button } from '@/components/ui/button';
 import { useQrApproval, type QrApprovalApi, type QrApprovalPhase } from '@/hooks/use-qr-approval';
@@ -14,6 +14,7 @@ export interface QrApprovalText {
     denied: string;
     expired: string;
     error: string;
+    undrawable: string;
     creating: string;
     qrName: string;
 }
@@ -26,6 +27,7 @@ export const DEFAULT_QR_TEXT: QrApprovalText = {
     denied: 'The sign-in was denied on your phone.',
     expired: 'This code has expired.',
     error: 'Could not reach the server.',
+    undrawable: 'This code could not be drawn.',
     creating: 'Getting a code.',
     qrName: 'QR code to scan with your phone',
 };
@@ -40,28 +42,32 @@ export interface QrApprovalPanelProps {
 
 const QUIET_ZONE = 4;
 
+interface Drawing {
+    path: string;
+    extent: number;
+}
+
+function draw(value: string): Drawing | null {
+    try {
+        const { modules } = QRCode.create(value, { errorCorrectionLevel: 'M' });
+        const size = modules.size;
+        let path = '';
+        for (let row = 0; row < size; row += 1) {
+            for (let col = 0; col < size; col += 1) {
+                if (modules.get(row, col)) path += `M${col + QUIET_ZONE} ${row + QUIET_ZONE}h1v1h-1z`;
+            }
+        }
+        return { path, extent: size + QUIET_ZONE * 2 };
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Draws the modules as one path. Dark modules are `card` on a `card-foreground` ground in dark mode
  * and the reverse in light, so a scanner always sees dark on light.
  */
-function QrCode({ value, name }: { value: string; name: string }) {
-    const drawing = useMemo(() => {
-        try {
-            const { modules } = QRCode.create(value, { errorCorrectionLevel: 'M' });
-            const size = modules.size;
-            let path = '';
-            for (let row = 0; row < size; row += 1) {
-                for (let col = 0; col < size; col += 1) {
-                    if (modules.get(row, col)) path += `M${col + QUIET_ZONE} ${row + QUIET_ZONE}h1v1h-1z`;
-                }
-            }
-            return { path, extent: size + QUIET_ZONE * 2 };
-        } catch {
-            return null;
-        }
-    }, [value]);
-
-    if (!drawing) return null;
+function QrCode({ drawing, name }: { drawing: Drawing; name: string }) {
     return (
         <svg
             role="img"
@@ -106,6 +112,8 @@ function message(phase: QrApprovalPhase, text: QrApprovalText): string {
             return text.expired;
         case 'error':
             return text.error;
+        case 'undrawable':
+            return text.undrawable;
     }
 }
 
@@ -115,16 +123,28 @@ function message(phase: QrApprovalPhase, text: QrApprovalText): string {
  */
 export function QrApprovalPanel({ flow, api, text }: QrApprovalPanelProps) {
     const copy = { ...DEFAULT_QR_TEXT, ...text };
-    const { phase, request, showNewCode, retry } = useQrApproval(api, flow.completeSession);
+    const { phase, request, showNewCode, retry, reportUndrawable } = useQrApproval(api, flow.completeSession);
+    const statusRef = useRef<HTMLParagraphElement>(null);
     const live = phase === 'waiting' || phase === 'scanned';
     const secondsLeft = useSecondsLeft(request?.expiresAt ?? null, live);
-    const showCode = request !== null && (live || phase === 'approved');
+    const payload = request?.qrPayload ?? null;
+    const drawing = useMemo(() => (payload === null ? null : draw(payload)), [payload]);
+    const undrawable = payload !== null && drawing === null;
+    useEffect(() => {
+        if (undrawable) reportUndrawable();
+    }, [undrawable, reportUndrawable]);
+    const showCode = request !== null && drawing !== null && (live || phase === 'approved');
+    // The button that was just pressed goes away, so focus moves to the status line rather than the page.
+    const act = (action: () => void) => () => {
+        action();
+        statusRef.current?.focus();
+    };
 
     return (
         <div className="flex flex-col items-center gap-4 text-center">
             {showCode ? (
                 <>
-                    <QrCode value={request.qrPayload} name={copy.qrName} />
+                    <QrCode drawing={drawing} name={copy.qrName} />
                     <div>
                         <p className="text-muted-foreground text-[12.5px] font-bold">{copy.matchLabel}</p>
                         <p className="font-mono text-4xl font-semibold tracking-widest tabular-nums">
@@ -138,22 +158,26 @@ export function QrApprovalPanel({ flow, api, text }: QrApprovalPanelProps) {
             ) : null}
 
             <p
+                ref={statusRef}
+                tabIndex={-1}
                 role="status"
                 aria-live="polite"
-                className={`text-[13.5px] leading-relaxed ${
-                    phase === 'denied' || phase === 'error' ? 'text-destructive' : 'text-muted-foreground'
+                className={`text-[13.5px] leading-relaxed outline-none ${
+                    phase === 'denied' || phase === 'error' || phase === 'undrawable'
+                        ? 'text-destructive'
+                        : 'text-muted-foreground'
                 }`}
             >
                 {message(phase, copy)}
             </p>
 
-            {phase === 'expired' || phase === 'denied' ? (
-                <Button type="button" onClick={showNewCode} className="h-11 w-full font-bold">
+            {phase === 'expired' || phase === 'denied' || phase === 'undrawable' ? (
+                <Button type="button" onClick={act(showNewCode)} className="h-11 w-full font-bold">
                     Show a new code
                 </Button>
             ) : null}
             {phase === 'error' ? (
-                <Button type="button" onClick={retry} className="h-11 w-full font-bold">
+                <Button type="button" onClick={act(retry)} className="h-11 w-full font-bold">
                     Try again
                 </Button>
             ) : null}

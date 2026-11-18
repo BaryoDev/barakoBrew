@@ -54,4 +54,6 @@ registerSlot('sign-in-method', 'MyModule', {
   `{ status, token?, refreshToken?, intervalSeconds? }`, where `status` is `pending`, `scanned`,
   `approved`, `denied` or `expired`. An `approved` reply without a token is not a session. Any other
   shape shows the network error state.
-- Entries are components registered from code at build time. A string or URL is refused.
+- Entries are components registered from code at build time. A string or URL is refused. `icon` and
+  `Panel` are functions or `forwardRef` or `memo` components. A `lazy` component is not accepted.
+  The ids `password` and `email-code` belong to the console and cannot be registered.
