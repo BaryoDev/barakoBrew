@@ -9,6 +9,12 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- A package installed next to the console can add a sign-in tab with `registerSlot('sign-in-method', name, entry)`. The page draws the tab only when `GET /api/auth/methods` lists its id. The public build registers none, so the page is unchanged.
+- `SignInFlow.completeSession(tokens)` lets a package panel hand tokens to the page, which starts the session and redirects as it does after a password. A panel never touches the token store.
+- `QrApprovalPanel`, a reusable panel that shows a QR and a match number, counts down to expiry and polls until a signed-in device approves. The browser secret stays in memory and is sent only in a poll body.
+
 ## [1.13.0] - 2026-11-17
 
 **Speaks API contracts 1 to 16, which covers barakoCMS 4.0.1 to 5.8.0.** barakoCMS 5.8.0 moves the

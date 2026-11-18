@@ -1,5 +1,11 @@
 import type { ComponentType, SVGProps } from 'react';
 
+/** What a panel hands the page when a sign-in it ran elsewhere ends in tokens. */
+export interface SignInTokens {
+    token: string;
+    refreshToken?: string;
+}
+
 /**
  * What a method panel can tell the sign-in page. A panel never navigates or stores a session on its
  * own: it reports where the sign-in got to and the page decides which step comes next.
@@ -13,6 +19,11 @@ export interface SignInFlow {
     needsMfa(challengeToken: string): void;
     /** Tokens were issued. */
     signedIn(): void;
+    /**
+     * The panel ran its own sign-in and holds the tokens. The page starts the session and redirects,
+     * as it does after a password. A panel never touches the token store. An empty token is ignored.
+     */
+    completeSession(tokens: SignInTokens): void;
     /** Move to another tab, for example from "Forgot it?" to the emailed code. */
     openMethod(id: string): void;
     /** The ids that have a tab right now, so a panel only points at a route that exists. */
