@@ -169,6 +169,28 @@ test.describe('accessibility', () => {
         await scan(page);
     });
 
+    test('the sign-in page with a registered method tab open', async ({ page }) => {
+        await stubShell(page);
+        await page.route('**/api/auth/methods', (r) => r.fulfill({ json: { methods: ['password', 'dev-qr'] } }));
+        await page.route('**/api/dev-fixture/qr/create', (r) =>
+            r.fulfill({
+                json: {
+                    qrPayload: 'request:r1',
+                    matchNumber: '482913',
+                    secret: 'browser-secret-xyz',
+                    requestId: 'r1',
+                    expiresInSeconds: 120,
+                    intervalSeconds: 5,
+                },
+            }),
+        );
+        await page.route('**/api/dev-fixture/qr/poll', (r) => r.fulfill({ json: { status: 'pending' } }));
+        await page.goto('/login');
+        await page.getByRole('tab', { name: 'Phone' }).click();
+        await expect(page.getByRole('img', { name: /QR code/i })).toBeVisible();
+        await scan(page);
+    });
+
     /**
      * Rows, not an empty page.
      *
