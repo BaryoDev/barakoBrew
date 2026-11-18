@@ -94,10 +94,14 @@ export const apiKeyRotationSchema = z.looseObject({
   kind: optionalString,
 });
 
-export function useApiKeys() {
+export function useApiKeys(options?: {
+  /** Read the list again on this schedule. Used while a phone is being connected. */
+  refetchInterval?: number | false | ((query: { state: { data: ApiKey[] | undefined } }) => number | false);
+}) {
   const tenant = useCurrentTenant();
   return useQuery({
     queryKey: ['api-keys', tenant],
+    refetchInterval: options?.refetchInterval,
     queryFn: async () => {
       const items = (await api.get<Paginated<ApiKey>>('/api/api-keys')).data.items;
       return items.map((k): ApiKey => {
@@ -208,5 +212,33 @@ export function useRevokeApiKey() {
       await api.delete(`/api/api-keys/${id}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+  });
+}
+
+/** The reply of POST /api/api-keys/pairings. The code and link are shown once, so they are only ever held in state. */
+export const pairingStartSchema = z.looseObject({
+  id: z.string().min(1),
+  instanceUrl: z.string().min(1),
+  tenant: z.string(),
+  instanceName: z.string(),
+  code: z.string().min(1),
+  expiresAt: z.string().min(1),
+  expiresInSeconds: z.number(),
+  link: z.string().min(1),
+  warning: z.string().nullable().optional(),
+});
+
+export type PairingStart = z.output<typeof pairingStartSchema>;
+
+/** Starts a pairing. The result holds the one-time code, so it carries the secret mutation options. */
+export function useStartPairing() {
+  return useMutation({
+    mutationFn: async (name: string): Promise<PairingStart> =>
+      parseResponse(
+        pairingStartSchema,
+        (await api.post<unknown>('/api/api-keys/pairings', { name })).data,
+        'POST /api/api-keys/pairings',
+      ),
+    ...SECRET_MUTATION,
   });
 }

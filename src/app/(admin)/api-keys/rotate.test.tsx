@@ -12,6 +12,7 @@ vi.mock('@/hooks/use-tenants', async () => {
     const actual = await vi.importActual<typeof import('@/hooks/use-tenants')>('@/hooks/use-tenants');
     return { ...actual, useCurrentTenant: () => tenantNow.value };
 });
+vi.mock('@/hooks/use-access', () => ({ useAccess: () => ({ can: () => true, known: true, viewer: { roles: [] } }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 globalThis.ResizeObserver ??= class {

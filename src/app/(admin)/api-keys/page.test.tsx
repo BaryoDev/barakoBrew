@@ -8,6 +8,8 @@ vi.mock('@/lib/api', async () => {
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } };
 });
 
+vi.mock('@/hooks/use-access', () => ({ useAccess: () => ({ can: () => true, known: true, viewer: { roles: [] } }) }));
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 globalThis.ResizeObserver ??= class {
