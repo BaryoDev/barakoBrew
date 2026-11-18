@@ -34,15 +34,17 @@ interface StatusBadgeProps {
   className?: string;
   /** Show a small dot before the label */
   dot?: boolean;
+  /** Pulse the dot, for a thing that is happening now. Reduced motion stops it (see .pulse). */
+  pulse?: boolean;
 }
 
-export function StatusBadge({ tone, children, className, dot = true }: StatusBadgeProps) {
+export function StatusBadge({ tone, children, className, dot = true, pulse = false }: StatusBadgeProps) {
   return (
     <Badge
       variant="outline"
       className={cn('gap-1.5 px-2.5 py-[3px] text-[11px] font-bold', TONE_CLASSES[tone], className)}
     >
-      {dot && <span className="size-1.5 rounded-full bg-current" aria-hidden />}
+      {dot && <span className={cn('size-1.5 rounded-full bg-current', pulse && 'pulse')} aria-hidden />}
       {children}
     </Badge>
   );

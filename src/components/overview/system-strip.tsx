@@ -3,12 +3,14 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { useApiMeta } from '@/hooks/use-meta';
+import { isModuleEnabled, useModules } from '@/hooks/use-modules';
 import { useHealthStatus } from '@/hooks/use-monitoring';
 import { useNavMetrics } from '@/hooks/use-nav-metrics';
 import { useRunSample } from '@/hooks/use-overview';
 import { useOverviewSummary, type OverviewStripItem } from '@/hooks/use-overview-summary';
 import { hrefsOf, useAllowedGroups } from '@/hooks/use-visible-hrefs';
 import { durationMs, runnerState, systemVerdict, type Tone } from '@/lib/overview';
+import { moduleHref } from '@/lib/module-state';
 import { cn } from '@/lib/utils';
 
 type Dot = Tone | 'accent' | 'none';
@@ -76,6 +78,15 @@ function Item({ item }: { item: StripItem }) {
   );
 }
 
+// The canvas opens a module screen from each cell: Diagnostics for API and Database, the Files module
+// for Storage (S3 first), the email module for Mail. The first one the deployment runs wins.
+const STRIP_MODULES: Record<string, readonly string[]> = {
+  API: ['Diagnostics'],
+  Database: ['Diagnostics'],
+  Storage: ['Files.S3', 'Files'],
+  Mail: ['Email.Resend', 'Email.Smtp'],
+};
+
 const STRIP_HREF: Record<string, string> = {
   API: '/ops/health',
   Database: '/ops/health',
@@ -109,6 +120,15 @@ export function SystemStrip() {
   const storage = findHealthEntry(health.data?.entries, STORAGE_WORDS);
   const latency = durationMs(database?.duration);
   const link = (href: string) => (visible.has(href) ? href : undefined);
+  const modules = useModules().data;
+  // The module screen when the module list says the deployment runs it. A caller who cannot read the
+  // list (or a deployment without the module) keeps the old screen, so no cell opens a dead page.
+  const target = (cell: string): string | undefined => {
+    const name = STRIP_MODULES[cell]?.find((n) => isModuleEnabled(modules, n));
+    if (name) return moduleHref(name);
+    const old = STRIP_HREF[cell];
+    return cell === 'API' || cell === 'Database' ? old : old ? link(old) : undefined;
+  };
 
   const items: StripItem[] = [
     {
@@ -116,7 +136,7 @@ export function SystemStrip() {
       label: 'API',
       dot: meta.data?.version ? 'ok' : 'none',
       value: <span className="font-mono text-xs">{meta.data?.version ? `up · ${meta.data.version}` : '—'}</span>,
-      href: '/ops/health',
+      href: target('API'),
     },
     {
       key: 'database',
@@ -128,14 +148,14 @@ export function SystemStrip() {
           {latency != null && <span className="font-mono text-xs">· {latency} ms</span>}
         </>
       ),
-      href: '/ops/health',
+      href: target('Database'),
     },
     {
       key: 'storage',
       label: 'Storage',
       dot: dotFor(storage?.status),
       value: <span>{storage?.status ?? 'Unknown'}</span>,
-      href: link('/settings/storage'),
+      href: target('Storage'),
     },
   ];
 
@@ -148,7 +168,7 @@ export function SystemStrip() {
       dot: bounces.value > 0 ? 'warn' : 'ok',
       value: <span>{bounces.value > 0 ? `${n} ${bounces.value === 1 ? 'bounce' : 'bounces'}` : 'delivering'}</span>,
       tip: 'Bounces in the last 24 hours',
-      href: link('/email-events'),
+      href: target('Mail'),
     });
   }
 
@@ -172,7 +192,7 @@ export function SystemStrip() {
     dot: item.status,
     value: <span className={item.name === 'API' || item.ms != null ? 'font-mono text-xs' : undefined}>{coreWords(item)}</span>,
     tip: item.detail ?? undefined,
-    href: link(STRIP_HREF[item.name] ?? '') ?? (item.name === 'API' || item.name === 'Database' ? '/ops/health' : undefined),
+    href: target(item.name),
   }));
   const shown = coreItems ?? items;
   const verdict =
@@ -181,6 +201,8 @@ export function SystemStrip() {
       : systemVerdict(items.map((item) => (item.dot === 'accent' ? 'ok' : item.dot)));
   const mailOff = core ? core.items.some((i) => i.name === 'Mail' && i.status !== 'ok') : !!bounces && bounces.value > 0;
 
+  const pillHref = (mailOff ? target('Mail') : undefined) ?? target('API') ?? '/ops/health';
+
   return (
     <div
       aria-label="System status"
@@ -188,7 +210,7 @@ export function SystemStrip() {
       className="bg-secondary flex flex-wrap items-center gap-x-3.5 gap-y-1 rounded-full py-1.5 pr-3.5 pl-1.5"
     >
       <Link
-        href={mailOff && visible.has('/email-events') ? '/email-events' : '/ops/health'}
+        href={pillHref}
         className={cn(
           'flex h-7 items-center gap-[7px] rounded-full px-[11px] text-[12.5px] font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50',
           PILL[verdict.tone],

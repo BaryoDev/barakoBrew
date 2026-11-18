@@ -7,6 +7,11 @@ let runs: { rows: { status: string }[] } | undefined;
 let hrefs: string[];
 
 let summary: unknown;
+let report: unknown;
+vi.mock('@/hooks/use-modules', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/hooks/use-modules')>()),
+    useModules: () => ({ data: report }),
+}));
 vi.mock('@/hooks/use-overview-summary', () => ({ useOverviewSummary: () => ({ summary, unavailable: !summary, isLoading: false, isError: false }) }));
 vi.mock('@/hooks/use-meta', () => ({ useApiMeta: () => ({ data: { version: '5.4.0', swaggerEnabled: false } }) }));
 vi.mock('@/hooks/use-monitoring', () => ({ useHealthStatus: () => ({ data: entries ? { entries } : undefined }) }));
@@ -22,6 +27,7 @@ const { SystemStrip } = await import('./system-strip');
 const healthy = { postgres: { status: 'Healthy', duration: '00:00:00.004' }, storage: { status: 'Healthy', duration: '00:00:00.01' } };
 
 beforeEach(() => {
+    report = undefined;
     summary = undefined;
     entries = healthy;
     metrics = { recentBounces: { value: 0, atLeast: false } };
@@ -127,5 +133,42 @@ describe('the system strip from GET /api/overview', () => {
         const cell = within(strip()).getByText('Storage').parentElement as HTMLElement;
         expect(cell).toHaveTextContent('problem');
         expect(cell).not.toHaveTextContent(/\bok\b/);
+    });
+
+    it('opens module screens from the cells when the deployment runs them', () => {
+        report = {
+            kind: 'modules',
+            modules: ['Diagnostics', 'Files.S3', 'Files', 'Email.Resend'].map((name) => ({ name, enabled: true })),
+        };
+        render(<SystemStrip />);
+        const href = (label: string) => within(strip()).getByText(label).closest('a');
+        expect(href('API')).toHaveAttribute('href', '/modules/Diagnostics');
+        expect(href('Database')).toHaveAttribute('href', '/modules/Diagnostics');
+        expect(href('Storage')).toHaveAttribute('href', '/modules/Files.S3');
+        expect(href('Mail')).toHaveAttribute('href', '/modules/Email.Resend');
+        expect(href('Runner')).toHaveAttribute('href', '/workflow-runs');
+    });
+
+    it('uses the Files module for Storage when S3 is not installed, and Smtp for Mail', () => {
+        report = { kind: 'modules', modules: ['Files', 'Email.Smtp'].map((name) => ({ name, enabled: true })) };
+        render(<SystemStrip />);
+        expect(within(strip()).getByText('Storage').closest('a')).toHaveAttribute('href', '/modules/Files');
+        expect(within(strip()).getByText('Mail').closest('a')).toHaveAttribute('href', '/modules/Email.Smtp');
+    });
+
+    it('opens Diagnostics from the All systems normal pill and Email from a mail warning', () => {
+        report = { kind: 'modules', modules: ['Diagnostics', 'Email.Resend'].map((name) => ({ name, enabled: true })) };
+        const { unmount } = render(<SystemStrip />);
+        expect(within(strip()).getByRole('link', { name: 'All systems normal' })).toHaveAttribute('href', '/modules/Diagnostics');
+        unmount();
+        metrics = { recentBounces: { value: 2, atLeast: false } };
+        render(<SystemStrip />);
+        expect(within(strip()).getByRole('link', { name: '1 warning' })).toHaveAttribute('href', '/modules/Email.Resend');
+    });
+
+    it('keeps the old screens when the module list is unreadable', () => {
+        report = { kind: 'unreadable' };
+        render(<SystemStrip />);
+        expect(within(strip()).getByText('API').closest('a')).toHaveAttribute('href', '/ops/health');
     });
 });

@@ -6,7 +6,7 @@ import { StatusBadge } from '@/components/patterns/status-badge';
 import { IconArrowRight } from '@/components/icons';
 import { RunProgressStrip } from '@/components/workflow/run-progress';
 import { exactTime, momentLabel } from '@/lib/relative-time';
-import { runStatusLabel, toneForRunStatus, useWorkflowRuns } from '@/hooks/use-workflow-runs';
+import { runEntryLabel, runStatusLabel, toneForRunStatus, useWorkflowRuns } from '@/hooks/use-workflow-runs';
 
 /** How many runs the page shows. The full list is one click away. */
 export const RECENT_RUN_COUNT = 5;
@@ -62,11 +62,11 @@ export function RecentRuns({ workflowId }: { workflowId: string }) {
                 onClick={() => router.push(`/workflow-runs?run=${encodeURIComponent(run.id)}`)}
                 className="hover:bg-secondary flex w-full items-center gap-3 px-2 py-2.5 text-left text-[13.5px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                <StatusBadge tone={toneForRunStatus(run.status)} className="min-w-24 justify-center">
+                <StatusBadge tone={toneForRunStatus(run.status)} pulse={run.status === 'Running'} className="min-w-24 justify-center">
                   {runStatusLabel(run.status)}
                 </StatusBadge>
                 <span className="min-w-0 flex-1 truncate font-semibold">
-                  {run.contentType} {run.contentId.slice(0, 8)}
+                  {runEntryLabel(run)}
                 </span>
                 <RunProgressStrip actions={run.actions} />
                 <span title={exactTime(run.createdAt)} className="text-muted-foreground min-w-24 text-right text-[12.5px]">

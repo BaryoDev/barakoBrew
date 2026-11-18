@@ -148,7 +148,7 @@ describe('AttemptCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /retry action 2/i }));
     await screen.findByRole('alertdialog');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep it' }));
 
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(onRetry).not.toHaveBeenCalled();
@@ -278,5 +278,18 @@ describe('undoText', () => {
     const dd = screen.getByText(/xxxxxxxx/);
     expect(dd).toHaveClass('min-w-0', 'break-words', 'text-right');
     expect(dd.parentElement).toHaveClass('min-w-0');
+  });
+});
+
+describe('AttemptCard heading', () => {
+  it('shows the label core sent for the action in place of the catalog label', () => {
+    renderCard(attempt({ label: 'Post to Slack' }));
+    expect(screen.getByText('Post to Slack')).toBeInTheDocument();
+  });
+
+  it('falls back to the catalog label when no label is sent', () => {
+    renderCard(attempt({ actionType: 'Webhook', label: null }));
+    expect(screen.queryByText('Post to Slack')).toBeNull();
+    expect(screen.getByText('Webhook')).toBeInTheDocument();
   });
 });

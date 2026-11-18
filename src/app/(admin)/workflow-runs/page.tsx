@@ -28,6 +28,7 @@ import {
   isAbandonable,
   isCancellable,
   runAllowsRetry,
+  runEntryLabel,
   runFailureKind,
   runStatusLabel,
   toneForRunStatus,
@@ -42,6 +43,9 @@ import {
 } from '@/hooks/use-workflow-runs';
 import { AttemptCard } from './attempt-card';
 import { RunNote } from './run-note';
+
+// The canvas draws Cancel run and Abandon as a neutral outline with red text and a red border on hover.
+const DANGER_OUTLINE = 'text-destructive hover:text-destructive hover:border-destructive';
 
 const CARD = 'min-w-0 bg-card rounded-xl border p-6 shadow-[var(--shadow-card)]';
 
@@ -59,7 +63,8 @@ function RunFacts({ run }: { run: WorkflowRun }) {
   const facts: { label: string; value: string; title?: string }[] = [
     { label: 'Trigger', value: triggerLabel(run.triggerEvent) },
     { label: 'Content type', value: run.contentType },
-    { label: 'Content', value: run.contentId },
+    // The canvas reads "{title} · {id}". With no title sent, the bare id as before.
+    { label: 'Content', value: run.contentTitle?.trim() ? `${run.contentTitle.trim()} · ${run.contentId}` : run.contentId },
     { label: 'Started', value: formatMoment(run.createdAt) || 'n/a', title: momentTitle(run.createdAt) },
   ];
 
@@ -198,7 +203,7 @@ function RunFailureKind({ run }: { run: WorkflowRun }) {
  * that only answered a mouse, or a radio inside a table cell, did not give a screen reader.
  */
 function RunRow({ row, selected, onSelect }: { row: WorkflowRun; selected: boolean; onSelect: (id: string) => void }) {
-  const entry = `${row.contentType} ${row.contentId.slice(0, 8)}`;
+  const entry = runEntryLabel(row);
 
   return (
     <button
@@ -211,7 +216,9 @@ function RunRow({ row, selected, onSelect }: { row: WorkflowRun; selected: boole
       )}
     >
       <span className="flex flex-wrap items-center gap-1.5">
-        <StatusBadge tone={toneForRunStatus(row.status)}>{runStatusLabel(row.status)}</StatusBadge>
+        <StatusBadge tone={toneForRunStatus(row.status)} pulse={row.status === 'Running'}>
+          {runStatusLabel(row.status)}
+        </StatusBadge>
         <RunFailureKind run={row} />
         <span title={momentTitle(row.createdAt)} className="text-muted-foreground ml-auto text-[12px] whitespace-nowrap">
           {formatMoment(row.createdAt) || 'n/a'}
@@ -378,7 +385,7 @@ export default function WorkflowRunsPage() {
   async function onAbandon(runId: string) {
     try {
       await abandon.mutateAsync(runId);
-      toast.success('Run abandoned. What went out is being undone.');
+      toast.success('Run abandoned. Rollback started, outputs kept.');
     } catch (error) {
       // 409 carries the reason: an action running now, nothing that succeeded, already rolled back.
       toast.error(apiErrorMessage(error, 'The run could not be abandoned.'));
@@ -488,11 +495,13 @@ export default function WorkflowRunsPage() {
           ) : run.data ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[15px] font-bold">{run.data.workflowName}</h2>
-                <StatusBadge tone={toneForRunStatus(run.data.status)}>{runStatusLabel(run.data.status)}</StatusBadge>
+                <h2 className="font-display text-[22px] leading-tight font-semibold tracking-[-0.02em]">{run.data.workflowName}</h2>
+                <StatusBadge tone={toneForRunStatus(run.data.status)} pulse={run.data.status === 'Running'}>
+                  {runStatusLabel(run.data.status)}
+                </StatusBadge>
                 {canCancel && isCancellable(run.data) && (
                   <Button
-                    className="ml-auto"
+                    className={cn('ml-auto', DANGER_OUTLINE)}
                     size="sm"
                     variant="outline"
                     disabled={cancel.isPending}
@@ -503,7 +512,7 @@ export default function WorkflowRunsPage() {
                 )}
                 {canAbandon && isAbandonable(run.data) && (
                   <Button
-                    className={isCancellable(run.data) && canCancel ? undefined : 'ml-auto'}
+                    className={cn(isCancellable(run.data) && canCancel ? undefined : 'ml-auto', DANGER_OUTLINE)}
                     size="sm"
                     variant="outline"
                     disabled={abandon.isPending}
@@ -561,6 +570,7 @@ export default function WorkflowRunsPage() {
               : 'Nothing in it runs again. What already went out is undone by the compensation each action declares, and an action that declares none is reported as not undone.'
           }
           confirmLabel={shown.kind === 'cancel' ? 'Yes, cancel the run' : 'Yes, abandon the run'}
+          cancelLabel="Keep it"
           destructive
           onConfirm={() => void onConfirm()}
         />

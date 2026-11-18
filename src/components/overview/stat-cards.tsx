@@ -161,6 +161,7 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
       />
       <StatCard
         label="Workflow runs"
+        // No status in the link: the canvas opens the list on every status.
         href="/workflow-runs"
         state={stateOf(runs)}
         value={runs.data?.totalItems}
@@ -169,8 +170,9 @@ export function StatCards({ range, now: fixedNow }: { range: Range; now?: number
       />
       <StatCard
         label="Failures"
-        // The count is Failed plus Partly failed, and the runs page filters one status, so this opens all runs.
-        href="/workflow-runs"
+        // The canvas opens the runs list on Partly failed. The runs page filters one status, so Failed
+        // runs are one chip over; the card count still adds both.
+        href="/workflow-runs?status=PartiallyFailed"
         state={stateOf(failures)}
         value={failedTotal}
         bars={fail.bars}
