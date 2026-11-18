@@ -155,7 +155,6 @@ export function AttemptCard({ attempt, onRetry, retrying, canRetry = true }: Att
                 title={`Retry action ${attempt.ordinal}, ${attempt.actionType}?`}
                 description="This failure will not fix itself by retrying. Retry anyway?"
                 confirmLabel="Retry anyway"
-                cancelLabel="Keep it"
                 onConfirm={onConfirmed}
               />
             ) : (

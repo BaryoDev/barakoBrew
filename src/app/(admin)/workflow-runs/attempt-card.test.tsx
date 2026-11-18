@@ -148,7 +148,7 @@ describe('AttemptCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /retry action 2/i }));
     await screen.findByRole('alertdialog');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(onRetry).not.toHaveBeenCalled();
