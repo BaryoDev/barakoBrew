@@ -2,6 +2,7 @@
 
 import { use } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ModuleAdapterBody } from '@/components/modules/module-adapters';
 import { ModuleScreen } from '@/components/modules/module-screen';
 import { ModuleScreenSlot, useHasModuleScreen } from '@/components/modules/module-screen-slot';
 import { useModules } from '@/hooks/use-modules';
@@ -18,10 +19,11 @@ export default function ModulePage({ params }: { params: Promise<{ name: string 
         return <p className="text-muted-foreground text-sm">This module is not on this deployment.</p>;
     }
     // A registered screen replaces the template's table body; the header and Configuration card stay.
+    // If it throws, the usual body for the module takes its place.
     if (hasScreen) {
         return (
             <ModuleScreen module={found}>
-                <ModuleScreenSlot name={moduleName} />
+                <ModuleScreenSlot name={moduleName} fallback={<ModuleAdapterBody name={moduleName} side={null} />} />
             </ModuleScreen>
         );
     }

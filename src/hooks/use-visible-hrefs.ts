@@ -3,9 +3,10 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useAccess } from '@/hooks/use-access';
-import { useEnabledModules } from '@/hooks/use-modules';
+import { useEnabledModules, useModules } from '@/hooks/use-modules';
 import { useActivityGone } from '@/hooks/use-activity';
 import { useSlot } from '@/hooks/use-slots';
+import { moduleDisplayName } from '@/lib/module-catalog';
 import { NAV_GROUPS, visibleGroups, withModules, withModuleScreens, type NavGroup } from '@/lib/navigation';
 
 /**
@@ -17,14 +18,20 @@ export function useAllowedGroups(): NavGroup[] {
   const access = useAccess();
   const modules = useEnabledModules();
   const screens = useSlot('module-screen');
+  const report = useModules().data;
+  const listed = report?.kind === 'modules' ? report.modules : undefined;
   const offered = useMemo(
     () =>
       withModuleScreens(
         withModules(visibleGroups(NAV_GROUPS, user?.roles, access.known ? access.can : undefined), modules),
         modules,
         screens.map((entry) => entry.module),
+        (name) => {
+          const found = listed?.find((m) => m.name === name);
+          return found ? moduleDisplayName(found) : name;
+        },
       ),
-    [user?.roles, access.known, access.can, modules, screens],
+    [user?.roles, access.known, access.can, modules, screens, listed],
   );
   // Ask the feed once, and only for a caller who is offered it, so an API older than 5.5 loses the
   // Activity item instead of leaving a link to a 404.

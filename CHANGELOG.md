@@ -18,6 +18,7 @@ moved. Which API a console works against is stated per release instead.
 
 ### Changed
 
+- Overview cards now get a required `queryClient` prop (`OverviewCardProps` is the shared slot props), so a card must render inside a `QueryClientProvider`. Existing overview card authors need to accept the prop and make sure their card is mounted under one.
 - Role editor (#146): each content type is a tab showing its name and a `CRUD` summary in mono (for
   example `CR.D`), with the four actions as pressed chips. Which fields is a grid with each field's
   sensitivity chip, a Read column, and one Write column per write action that is on (Update,

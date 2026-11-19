@@ -4,8 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 
 let enabled: string[] | undefined;
+let tenant = 'cafe';
 vi.mock('@/hooks/use-modules', () => ({ useEnabledModules: () => enabled }));
-vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => 'cafe' }));
+vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => tenant }));
 
 const client = new QueryClient();
 const render = (ui: ReactElement) => rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
@@ -20,6 +21,7 @@ const { useSlot } = await import('@/hooks/use-slots');
 beforeEach(() => {
     resetSlots();
     enabled = ['Files'];
+    tenant = 'cafe';
 });
 
 function Both() {
@@ -89,6 +91,40 @@ describe('a fake module in the slots', () => {
         expect(screen.queryByTestId('screen')).toBeNull();
     });
 
+    it('draws the section again after a throw once the tenant changes, and logs the throw', () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let broken = true;
+        registerSlot('settings-section', 'Fake', () => {
+            if (broken) throw new Error('boom');
+            return <div data-testid="section" />;
+        });
+        enabled = ['Fake'];
+        const view = render(<SettingsSectionSlot />);
+        expect(screen.queryByTestId('section')).toBeNull();
+        expect(log.mock.calls.some((call) => String(call[0]).includes('settings-section') && String(call[0]).includes('Fake'))).toBe(true);
+
+        broken = false;
+        tenant = 'bistro';
+        view.rerender(
+            <QueryClientProvider client={client}>
+                <SettingsSectionSlot />
+            </QueryClientProvider>,
+        );
+        expect(screen.getByTestId('section')).toBeInTheDocument();
+        log.mockRestore();
+    });
+
+    it('draws the fallback in place of a screen that throws', () => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        registerSlot('module-screen', 'Fake', () => {
+            throw new Error('boom');
+        });
+        enabled = ['Fake'];
+        render(<ModuleScreenSlot name="Fake" fallback={<p data-testid="fallback" />} />);
+        expect(screen.getByTestId('fallback')).toBeInTheDocument();
+        log.mockRestore();
+    });
+
     it('keeps a slot kind and a props shape typed', () => {
         // @ts-expect-error a module screen is not given a page internal
         registerSlot('module-screen', 'Fake', (props: { router: unknown }) => <div>{String(props.router)}</div>);
@@ -134,6 +170,21 @@ describe('the nav rule for module screens', () => {
 
     it('shows nothing while the module report has no answer', () => {
         expect(hrefs(withModuleScreens(base(), undefined, ['Fake']))).not.toContain('/modules/Fake');
+    });
+
+    it('titles the item with the name the module page uses', () => {
+        const items = withModuleScreens(base(), ['Files', 'Fake'], ['Fake'], (name) => `Shown ${name}`).flatMap((g) => g.items);
+        expect(items.find((i) => i.href === '/modules/Fake')?.title).toBe('Shown Fake');
+    });
+
+    it('copies the capability and roles of All modules onto the item', () => {
+        const out = withModuleScreens(base(), ['Files', 'Fake'], ['Fake']).flatMap((g) => g.items);
+        const all = out.find((i) => i.href === '/modules');
+        const added = out.find((i) => i.href === '/modules/Fake');
+        expect(all).toBeDefined();
+        expect(added?.capability).toEqual(all?.capability);
+        expect(added?.roles).toEqual(all?.roles);
+        expect(added?.capability !== undefined || added?.roles !== undefined).toBe(true);
     });
 
     it('offers nothing to a caller who cannot see All modules', () => {
