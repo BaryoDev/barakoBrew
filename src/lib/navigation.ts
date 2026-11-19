@@ -153,6 +153,35 @@ export function withModules(groups: NavGroup[], enabled: readonly string[] | und
 }
 
 /**
+ * Adds a rail item for each module screen a build registered, when its module runs. Both must hold:
+ * a module that is present with no screen registered gets no item, and so does a registered screen
+ * whose module is absent or unreported. The item goes in the group that holds `All modules`, just
+ * before it, so a caller who cannot see that group is not offered one either.
+ */
+export function withModuleScreens(
+  groups: NavGroup[],
+  enabled: readonly string[] | undefined,
+  screens: readonly string[],
+): NavGroup[] {
+  if (!enabled) return groups;
+  const running = new Set(enabled);
+  const added: NavItem[] = screens
+    .filter((name) => running.has(name))
+    .map((name) => ({
+      title: name,
+      href: `/modules/${encodeURIComponent(name)}`,
+      icon: IconCube,
+      module: name,
+    }));
+  if (added.length === 0) return groups;
+  return groups.map((g) => {
+    const at = g.items.findIndex((i) => i.href === '/modules');
+    if (at < 0) return g;
+    return { ...g, items: [...g.items.slice(0, at), ...added, ...g.items.slice(at)] };
+  });
+}
+
+/**
  * The first group carries no label on purpose: it is the primary set, the destinations someone works
  * in all day, and a heading over them would only name the app. Every group after it is
  * labelled, and the rail renders those at a smaller size.

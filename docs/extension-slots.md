@@ -2,7 +2,21 @@
 
 A module installed next to the console can add a component to it without a change to this repo.
 
-There are two slot kinds, `overview-card` and `sign-in-method`.
+There are four slot kinds: `overview-card`, `settings-section`, `module-screen` and `sign-in-method`.
+
+The first three are component slots. They share one props shape, and a component for a module that
+`GET /api/modules` does not report as enabled is never mounted:
+
+```ts
+interface SlotProps {
+  tenant: string;
+  modules: readonly string[]; // the enabled module names, which is module presence
+  queryClient: QueryClient;   // the console's shared client
+}
+```
+
+A component gets these three and nothing else from the page. A component that throws is dropped
+without taking the page down.
 
 ## overview-card
 
@@ -19,9 +33,37 @@ registerSlot('overview-card', 'MyModule', MyCard);
 
 - The second argument is the module name. The component is mounted only when `GET /api/modules`
   reports that module as enabled. While the report is loading or refused, nothing mounts.
-- The component gets `{ tenant, modules }` and nothing else from the page.
+- The component gets `SlotProps` and nothing else from the page.
 - Components are registered from code at build time. They are never fetched from the API or a URL.
 - An unknown slot kind is a type error.
+
+## settings-section
+
+A section on the Settings page, above the runtime settings. With nothing registered the page is
+unchanged.
+
+```ts
+registerSlot('settings-section', 'MyModule', MySection);
+```
+
+The module name and the gating are the same as `overview-card`. Sections stack in registration order.
+
+## module-screen
+
+The body of a module's page under Modules (`/modules/MyModule`). It renders inside the existing
+module screen template, so the header and the Configuration card stay and the component replaces the
+table body.
+
+```ts
+registerSlot('module-screen', 'MyModule', MyScreen);
+```
+
+- Only the component registered for the module in the address is mounted, and only while that module
+  runs. Without one, the template shows its usual body.
+- Navigation: the rail lists a module screen only when both hold, the module is present in
+  `GET /api/modules` and a screen is registered for it. A present module with no screen gets no
+  item, and a registered screen for an absent module gets none either. The item sits above
+  `All modules`, so a caller who cannot see `All modules` is not offered one.
 
 ## sign-in-method
 

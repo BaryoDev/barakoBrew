@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
+
+const render = (ui: ReactElement) =>
+    rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 let enabled: string[] | undefined;
 vi.mock('@/hooks/use-modules', () => ({ useEnabledModules: () => enabled }));
