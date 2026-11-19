@@ -2,8 +2,9 @@
 #
 # Measures what perf-budget.json budgets (#853) and writes the numbers as JSON:
 #
-#   image_uncompressed_mb    the image as Docker stores it
-#   image_compressed_mb      the image saved and gzipped, about what a registry pull transfers
+#   image_uncompressed_mb    the layers of the image unpacked
+#   image_compressed_mb      the layers gzipped, about what a registry pull transfers
+#                            (both are read from the saved image, so the image store does not change them)
 #   startup_seconds          container start to the first 200 from /login
 #   memory_at_rest_mb        the console's resident memory after 60 seconds idle
 #
@@ -29,6 +30,7 @@ TAG="barako-brew-perf:$$"
 CNAME="barako-brew-perf-$$"
 
 cleanup() {
+    rm -rf "${SAVE_DIR:-}"
     docker rm -f "$CNAME" >/dev/null 2>&1 || true
     docker image rm -f "$TAG" >/dev/null 2>&1 || true
 }
@@ -50,8 +52,13 @@ docker build --no-cache -q -f "$DOCKERFILE" -t "$TAG" \
 echo "built in $(elapsed "$start" "$(now)")s" >&2
 
 step "measuring the image"
-uncompressed=$(docker image inspect -f '{{.Size}}' "$TAG")
-compressed=$(docker save "$TAG" | gzip -c | wc -c)
+# Both numbers come from the layers of a docker save archive. docker image inspect reports compressed
+# sizes on a host with the containerd image store, and its saved layers are already gzipped.
+SAVE_DIR="$(mktemp -d)"
+docker save "$TAG" -o "$SAVE_DIR/image.tar" || fail "could not save the image"
+sizes=$(python3 scripts/perf-image-size.py "$SAVE_DIR/image.tar") \
+    || fail "could not read the image size from the saved image"
+read -r uncompressed compressed <<<"$sizes"
 echo "uncompressed $uncompressed bytes, compressed $compressed bytes" >&2
 
 step "starting the console"
