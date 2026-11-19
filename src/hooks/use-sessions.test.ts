@@ -195,7 +195,7 @@ describe('ending my own sessions', () => {
         const { result } = renderHook(() => useEndMySession(), { wrapper });
         const out = await result.current.mutateAsync({ id: ID_A, current: true });
 
-        expect(out).toEqual({ current: true });
+        expect(out).toEqual({ current: true, revoked: false });
         expect(api.delete).not.toHaveBeenCalled();
         expect(beginSignOut).not.toHaveBeenCalled();
         tokenSpy.mockRestore();

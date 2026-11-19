@@ -111,9 +111,10 @@ export function useEndMySession() {
       if (current) {
         const token = tokenStore.token;
         if (token && accessTokenExpired(token)) {
-          // No refresh cookie left: the tokens are cleared and there is nothing to end on the server,
-          // so the caller goes straight to its sign-out flow.
-          if ((await refreshSession()) === null) return { current: true };
+          // The refresh failed: the cookie may be gone, or the server may just be unreachable. The
+          // session was not ended here, so the caller runs its normal sign-out, which tries the
+          // server again and warns if it cannot confirm.
+          if ((await refreshSession()) === null) return { current: true, revoked: false };
         }
         beginSignOut();
       }
@@ -123,7 +124,7 @@ export function useEndMySession() {
         if (current) cancelSignOut();
         throw error;
       }
-      return { current };
+      return { current, revoked: true };
     },
     // The current session is not read again: the list would answer 401, and the page is leaving.
     onSuccess: ({ current }) => (current ? undefined : queryClient.invalidateQueries({ queryKey: ['sessions'] })),

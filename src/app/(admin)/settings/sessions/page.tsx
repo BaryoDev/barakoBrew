@@ -53,12 +53,13 @@ export default function SessionsPage() {
     if (!confirming) return;
     const target = confirming;
     try {
-      await endOne.mutateAsync({ id: target.id, current: target.current });
+      const { revoked } = await endOne.mutateAsync({ id: target.id, current: target.current });
       setConfirming(null);
       if (target.current) {
-        // The API has ended this session, so there is nothing to revoke. The sign-out flow still
-        // drops the token and the cache and goes to the sign-in page, without asking the server.
-        await logout({ serverRevoked: true });
+        // When the API ended this session there is nothing to revoke, so the sign-out flow only drops
+        // the token and the cache and goes to the sign-in page. When it did not (the token could not
+        // be refreshed first), the flow asks the server itself and warns if it cannot confirm.
+        await (revoked ? logout({ serverRevoked: true }) : logout());
         return;
       }
       toast.success('Signed out.');
