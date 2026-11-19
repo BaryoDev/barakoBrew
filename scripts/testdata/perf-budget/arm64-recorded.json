@@ -1,0 +1,9 @@
+{
+  "arch": "arm64",
+  "metrics": {
+    "image_uncompressed_mb": 250.0,
+    "image_compressed_mb": 80.0,
+    "startup_seconds": 1.0,
+    "memory_at_rest_mb": 60.0
+  }
+}

@@ -541,6 +541,53 @@ jobs:
             gh issue create --title "$title" --body "$body"
           fi
 
+  # Lean only stays lean if something notices weight coming back (#853). This builds the production
+  # image, boots it with a dummy API address that nothing listens on, and records image size,
+  # startup to /login and memory at rest. Each is compared with perf-budget.json, and the summary
+  # shows the baseline, this run and the budget. Raising a budget is an edit to that file, so it is
+  # reviewed. Both architectures run because both ship. The numbers are uploaded on every run, so a
+  # slow creep across pull requests shows. It needs no secret.
+  perf-budget:
+    name: Performance budget (${{ matrix.arch }})
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Prove the budget comparison can fail
+        run: bash scripts/test-perf-budget.sh
+
+      - name: Prove the image size is read from the saved layers
+        run: bash scripts/test-perf-image-size.sh
+
+      - name: Measure the image and the running console
+        run: bash scripts/perf-measure.sh "$RUNNER_TEMP/perf.json"
+
+      - name: Compare with perf-budget.json
+        run: python3 scripts/perf-budget.py "$RUNNER_TEMP/perf.json" perf-budget.json --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: perf-${{ matrix.arch }}
+          path: ${{ runner.temp }}/perf.json
+          if-no-files-found: ignore
+          retention-days: 90
+
   # Proves the release gate can fail, rather than trusting it because it has never fired.
   #
   # scripts/check-image-platforms.sh is what stands between a release and an amd64-only tag, and it

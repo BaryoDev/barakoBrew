@@ -1,0 +1,39 @@
+{
+  "about": "A frozen copy of the shape of perf-budget.json for scripts/test-perf-budget.sh, so raising a real budget never breaks the comparator's own test. arm64 is unbudgeted here on purpose.",
+  "amd64": {
+    "image_uncompressed_mb": {
+      "baseline": 250.0,
+      "budget": 275
+    },
+    "image_compressed_mb": {
+      "baseline": 80.0,
+      "budget": 88
+    },
+    "startup_seconds": {
+      "baseline": 1.0,
+      "budget": 5
+    },
+    "memory_at_rest_mb": {
+      "baseline": 60.0,
+      "budget": 120
+    }
+  },
+  "arm64": {
+    "image_uncompressed_mb": {
+      "baseline": null,
+      "budget": null
+    },
+    "image_compressed_mb": {
+      "baseline": null,
+      "budget": null
+    },
+    "startup_seconds": {
+      "baseline": null,
+      "budget": null
+    },
+    "memory_at_rest_mb": {
+      "baseline": null,
+      "budget": null
+    }
+  }
+}
