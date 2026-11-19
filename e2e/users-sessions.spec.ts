@@ -119,8 +119,75 @@ test.describe('users: sessions and blocking', () => {
         await page.goto('/users');
         await page.getByRole('button', { name: 'Sessions for ana' }).click();
 
-        await expect(page.getByRole('dialog', { name: 'Sessions for ana' }).getByRole('alert')).toBeVisible({ timeout: 20000 });
+        const panel = page.getByRole('dialog', { name: 'Sessions for ana' });
+        await expect(panel.getByText('You do not have permission to do that.')).toBeVisible({ timeout: 20000 });
+        await expect(panel.getByText(/Couldn.t load sessions/)).toHaveCount(0);
     });
+
+    test('a user deleted since the list loaded closes the panel and says so', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        let listReads = 0;
+        await page.route(/\/api\/users(\?|$)/, (r) => {
+            listReads++;
+            return r.fulfill({ json: pageOf(listReads === 1 ? [user(ANA, 'ana')] : []) });
+        });
+        await page.route('**/api/roles**', (r) => r.fulfill({ json: pageOf([]) }));
+        await page.route('**/api/user-groups**', (r) => r.fulfill({ json: pageOf([]) }));
+        await page.route('**/api/me/sessions**', (r) => r.fulfill({ json: pageOf([]) }));
+        await page.route(`**/api/users/${ANA}/sessions`, (r) => r.fulfill({ status: 404, json: {} }));
+
+        await page.goto('/users');
+        await page.getByRole('button', { name: 'Sessions for ana' }).click();
+
+        await expect(page.getByText('That account no longer exists.')).toBeVisible({ timeout: 20000 });
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        // The stale row is gone because the list was read again.
+        await expect(page.getByRole('button', { name: 'Sessions for ana' })).toHaveCount(0);
+        expect(listReads).toBeGreaterThan(1);
+    });
+
+    test('says when only the first 100 of a user\'s sessions are shown', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubUsers(page, [user(ANA, 'ana')]);
+        await page.route(`**/api/users/${ANA}/sessions`, (r) =>
+            r.fulfill({ json: { ...pageOf([S1]), hasNextPage: true } })
+        );
+
+        await page.goto('/users');
+        await page.getByRole('button', { name: 'Sessions for ana' }).click();
+        await expect(page.getByText('Showing the first 100 sessions.')).toBeVisible({ timeout: 20000 });
+    });
+
+    for (const action of ['block', 'unblock'] as const) {
+        test(`an unknown user answered 404 on ${action} says so and keeps the actions`, async ({ page }) => {
+            await authed(page);
+            await stubShell(page);
+            const listed = action === 'unblock' ? user(ANA, 'ana', true) : user(ANA, 'ana');
+            const other = user(BEN, 'ben');
+            let reads = 0;
+            await page.route(/\/api\/users(\?|$)/, (r) => {
+                reads++;
+                // The target is deleted by the time the list is read again.
+                return r.fulfill({ json: pageOf(reads === 1 ? [listed, other] : [other]) });
+            });
+            await page.route('**/api/roles**', (r) => r.fulfill({ json: pageOf([]) }));
+            await page.route('**/api/user-groups**', (r) => r.fulfill({ json: pageOf([]) }));
+            await page.route('**/api/me/sessions**', (r) => r.fulfill({ json: pageOf([]) }));
+            await page.route(/\/api\/users\/[^/]+\/(block|unblock)$/, (r) => r.fulfill({ status: 404, json: {} }));
+
+            await page.goto('/users');
+            const label = action === 'block' ? 'Block ana' : 'Unblock ana';
+            await page.getByRole('button', { name: label }).click();
+            await page.getByRole('button', { name: action === 'block' ? 'Confirm block' : 'Confirm unblock' }).click();
+
+            await expect(page.getByText('That account no longer exists.')).toBeVisible({ timeout: 20000 });
+            // The route exists, so the actions of the user who is still there stay.
+            await expect(page.getByRole('button', { name: 'Block ben' })).toBeVisible();
+            await expect(page.getByRole('button', { name: 'Sessions for ben' })).toBeVisible();
+        });
+    }
 
     test('block shows the badge and unblock clears it, each after a confirm step', async ({ page }) => {
         await authed(page);
@@ -184,7 +251,8 @@ test.describe('users: sessions and blocking', () => {
         await page.goto('/users');
         await expect(page.getByRole('button', { name: 'Block ana' })).toBeVisible({ timeout: 20000 });
         await expect(page.getByRole('button', { name: 'Block admin' })).toHaveCount(0);
-        await expect(page.getByRole('button', { name: 'Sessions for admin' })).toBeVisible();
+        // Your own sessions are on the Sessions page, which runs the sign-out flow for the current one.
+        await expect(page.getByRole('button', { name: 'Sessions for admin' })).toHaveCount(0);
     });
 
     test('hides the sessions action, with no toast, when the API has no session routes', async ({ page }) => {

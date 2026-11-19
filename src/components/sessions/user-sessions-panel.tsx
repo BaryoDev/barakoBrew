@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   isSessionsMissing,
   useEndAllUserSessions,
@@ -9,7 +10,7 @@ import {
   useUserSessions,
   type Session,
 } from '@/hooks/use-sessions';
-import { apiErrorMessage } from '@/lib/api';
+import { apiErrorMessage, isForbidden } from '@/lib/api';
 import type { User } from '@/types/rbac';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -29,8 +30,9 @@ import { IconShield } from '@/components/icons';
 /**
  * One user's sessions, for a SuperAdmin. Opened from the Users list, which has no detail page.
  *
- * A 404 on the list means the API has no such routes (or no such user), so the panel closes and
- * says nothing. A 403 is shown as the standard message, in the panel, never as a blank one.
+ * A 404 on the list means the user is gone since the list loaded (the routes themselves are checked
+ * by the rail probe), so the panel closes, the Users list is read again and a toast says so. A 403 is
+ * shown as the standard message in the panel, never as a blank one.
  */
 export function UserSessionsPanel({ user, onClose }: { user: User | null; onClose: () => void }) {
   const { data, isLoading, isError, error, refetch } = useUserSessions(user?.id ?? null);
@@ -38,11 +40,17 @@ export function UserSessionsPanel({ user, onClose }: { user: User | null; onClos
   const endAll = useEndAllUserSessions();
   const [confirmingAll, setConfirmingAll] = useState(false);
 
-  useEffect(() => {
-    if (user && data === null) onClose();
-  }, [user, data, onClose]);
+  const queryClient = useQueryClient();
 
-  const sessions = data ?? [];
+  useEffect(() => {
+    if (user && data === null) {
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.error('That account no longer exists.');
+      onClose();
+    }
+  }, [user, data, onClose, queryClient]);
+
+  const sessions = data?.items ?? [];
   const busy = endOne.isPending || endAll.isPending;
 
   const onError = (err: unknown) => {
@@ -90,6 +98,10 @@ export function UserSessionsPanel({ user, onClose }: { user: User | null; onClos
 
           {isLoading ? (
             <TableSkeleton />
+          ) : isError && isForbidden(error) ? (
+            <p role="alert" className="text-destructive py-8 text-center text-sm">
+              {apiErrorMessage(error)}
+            </p>
           ) : isError ? (
             <ErrorState
               entity="sessions"
@@ -104,7 +116,7 @@ export function UserSessionsPanel({ user, onClose }: { user: User | null; onClos
               description="This account is not signed in anywhere."
             />
           ) : (
-            <SessionTable sessions={sessions} onEnd={end} busy={busy} />
+            <SessionTable sessions={sessions} onEnd={end} busy={busy} more={data?.more} />
           )}
 
           <DialogFooter>

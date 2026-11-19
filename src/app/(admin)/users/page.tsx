@@ -62,6 +62,8 @@ export default function UsersPage() {
   const unblock = useUnblockUser();
   const [sessionsOf, setSessionsOf] = useState<User | null>(null);
   const [blocking, setBlocking] = useState<{ user: User; action: 'block' | 'unblock' } | null>(null);
+  // There is no read-only probe for the block routes (a POST changes state), so these actions go
+  // only after a click answers 404.
   // Set when a block call answers 404: the API has no such route, so the actions go, with no toast.
   const [noBlock, setNoBlock] = useState(false);
 
@@ -82,7 +84,14 @@ export default function UsersPage() {
     } catch (error) {
       setBlocking(null);
       if (isNotFound(error)) {
-        setNoBlock(true);
+        // Core answers 404 for an unknown user as well as for an API without the route. Read the list
+        // again: a target that is gone is the first, one still listed is the second.
+        const fresh = await refetch();
+        if (fresh.data && !fresh.data.items.some((u) => u.id === user.id)) {
+          toast.error('That account no longer exists.');
+        } else {
+          setNoBlock(true);
+        }
         return;
       }
       toast.error(apiErrorMessage(error));
@@ -161,7 +170,8 @@ export default function UsersPage() {
                     </TableCell>
                     {showActions && (
                       <TableCell className="text-right whitespace-nowrap">
-                        {showSessions && (
+                        {/* Not on your own row: ending your own current session needs the sign-out flow, which the Sessions page runs. */}
+                        {showSessions && user.id !== me?.userId && (
                           <Button
                             variant="ghost"
                             size="sm"
