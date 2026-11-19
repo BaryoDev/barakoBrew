@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { z } from 'zod';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 import { api, parseResponse, type Paginated } from '@/lib/api';
@@ -230,15 +231,59 @@ export const pairingStartSchema = z.looseObject({
 
 export type PairingStart = z.output<typeof pairingStartSchema>;
 
+/** What a pairing input needs: a name, and optionally the ids of the things the phone may see. */
+export interface StartPairingInput {
+  name: string;
+  /** Left out of the body when undefined, so an older server gets the body it always did. */
+  sources?: string[];
+}
+
 /** Starts a pairing. The result holds the one-time code, so it carries the secret mutation options. */
 export function useStartPairing() {
   return useMutation({
-    mutationFn: async (name: string): Promise<PairingStart> =>
+    mutationFn: async ({ name, sources }: StartPairingInput): Promise<PairingStart> =>
       parseResponse(
         pairingStartSchema,
-        (await api.post<unknown>('/api/api-keys/pairings', { name })).data,
+        (await api.post<unknown>('/api/api-keys/pairings', sources === undefined ? { name } : { name, sources })).data,
         'POST /api/api-keys/pairings',
       ),
     ...SECRET_MUTATION,
+  });
+}
+
+/** One thing a phone may be allowed to see, as the server lists it. Labels are drawn as sent. */
+export const pairingSourceSchema = z.looseObject({
+  id: z.string().min(1),
+  label: z.string(),
+  on: z.boolean(),
+  allowed: z.boolean(),
+});
+
+export type PairingSource = z.output<typeof pairingSourceSchema>;
+
+const pairingSourcesSchema = z.looseObject({ sources: z.array(pairingSourceSchema) });
+
+/**
+ * The choices for a new pairing, from `GET /api/api-keys/pairings/sources`, in display order.
+ * `null` when the route answers 404 (an older server): there is no choice step then.
+ */
+export function usePairingSources() {
+  return useQuery({
+    queryKey: ['api-keys', 'pairing-sources'],
+    queryFn: async (): Promise<PairingSource[] | null> => {
+      try {
+        const { data } = await api.get<unknown>('/api/api-keys/pairings/sources');
+        return parseResponse(pairingSourcesSchema, data, 'GET /api/api-keys/pairings/sources').sources;
+      } catch (error) {
+        if (isAxiosError(error) && error.response?.status === 404) return null;
+        throw error;
+      }
+    },
+    retry: false,
+    // Read once per open: a refetch on focus must not swap the form under the admin for an error.
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    // The list can change with the caller's rights, so each dialog open asks again.
+    gcTime: 0,
   });
 }

@@ -64,6 +64,31 @@ function mount(modules: unknown = { kind: 'modules', modules: [{ name: 'ApiKeyPa
     return { client };
 }
 
+const notFound = () =>
+    Object.assign(new Error('404'), { isAxiosError: true, response: { status: 404, data: '', headers: {} } });
+
+const SOURCES = [
+    { id: 'health', label: 'Health checks', on: true, allowed: true },
+    { id: 'traffic', label: 'Traffic', on: true, allowed: true },
+    { id: 'errors', label: 'Error log', on: true, allowed: false },
+    { id: 'digest', label: 'Weekly digest', on: false, allowed: true },
+];
+
+/** Serves the sources route with a list, and the key list as before. */
+const withSources = (sources = SOURCES) =>
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+        if (url === '/api/api-keys') return listOf(['CI deploy']);
+        if (url === '/api/api-keys/pairings/sources') return { data: { sources } };
+        throw new Error(`unexpected GET ${url}`);
+    });
+
+const showQr = async () => {
+    await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Show QR' }));
+    });
+    await flush();
+};
+
 const keyReads = () => vi.mocked(api.get).mock.calls.filter((c) => c[0] === '/api/api-keys').length;
 const flush = () => act(async () => { await vi.advanceTimersByTimeAsync(0); });
 
@@ -72,6 +97,11 @@ async function openDialog() {
         fireEvent.click(screen.getByRole('button', { name: 'Connect a phone' }));
     });
     await flush();
+}
+
+async function openAndShow() {
+    await openDialog();
+    await showQr();
 }
 
 describe('Connect a phone', () => {
@@ -85,6 +115,7 @@ describe('Connect a phone', () => {
         vi.mocked(api.post).mockResolvedValue(started());
         vi.mocked(api.get).mockImplementation(async (url: string) => {
             if (url === '/api/api-keys') return listOf(['CI deploy']);
+            if (url === '/api/api-keys/pairings/sources') throw notFound();
             throw new Error(`unexpected GET ${url}`);
         });
     });
@@ -110,10 +141,11 @@ describe('Connect a phone', () => {
         expect(screen.queryByRole('button', { name: 'Connect a phone' })).toBeNull();
     });
 
-    it('makes one code on a click, even when the button is clicked twice quickly', async () => {
+    it('makes no code on opening, and one code when Show QR is pressed twice quickly', async () => {
         mount();
-        const button = screen.getByRole('button', { name: 'Connect a phone' });
+        await openDialog();
         expect(api.post).not.toHaveBeenCalled();
+        const button = screen.getByRole('button', { name: 'Show QR' });
         await act(async () => {
             fireEvent.click(button);
             fireEvent.click(button);
@@ -122,9 +154,158 @@ describe('Connect a phone', () => {
         expect(api.post).toHaveBeenCalledTimes(1);
     });
 
-    it('sends a name with the local time and draws the server link as the QR, without showing the code', async () => {
+    it('opens on the choice step with a generated name, a box per source and no QR', async () => {
+        withSources();
         mount();
         await openDialog();
+        expect(api.post).not.toHaveBeenCalled();
+        expect((screen.getByLabelText('Name') as HTMLInputElement).value).toMatch(/^Phone \d\d:\d\d:\d\d$/);
+        expect(screen.getByText('What can this phone see?')).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: 'Health checks' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Traffic' })).toBeChecked();
+        expect(screen.queryByAltText('QR code to connect a phone')).toBeNull();
+    });
+
+    it('shows a source the caller may not tick as unticked and disabled, with a hint', async () => {
+        withSources();
+        mount();
+        await openDialog();
+        const box = screen.getByRole('checkbox', { name: 'Error log' });
+        expect(box).not.toBeChecked();
+        expect(box).toBeDisabled();
+        expect(screen.getByText('Your sign-in cannot see this.')).toBeInTheDocument();
+        // Off by default but allowed: unticked and free to tick.
+        const digest = screen.getByRole('checkbox', { name: 'Weekly digest' });
+        expect(digest).not.toBeChecked();
+        expect(digest).not.toBeDisabled();
+        await showQr();
+        const body = vi.mocked(api.post).mock.calls[0][1] as { sources: string[] };
+        expect(body.sources).toEqual(['health', 'traffic']);
+    });
+
+    it('says what the phone sees when nothing is ticked, and posts an empty list', async () => {
+        withSources();
+        mount();
+        await openDialog();
+        const hint = 'Nothing ticked. The phone will only see which modules the site runs.';
+        expect(screen.queryByText(hint)).toBeNull();
+        for (const name of ['Health checks', 'Traffic']) {
+            await act(async () => {
+                fireEvent.click(screen.getByRole('checkbox', { name }));
+            });
+        }
+        expect(screen.getByText(hint)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Show QR' })).toBeEnabled();
+        await showQr();
+        expect((vi.mocked(api.post).mock.calls[0][1] as { sources: string[] }).sources).toEqual([]);
+    });
+
+    it('keeps the boxes when the window regains focus and the sources route has since failed', async () => {
+        withSources();
+        mount();
+        await openDialog();
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/api-keys') return listOf(['CI deploy']);
+            throw notFound();
+        });
+        await act(async () => {
+            document.dispatchEvent(new Event('visibilitychange'));
+            window.dispatchEvent(new Event('focus'));
+        });
+        await flush();
+        expect(screen.getByRole('checkbox', { name: 'Health checks' })).toBeInTheDocument();
+        expect(screen.queryByText('Could not load what this phone can see.')).toBeNull();
+    });
+
+    it('posts the name and the ticked ids in list order after Traffic is unticked', async () => {
+        withSources([...SOURCES.slice(0, 2), { id: 'jobs', label: 'Jobs', on: true, allowed: true }]);
+        mount();
+        await openDialog();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('checkbox', { name: 'Traffic' }));
+        });
+        await showQr();
+        const [url, body] = vi.mocked(api.post).mock.calls[0] as [string, { name: string; sources: string[] }];
+        expect(url).toBe('/api/api-keys/pairings');
+        expect(body.name).toMatch(/^Phone \d\d:\d\d:\d\d$/);
+        expect(body.sources).toEqual(['health', 'jobs']);
+    });
+
+    it('shows an error and Try again when the sources route fails, makes no code, and recovers', async () => {
+        const fail = Object.assign(new Error('500'), { isAxiosError: true, response: { status: 500, data: '', headers: {} } });
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/api-keys') return listOf(['CI deploy']);
+            if (url === '/api/api-keys/pairings/sources') throw fail;
+            throw new Error(`unexpected GET ${url}`);
+        });
+        mount();
+        await openDialog();
+        expect(screen.getByText('Could not load what this phone can see.')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Show QR' })).toBeNull();
+        expect(api.post).not.toHaveBeenCalled();
+        withSources();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+        });
+        await flush();
+        expect(screen.getByRole('checkbox', { name: 'Health checks' })).toBeInTheDocument();
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('posts only the name when the sources route answers 404', async () => {
+        mount();
+        await openDialog();
+        expect(screen.getByLabelText('Name')).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox')).toBeNull();
+        await showQr();
+        const body = vi.mocked(api.post).mock.calls[0][1] as Record<string, unknown>;
+        expect(Object.keys(body)).toEqual(['name']);
+    });
+
+    it('sends the generated name for a blank name, and the connected poll matches it', async () => {
+        mount();
+        await openDialog();
+        await act(async () => {
+            fireEvent.change(screen.getByLabelText('Name'), { target: { value: '   ' } });
+        });
+        await showQr();
+        const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
+        expect(name).toMatch(/^Phone \d\d:\d\d:\d\d$/);
+        vi.mocked(api.get).mockImplementation(async () => listOf([name]));
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(3_000);
+        });
+        expect(screen.getByText('Phone connected')).toBeInTheDocument();
+    });
+
+    it('sends a typed name trimmed', async () => {
+        mount();
+        await openDialog();
+        await act(async () => {
+            fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  Arnel phone ' } });
+        });
+        await showQr();
+        expect((vi.mocked(api.post).mock.calls[0][1] as { name: string }).name).toBe('Arnel phone');
+    });
+
+    it('shows a 400 message from the server and offers New code and a way back', async () => {
+        withSources();
+        vi.mocked(api.post).mockRejectedValue(
+            Object.assign(new Error('400'), {
+                isAxiosError: true,
+                response: { status: 400, data: { message: 'That choice is not allowed.' }, headers: {} },
+            }),
+        );
+        mount();
+        await openDialog();
+        await showQr();
+        expect(screen.getAllByText('That choice is not allowed.').length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: 'Change choices' })).toBeInTheDocument();
+    });
+
+    it('sends a name with the local time and draws the server link as the QR, without showing the code', async () => {
+        mount();
+        await openAndShow();
         const [url, body] = vi.mocked(api.post).mock.calls[0] as [string, { name: string }];
         expect(url).toBe('/api/api-keys/pairings');
         expect(body.name).toMatch(/^Phone \d\d:\d\d:\d\d$/);
@@ -137,14 +318,14 @@ describe('Connect a phone', () => {
     it('shows the warning as text under the QR', async () => {
         vi.mocked(api.post).mockResolvedValue(started({ warning: 'This instance is reachable only on your network.' }));
         mount();
-        await openDialog();
+        await openAndShow();
         expect(screen.getByText('This instance is reachable only on your network.')).toBeInTheDocument();
     });
 
     it('shows the https message and no QR when the instance url is http and not local', async () => {
         vi.mocked(api.post).mockResolvedValue(started({ instanceUrl: 'http://cms.example.com' }));
         mount();
-        await openDialog();
+        await openAndShow();
         expect(screen.getByText('A phone can only connect over https. This address is not https.')).toBeInTheDocument();
         expect(screen.queryByAltText('QR code to connect a phone')).toBeNull();
         expect(toDataURL).not.toHaveBeenCalled();
@@ -155,7 +336,7 @@ describe('Connect a phone', () => {
             Object.assign(new Error('429'), { isAxiosError: true, response: { status: 429, data: '', headers: {} } }),
         );
         mount();
-        await openDialog();
+        await openAndShow();
         expect(screen.getAllByText('Too many codes. Wait a minute and try again.').length).toBeGreaterThan(0);
         expect(screen.queryByAltText('QR code to connect a phone')).toBeNull();
     });
@@ -163,7 +344,7 @@ describe('Connect a phone', () => {
     it('shows the expired state and stops reading the list five seconds after expiry', async () => {
         vi.mocked(api.post).mockResolvedValue(started({}, 10_000));
         mount();
-        await openDialog();
+        await openAndShow();
         await act(async () => {
             await vi.advanceTimersByTimeAsync(11_000);
         });
@@ -182,7 +363,7 @@ describe('Connect a phone', () => {
     it('shows connected for a key that appears three seconds after expiry', async () => {
         vi.mocked(api.post).mockResolvedValue(started({}, 10_000));
         mount();
-        await openDialog();
+        await openAndShow();
         const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
         await act(async () => {
             await vi.advanceTimersByTimeAsync(10_500);
@@ -203,7 +384,7 @@ describe('Connect a phone', () => {
         // The server says it made the code at T0 + skew. This browser's clock says T0.
         vi.mocked(api.post).mockResolvedValue(started({ expiresAt: new Date(T0 + skew + 120_000).toISOString() }));
         mount();
-        await openDialog();
+        await openAndShow();
         expect(screen.queryByText('Code expired')).toBeNull();
         expect(screen.getByTestId('pairing-countdown')).toHaveTextContent('2:00');
         await act(async () => {
@@ -218,7 +399,7 @@ describe('Connect a phone', () => {
 
     it('does not count a same-name key made before the pairing', async () => {
         mount();
-        await openDialog();
+        await openAndShow();
         const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
         vi.mocked(api.get).mockImplementation(async () =>
             listOf([{ name, createdAt: new Date(T0 - 60_000).toISOString() }]),
@@ -232,7 +413,7 @@ describe('Connect a phone', () => {
 
     it('does not count a revoked same-name key', async () => {
         mount();
-        await openDialog();
+        await openAndShow();
         const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
         vi.mocked(api.get).mockImplementation(async () => listOf([{ name, revoked: true }]));
         await act(async () => {
@@ -241,10 +422,11 @@ describe('Connect a phone', () => {
         expect(screen.queryByText('Phone connected')).toBeNull();
     });
 
-    it('asks for a new code from the expired state', async () => {
+    it('asks for a new code from the expired state, with the same name and sources', async () => {
+        withSources();
         vi.mocked(api.post).mockResolvedValueOnce(started({}, 5_000));
         mount();
-        await openDialog();
+        await openAndShow();
         await act(async () => {
             await vi.advanceTimersByTimeAsync(6_000);
         });
@@ -254,13 +436,14 @@ describe('Connect a phone', () => {
         });
         await flush();
         expect(api.post).toHaveBeenCalledTimes(2);
+        expect(vi.mocked(api.post).mock.calls[1][1]).toEqual(vi.mocked(api.post).mock.calls[0][1]);
         expect(toDataURL).toHaveBeenLastCalledWith('app://connect?v=2&code=NEW');
         expect(screen.getByAltText('QR code to connect a phone')).toBeInTheDocument();
     });
 
     it('reads the key list every three seconds and shows connected when the named row appears', async () => {
         mount();
-        await openDialog();
+        await openAndShow();
         const name = (vi.mocked(api.post).mock.calls[0][1] as { name: string }).name;
         const before = keyReads();
         await act(async () => {
@@ -287,7 +470,7 @@ describe('Connect a phone', () => {
 
     it('stops reading the list after the dialog closes', async () => {
         mount();
-        await openDialog();
+        await openAndShow();
         await act(async () => {
             // The footer button, not the dialog's x, which has the same name.
             fireEvent.click(screen.getByText('Close', { selector: 'button' }));
