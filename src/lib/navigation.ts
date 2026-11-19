@@ -17,6 +17,7 @@ import {
   IconFlag,
   IconSun,
   IconPen,
+  IconClock,
   IconCube,
   IconGroups,
   IconHealth,
@@ -280,7 +281,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // Every signed-in role, like Devices: GET /api/me/sessions lists the caller's own sessions. It
       // belongs to no module, so it sits here with the per-person items. The rail drops it when the
       // API answers 404, since the routes are optional.
-      { title: 'Sessions', href: '/settings/sessions', icon: IconLock, roles: ['SuperAdmin', 'Admin', 'User'] },
+      { title: 'Sessions', href: '/settings/sessions', icon: IconClock, roles: ['SuperAdmin', 'Admin', 'User'] },
       { title: 'Connectors', href: '/settings/connectors', icon: IconWebhook, capability: 'view_connectors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Outbound requests', href: '/settings/requests', icon: IconWebhook, capability: 'manage_requests', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Deliveries', href: '/settings/deliveries', icon: IconTasks, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
