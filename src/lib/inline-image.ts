@@ -9,7 +9,33 @@ export const INLINE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'imag
 
 export const INLINE_IMAGE_MAX_ALT = 500;
 
-export const INLINE_IMAGE_RULES = 'PNG, JPEG, GIF or WebP, up to 64 KB. SVG is not accepted.';
+/** The note shown under an inline field. */
+export const INLINE_IMAGE_NOTE =
+    'Inline images are stored in every saved version of the entry, so keep them small.';
+
+/** A byte count as KB with one decimal, such as "12.3 KB". */
+export function formatKb(bytes: number): string {
+    const kb = bytes / 1024;
+    return `${Number.isInteger(kb) ? kb : kb.toFixed(1)} KB`;
+}
+
+/** A byte count as KB rounded up to one decimal, so a size over a limit never reads as the limit. */
+export function formatKbUp(bytes: number): string {
+    const tenths = Math.ceil((bytes / 1024) * 10);
+    return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)} KB`;
+}
+
+/** The accepted types and the limit, as one line. */
+export function inlineImageRules(maxBytes: number = INLINE_IMAGE_MAX_BYTES): string {
+    return `PNG, JPEG, GIF or WebP, up to ${formatKb(maxBytes)}. SVG is not accepted.`;
+}
+
+/** The decoded size in bytes of a base64 data URI, without decoding it. */
+export function dataUriBytes(url: string): number {
+    const body = url.slice(url.indexOf(',') + 1);
+    const padding = body.endsWith('==') ? 2 : body.endsWith('=') ? 1 : 0;
+    return Math.max(0, Math.floor((body.length * 3) / 4) - padding);
+}
 
 /** What the field holds: the data URI and its alt text. */
 export interface InlineImage {
@@ -18,14 +44,17 @@ export interface InlineImage {
 }
 
 /** Why the API would refuse this file as an inline image, or null when it passes these checks. */
-export function inlineImageProblem(file: { size: number; type: string }): string | null {
+export function inlineImageProblem(
+    file: { size: number; type: string },
+    maxBytes: number = INLINE_IMAGE_MAX_BYTES
+): string | null {
     const type = file.type.toLowerCase();
     if (!(INLINE_IMAGE_TYPES as readonly string[]).includes(type)) {
-        return `Only ${INLINE_IMAGE_RULES}`;
+        return `Only ${inlineImageRules(maxBytes)}`;
     }
     if (file.size === 0) return 'This file is empty.';
-    if (file.size > INLINE_IMAGE_MAX_BYTES) {
-        return `This image is ${Math.ceil(file.size / 1024)} KB. An inline image is at most 64 KB; store a larger one in Files and use a file field.`;
+    if (file.size > maxBytes) {
+        return `This image is ${formatKbUp(file.size)}. An inline image is at most ${formatKb(maxBytes)}; store a larger one in Files and use a file field.`;
     }
     return null;
 }

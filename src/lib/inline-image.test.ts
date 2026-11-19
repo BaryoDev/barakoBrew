@@ -18,6 +18,15 @@ describe('the checks on an inline image before it is read', () => {
     });
 });
 
+describe('the size named in a refusal', () => {
+    it('rounds up, so an image one byte over 64 KB is not called 64.0 KB', () => {
+        const message = inlineImageProblem({ size: 64 * 1024 + 1, type: 'image/png' });
+
+        expect(message).toContain('64.1 KB');
+        expect(message).toContain('at most 64 KB');
+    });
+});
+
 describe('what an inline image field holds', () => {
     it('draws only a data URI of an allowed image type', () => {
         expect(isInlineDataUri('data:image/png;base64,iVBORw0KGgo=')).toBe(true);

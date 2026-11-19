@@ -6,6 +6,7 @@ import { useAddField, type AddFieldRequest } from '@/hooks/use-schemas';
 import { apiErrorMessage } from '@/lib/api';
 import { hasOptionIssues, optionIssues } from '@/lib/choice';
 import { PASCAL_CASE } from '@/lib/field-form';
+import { INLINE_IMAGE_MAX_BYTES, formatKb } from '@/lib/inline-image';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -235,6 +236,38 @@ export function AddFieldPanel({
                     )}
                   </select>
                 </div>
+              )}
+
+              {(type === 'file' || type === 'inlineimage') && (
+                <fieldset className="space-y-2 sm:col-span-2">
+                  <legend className="mb-1.5 text-xs font-medium">Storage</legend>
+                  {(
+                    [
+                      ['file', 'Stored file (recommended)'],
+                      ['inlineimage', 'Inline in the entry (one image)'],
+                    ] as const
+                  ).map(([value, text]) => (
+                    <div key={value} className="flex items-center gap-2 text-sm">
+                      <input
+                        id={`${id}-mode-${value}`}
+                        type="radio"
+                        aria-label={text}
+                        name={`${id}-mode`}
+                        value={value}
+                        checked={type === value}
+                        onChange={() => setType(value)}
+                      />
+                      <Label htmlFor={`${id}-mode-${value}`}>{text}</Label>
+                    </div>
+                  ))}
+                  {type === 'inlineimage' && (
+                    <p data-testid="inline-limit" className="text-muted-foreground text-xs">
+                      Holds one image (PNG, JPEG, GIF or WebP), saved as base64 in the entry, up to{' '}
+                      <span className="font-mono tabular-nums">{formatKb(INLINE_IMAGE_MAX_BYTES)}</span>.
+                      The API sets the limit.
+                    </p>
+                  )}
+                </fieldset>
               )}
 
               {type === 'choice' && (
