@@ -251,12 +251,13 @@ export function AddFieldPanel({
                       <input
                         id={`${id}-mode-${value}`}
                         type="radio"
+                        aria-label={text}
                         name={`${id}-mode`}
                         value={value}
                         checked={type === value}
                         onChange={() => setType(value)}
                       />
-                      <label htmlFor={`${id}-mode-${value}`}>{text}</label>
+                      <Label htmlFor={`${id}-mode-${value}`}>{text}</Label>
                     </div>
                   ))}
                   {type === 'inlineimage' && (
