@@ -110,7 +110,11 @@ export function useEndMySession() {
       // refreshes, so the DELETE would fail and the session would stay alive.
       if (current) {
         const token = tokenStore.token;
-        if (token && accessTokenExpired(token)) await refreshSession();
+        if (token && accessTokenExpired(token)) {
+          // No refresh cookie left: the tokens are cleared and there is nothing to end on the server,
+          // so the caller goes straight to its sign-out flow.
+          if ((await refreshSession()) === null) return { current: true };
+        }
         beginSignOut();
       }
       try {

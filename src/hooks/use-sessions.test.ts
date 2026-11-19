@@ -184,6 +184,23 @@ describe('ending my own sessions', () => {
         tokenSpy.mockRestore();
     });
 
+    it('sends no DELETE when the refresh finds the session already gone', async () => {
+        const expired = `x.${btoa(JSON.stringify({ exp: 1 }))}.y`;
+        const tokenSpy = vi.spyOn(tokenStore, 'token', 'get').mockReturnValue(expired);
+        vi.mocked(refreshSession).mockResolvedValue(null);
+        vi.mocked(beginSignOut).mockClear();
+        vi.mocked(api.delete).mockClear();
+        const { wrapper } = setup();
+
+        const { result } = renderHook(() => useEndMySession(), { wrapper });
+        const out = await result.current.mutateAsync({ id: ID_A, current: true });
+
+        expect(out).toEqual({ current: true });
+        expect(api.delete).not.toHaveBeenCalled();
+        expect(beginSignOut).not.toHaveBeenCalled();
+        tokenSpy.mockRestore();
+    });
+
     it('lets automatic refresh run again when ending the current session fails', async () => {
         vi.mocked(api.delete).mockRejectedValue(httpError(500));
         const { wrapper } = setup();

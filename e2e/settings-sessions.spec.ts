@@ -128,8 +128,8 @@ test.describe('sessions', () => {
         await expect(page).toHaveURL(/\/login/, { timeout: 20000 });
         await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
         expect(logoutCalls).toEqual([]);
-        // The current row does not refetch the list: without the sign-out mark it would, and the
-        // redirect alone would still land on /login.
+        // The current row does not refetch the list: the mutation's onSuccess skips that refetch,
+        // and the redirect alone would still land on /login.
         expect(readsAfterEnd).toBe(0);
     });
 
@@ -193,7 +193,8 @@ test.describe('sessions', () => {
         await page.route('**/api/me/sessions**', (r) => {
             if (r.request().method() === 'GET') {
                 reads++;
-                return r.fulfill({ json: pageOf([CURRENT]) });
+                // Another session is listed until the 404 shows it already ended.
+                return r.fulfill({ json: pageOf(reads === 1 ? [CURRENT, OTHER] : [CURRENT]) });
             }
             return r.fallback();
         });

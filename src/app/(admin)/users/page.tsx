@@ -16,6 +16,7 @@ import { useUserGroups } from '@/hooks/use-user-groups';
 import { useAuth } from '@/hooks/use-auth';
 import { useSessionsGone } from '@/hooks/use-sessions';
 import { UserSessionsPanel } from '@/components/sessions/user-sessions-panel';
+import { isAxiosError } from 'axios';
 import { apiErrorMessage, isNotFound } from '@/lib/api';
 import { roleChangeErrorMessage } from '@/lib/global-roles';
 import { isGlobalRoleCandidate, type User } from '@/types/rbac';
@@ -84,9 +85,11 @@ export default function UsersPage() {
     } catch (error) {
       setBlocking(null);
       if (isNotFound(error)) {
-        // Core answers 404 with an error message for an unknown account. An API without the route
-        // answers 404 with no body, so there is nothing to say and the actions go.
-        if (apiErrorMessage(error, '')) {
+        // Core answers 404 for an unknown account with the FastEndpoints body, an object with an
+        // `errors` field. Anything else (no body, or text or HTML from a proxy) means the route is
+        // missing, so the actions go.
+        const body = isAxiosError(error) ? error.response?.data : undefined;
+        if (body !== null && typeof body === 'object' && 'errors' in body) {
           toast.error('That account no longer exists.');
           refetch();
         } else {
