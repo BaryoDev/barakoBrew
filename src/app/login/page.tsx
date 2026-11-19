@@ -8,7 +8,7 @@ import { useAuthProviders } from '@/hooks/use-auth-providers';
 import { useInstanceReachability } from '@/hooks/use-instance-reachability';
 import { useRememberedInstance } from '@/hooks/use-remembered-instance';
 import { useSignInMethods } from '@/hooks/use-sign-in-methods';
-import { apiErrorMessage, getApiUrl } from '@/lib/api';
+import { apiErrorMessage, getApiUrl, startSession } from '@/lib/api';
 import { wrongCode } from '@/lib/sign-in-errors';
 import { signInErrorFromQuery } from '@/lib/social-callback';
 import { DEFAULT_METHOD_IDS, tabsFor } from '@/lib/sign-in-methods';
@@ -137,6 +137,12 @@ export default function LoginPage() {
       goTo('mfa');
     },
     signedIn: () => router.push('/'),
+    completeSession(tokens) {
+      // A reply with no token is not a session.
+      if (!tokens.token) return;
+      startSession(tokens.token);
+      router.push('/');
+    },
     openMethod: (id) => {
       setFocusEmail(true);
       setMethod(id);

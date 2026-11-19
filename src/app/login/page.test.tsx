@@ -7,7 +7,8 @@ const verifyMutate = vi.fn();
 const requestMutate = vi.fn();
 const mutation = (mutate: typeof loginMutate) => () => ({ mutate, isPending: false });
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
+const pushMock = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, replace: vi.fn() }) }));
 vi.mock('@/hooks/use-auth', () => ({
     useAuth: () => ({ isAuthenticated: false, isLoading: false }),
     useLogin: mutation(loginMutate),
@@ -26,7 +27,7 @@ vi.mock('@/hooks/use-instance-reachability', () => ({
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn() } }));
 
 const { default: LoginPage } = await import('./page');
-const { getApiUrl } = await import('@/lib/api');
+const { getApiUrl, tokenStore } = await import('@/lib/api');
 const { REMEMBERED_KEY } = await import('@/lib/remembered-instance');
 const { registerSignInMethod, SIGN_IN_METHODS } = await import('@/components/sign-in/registry');
 
@@ -71,6 +72,67 @@ describe('sign-in method tabs', () => {
         render(<LoginPage />);
         expect(screen.queryByRole('tab')).toBeNull();
         expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    });
+});
+
+describe('a registered sign-in method', () => {
+    const entry = (id: string) => ({
+        id,
+        label: 'Phone',
+        icon: () => <svg />,
+        Panel: () => <p>phone panel</p>,
+    });
+
+    beforeEach(() => {
+        delete SIGN_IN_METHODS['phone'];
+    });
+
+    it('a_registered_method_gets_a_tab_only_when_the_server_lists_its_id', () => {
+        registerSignInMethod(entry('phone'));
+
+        listed = ['password', 'email-code'];
+        const first = render(<LoginPage />);
+        expect(screen.queryByRole('tab', { name: 'Phone' })).toBeNull();
+        first.unmount();
+
+        listed = ['password', 'email-code', 'phone'];
+        render(<LoginPage />);
+        expect(screen.getByRole('tab', { name: 'Phone' })).toBeInTheDocument();
+    });
+
+    it('a_registered_method_with_no_listing_draws_nothing', () => {
+        registerSignInMethod(entry('phone'));
+        listed = undefined;
+        render(<LoginPage />);
+        expect(screen.queryByRole('tab')).toBeNull();
+        expect(screen.queryByText('phone panel')).toBeNull();
+        expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    });
+
+    it('completeSession_starts_the_session_and_redirects', () => {
+        listed = ['password', 'phone'];
+        registerSignInMethod({
+            ...entry('phone'),
+            Panel: ({ flow }) => (
+                <>
+                    <button onClick={() => flow.completeSession({ token: 'phone-token' })}>finish</button>
+                    <button onClick={() => flow.completeSession({ token: '' })}>finish empty</button>
+                </>
+            ),
+        });
+        pushMock.mockReset();
+        tokenStore.clear();
+        render(<LoginPage />);
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Phone' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'finish empty' }));
+        expect(tokenStore.token).toBeNull();
+        expect(pushMock).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'finish' }));
+        expect(tokenStore.token).toBe('phone-token');
+        expect(pushMock).toHaveBeenCalledWith('/');
+        tokenStore.clear();
     });
 });
 
