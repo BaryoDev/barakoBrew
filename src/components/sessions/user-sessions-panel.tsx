@@ -31,8 +31,8 @@ import { IconShield } from '@/components/icons';
  * One user's sessions, for a SuperAdmin. Opened from the Users list, which has no detail page.
  *
  * A 404 on the list means the user is gone since the list loaded (the routes themselves are checked
- * by the rail probe), so the panel closes, the Users list is read again and a toast says so. A 403 is
- * shown as the standard message in the panel, never as a blank one.
+ * by the rail probe), so the panel closes, the Users list is read again and a toast says so. A 403 shows
+ * the server's reason in the panel, or the standard message when it gives none, never a blank one.
  */
 export function UserSessionsPanel({ user, onClose }: { user: User | null; onClose: () => void }) {
   const { data, isLoading, isError, error, refetch } = useUserSessions(user?.id ?? null);

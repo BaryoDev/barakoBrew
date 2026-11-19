@@ -111,19 +111,38 @@ test.describe('users: sessions and blocking', () => {
         await expect(panel.getByText('Chrome on Windows')).toBeVisible();
     });
 
-    test('shows the standard message when the sessions are refused with 403', async ({ page }) => {
+    test('shows the refusal when the sessions are refused with 403', async ({ page }) => {
+        const refused = "Only a platform administrator (SuperAdmin) can manage another user's sessions.";
         await authed(page);
         await stubShell(page);
         await stubUsers(page, [user(ANA, 'ana')]);
+        // The ProblemDetails body core sends for this refusal.
         await page.route(userSessions(ANA), (r) =>
-            r.fulfill({ status: 403, json: { errors: ['Only a platform administrator (SuperAdmin) can manage another user\'s sessions.'] } })
+            r.fulfill({
+                status: 403,
+                json: { status: 403, title: 'One or more errors occurred!', errors: [{ name: 'generalErrors', reason: refused }] },
+            })
         );
 
         await page.goto('/users');
         await page.getByRole('button', { name: 'Sessions for ana' }).click();
 
         const panel = page.getByRole('dialog', { name: 'Sessions for ana' });
-        await expect(panel.getByText('You do not have permission to do that.')).toBeVisible({ timeout: 20000 });
+        await expect(panel.getByRole('alert')).toHaveText(refused, { timeout: 20000 });
+        await expect(panel.getByText(/Couldn.t load sessions/)).toHaveCount(0);
+    });
+
+    test('shows the standard message when a 403 carries no reason', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await stubUsers(page, [user(ANA, 'ana')]);
+        await page.route(userSessions(ANA), (r) => r.fulfill({ status: 403, body: '' }));
+
+        await page.goto('/users');
+        await page.getByRole('button', { name: 'Sessions for ana' }).click();
+
+        const panel = page.getByRole('dialog', { name: 'Sessions for ana' });
+        await expect(panel.getByRole('alert')).toHaveText('You do not have permission to do that.', { timeout: 20000 });
         await expect(panel.getByText(/Couldn.t load sessions/)).toHaveCount(0);
     });
 
