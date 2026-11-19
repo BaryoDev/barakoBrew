@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { z } from 'zod';
 import { useCurrentTenant } from '@/hooks/use-tenants';
-import { api, beginSignOut, cancelSignOut, parseResponse } from '@/lib/api';
+import { accessTokenExpired, api, beginSignOut, cancelSignOut, parseResponse, refreshSession, tokenStore } from '@/lib/api';
 
 /** Optional text: anything that is not a string becomes absent, so a null or a number never reaches the screen. */
 const optionalText = z.preprocess((v) => (typeof v === 'string' ? v : undefined), z.string().optional());
@@ -105,7 +105,14 @@ export function useEndMySession() {
       // Ending the session this browser is using makes every request after the answer a 401. Sign-out
       // is marked first so the 401 handler does not refresh and hard-redirect on its own; the caller
       // runs the sign-out flow once this resolves.
-      if (current) beginSignOut();
+      //
+      // An expired access token is refreshed first: once sign-out is marked the 401 handler no longer
+      // refreshes, so the DELETE would fail and the session would stay alive.
+      if (current) {
+        const token = tokenStore.token;
+        if (token && accessTokenExpired(token)) await refreshSession();
+        beginSignOut();
+      }
       try {
         await api.delete(`/api/me/sessions/${id}`);
       } catch (error) {

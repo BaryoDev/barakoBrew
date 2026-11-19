@@ -9,10 +9,11 @@ vi.mock('@/lib/api', async () => {
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
         beginSignOut: vi.fn(),
         cancelSignOut: vi.fn(),
+        refreshSession: vi.fn(),
     };
 });
 
-const { api, beginSignOut, cancelSignOut } = await import('@/lib/api');
+const { api, beginSignOut, cancelSignOut, refreshSession, tokenStore } = await import('@/lib/api');
 const {
     useMySessions,
     useEndMySession,
@@ -159,6 +160,28 @@ describe('ending my own sessions', () => {
 
         expect(invalidate).not.toHaveBeenCalled();
         expect(order).toEqual(['begin', 'delete']);
+    });
+
+    it('refreshes an expired access token before ending the current session', async () => {
+        const order: string[] = [];
+        const expired = `x.${btoa(JSON.stringify({ exp: 1 }))}.y`;
+        const tokenSpy = vi.spyOn(tokenStore, 'token', 'get').mockReturnValue(expired);
+        vi.mocked(refreshSession).mockImplementation(async () => {
+            order.push('refresh');
+            return 'fresh';
+        });
+        vi.mocked(beginSignOut).mockImplementation(() => void order.push('begin'));
+        vi.mocked(api.delete).mockImplementation(async () => {
+            order.push('delete');
+            return { data: undefined };
+        });
+        const { wrapper } = setup();
+
+        const { result } = renderHook(() => useEndMySession(), { wrapper });
+        await result.current.mutateAsync({ id: ID_A, current: true });
+
+        expect(order).toEqual(['refresh', 'begin', 'delete']);
+        tokenSpy.mockRestore();
     });
 
     it('lets automatic refresh run again when ending the current session fails', async () => {
