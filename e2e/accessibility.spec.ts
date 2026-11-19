@@ -635,6 +635,8 @@ test.describe('accessibility', () => {
         await expect(page.locator('#Title')).toBeVisible({ timeout: 15000 });
         await page.locator('#Badge').setInputFiles({ name: 'star.png', mimeType: 'image/png', buffer: PNG });
         await expect(page.getByLabel('Alt text', { exact: true })).toBeVisible();
+        // The size meter is in this scan: it is drawn once an image is stored.
+        await expect(page.getByRole('meter', { name: 'Inline image size' })).toBeVisible();
         await scan(page);
 
         await page.getByRole('button', { name: 'Upload an image for Cover' }).click();

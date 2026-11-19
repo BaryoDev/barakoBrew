@@ -117,3 +117,30 @@ test('inline mode: an image read in the browser is saved as a data URI with its 
         Badge: { url: `data:image/png;base64,${PNG_BASE64}`, alt: 'A gold star' },
     });
 });
+
+test('inline mode: the size meter shows the decoded size and an SVG is refused with no request', async ({ page }) => {
+    await gotoNewStory(page);
+
+    await page.locator('#Badge').setInputFiles(PNG);
+    const meter = page.getByRole('meter', { name: 'Inline image size' });
+    await expect(meter).toBeVisible();
+    await expect(meter).toHaveAttribute('aria-valuenow', String(PNG.buffer.length));
+    await expect(page.getByTestId('inline-image-size')).toHaveText(/ of 64 KB$/);
+    await expect(page.getByTestId('inline-image-note')).toHaveText(
+        'Inline images are stored in every saved version of the entry, so keep them small.'
+    );
+
+    // An SVG is refused in the browser, so the value stays the PNG and nothing is posted for it.
+    await page.locator('#Badge').setInputFiles({
+        name: 'star.svg',
+        mimeType: 'image/svg+xml',
+        buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+    });
+    await expect(page.locator('.text-destructive', { hasText: 'SVG is not accepted' })).toBeVisible();
+
+    const created = await saveDraft(page);
+    expect(created.data).toEqual({
+        Title: 'Harbour',
+        Badge: { url: `data:image/png;base64,${PNG_BASE64}`, alt: null },
+    });
+});

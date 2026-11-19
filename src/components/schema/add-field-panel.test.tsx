@@ -118,4 +118,53 @@ describe('the add a field panel', () => {
         expect(vi.mocked(api.post).mock.calls[0][1]).toMatchObject({ isRequired: true });
         expect((screen.getByLabelText('Label') as HTMLInputElement).value).toBe('Summary');
     });
+
+    it('offers stored file or inline for an image field and writes the matching type', async () => {
+        const user = userEvent.setup();
+        renderPanel();
+        await open(user);
+
+        await user.click(screen.getByRole('button', { name: 'File' }));
+        const stored = screen.getByRole('radio', { name: 'Stored file (recommended)' }) as HTMLInputElement;
+        expect(stored.checked).toBe(true);
+        expect(screen.queryByTestId('inline-limit')).toBeNull();
+
+        await user.click(screen.getByRole('radio', { name: 'Inline in the entry' }));
+        expect(screen.getByTestId('inline-limit').textContent).toContain('64 KB');
+        expect(screen.getByTestId('image-mode-note').textContent).toContain('Existing values keep their current mode');
+        await user.type(screen.getByLabelText('Label'), 'Badge');
+        await user.click(screen.getByRole('button', { name: 'Add field' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.post).mock.calls[0][1]).toEqual({
+            fieldName: 'Badge',
+            displayName: 'Badge',
+            type: 'inlineimage',
+            isRequired: false,
+        });
+    });
+
+    it('sends a stored file field as type file', async () => {
+        const user = userEvent.setup();
+        renderPanel();
+        await open(user);
+
+        await user.click(screen.getByRole('button', { name: 'Inline image' }));
+        await user.click(screen.getByRole('radio', { name: 'Stored file (recommended)' }));
+        await user.type(screen.getByLabelText('Label'), 'Cover');
+        await user.click(screen.getByRole('button', { name: 'Add field' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.post).mock.calls[0][1]).toMatchObject({ fieldName: 'Cover', type: 'file' });
+    });
+
+    it('shows no mode choice for other types', async () => {
+        const user = userEvent.setup();
+        renderPanel();
+        await open(user);
+
+        await user.click(screen.getByRole('button', { name: 'Long text' }));
+
+        expect(screen.queryByRole('radio')).toBeNull();
+    });
 });

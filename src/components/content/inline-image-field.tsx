@@ -7,8 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
     INLINE_IMAGE_MAX_ALT,
-    INLINE_IMAGE_RULES,
+    INLINE_IMAGE_MAX_BYTES,
+    INLINE_IMAGE_NOTE,
     INLINE_IMAGE_TYPES,
+    dataUriBytes,
+    formatKb,
+    inlineImageRules,
     inlineImageProblem,
     isInlineDataUri,
     readInlineImage,
@@ -29,12 +33,15 @@ export function InlineImageField({
     value,
     error,
     onChange,
+    maxBytes = INLINE_IMAGE_MAX_BYTES,
 }: {
     field: FieldDefinition;
     label: ReactNode;
     value: unknown;
     error?: string;
     onChange: (value: unknown) => void;
+    /** The limit on the decoded image. The API fixes it at 64 KB today, so that is the default. */
+    maxBytes?: number;
 }) {
     const [problem, setProblem] = useState<string | null>(null);
     const altId = useId();
@@ -43,7 +50,7 @@ export function InlineImageField({
 
     const choose = async (file: File | undefined) => {
         if (!file) return;
-        const refused = inlineImageProblem(file);
+        const refused = inlineImageProblem(file, maxBytes);
         setProblem(refused);
         if (refused) return;
         try {
@@ -81,8 +88,11 @@ export function InlineImageField({
                         }}
                     />
                     <p id={`${field.name}-inline-rules`} className="text-muted-foreground text-xs">
-                        {INLINE_IMAGE_RULES} The image is saved in every version of the entry, so keep it
-                        small.
+                        {inlineImageRules(maxBytes)}
+                    </p>
+                    {image && <SizeMeter bytes={dataUriBytes(image.url)} maxBytes={maxBytes} />}
+                    <p data-testid="inline-image-note" className="text-muted-foreground text-xs">
+                        {INLINE_IMAGE_NOTE}
                     </p>
                     {image && (
                         <div className="space-y-1">
@@ -111,6 +121,33 @@ export function InlineImageField({
                 )}
             </div>
             <FieldError message={problem ?? error} />
+        </div>
+    );
+}
+
+/** The decoded size against the limit. Mono, since it is a count (design-rules R4). */
+function SizeMeter({ bytes, maxBytes }: { bytes: number; maxBytes: number }) {
+    const over = bytes > maxBytes;
+    const share = Math.min(100, Math.round((bytes / maxBytes) * 100));
+    return (
+        <div className="space-y-1">
+            <div
+                role="meter"
+                aria-label="Inline image size"
+                aria-valuemin={0}
+                aria-valuemax={maxBytes}
+                aria-valuenow={Math.min(bytes, maxBytes)}
+                aria-valuetext={`${formatKb(bytes)} of ${formatKb(maxBytes)}`}
+                className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
+            >
+                <div
+                    className={over ? 'bg-destructive h-full' : 'bg-primary h-full'}
+                    style={{ width: `${share}%` }}
+                />
+            </div>
+            <p data-testid="inline-image-size" className="text-muted-foreground font-mono text-xs tabular-nums">
+                {formatKb(bytes)} of {formatKb(maxBytes)}
+            </p>
         </div>
     );
 }
