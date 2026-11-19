@@ -1,25 +1,31 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import type { ContentTypePermission, PermissionAction } from '@/types/rbac';
 import type { ContentTypeDefinition } from '@/types/schema';
+import { SensitivityLevel, sensitivityMeta } from '@/types/content';
+import { CREATED_BY_FIELD } from '@/types/schema';
 import {
   CONDITION_OPERATORS,
   CONDITION_RULES,
-  FIELD_SET_RULES,
   OPERATOR_LABELS,
+  conditionPreset,
   conditionProblem,
+  effectiveFields,
   hasFieldSet,
+  presetRow,
   readConditions,
   ruleSentence,
+  toggleFieldInSet,
   transitionRule,
   withTransitionRule,
   type ConditionOperator,
+  type ConditionPreset,
   type ConditionRow,
 } from '@/lib/role-rules';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { IconPlus, IconTrash } from '@/components/icons';
 
 const SELECT =
@@ -38,8 +44,8 @@ const RULE_WORD: Record<PermissionAction, string> = {
 };
 
 /**
- * The parts of one content type's permission the grid does not show: conditions on Read, Update and
- * Delete, and the field sets on Read, Create and Update.
+ * The parts of one content type's permission the action chips do not show: conditions on Read,
+ * Update and Delete, the Read and Write grid of fields, and the transitions.
  */
 export function PermissionDetails({
   schema,
@@ -62,11 +68,11 @@ export function PermissionDetails({
   onPermission: (permission: ContentTypePermission) => void;
 }) {
   const conditionRules = CONDITION_RULES.filter((action) => permission[action].enabled);
-  const setRules = FIELD_SET_RULES.filter(({ action }) => permission[action].enabled);
+  const showFields = permission.read.enabled || permission.create.enabled || permission.update.enabled;
 
   const transitions = schema.lifecycle?.transitions ?? [];
 
-  if (conditionRules.length === 0 && setRules.length === 0 && transitions.length === 0) {
+  if (conditionRules.length === 0 && !showFields && transitions.length === 0) {
     return (
       <p className="text-muted-foreground text-xs">
         Allow an action on {schema.displayName} first. Conditions and field limits belong to an action.
@@ -86,59 +92,7 @@ export function PermissionDetails({
         />
       ))}
 
-      {setRules.map(({ action, set }) => {
-        const rule = permission[action];
-        const limited = hasFieldSet(rule, set);
-        const chosen = limited ? (rule[set] as string[]) : [];
-        const names = [...schema.fields.map((f) => f.name), ...chosen.filter((n) => !schema.fields.some((f) => f.name === n))];
-        const verb = set === 'readableFields' ? 'shows' : 'sets';
-        const switchId = `${schema.name}-${action}-${set}`;
-
-        const write = (next: string[]) =>
-          onPermission({ ...permission, [action]: { ...rule, [set]: next } });
-
-        return (
-          <div key={`${action}-${set}`} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Switch
-                id={switchId}
-                checked={limited}
-                onCheckedChange={(on) => write(on ? schema.fields.map((f) => f.name) : [])}
-              />
-              <label htmlFor={switchId} className="text-sm font-medium">
-                {RULE_WORD[action]} {verb} only some fields
-              </label>
-            </div>
-            {limited && (
-              <div className="grid grid-cols-1 gap-1.5 pl-10 sm:grid-cols-2">
-                {names.map((fieldName) => {
-                  const declared = schema.fields.find((f) => f.name === fieldName);
-                  return (
-                    <label key={fieldName} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={chosen.includes(fieldName)}
-                        onCheckedChange={(checked) =>
-                          write(
-                            checked === true
-                              ? [...chosen, fieldName]
-                              : chosen.filter((n) => n !== fieldName),
-                          )
-                        }
-                      />
-                      <span>{declared?.displayName ?? fieldName}</span>
-                      {!declared && <span className="text-warning text-xs">not a field of this type</span>}
-                    </label>
-                  );
-                })}
-                <p className="text-muted-foreground col-span-full text-xs">
-                  Unticking every field removes the limit. Sensitive fields stay masked for a role that cannot
-                  read them.
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {showFields && <FieldGrid schema={schema} permission={permission} onPermission={onPermission} />}
 
       {transitions.length > 0 && (
         <div className="space-y-3">
@@ -165,9 +119,10 @@ export function PermissionDetails({
                 </label>
                 {rule.enabled && (
                   <div className="pl-6">
-                    <ConditionEditor
+                    <TransitionCondition
                       id={id}
-                      title={`${t.name} only entries where`}
+                      name={t.name}
+                      schema={schema}
                       draft={draft}
                       onChange={(next) => onTransitionDraft(t.name, next)}
                     />
@@ -181,6 +136,282 @@ export function PermissionDetails({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+const PRESET_LABELS: Record<ConditionPreset, string> = {
+  any: 'On any entry',
+  own: 'Only their own',
+  department: 'Only in their department',
+  custom: 'Custom',
+};
+
+/** Fields every entry carries whatever its type declares. */
+const SYSTEM_FIELDS = [{ name: CREATED_BY_FIELD, label: 'Created by' }];
+
+/**
+ * A transition's condition as a choice: any entry, the caller's own, the caller's department, or the
+ * builder. A draft opens on the preset it is exactly, and on Custom otherwise.
+ */
+function TransitionCondition({
+  id,
+  name,
+  schema,
+  draft,
+  onChange,
+}: {
+  id: string;
+  name: string;
+  schema: ContentTypeDefinition;
+  draft: ConditionDraft;
+  onChange: (draft: ConditionDraft) => void;
+}) {
+  const [mode, setMode] = useState<ConditionPreset>(() => conditionPreset(draft));
+  const lastCustom = useRef<ConditionDraft | null>(null);
+  const key = draft.rows[0]?.key ?? '';
+
+  const choices = [
+    ...SYSTEM_FIELDS.filter((s) => !schema.fields.some((f) => f.name === s.name)).map((s) => ({
+      name: s.name,
+      label: s.label,
+    })),
+    ...schema.fields.map((f) => ({ name: f.name, label: f.displayName })),
+  ];
+  if (key && !choices.some((c) => c.name === key)) choices.push({ name: key, label: key });
+
+  const pick = (next: ConditionPreset) => {
+    if (next === mode) return;
+    if (mode === 'custom') lastCustom.current = draft;
+    setMode(next);
+    if (next === 'custom') {
+      if (lastCustom.current) onChange(lastCustom.current);
+    } else if (next === 'any') onChange({ rows: [], kept: {} });
+    else if (next === 'own' || next === 'department') onChange({ rows: [presetRow(next, key)], kept: {} });
+  };
+
+  const problem = mode === 'own' || mode === 'department' ? conditionProblem(draft.rows[0] ?? presetRow(mode, '')) : null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label={`Condition for ${name}`}
+          className={SELECT}
+          value={mode}
+          onChange={(e) => pick(e.target.value as ConditionPreset)}
+        >
+          {(Object.keys(PRESET_LABELS) as ConditionPreset[]).map((preset) => (
+            <option key={preset} value={preset}>
+              {PRESET_LABELS[preset]}
+            </option>
+          ))}
+        </select>
+        {(mode === 'own' || mode === 'department') && (
+          <select
+            aria-label={`Field for ${name}`}
+            className={SELECT}
+            value={key}
+            aria-invalid={problem ? true : undefined}
+            onChange={(e) => onChange({ rows: [presetRow(mode, e.target.value)], kept: {} })}
+          >
+            <option value="">Choose a field</option>
+            {choices.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {problem && <p className="text-warning text-xs">{problem}</p>}
+      {mode === 'custom' && (
+        <ConditionEditor id={id} title={`${name} only entries where`} draft={draft} onChange={onChange} />
+      )}
+    </div>
+  );
+}
+
+const LEVEL_STYLE: Record<string, string> = {
+  [SensitivityLevel.Public]: 'bg-muted text-muted-foreground border-transparent',
+  [SensitivityLevel.Members]: 'bg-secondary text-secondary-foreground border-transparent',
+  [SensitivityLevel.Sensitive]: 'text-warning border-warning',
+  [SensitivityLevel.Hidden]: 'text-destructive border-destructive',
+};
+
+/** A field's sensitivity, as the content type sets it. */
+function SensitivityChip({ level }: { level: string }) {
+  const { label, description } = sensitivityMeta(level);
+  return (
+    <span
+      title={description}
+      className={`rounded-full border px-1.5 py-px text-[11px] font-semibold ${LEVEL_STYLE[level] ?? 'border-border text-muted-foreground'}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+/**
+ * One row per field with a Read box and a Write box for each of the Update and Create rules that is
+ * on. Each box edits only its own rule's set (readableFields, or that rule's writableFields). Read
+ * and Write are separate in the API, so neither needs the other and a click on one never changes the
+ * other. A set is never left empty by a click,
+ * because an empty list means no limit. Ticking every field stores an empty list, which is the same.
+ */
+function FieldGrid({
+  schema,
+  permission,
+  onPermission,
+}: {
+  schema: ContentTypeDefinition;
+  permission: ContentTypePermission;
+  onPermission: (permission: ContentTypePermission) => void;
+}) {
+  const declared = schema.fields.map((f) => f.name);
+  const writeActions = (['update', 'create'] as const).filter((a) => permission[a].enabled);
+  const readOn = permission.read.enabled;
+  const readSet = readOn ? effectiveFields(permission.read, 'readableFields', declared) : [];
+  const writeSets = writeActions.map((a) => effectiveFields(permission[a], 'writableFields', declared));
+
+  const stored = [
+    ...(hasFieldSet(permission.read, 'readableFields') ? (permission.read.readableFields as string[]) : []),
+    ...writeActions.flatMap((a) => (hasFieldSet(permission[a], 'writableFields') ? (permission[a].writableFields as string[]) : [])),
+  ];
+  const extras = [...new Set(stored)].filter((n) => !declared.includes(n));
+  const names = [...declared, ...extras];
+
+  const readOffId = `${schema.name}-read-off`;
+  const writeOffId = `${schema.name}-write-off`;
+  const noWrite = writeActions.length === 0;
+
+  const setRead = (field: string, on: boolean) => {
+    if (!readOn) return;
+    onPermission({
+      ...permission,
+      read: { ...permission.read, readableFields: toggleFieldInSet(permission.read, 'readableFields', declared, field, on) },
+    });
+  };
+
+  const setWrite = (action: 'update' | 'create', field: string, on: boolean) => {
+    onPermission({
+      ...permission,
+      [action]: {
+        ...permission[action],
+        writableFields: toggleFieldInSet(permission[action], 'writableFields', declared, field, on),
+      },
+    });
+  };
+
+  const hintClass = 'text-muted-foreground block text-[11px] leading-tight';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Which fields</p>
+        <span className="text-muted-foreground ml-auto font-mono text-xs">readable · writable</span>
+      </div>
+      <table className="w-full max-w-2xl overflow-hidden rounded-lg border text-sm">
+        <thead>
+          <tr className="bg-muted text-muted-foreground text-xs">
+            <th scope="col" className="px-3 py-2 text-left font-semibold">
+              Field
+            </th>
+            <th scope="col" className="w-28 px-3 py-2 text-center font-semibold">
+              Read
+            </th>
+            {noWrite ? (
+              <th scope="col" className="w-28 px-3 py-2 text-center font-semibold">
+                Write
+              </th>
+            ) : (
+              writeActions.map((action) => (
+                <th key={action} scope="col" className="w-28 px-3 py-2 text-center font-semibold">
+                  {writeActions.length > 1 ? `Write (${RULE_WORD[action]})` : 'Write'}
+                </th>
+              ))
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {names.map((fieldName) => {
+            const field = schema.fields.find((f) => f.name === fieldName);
+            const label = field?.displayName ?? fieldName;
+            const readTicked = readSet.includes(fieldName);
+            const lastRead = readTicked && readSet.length === 1;
+            const readHint = lastRead ? 'At least one field. Turn off Read to allow none.' : null;
+            const readHintId = `${schema.name}-read-${fieldName}-hint`;
+            return (
+              <tr key={fieldName} className="border-t">
+                <td className="px-3 py-1.5">
+                  <span className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span>{label}</span>
+                    {field?.sensitivity && <SensitivityChip level={field.sensitivity} />}
+                    {!field && <span className="text-warning text-xs">not a field of this type</span>}
+                  </span>
+                </td>
+                <td className="px-3 py-1.5 text-center">
+                  <Checkbox
+                    aria-label={`Read ${label}`}
+                    checked={readTicked}
+                    disabled={!readOn || lastRead}
+                    aria-describedby={!readOn ? readOffId : readHint ? readHintId : undefined}
+                    onCheckedChange={(checked) => setRead(fieldName, checked === true)}
+                  />
+                  {readHint && (
+                    <span id={readHintId} className={hintClass}>
+                      {readHint}
+                    </span>
+                  )}
+                </td>
+                {noWrite ? (
+                  <td className="px-3 py-1.5 text-center">
+                    <Checkbox aria-label={`Write ${label}`} checked={false} disabled aria-describedby={writeOffId} />
+                  </td>
+                ) : (
+                  writeActions.map((action, i) => {
+                    const held = writeSets[i];
+                    const ticked = held.includes(fieldName);
+                    const last = ticked && held.length === 1;
+                    const hint = last ? `At least one field. Turn off ${RULE_WORD[action]} to allow none.` : null;
+                    const hintId = `${schema.name}-write-${action}-${fieldName}-hint`;
+                    return (
+                      <td key={action} className="px-3 py-1.5 text-center">
+                        <Checkbox
+                          aria-label={writeActions.length > 1 ? `Write ${label} (${RULE_WORD[action]})` : `Write ${label}`}
+                          checked={ticked}
+                          disabled={last}
+                          aria-describedby={hint ? hintId : undefined}
+                          onCheckedChange={(checked) => setWrite(action, fieldName, checked === true)}
+                        />
+                        {hint && (
+                          <span id={hintId} className={hintClass}>
+                            {hint}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {!readOn && (
+        <p id={readOffId} className="text-muted-foreground text-xs">
+          Read is off. Turn on Read to choose which fields it shows.
+        </p>
+      )}
+      {noWrite && (
+        <p id={writeOffId} className="text-muted-foreground text-xs">
+          Update and Create are off. Turn on Update or Create to choose which fields they set.
+        </p>
+      )}
+      <p className="text-muted-foreground text-xs">
+        Sensitivity is the default a reader gets with no rule. Ticking every field removes the limit. To allow none,
+        turn the action off. Sensitive fields stay masked for a role that cannot read them.
+      </p>
     </div>
   );
 }

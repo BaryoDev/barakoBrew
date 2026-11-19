@@ -107,7 +107,7 @@ describe('saving a role keeps what the grid does not show', () => {
     it('sends back the stored field sets, a condition it cannot draw, and the transition rules', async () => {
         const onSubmit = await renderEditor(ROLE);
 
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Allow delete on Record' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Allow delete on Record' }));
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
 
         const [permission] = submitted(onSubmit).permissions;
@@ -121,8 +121,8 @@ describe('saving a role keeps what the grid does not show', () => {
     it('keeps a permission that holds a transition when every action is turned off', async () => {
         const onSubmit = await renderEditor(ROLE);
 
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Allow read on Record' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Allow update on Record' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Allow read on Record' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Allow update on Record' }));
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
 
         const { permissions } = submitted(onSubmit);
@@ -133,9 +133,7 @@ describe('saving a role keeps what the grid does not show', () => {
 
 describe('conditions and field limits', () => {
     async function expand(initial: RoleRequest = ROLE) {
-        const onSubmit = await renderEditor(initial);
-        fireEvent.click(screen.getByRole('button', { name: 'Conditions and field limits for Record' }));
-        return onSubmit;
+        return renderEditor(initial);
     }
 
     it('saves a condition that follows a reference beside the kept one', async () => {
@@ -165,12 +163,11 @@ describe('conditions and field limits', () => {
         expect(onSubmit).not.toHaveBeenCalled();
     });
 
-    it('sends an empty list when a stored field limit is turned off, which is how the API removes it', async () => {
+    it('sends an empty list when every field is readable again, which is how the API removes a limit', async () => {
         const onSubmit = await expand();
 
-        const limit = screen.getByRole('switch', { name: 'Read shows only some fields' });
-        expect(limit).toBeChecked();
-        fireEvent.click(limit);
+        expect(screen.getByRole('checkbox', { name: 'Read Grade' })).not.toBeChecked();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Read Grade' }));
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
 
         const [permission] = submitted(onSubmit).permissions;
@@ -183,9 +180,8 @@ describe('conditions and field limits', () => {
             ...ROLE,
             permissions: [{ ...ROLE.permissions[0], update: { enabled: true, writableFields: ['Attendance', 'Grade'] } }],
         });
-        const update = screen.getByRole('switch', { name: 'Update sets only some fields' }).closest('div')!.parentElement!;
 
-        fireEvent.click(within(update).getByRole('checkbox', { name: 'Grade' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Write Grade' }));
         fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
 
         expect(submitted(onSubmit).permissions[0].update.writableFields).toEqual(['Attendance']);
@@ -196,7 +192,9 @@ describe('conditions and field limits', () => {
         recordContractVersion('5');
         await renderEditor(ROLE);
 
-        expect(screen.queryByRole('button', { name: 'Conditions and field limits for Record' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Allow read on Record' })).toBeInTheDocument();
+        expect(screen.queryByRole('checkbox', { name: 'Read Name' })).toBeNull();
+        expect(screen.queryByText('Read only entries where')).toBeNull();
     });
 });
 
@@ -308,7 +306,6 @@ describe('transition permissions', () => {
         );
         await waitFor(() => expect(screen.getByText('Absence')).toBeInTheDocument());
         fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Teacher' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Conditions and field limits for Absence' }));
         return onSubmit;
     }
 
@@ -316,6 +313,7 @@ describe('transition permissions', () => {
         const onSubmit = await openAbsence();
 
         fireEvent.click(screen.getByRole('checkbox', { name: 'Run Explain on Absence' }));
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'custom' } });
         fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
         fireEvent.change(screen.getByLabelText('Condition 1 field'), { target: { value: 'CreatedBy' } });
         fireEvent.change(screen.getByLabelText('Condition 1 value'), { target: { value: '$CURRENT_USER' } });
@@ -363,6 +361,7 @@ describe('transition permissions', () => {
         const onSubmit = await openAbsence();
 
         fireEvent.click(screen.getByRole('checkbox', { name: 'Run Sign|Off on Absence' }));
+        fireEvent.change(screen.getByLabelText('Condition for Sign|Off'), { target: { value: 'custom' } });
         fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
         fireEvent.change(screen.getByLabelText('Condition 1 field'), { target: { value: 'CreatedBy' } });
         fireEvent.change(screen.getByLabelText('Condition 1 value'), { target: { value: '$CURRENT_USER' } });
@@ -372,6 +371,328 @@ describe('transition permissions', () => {
         expect(permission.transitions).toEqual({
             'Sign|Off': { enabled: true, conditions: { CreatedBy: { _eq: '$CURRENT_USER' } } },
         });
+    });
+});
+
+describe('the Read and Write grid, the tabs and the chips', () => {
+    it('unticking_read_leaves_write_unchanged', async () => {
+        const onSubmit = await renderEditor({
+            ...ROLE,
+            permissions: [
+                {
+                    ...ROLE.permissions[0],
+                    read: { enabled: true, readableFields: ['Name', 'Attendance'] },
+                    update: { enabled: true, writableFields: ['Name', 'Attendance'] },
+                },
+            ],
+        });
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Read Name' }));
+        expect(screen.getByRole('checkbox', { name: 'Read Name' })).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Name' })).toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
+        expect(permission.read.readableFields).toEqual(['Attendance']);
+        expect(permission.update.writableFields).toEqual(['Name', 'Attendance']);
+    });
+
+    it('a_create_only_role_can_tick_write_back', async () => {
+        const onSubmit = await renderEditor({
+            ...ROLE,
+            permissions: [
+                {
+                    ...ROLE.permissions[0],
+                    read: { enabled: false },
+                    update: { enabled: false },
+                    create: { enabled: true, writableFields: ['Name', 'Attendance'] },
+                },
+            ],
+        });
+
+        const attendance = screen.getByRole('checkbox', { name: 'Write Attendance' });
+        expect(attendance).toBeEnabled();
+        fireEvent.click(attendance);
+        expect(attendance).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Name' })).toBeDisabled();
+        expect(screen.getByRole('checkbox', { name: 'Read Name' })).toBeDisabled();
+        expect(screen.getByText(/Turn on Read/)).toBeInTheDocument();
+
+        fireEvent.click(attendance);
+        expect(attendance).toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].create.writableFields).toEqual(['Name', 'Attendance']);
+    });
+
+    it('update_and_create_write_sets_are_edited_separately', async () => {
+        const onSubmit = await renderEditor({
+            ...ROLE,
+            permissions: [
+                {
+                    ...ROLE.permissions[0],
+                    read: { enabled: true },
+                    update: { enabled: true, writableFields: ['Attendance', 'Grade'] },
+                    create: { enabled: true, writableFields: ['Name', 'Grade'] },
+                },
+            ],
+        });
+
+        expect(screen.getByRole('checkbox', { name: 'Write Name (Update)' })).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Name (Create)' })).toBeChecked();
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Write Grade (Update)' }));
+        expect(screen.getByRole('checkbox', { name: 'Write Grade (Create)' })).toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
+        expect(permission.update.writableFields).toEqual(['Attendance']);
+        expect(permission.create.writableFields).toEqual(['Name', 'Grade']);
+    });
+
+    function narrow(read: string[], update: string[] | null) {
+        return {
+            ...ROLE,
+            permissions: [
+                {
+                    ...ROLE.permissions[0],
+                    read: { enabled: true, readableFields: read },
+                    update: update ? { enabled: true, writableFields: update } : { enabled: false },
+                },
+            ],
+        };
+    }
+
+    it('the_last_read_field_cannot_be_unticked', async () => {
+        const onSubmit = await renderEditor(narrow(['Name'], null));
+
+        const last = screen.getByRole('checkbox', { name: 'Read Name' });
+        expect(last).toBeDisabled();
+        expect(last).toHaveAccessibleDescription('At least one field. Turn off Read to allow none.');
+        fireEvent.click(last);
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].read.readableFields).toEqual(['Name']);
+    });
+
+    it('the_last_write_field_cannot_be_unticked', async () => {
+        const onSubmit = await renderEditor(narrow(['Name', 'Attendance'], ['Attendance']));
+
+        const last = screen.getByRole('checkbox', { name: 'Write Attendance' });
+        expect(last).toBeDisabled();
+        expect(last).toHaveAccessibleDescription('At least one field. Turn off Update to allow none.');
+        fireEvent.click(last);
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].update.writableFields).toEqual(['Attendance']);
+    });
+
+    it('round_trips_readable_and_writable_fields_through_the_grid', async () => {
+        const onSubmit = await renderEditor(ROLE);
+
+        expect(screen.getByRole('checkbox', { name: 'Read Name' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Read Attendance' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Read Grade' })).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Attendance' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Write Name' })).not.toBeChecked();
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        const [permission] = submitted(onSubmit).permissions;
+        expect(permission.read.readableFields).toEqual(['Name', 'Attendance']);
+        expect(permission.update.writableFields).toEqual(['Attendance']);
+        expect(permission.create.writableFields).toBeUndefined();
+    });
+
+    it('shows_the_sensitivity_chip_for_a_sensitive_field', async () => {
+        vi.mocked(api.get).mockResolvedValue({
+            data: {
+                items: [
+                    {
+                        ...RECORD,
+                        fields: [
+                            { name: 'Name', displayName: 'Name', type: 'string', isRequired: true },
+                            { name: 'Diagnosis', displayName: 'Diagnosis', type: 'string', isRequired: false, sensitivity: 'Sensitive' },
+                        ],
+                    },
+                ],
+                page: 1,
+                pageSize: 20,
+                totalItems: 1,
+            },
+        });
+        await renderEditor(ROLE);
+
+        const sensitive = screen.getByRole('checkbox', { name: 'Read Diagnosis' }).closest('tr')!;
+        expect(within(sensitive).getByText('Sensitive')).toBeInTheDocument();
+        const plain = screen.getByRole('checkbox', { name: 'Read Name' }).closest('tr')!;
+        expect(within(plain).queryByText('Sensitive')).toBeNull();
+        expect(within(plain).queryByText('Public')).toBeNull();
+    });
+
+    it('tab_shows_the_crud_summary_in_mono', async () => {
+        await renderEditor(ROLE);
+
+        const tab = screen.getByRole('tab', { name: /Record/ });
+        const summary = within(tab).getByText('.RU.');
+        expect(summary).toHaveClass('font-mono');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Allow create on Record' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Allow delete on Record' }));
+        expect(within(tab).getByText('CRUD')).toBeInTheDocument();
+    });
+
+    it('action_chips_report_aria_pressed', async () => {
+        await renderEditor(ROLE);
+
+        expect(screen.getByRole('button', { name: 'Allow read on Record' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'Allow update on Record' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: 'Allow create on Record' })).toHaveAttribute('aria-pressed', 'false');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Allow create on Record' }));
+        expect(screen.getByRole('button', { name: 'Allow create on Record' })).toHaveAttribute('aria-pressed', 'true');
+    });
+});
+
+describe('transition condition presets', () => {
+    const ABSENCE = {
+        name: 'absence',
+        displayName: 'Absence',
+        fields: [
+            { name: 'Reason', displayName: 'Reason', type: 'string', isRequired: false },
+            { name: 'Owner', displayName: 'Owner', type: 'string', isRequired: false },
+        ],
+        lifecycle: {
+            states: ['Recorded', 'Explained'],
+            initialState: 'Recorded',
+            transitions: [{ name: 'Explain', from: 'Recorded', to: 'Explained' }],
+        },
+    };
+
+    function held(conditions?: Record<string, unknown>): RoleRequest {
+        return {
+            name: 'Teacher',
+            systemCapabilities: [],
+            permissions: [
+                {
+                    contentTypeSlug: 'absence',
+                    create: { enabled: false },
+                    read: { enabled: true },
+                    update: { enabled: false },
+                    delete: { enabled: false },
+                    transitions: { Explain: { enabled: true, ...(conditions ? { conditions } : {}) } },
+                },
+            ],
+        };
+    }
+
+    async function open(initial: RoleRequest) {
+        vi.mocked(api.get).mockResolvedValue({ data: { items: [ABSENCE], page: 1, pageSize: 20, totalItems: 1 } });
+        const onSubmit = vi.fn();
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <RoleEditor initial={initial} submitLabel="Save role" isPending={false} onSubmit={onSubmit} onCancel={() => {}} />
+            </QueryClientProvider>,
+        );
+        await waitFor(() => expect(screen.getByText('Absence')).toBeInTheDocument());
+        return onSubmit;
+    }
+
+    it('only_their_own_writes_an_eq_current_user_condition_on_the_chosen_field', async () => {
+        const onSubmit = await open(held());
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('any');
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'own' } });
+        expect(screen.getByRole('button', { name: 'Save role' })).toBeDisabled();
+        fireEvent.change(screen.getByLabelText('Field for Explain'), { target: { value: 'Owner' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({
+            Explain: { enabled: true, conditions: { Owner: { _eq: '$CURRENT_USER' } } },
+        });
+    });
+
+    it('only_in_their_department_writes_current_user_department', async () => {
+        const onSubmit = await open(held());
+
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'department' } });
+        fireEvent.change(screen.getByLabelText('Field for Explain'), { target: { value: 'Reason' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({
+            Explain: { enabled: true, conditions: { Reason: { _eq: '$CURRENT_USER.department' } } },
+        });
+    });
+
+    it('opens a stored preset on its preset, and any entry clears it', async () => {
+        const onSubmit = await open(held({ Owner: { _eq: '$CURRENT_USER.department' } }));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('department');
+        expect(screen.getByLabelText('Field for Explain')).toHaveValue('Owner');
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'any' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({ Explain: { enabled: true, conditions: null } });
+    });
+
+    it('only_their_own_writes_the_createdBy_system_key', async () => {
+        const onSubmit = await open(held());
+
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'own' } });
+        fireEvent.change(screen.getByLabelText('Field for Explain'), { target: { value: '$createdBy' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({
+            Explain: { enabled: true, conditions: { $createdBy: { _eq: '$CURRENT_USER' } } },
+        });
+    });
+
+    it('reads_a_stored_dollar_createdby_as_only_their_own', async () => {
+        const onSubmit = await open(held({ $CreatedBy: { _eq: '$CURRENT_USER' } }));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('own');
+        expect(screen.getByLabelText('Field for Explain')).toHaveValue('$CreatedBy');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({
+            Explain: { enabled: true, conditions: { $CreatedBy: { _eq: '$CURRENT_USER' } } },
+        });
+    });
+
+    it('switching_to_any_and_back_restores_the_custom_condition', async () => {
+        const stored = { Owner: { _eq: '$CURRENT_USER.team' }, Seats: { _eq: 4 } };
+        const onSubmit = await open(held(stored));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('custom');
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'any' } });
+        expect(screen.queryByLabelText('Condition 1 field')).toBeNull();
+        fireEvent.change(screen.getByLabelText('Condition for Explain'), { target: { value: 'custom' } });
+        expect(screen.getByLabelText('Condition 1 field')).toHaveValue('Owner');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({ Explain: { enabled: true, conditions: stored } });
+    });
+
+    it('an_owner_field_condition_stays_custom', async () => {
+        const stored = { Owner: { _eq: '$CURRENT_USER' } };
+        const onSubmit = await open(held(stored));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('custom');
+        expect(screen.getByLabelText('Condition 1 field')).toHaveValue('Owner');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({ Explain: { enabled: true, conditions: stored } });
+    });
+
+    it('a_stored_condition_of_another_shape_opens_on_custom_unchanged', async () => {
+        const stored = { Owner: { _eq: '$CURRENT_USER.team' } };
+        const onSubmit = await open(held(stored));
+
+        expect(screen.getByLabelText('Condition for Explain')).toHaveValue('custom');
+        expect(screen.getByLabelText('Condition 1 field')).toHaveValue('Owner');
+        expect(screen.getByLabelText('Condition 1 value')).toHaveValue('$CURRENT_USER.team');
+        fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+
+        expect(submitted(onSubmit).permissions[0].transitions).toEqual({ Explain: { enabled: true, conditions: stored } });
     });
 });
 
@@ -559,7 +880,6 @@ describe('the Preview as panel', () => {
         pick();
         expect(screen.getByRole('button', { name: 'Preview' })).toBeEnabled();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Conditions and field limits for Record' }));
         const read = screen.getByText('Read only entries where').parentElement!;
         fireEvent.click(within(read).getByRole('button', { name: 'Add condition' }));
         fireEvent.change(within(read).getByLabelText('Condition 1 field'), { target: { value: 'Class.Teacher.User' } });

@@ -15,6 +15,19 @@ moved. Which API a console works against is stated per release instead.
 - `SignInFlow.completeSession(tokens)` lets a package panel hand tokens to the page, which starts the session and redirects as it does after a password. A panel never touches the token store.
 - `QrApprovalPanel`, a reusable panel that shows a QR and a match number, counts down to expiry and polls until a signed-in device approves. The browser secret stays in memory and is sent only in a poll body.
 
+### Changed
+
+- Role editor (#146): each content type is a tab showing its name and a `CRUD` summary in mono (for
+  example `CR.D`), with the four actions as pressed chips. Which fields is a grid with each field's
+  sensitivity chip, a Read column, and one Write column per write action that is on (Update,
+  Create). Read and Write are independent, as they are in core. The last ticked box in a column
+  cannot be unticked, because an empty list means every field. The saved `readableFields` and
+  `writableFields` are unchanged.
+- A transition's condition is a select: On any entry, Only their own, Only in their department, or
+  Custom. Only their own writes `{ "$createdBy": { "_eq": "$CURRENT_USER" } }`, and the department
+  preset writes `{ field: { _eq: "$CURRENT_USER.department" } }`. A stored condition of any other
+  shape opens on Custom with the builder, unchanged.
+
 ## [1.13.0] - 2026-11-17
 
 **Speaks API contracts 1 to 16, which covers barakoCMS 4.0.1 to 5.8.0.** barakoCMS 5.8.0 moves the

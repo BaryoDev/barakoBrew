@@ -5,7 +5,7 @@ export type PermissionAction = 'create' | 'read' | 'update' | 'delete';
 
 export interface PermissionRule {
     enabled: boolean;
-    // Directus-style conditions, e.g. { "CreatedBy": { "_eq": "$CURRENT_USER" } }. A key written
+    // Directus-style conditions, e.g. { "$createdBy": { "_eq": "$CURRENT_USER" } }. A key written
     // Reference.Field follows the entry's reference and compares a field of the entry it points at.
     conditions?: Record<string, unknown> | null;
     /**
