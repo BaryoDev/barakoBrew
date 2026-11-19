@@ -14,6 +14,32 @@ export function useUsers(params: PageParams = {}) {
     });
 }
 
+// Block and unblock. A SuperAdmin only: the API answers 400 for your own account, 403 for another
+// SuperAdmin or a caller who is not one, and 404 for an unknown user.
+
+export function useBlockUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (userId: string) => {
+            await api.post(`/api/users/${userId}/block`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            queryClient.invalidateQueries({ queryKey: ['sessions'] });
+        },
+    });
+}
+
+export function useUnblockUser() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (userId: string) => {
+            await api.post(`/api/users/${userId}/unblock`);
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    });
+}
+
 // Roles
 
 export function useRoles(params: PageParams = {}) {

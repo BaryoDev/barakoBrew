@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   useAssignGroup,
+  useBlockUser,
+  useUnblockUser,
   useAssignRole,
   useRemoveGroup,
   useRemoveRole,
@@ -11,7 +13,10 @@ import {
   useUsers,
 } from '@/hooks/use-rbac';
 import { useUserGroups } from '@/hooks/use-user-groups';
-import { apiErrorMessage } from '@/lib/api';
+import { useAuth } from '@/hooks/use-auth';
+import { useSessionsGone } from '@/hooks/use-sessions';
+import { UserSessionsPanel } from '@/components/sessions/user-sessions-panel';
+import { apiErrorMessage, isNotFound } from '@/lib/api';
 import { roleChangeErrorMessage } from '@/lib/global-roles';
 import { isGlobalRoleCandidate, type User } from '@/types/rbac';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -21,6 +26,14 @@ import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { PaginationControls } from '@/components/patterns/pagination-controls';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +57,37 @@ export default function UsersPage() {
   const { data: users, isLoading, isError, refetch } = useUsers({ page });
   const { data: roles } = useRoles({ pageSize: 100 });
   const { data: groups } = useUserGroups();
+  const { user: me } = useAuth();
+  const block = useBlockUser();
+  const unblock = useUnblockUser();
+  const [sessionsOf, setSessionsOf] = useState<User | null>(null);
+  const [blocking, setBlocking] = useState<{ user: User; action: 'block' | 'unblock' } | null>(null);
+  // Set when a block call answers 404: the API has no such route, so the actions go, with no toast.
+  const [noBlock, setNoBlock] = useState(false);
+
+  // Only a SuperAdmin is offered these: the API answers 403 to anyone else.
+  const isSuperAdmin = me?.roles.includes('SuperAdmin') ?? false;
+  const noSessions = useSessionsGone(isSuperAdmin);
+  const showSessions = isSuperAdmin && !noSessions;
+  const showBlock = isSuperAdmin && !noBlock;
+  const showActions = showSessions || showBlock;
+
+  const onConfirmBlock = async () => {
+    if (!blocking) return;
+    const { user, action } = blocking;
+    try {
+      await (action === 'block' ? block : unblock).mutateAsync(user.id);
+      setBlocking(null);
+      toast.success(action === 'block' ? `${user.username} is blocked.` : `${user.username} is unblocked.`);
+    } catch (error) {
+      setBlocking(null);
+      if (isNotFound(error)) {
+        setNoBlock(true);
+        return;
+      }
+      toast.error(apiErrorMessage(error));
+    }
+  };
 
   const roleName = (id: string) => roles?.items.find((r) => r.id === id)?.name ?? '…';
   const groupName = (id: string) => groups?.find((g) => g.id === id)?.name ?? '…';
@@ -75,13 +119,21 @@ export default function UsersPage() {
                   <TableHead>Roles</TableHead>
                   <TableHead className="hidden lg:table-cell">Groups</TableHead>
                   <TableHead className="hidden text-right sm:table-cell">Joined</TableHead>
+                  {showActions && (
+                    <TableHead className="text-right">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.items.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell>
-                      <div className="font-medium">{user.username}</div>
+                      <div className="flex items-center gap-2 font-medium">
+                        {user.username}
+                        {user.blocked === true && <Badge variant="destructive">Blocked</Badge>}
+                      </div>
                       <div className="text-muted-foreground text-xs">{user.email}</div>
                     </TableCell>
                     <TableCell>
@@ -107,6 +159,31 @@ export default function UsersPage() {
                     <TableCell className="text-muted-foreground hidden text-right text-sm sm:table-cell">
                       {format(new Date(user.createdAt), 'PP')}
                     </TableCell>
+                    {showActions && (
+                      <TableCell className="text-right whitespace-nowrap">
+                        {showSessions && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSessionsOf(user)}
+                            aria-label={`Sessions for ${user.username}`}
+                          >
+                            Sessions
+                          </Button>
+                        )}
+                        {/* Not on your own account: the API answers 400, so the control is left out. */}
+                        {showBlock && user.id !== me?.userId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setBlocking({ user, action: user.blocked === true ? 'unblock' : 'block' })}
+                            aria-label={`${user.blocked === true ? 'Unblock' : 'Block'} ${user.username}`}
+                          >
+                            {user.blocked === true ? 'Unblock' : 'Block'}
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -115,6 +192,33 @@ export default function UsersPage() {
           <PaginationControls page={users} onPageChange={setPage} />
         </>
       )}
+
+      {showSessions && <UserSessionsPanel user={sessionsOf} onClose={() => setSessionsOf(null)} />}
+
+      <Dialog open={blocking !== null} onOpenChange={(open) => !open && setBlocking(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{blocking?.action === 'unblock' ? 'Unblock this account?' : 'Block this account?'}</DialogTitle>
+            <DialogDescription>
+              {blocking?.action === 'unblock'
+                ? `${blocking.user.username} can sign in again. Their API keys work again.`
+                : `${blocking?.user.username} cannot sign in, their sessions end, and their API keys stop working until you unblock the account.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBlocking(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={blocking?.action === 'unblock' ? 'default' : 'destructive'}
+              onClick={onConfirmBlock}
+              disabled={block.isPending || unblock.isPending}
+            >
+              {blocking?.action === 'unblock' ? 'Confirm unblock' : 'Confirm block'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
