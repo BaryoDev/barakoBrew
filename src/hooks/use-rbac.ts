@@ -14,12 +14,6 @@ export function useUsers(params: PageParams = {}) {
     });
 }
 
-/** GET /api/users/{id}: one account. Used to tell an unknown user from a missing route after a 404. */
-export async function readUser(userId: string): Promise<User> {
-    const response = await api.get<User>(`/api/users/${userId}`);
-    return response.data;
-}
-
 // Block and unblock. A SuperAdmin only: the API answers 400 for your own account, 403 for another
 // SuperAdmin or a caller who is not one, and 404 for an unknown user.
 

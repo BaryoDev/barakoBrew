@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   useAssignGroup,
-  readUser,
   useBlockUser,
   useUnblockUser,
   useAssignRole,
@@ -64,7 +63,8 @@ export default function UsersPage() {
   const [sessionsOf, setSessionsOf] = useState<User | null>(null);
   const [blocking, setBlocking] = useState<{ user: User; action: 'block' | 'unblock' } | null>(null);
   // There is no read-only probe for the block routes (a POST changes state). Set when a block call
-  // answers 404 and the user still exists: the API has no such route, so the actions go, with no toast.
+  // answers 404 with no error message: an API with the route names an unknown account, one without
+  // it answers an empty 404. The actions go, with no toast.
   const [noBlock, setNoBlock] = useState(false);
 
   // Only a SuperAdmin is offered these: the API answers 403 to anyone else.
@@ -84,18 +84,13 @@ export default function UsersPage() {
     } catch (error) {
       setBlocking(null);
       if (isNotFound(error)) {
-        // Core answers 404 for an unknown user as well as for an API without the route. Read the one
-        // account: a 404 there is a gone target, a 200 is a missing route, anything else changes nothing.
-        try {
-          await readUser(user.id);
+        // Core answers 404 with an error message for an unknown account. An API without the route
+        // answers 404 with no body, so there is nothing to say and the actions go.
+        if (apiErrorMessage(error, '')) {
+          toast.error('That account no longer exists.');
+          refetch();
+        } else {
           setNoBlock(true);
-        } catch (readError) {
-          if (isNotFound(readError)) {
-            toast.error('That account no longer exists.');
-            refetch();
-          } else {
-            toast.error(apiErrorMessage(readError));
-          }
         }
         return;
       }
