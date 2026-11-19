@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useAccess } from '@/hooks/use-access';
 import { useEnabledModules, useModules } from '@/hooks/use-modules';
 import { useActivityGone } from '@/hooks/use-activity';
+import { useSessionsGone } from '@/hooks/use-sessions';
 import { useSlot } from '@/hooks/use-slots';
 import { moduleDisplayName } from '@/lib/module-catalog';
 import { NAV_GROUPS, visibleGroups, withModules, withModuleScreens, type NavGroup } from '@/lib/navigation';
@@ -37,10 +38,15 @@ export function useAllowedGroups(): NavGroup[] {
   // Activity item instead of leaving a link to a 404.
   const wantsActivity = hrefsOf(offered).has('/activity');
   const missing = useActivityGone(wantsActivity);
-  return useMemo(
-    () => (missing ? offered.map((g) => ({ ...g, items: g.items.filter((i) => i.href !== '/activity') })) : offered),
-    [offered, missing],
-  );
+  // The same for Sessions: an API without the routes answers 404, and the item is left out.
+  const wantsSessions = hrefsOf(offered).has('/settings/sessions');
+  const noSessions = useSessionsGone(wantsSessions);
+  return useMemo(() => {
+    const gone = new Set<string>();
+    if (missing) gone.add('/activity');
+    if (noSessions) gone.add('/settings/sessions');
+    return gone.size === 0 ? offered : offered.map((g) => ({ ...g, items: g.items.filter((i) => !gone.has(i.href)) }));
+  }, [offered, missing, noSessions]);
 }
 
 export function hrefsOf(groups: readonly NavGroup[]): ReadonlySet<string> {

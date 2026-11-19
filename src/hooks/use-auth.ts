@@ -120,9 +120,14 @@ export function useAuth() {
     const user = useMemo(() => decodeSession(token), [token]);
     const isLoading = !hydrated || !bootstrapped;
 
-    const logout = useCallback(async () => {
+    /**
+     * `serverRevoked` is for a caller that has just had the server end this very session (the
+     * Sessions page): there is nothing left to revoke, and asking would only fail with a 401 and
+     * warn that sign-out could not be confirmed. The token, the cache and the redirect still run.
+     */
+    const logout = useCallback(async (options?: { serverRevoked?: boolean }) => {
         beginSignOut();
-        const revoked = await revokeOnServer();
+        const revoked = options?.serverRevoked === true ? true : await revokeOnServer();
         // Everything cached was fetched as the account that just left. Dropping the token stops new
         // requests, and does nothing about answers already held: the next account signing in to this
         // tab reads the previous one's lists, counts and names from cache until each goes stale.

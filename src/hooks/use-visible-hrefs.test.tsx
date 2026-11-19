@@ -4,6 +4,7 @@ import { renderHook } from '@testing-library/react';
 let enabled: string[] | undefined;
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { roles: ['SuperAdmin'] } }) }));
 vi.mock('@/hooks/use-access', () => ({ useAccess: () => ({ known: false, can: () => true }) }));
+vi.mock('@/hooks/use-sessions', () => ({ useSessionsGone: () => false }));
 vi.mock('@/hooks/use-activity', () => ({ useActivityGone: () => false }));
 vi.mock('@/hooks/use-modules', () => ({
     useEnabledModules: () => enabled,

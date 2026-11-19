@@ -99,6 +99,8 @@ export interface User {
     roleIds: string[];
     groupIds: string[];
     createdAt: string;
+    /** True when a SuperAdmin has blocked the account. Absent when it is not, and on an API without blocking. */
+    blocked?: boolean;
 }
 
 export interface UserGroup {

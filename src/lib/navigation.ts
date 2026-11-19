@@ -17,6 +17,7 @@ import {
   IconFlag,
   IconSun,
   IconPen,
+  IconClock,
   IconCube,
   IconGroups,
   IconHealth,
@@ -277,6 +278,10 @@ export const NAV_GROUPS: NavGroup[] = [
       // The caller's own second factor. With capabilities known it is offered to every signed-in
       // caller, as the API serves it; the roles are what an older API's console offered.
       { title: 'Security', href: '/settings/security', icon: IconLock, roles: ['SuperAdmin', 'Admin'] },
+      // Every signed-in role, like Devices: GET /api/me/sessions lists the caller's own sessions. It
+      // belongs to no module, so it sits here with the per-person items. The rail drops it when the
+      // API answers 404, since the routes are optional.
+      { title: 'Sessions', href: '/settings/sessions', icon: IconClock, roles: ['SuperAdmin', 'Admin', 'User'] },
       { title: 'Connectors', href: '/settings/connectors', icon: IconWebhook, capability: 'view_connectors', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Outbound requests', href: '/settings/requests', icon: IconWebhook, capability: 'manage_requests', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Deliveries', href: '/settings/deliveries', icon: IconTasks, capability: 'view_workflow_runs', roles: ['SuperAdmin', 'Admin'] },
@@ -361,6 +366,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   modules: 'All modules',
   pwa: 'PWA installs',
   devices: 'Devices',
+  sessions: 'Sessions',
   portability: 'Export and import',
   connectors: 'Connectors',
   requests: 'Outbound requests',

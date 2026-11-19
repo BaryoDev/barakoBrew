@@ -376,7 +376,7 @@ describe('the rail against an API that reports capabilities', () => {
     });
 
     it('offers a custom role only what its capabilities open, plus what every caller may use', () => {
-        expect(seen([])).toEqual(['Overview', 'Devices', 'Health', 'Security']);
+        expect(seen([])).toEqual(['Overview', 'Devices', 'Health', 'Security', 'Sessions']);
     });
 
     it('decides by capability rather than by the Admin name', () => {
@@ -396,11 +396,12 @@ describe('the rail against an API that reports capabilities', () => {
         expect(seen(['*'])).toHaveLength(NAV_GROUPS.reduce((n, g) => n + g.items.length, 0));
     });
 
-    it('gates every role-gated item on a capability, except the two every caller may use', () => {
+    // Devices, Security and Sessions are the caller's own account, so any signed-in role may use them.
+    it('gates every role-gated item on a capability, except the three every caller may use', () => {
         const ungated = NAV_GROUPS.flatMap((g) => g.items)
             .filter((i) => i.roles && i.capability === undefined)
             .map((i) => i.title);
-        expect(ungated).toEqual(['Devices', 'Security']);
+        expect(ungated).toEqual(['Devices', 'Security', 'Sessions']);
     });
 
     it('keeps a single-entry type gated like Entries', () => {

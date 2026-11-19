@@ -288,7 +288,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Sign out"
-              onClick={logout}
+              onClick={() => logout()}
               className="h-[34px] gap-2.5 rounded-[9px] px-2.5 text-[13.5px] text-muted-foreground hover:bg-secondary hover:text-foreground max-rail:h-11"
             >
               <span aria-hidden className="size-3 shrink-0 rounded-full border-2 border-primary bg-accent" />

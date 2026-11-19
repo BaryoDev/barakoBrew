@@ -392,7 +392,10 @@ export default function ApiKeysPage() {
                       )}
                     </TableCell>
                   )}
-                  <TableCell className="text-muted-foreground font-mono text-xs">{lastUsedLabel(k.lastUsedAt, now)}</TableCell>
+                  <TableCell className="text-muted-foreground font-mono text-xs">
+                    {lastUsedLabel(k.lastUsedAt, now)}
+                    {k.lastUsedIp && <div data-testid="last-used-ip">{k.lastUsedIp}</div>}
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-xs">{formatDate(k.expiresAt)}</TableCell>
                   <TableCell>
                     <KeyState apiKey={k} now={now} />
