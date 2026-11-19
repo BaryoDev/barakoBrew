@@ -176,6 +176,8 @@ test.describe('users: sessions and blocking', () => {
             await page.route('**/api/user-groups**', (r) => r.fulfill({ json: pageOf([]) }));
             await page.route('**/api/me/sessions**', (r) => r.fulfill({ json: pageOf([]) }));
             await page.route(/\/api\/users\/[^/]+\/(block|unblock)$/, (r) => r.fulfill({ status: 404, json: {} }));
+            // The read of the one account answers 404: the target is gone.
+            await page.route(`**/api/users/${ANA}`, (r) => r.fulfill({ status: 404, json: {} }));
 
             await page.goto('/users');
             const label = action === 'block' ? 'Block ana' : 'Unblock ana';
@@ -272,6 +274,8 @@ test.describe('users: sessions and blocking', () => {
         await stubShell(page);
         await stubUsers(page, [user(ANA, 'ana')]);
         await page.route(/\/api\/users\/[^/]+\/block$/, (r) => r.fulfill({ status: 404, json: {} }));
+        // The account is still there, so the 404 means the route is missing.
+        await page.route(`**/api/users/${ANA}`, (r) => r.fulfill({ json: user(ANA, 'ana') }));
 
         await page.goto('/users');
         await page.getByRole('button', { name: 'Block ana' }).click();
