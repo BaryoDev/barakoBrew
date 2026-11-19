@@ -46,6 +46,9 @@ function adminToken() {
     return `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`;
 }
 
+/** The sessions of one user. A regex, because the panel asks with ?pageSize= and a glob would not match it. */
+const userSessions = (id: string) => new RegExp(`/api/users/${id}/sessions(\\?|$)`);
+
 async function stubUsers(page: Page, users: ReturnType<typeof user>[]) {
     await page.route(/\/api\/users(\?|$)/, (r) => r.fulfill({ json: pageOf(users) }));
     await page.route('**/api/roles**', (r) => r.fulfill({ json: pageOf([]) }));
@@ -61,7 +64,7 @@ test.describe('users: sessions and blocking', () => {
         await stubUsers(page, [user(ANA, 'ana'), user(BEN, 'ben')]);
 
         const live = [S1, S2];
-        await page.route(`**/api/users/${ANA}/sessions`, (r) => {
+        await page.route(userSessions(ANA), (r) => {
             if (r.request().method() === 'DELETE') {
                 live.length = 0;
                 return r.fulfill({ status: 204 });
@@ -89,7 +92,7 @@ test.describe('users: sessions and blocking', () => {
         await stubUsers(page, [user(ANA, 'ana')]);
 
         const live = [S1, S2];
-        await page.route(`**/api/users/${ANA}/sessions`, (r) => r.fulfill({ json: pageOf(live) }));
+        await page.route(userSessions(ANA), (r) => r.fulfill({ json: pageOf(live) }));
         const ended: string[] = [];
         await page.route(`**/api/users/${ANA}/sessions/*`, (r) => {
             const id = new URL(r.request().url()).pathname.split('/').pop()!;
@@ -112,7 +115,7 @@ test.describe('users: sessions and blocking', () => {
         await authed(page);
         await stubShell(page);
         await stubUsers(page, [user(ANA, 'ana')]);
-        await page.route(`**/api/users/${ANA}/sessions`, (r) =>
+        await page.route(userSessions(ANA), (r) =>
             r.fulfill({ status: 403, json: { errors: ['Only a platform administrator (SuperAdmin) can manage another user\'s sessions.'] } })
         );
 
@@ -135,7 +138,7 @@ test.describe('users: sessions and blocking', () => {
         await page.route('**/api/roles**', (r) => r.fulfill({ json: pageOf([]) }));
         await page.route('**/api/user-groups**', (r) => r.fulfill({ json: pageOf([]) }));
         await page.route('**/api/me/sessions**', (r) => r.fulfill({ json: pageOf([]) }));
-        await page.route(`**/api/users/${ANA}/sessions`, (r) => r.fulfill({ status: 404, json: {} }));
+        await page.route(userSessions(ANA), (r) => r.fulfill({ status: 404, json: {} }));
 
         await page.goto('/users');
         await page.getByRole('button', { name: 'Sessions for ana' }).click();
@@ -151,7 +154,7 @@ test.describe('users: sessions and blocking', () => {
         await authed(page);
         await stubShell(page);
         await stubUsers(page, [user(ANA, 'ana')]);
-        await page.route(`**/api/users/${ANA}/sessions`, (r) =>
+        await page.route(userSessions(ANA), (r) =>
             r.fulfill({ json: { ...pageOf([S1]), hasNextPage: true } })
         );
 
@@ -309,7 +312,8 @@ test.describe('users: sessions and blocking', () => {
 
         await page.goto('/users');
         // The row is there, and the badge, but no action on it.
-        await expect(page.getByText('ana', { exact: true })).toBeVisible({ timeout: 20000 });
+        // The email, because the username shares its element with the badge and never matches alone.
+        await expect(page.getByText('ana@example.com', { exact: true })).toBeVisible({ timeout: 20000 });
         await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Sessions for ana' })).toHaveCount(0);
         await expect(page.getByRole('button', { name: /^(Block|Unblock) ana$/ })).toHaveCount(0);

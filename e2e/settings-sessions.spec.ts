@@ -33,8 +33,15 @@ async function stubSessions(page: import('@playwright/test').Page, live: unknown
     });
 }
 
+/** The rail's System group is folded on every screen but its own. Opens it so its links are in the page. */
+async function openSystem(page: import('@playwright/test').Page) {
+    const system = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^System/ });
+    await expect(system).toBeVisible({ timeout: 20000 });
+    if ((await system.getAttribute('aria-expanded')) !== 'true') await system.click();
+}
+
 test.describe('sessions', () => {
-    test('lists the sessions with the current one marked', async ({ page }) => {
+    test('lists the sessions with the current one marked', async ({ page, isMobile }) => {
         await authed(page);
         await stubShell(page);
         await stubSessions(page, [CURRENT, OTHER]);
@@ -45,8 +52,11 @@ test.describe('sessions', () => {
         const table = page.getByRole('table');
         await expect(table.getByText('Chrome on macOS')).toBeVisible();
         await expect(table.getByText('Safari on iPhone')).toBeVisible();
-        await expect(table.getByText('203.0.113.24', { exact: true })).toBeVisible();
-        await expect(table.getByText('203.0.113.25', { exact: true })).toBeVisible();
+        // The address columns are hidden below the sm breakpoint, by design.
+        if (!isMobile) {
+            await expect(table.getByText('203.0.113.24', { exact: true })).toBeVisible();
+            await expect(table.getByText('203.0.113.25', { exact: true })).toBeVisible();
+        }
         await expect(table.getByText('This device', { exact: true })).toHaveCount(1);
         await expect(page.getByRole('button', { name: 'Sign out everywhere else' })).toBeVisible();
     });
@@ -218,16 +228,19 @@ test.describe('sessions', () => {
         await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
     });
 
-    test('offers the nav item when the routes answer', async ({ page }) => {
+    test('offers the nav item when the routes answer', async ({ page, isMobile }) => {
+        test.skip(isMobile, 'the rail is a sheet on a phone, and this asserts the desktop rail');
         await authed(page);
         await stubShell(page);
         await stubSessions(page, [CURRENT]);
 
         await page.goto('/');
+        await openSystem(page);
         await expect(page.getByRole('link', { name: /^Sessions/ })).toBeVisible({ timeout: 20000 });
     });
 
-    test('hides the nav item, with no error toast, when the API answers 404', async ({ page }) => {
+    test('hides the nav item, with no error toast, when the API answers 404', async ({ page, isMobile }) => {
+        test.skip(isMobile, 'the rail is a sheet on a phone, and this asserts the desktop rail');
         await authed(page);
         await stubShell(page);
         let asked = 0;
@@ -238,6 +251,7 @@ test.describe('sessions', () => {
 
         await page.goto('/');
         // The rail is up once its own items are, and by then the probe has been answered.
+        await openSystem(page);
         await expect(page.getByRole('link', { name: /^Devices/ })).toBeVisible({ timeout: 20000 });
         await expect.poll(() => asked).toBeGreaterThan(0);
         await expect(page.getByRole('link', { name: /^Sessions/ })).toHaveCount(0);
