@@ -155,6 +155,20 @@ deliberate: tolerating a bad body is how the History panel showed an empty list 
 anything the API can send as null. A parse is a second line of defence behind `smoke/`, not a
 replacement for it: the mocked pack's fixtures are still written by the same person as the schema.
 
+## Performance budget
+
+The Performance budget job in CI builds the `Dockerfile` with no cache, starts the image on amd64 and
+arm64 with a dummy API address (it calls nothing, and needs no secret), and measures four numbers:
+uncompressed and compressed image size, seconds from container start to a 200 from `/login`, and
+resident memory after 60 seconds idle. `scripts/perf-budget.py` compares them with `perf-budget.json`
+and shows the baseline, this run and the budget in the job summary. A number over budget fails the
+job, a lower one shows as an improvement. The measured JSON is uploaded as the `perf-amd64` and
+`perf-arm64` artifacts on every run.
+
+If growth is deliberate, raise the budget in `perf-budget.json` and say why in the pull request.
+`scripts/test-perf-budget.sh` proves the comparison fails when it should, with no Docker.
+`scripts/perf-measure.sh <out.json>` runs the measurement locally.
+
 ## Dependencies
 
 - `package-lock.json` is committed and is the truth. CI and the Dockerfile run `npm ci`.

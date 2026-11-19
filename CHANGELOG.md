@@ -11,6 +11,7 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- A Performance budget job on every pull request builds the production image, boots it with a dummy API address and fails when image size (uncompressed and compressed), startup to `/login` or memory at rest passes the budget in `perf-budget.json`. It runs on amd64 and arm64 and keeps the measured numbers as an artifact (#853).
 - A package installed next to the console can add a sign-in tab with `registerSlot('sign-in-method', name, entry)`. The page draws the tab only when `GET /api/auth/methods` lists its id. The public build registers none, so the page is unchanged.
 - `SignInFlow.completeSession(tokens)` lets a package panel hand tokens to the page, which starts the session and redirects as it does after a password. A panel never touches the token store.
 - `QrApprovalPanel`, a reusable panel that shows a QR and a match number, counts down to expiry and polls until a signed-in device approves. The browser secret stays in memory and is sent only in a poll body.
