@@ -92,9 +92,11 @@ test.describe('sessions', () => {
         await authed(page);
         await stubShell(page);
         let ended = false;
+        let readsAfterEnd = 0;
         // After the API ends the session every authenticated call answers 401, the list read included.
         await page.route('**/api/me/sessions**', (r) => {
             if (r.request().method() === 'GET') {
+                if (ended) readsAfterEnd++;
                 return ended
                     ? r.fulfill({ status: 401, json: { message: 'Unauthorized' } })
                     : r.fulfill({ json: pageOf([CURRENT, OTHER]) });
@@ -126,6 +128,9 @@ test.describe('sessions', () => {
         await expect(page).toHaveURL(/\/login/, { timeout: 20000 });
         await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
         expect(logoutCalls).toEqual([]);
+        // The current row does not refetch the list: without the sign-out mark it would, and the
+        // redirect alone would still land on /login.
+        expect(readsAfterEnd).toBe(0);
     });
 
     test('a row already ended elsewhere refreshes the list with no toast', async ({ page }) => {
@@ -179,6 +184,29 @@ test.describe('sessions', () => {
 
         await expect.poll(() => calls).toEqual(['POST']);
         await expect(page.getByRole('table').getByText('Safari on iPhone')).toHaveCount(0);
+    });
+
+    test('sign out everywhere else answered 404 closes the dialog, reads the list again, with no toast', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        let reads = 0;
+        await page.route('**/api/me/sessions**', (r) => {
+            if (r.request().method() === 'GET') {
+                reads++;
+                return r.fulfill({ json: pageOf([CURRENT]) });
+            }
+            return r.fallback();
+        });
+        await page.route('**/api/me/sessions/revoke-others', (r) => r.fulfill({ status: 404, json: {} }));
+
+        await page.goto('/settings/sessions');
+        await expect.poll(() => reads).toBe(1);
+        await page.getByRole('button', { name: 'Sign out everywhere else' }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Sign out everywhere else' }).click();
+
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        await expect.poll(() => reads).toBe(2);
+        await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
     });
 
     test('offers the nav item when the routes answer', async ({ page }) => {
