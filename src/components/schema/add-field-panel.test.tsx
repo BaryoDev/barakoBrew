@@ -129,9 +129,9 @@ describe('the add a field panel', () => {
         expect(stored.checked).toBe(true);
         expect(screen.queryByTestId('inline-limit')).toBeNull();
 
-        await user.click(screen.getByRole('radio', { name: 'Inline in the entry' }));
+        await user.click(screen.getByRole('radio', { name: 'Inline in the entry (one image)' }));
         expect(screen.getByTestId('inline-limit').textContent).toContain('64 KB');
-        expect(screen.getByTestId('image-mode-note').textContent).toContain('Existing values keep their current mode');
+        expect(screen.getByTestId('inline-limit').textContent).toContain('one image (PNG, JPEG, GIF or WebP)');
         await user.type(screen.getByLabelText('Label'), 'Badge');
         await user.click(screen.getByRole('button', { name: 'Add field' }));
 
@@ -155,7 +155,13 @@ describe('the add a field panel', () => {
         await user.click(screen.getByRole('button', { name: 'Add field' }));
 
         await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
-        expect(vi.mocked(api.post).mock.calls[0][1]).toMatchObject({ fieldName: 'Cover', type: 'file' });
+        expect(vi.mocked(api.post).mock.calls[0][1]).toEqual({
+            fieldName: 'Cover',
+            displayName: 'Cover',
+            type: 'file',
+            isRequired: false,
+        });
+        expect(vi.mocked(api.post).mock.calls[0][1]).not.toHaveProperty('editor');
     });
 
     it('shows no mode choice for other types', async () => {

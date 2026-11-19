@@ -240,11 +240,11 @@ export function AddFieldPanel({
 
               {(type === 'file' || type === 'inlineimage') && (
                 <fieldset className="space-y-2 sm:col-span-2">
-                  <legend className="mb-1.5 text-xs font-medium">Image storage</legend>
+                  <legend className="mb-1.5 text-xs font-medium">Storage</legend>
                   {(
                     [
                       ['file', 'Stored file (recommended)'],
-                      ['inlineimage', 'Inline in the entry'],
+                      ['inlineimage', 'Inline in the entry (one image)'],
                     ] as const
                   ).map(([value, text]) => (
                     <div key={value} className="flex items-center gap-2 text-sm">
@@ -262,14 +262,11 @@ export function AddFieldPanel({
                   ))}
                   {type === 'inlineimage' && (
                     <p data-testid="inline-limit" className="text-muted-foreground text-xs">
-                      The image is saved as base64 in the entry, up to{' '}
+                      Holds one image (PNG, JPEG, GIF or WebP), saved as base64 in the entry, up to{' '}
                       <span className="font-mono tabular-nums">{formatKb(INLINE_IMAGE_MAX_BYTES)}</span>.
-                      The API sets the limit, it is not a per-field option.
+                      The API sets the limit.
                     </p>
                   )}
-                  <p data-testid="image-mode-note" className="text-muted-foreground text-xs">
-                    Existing values keep their current mode. Changing the mode does not rewrite them.
-                  </p>
                 </fieldset>
               )}
 

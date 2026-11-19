@@ -19,6 +19,12 @@ export function formatKb(bytes: number): string {
     return `${Number.isInteger(kb) ? kb : kb.toFixed(1)} KB`;
 }
 
+/** A byte count as KB rounded up to one decimal, so a size over a limit never reads as the limit. */
+export function formatKbUp(bytes: number): string {
+    const tenths = Math.ceil((bytes / 1024) * 10);
+    return `${tenths % 10 === 0 ? tenths / 10 : (tenths / 10).toFixed(1)} KB`;
+}
+
 /** The accepted types and the limit, as one line. */
 export function inlineImageRules(maxBytes: number = INLINE_IMAGE_MAX_BYTES): string {
     return `PNG, JPEG, GIF or WebP, up to ${formatKb(maxBytes)}. SVG is not accepted.`;
@@ -48,7 +54,7 @@ export function inlineImageProblem(
     }
     if (file.size === 0) return 'This file is empty.';
     if (file.size > maxBytes) {
-        return `This image is ${formatKb(file.size)}. An inline image is at most ${formatKb(maxBytes)}; store a larger one in Files and use a file field.`;
+        return `This image is ${formatKbUp(file.size)}. An inline image is at most ${formatKb(maxBytes)}; store a larger one in Files and use a file field.`;
     }
     return null;
 }
