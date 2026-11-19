@@ -69,6 +69,11 @@ export function beginSignOut() {
     signedOut = true;
 }
 
+/** Undoes beginSignOut, for a sign-out that did not happen (the server refused the call). */
+export function cancelSignOut() {
+    signedOut = false;
+}
+
 /** Stores the token from a sign-in and lets automatic refreshes run again. */
 export function startSession(token: string) {
     signedOut = false;

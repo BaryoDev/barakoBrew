@@ -88,18 +88,29 @@ test.describe('sessions', () => {
         await expect(page.getByRole('button', { name: 'Sign out everywhere else' })).toHaveCount(0);
     });
 
-    test('signing out the current row lands on the sign-in page', async ({ page }) => {
+    test('signing out the current row lands on the sign-in page, with no toast and no logout call', async ({ page }) => {
         await authed(page);
         await stubShell(page);
-        await stubSessions(page, [CURRENT, OTHER]);
-
         let ended = false;
+        // After the API ends the session every authenticated call answers 401, the list read included.
+        await page.route('**/api/me/sessions**', (r) => {
+            if (r.request().method() === 'GET') {
+                return ended
+                    ? r.fulfill({ status: 401, json: { message: 'Unauthorized' } })
+                    : r.fulfill({ json: pageOf([CURRENT, OTHER]) });
+            }
+            return r.fallback();
+        });
         // Newest route wins. Until the API has ended the session the refresh works, as it does for a
         // live session; after that it answers 401, which is what an ended session gets.
         await page.route('**/api/auth/refresh', (r) =>
             ended ? r.fulfill({ status: 401, json: { message: 'Unauthorized' } }) : r.fallback()
         );
-        await page.route('**/api/auth/logout', (r) => r.fulfill({ status: 204 }));
+        const logoutCalls: string[] = [];
+        await page.route('**/api/auth/logout', (r) => {
+            logoutCalls.push(r.request().method());
+            return r.fulfill({ status: 401, json: { message: 'Unauthorized' } });
+        });
         await page.route('**/api/auth/methods', (r) => r.fulfill({ json: { methods: ['password'] } }));
         await page.route('**/api/me/sessions/*', (r) => {
             if (r.request().method() !== 'DELETE') return r.fallback();
@@ -113,6 +124,40 @@ test.describe('sessions', () => {
         await page.getByRole('dialog').getByRole('button', { name: 'Sign out', exact: true }).click();
 
         await expect(page).toHaveURL(/\/login/, { timeout: 20000 });
+        await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+        expect(logoutCalls).toEqual([]);
+    });
+
+    test('a row already ended elsewhere refreshes the list with no toast', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        const live: unknown[] = [CURRENT, OTHER];
+        await stubSessions(page, live);
+        await page.route('**/api/me/sessions/*', (r) => {
+            if (r.request().method() !== 'DELETE') return r.fallback();
+            // Gone on another device before the click landed.
+            live.splice(0, live.length, CURRENT);
+            return r.fulfill({ status: 404, json: {} });
+        });
+
+        await page.goto('/settings/sessions');
+        await page.getByRole('button', { name: 'Sign out Safari on iPhone' }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Sign out', exact: true }).click();
+
+        await expect(page.getByRole('table').getByText('Safari on iPhone')).toHaveCount(0);
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        await expect(page.locator('[data-sonner-toast]')).toHaveCount(0);
+    });
+
+    test('says when only the first 100 sessions are shown', async ({ page }) => {
+        await authed(page);
+        await stubShell(page);
+        await page.route('**/api/me/sessions**', (r) =>
+            r.fulfill({ json: { ...pageOf([CURRENT, OTHER]), hasNextPage: true } })
+        );
+
+        await page.goto('/settings/sessions');
+        await expect(page.getByText('Showing the first 100 sessions.')).toBeVisible({ timeout: 20000 });
     });
 
     test('signs out everywhere else with one call', async ({ page }) => {

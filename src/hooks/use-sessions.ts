@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { z } from 'zod';
 import { useCurrentTenant } from '@/hooks/use-tenants';
-import { api, parseResponse } from '@/lib/api';
+import { api, beginSignOut, cancelSignOut, parseResponse } from '@/lib/api';
 
 /** Optional text: anything that is not a string becomes absent, so a null or a number never reaches the screen. */
 const optionalText = z.preprocess((v) => (typeof v === 'string' ? v : undefined), z.string().optional());
@@ -29,7 +29,7 @@ export const sessionSchema = z.looseObject({
 
 export type Session = z.output<typeof sessionSchema>;
 
-const sessionPageSchema = z.looseObject({ items: z.array(sessionSchema) });
+const sessionPageSchema = z.looseObject({ items: z.array(sessionSchema), hasNextPage: z.boolean().optional() });
 
 /** Rows read at once. Core caps a page at 100, and a person rarely holds more. */
 const PAGE_SIZE = 100;
@@ -39,9 +39,17 @@ export function isSessionsMissing(error: unknown): boolean {
   return isAxiosError(error) && error.response?.status === 404;
 }
 
-async function readSessions(path: string): Promise<Session[]> {
+/** The sessions read, and whether the API holds more than one page of them. */
+export interface SessionList {
+  items: Session[];
+  /** True when sessions past the first page exist. Core caps a page at 100, and none is fetched beyond it. */
+  more: boolean;
+}
+
+async function readSessions(path: string): Promise<SessionList> {
   const { data } = await api.get<unknown>(path, { params: { pageSize: PAGE_SIZE } });
-  return parseResponse(sessionPageSchema, data, `GET ${path.replace(/[0-9a-f-]{36}/i, '{id}')}`).items;
+  const page = parseResponse(sessionPageSchema, data, `GET ${path.replace(/[0-9a-f-]{36}/i, '{id}')}`);
+  return { items: page.items, more: page.hasNextPage === true };
 }
 
 /**
@@ -78,7 +86,7 @@ export function useMySessions() {
   return useQuery({
     queryKey: ['sessions', 'me', tenant],
     retry: false,
-    queryFn: async (): Promise<Session[] | null> => {
+    queryFn: async (): Promise<SessionList | null> => {
       try {
         return await readSessions('/api/me/sessions');
       } catch (error) {
@@ -93,10 +101,21 @@ export function useMySessions() {
 export function useEndMySession() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      await api.delete(`/api/me/sessions/${id}`);
+    mutationFn: async ({ id, current = false }: { id: string; current?: boolean }) => {
+      // Ending the session this browser is using makes every request after the answer a 401. Sign-out
+      // is marked first so the 401 handler does not refresh and hard-redirect on its own; the caller
+      // runs the sign-out flow once this resolves.
+      if (current) beginSignOut();
+      try {
+        await api.delete(`/api/me/sessions/${id}`);
+      } catch (error) {
+        if (current) cancelSignOut();
+        throw error;
+      }
+      return { current };
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+    // The current session is not read again: the list would answer 401, and the page is leaving.
+    onSuccess: ({ current }) => (current ? undefined : queryClient.invalidateQueries({ queryKey: ['sessions'] })),
   });
 }
 
@@ -120,7 +139,7 @@ export function useUserSessions(userId: string | null) {
     queryKey: ['sessions', 'user', userId],
     enabled: userId !== null,
     retry: false,
-    queryFn: async (): Promise<Session[] | null> => {
+    queryFn: async (): Promise<SessionList | null> => {
       try {
         return await readSessions(`/api/users/${userId}/sessions`);
       } catch (error) {

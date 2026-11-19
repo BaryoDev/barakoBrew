@@ -6,10 +6,13 @@ import { AxiosError, AxiosHeaders } from 'axios';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
-    return { ...actual, api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } };
+    return { ...actual, api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+        beginSignOut: vi.fn(),
+        cancelSignOut: vi.fn(),
+    };
 });
 
-const { api } = await import('@/lib/api');
+const { api, beginSignOut, cancelSignOut } = await import('@/lib/api');
 const {
     useMySessions,
     useEndMySession,
@@ -72,8 +75,8 @@ describe('useMySessions', () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(api.get).toHaveBeenCalledWith('/api/me/sessions', { params: { pageSize: 100 } });
-        expect(result.current.data?.map((s) => [s.id, s.current])).toEqual([[ID_A, true], [ID_B, false]]);
-        expect(result.current.data?.[0].device).toBe('Chrome on macOS');
+        expect(result.current.data?.items.map((s) => [s.id, s.current])).toEqual([[ID_A, true], [ID_B, false]]);
+        expect(result.current.data?.items[0].device).toBe('Chrome on macOS');
     });
 
     it('lists a session with the optional parts missing or null', async () => {
@@ -85,7 +88,7 @@ describe('useMySessions', () => {
         const { result } = renderHook(() => useMySessions(), { wrapper });
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data?.[0]).toMatchObject({ id: ID_A, device: undefined, signInIp: undefined, current: false });
+        expect(result.current.data?.items[0]).toMatchObject({ id: ID_A, device: undefined, signInIp: undefined, current: false });
     });
 
     it('fails on a list in the wrong shape rather than showing a guess', async () => {
@@ -125,7 +128,7 @@ describe('ending my own sessions', () => {
         const { wrapper, invalidate } = setup();
 
         const { result } = renderHook(() => useEndMySession(), { wrapper });
-        await result.current.mutateAsync(ID_B);
+        await result.current.mutateAsync({ id: ID_B });
 
         expect(api.delete).toHaveBeenCalledWith(`/api/me/sessions/${ID_B}`);
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['sessions'] });
@@ -142,12 +145,59 @@ describe('ending my own sessions', () => {
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['sessions'] });
     });
 
+    it('ends the current session without reading the list again, and marks sign-out first', async () => {
+        const order: string[] = [];
+        vi.mocked(beginSignOut).mockImplementation(() => void order.push('begin'));
+        vi.mocked(api.delete).mockImplementation(async () => {
+            order.push('delete');
+            return { data: undefined };
+        });
+        const { wrapper, invalidate } = setup();
+
+        const { result } = renderHook(() => useEndMySession(), { wrapper });
+        await result.current.mutateAsync({ id: ID_A, current: true });
+
+        expect(invalidate).not.toHaveBeenCalled();
+        expect(order).toEqual(['begin', 'delete']);
+    });
+
+    it('lets automatic refresh run again when ending the current session fails', async () => {
+        vi.mocked(api.delete).mockRejectedValue(httpError(500));
+        const { wrapper } = setup();
+
+        const { result } = renderHook(() => useEndMySession(), { wrapper });
+        await expect(result.current.mutateAsync({ id: ID_A, current: true })).rejects.toBeTruthy();
+
+        expect(cancelSignOut).toHaveBeenCalled();
+    });
+
+    it('does not mark sign-out for another session', async () => {
+        vi.mocked(api.delete).mockResolvedValue({ data: undefined });
+        vi.mocked(beginSignOut).mockClear();
+        const { wrapper } = setup();
+
+        const { result } = renderHook(() => useEndMySession(), { wrapper });
+        await result.current.mutateAsync({ id: ID_B });
+
+        expect(beginSignOut).not.toHaveBeenCalled();
+    });
+
+    it('reports whether the list has more than one page', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: { ...page([SESSION_A]), hasNextPage: true } });
+        const { wrapper } = setup();
+
+        const { result } = renderHook(() => useMySessions(), { wrapper });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data?.more).toBe(true);
+    });
+
     it('does not refresh the list when the call fails', async () => {
         vi.mocked(api.delete).mockRejectedValue(httpError(500));
         const { wrapper, invalidate } = setup();
 
         const { result } = renderHook(() => useEndMySession(), { wrapper });
-        await expect(result.current.mutateAsync(ID_B)).rejects.toBeTruthy();
+        await expect(result.current.mutateAsync({ id: ID_B })).rejects.toBeTruthy();
 
         expect(invalidate).not.toHaveBeenCalled();
     });
@@ -162,7 +212,7 @@ describe('another user\'s sessions', () => {
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(api.get).toHaveBeenCalledWith(`/api/users/${USER}/sessions`, { params: { pageSize: 100 } });
-        expect(result.current.data?.[0].id).toBe(ID_B);
+        expect(result.current.data?.items[0].id).toBe(ID_B);
     });
 
     it('asks for nothing until a user is chosen', () => {

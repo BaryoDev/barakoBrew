@@ -9,7 +9,7 @@ import {
   useMySessions,
   type Session,
 } from '@/hooks/use-sessions';
-import { apiErrorMessage } from '@/lib/api';
+import { apiErrorMessage, isNotFound } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { ErrorState } from '@/components/patterns/error-state';
@@ -36,24 +36,35 @@ export default function SessionsPage() {
 
   // null is the API saying it has no session routes. The rail has dropped the item by now, so the
   // page says so plainly rather than showing a failure nobody can act on.
-  const sessions = data ?? [];
+  const sessions = data?.items ?? [];
   const busy = endOne.isPending || endOthers.isPending;
+
+  // 404 means the session already ended, on another device or by its own expiry. Reading the list
+  // again shows that, and a toast would only report something that is already true.
+  const onGone = (err: unknown) => {
+    if (isNotFound(err)) {
+      void refetch();
+      return;
+    }
+    toast.error(apiErrorMessage(err));
+  };
 
   const onEnd = async () => {
     if (!confirming) return;
     const target = confirming;
     try {
-      await endOne.mutateAsync(target.id);
+      await endOne.mutateAsync({ id: target.id, current: target.current });
       setConfirming(null);
       if (target.current) {
-        // The API has ended this session, so the same flow as Sign out runs: it drops the token and
-        // the cache and goes to the sign-in page.
-        await logout();
+        // The API has ended this session, so there is nothing to revoke. The sign-out flow still
+        // drops the token and the cache and goes to the sign-in page, without asking the server.
+        await logout({ serverRevoked: true });
         return;
       }
       toast.success('Signed out.');
     } catch (err) {
-      toast.error(apiErrorMessage(err));
+      setConfirming(null);
+      onGone(err);
     }
   };
 
@@ -63,7 +74,8 @@ export default function SessionsPage() {
       setConfirmingOthers(false);
       toast.success('Signed out everywhere else.');
     } catch (err) {
-      toast.error(apiErrorMessage(err));
+      setConfirmingOthers(false);
+      onGone(err);
     }
   };
 
@@ -98,7 +110,7 @@ export default function SessionsPage() {
           description="A session appears here when you sign in."
         />
       ) : (
-        <SessionTable sessions={sessions} onEnd={setConfirming} busy={busy} />
+        <SessionTable sessions={sessions} onEnd={setConfirming} busy={busy} more={data?.more} />
       )}
 
       <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
