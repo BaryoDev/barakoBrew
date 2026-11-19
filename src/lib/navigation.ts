@@ -240,6 +240,9 @@ export const NAV_GROUPS: NavGroup[] = [
       // ungated, since an item with no roles is offered to a signed-out caller too, and Overview
       // and Health are the only two that should be.
       { title: 'Devices', href: '/settings/devices', icon: IconShield , module: MODULE.deviceTrust, roles: ['SuperAdmin', 'Admin', 'User'] },
+      // Every signed-in role, like Devices: GET /api/me/sessions lists the caller's own sessions. The
+      // rail drops this item when the API answers 404, since the routes are optional.
+      { title: 'Sessions', href: '/settings/sessions', icon: IconLock, roles: ['SuperAdmin', 'Admin', 'User'] },
       { title: 'Export and import', href: '/settings/portability', icon: IconDisk , module: MODULE.portability, capability: 'export_content', roles: ['SuperAdmin', 'Admin'] },
       { title: 'Import a spreadsheet', href: '/settings/import', icon: IconTable , module: MODULE.import, capability: 'analyze_spreadsheets', roles: ['SuperAdmin', 'Admin'] },
       // manage_forms, which BarakoCMS.Forms seeds to Admin; SuperAdmin passes every gate.
@@ -361,6 +364,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   modules: 'All modules',
   pwa: 'PWA installs',
   devices: 'Devices',
+  sessions: 'Sessions',
   portability: 'Export and import',
   connectors: 'Connectors',
   requests: 'Outbound requests',

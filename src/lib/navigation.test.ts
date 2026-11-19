@@ -376,7 +376,7 @@ describe('the rail against an API that reports capabilities', () => {
     });
 
     it('offers a custom role only what its capabilities open, plus what every caller may use', () => {
-        expect(seen([])).toEqual(['Overview', 'Devices', 'Health', 'Security']);
+        expect(seen([])).toEqual(['Overview', 'Devices', 'Sessions', 'Health', 'Security']);
     });
 
     it('decides by capability rather than by the Admin name', () => {
