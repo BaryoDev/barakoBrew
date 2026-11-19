@@ -37,6 +37,8 @@ expect() { # <description> <pass|fail> <results> [text the output must contain].
 expect "every metric at its baseline"          pass "$FIX/within.json"
 expect "an image over its size budget"         fail "$FIX/image-over-budget.json" \
     "image_compressed_mb is 120, over its budget of 88 (baseline 80.0)" "| image_compressed_mb | 80.0 | 120 | +40.0 | 88 | OVER BUDGET |"
+expect "every metric exactly at its budget"     pass "$FIX/at-budget.json" \
+    "| image_compressed_mb | 80.0 | 88 | +8.0 | 88 | within |"
 expect "lower memory at rest"                  pass "$FIX/memory-improved.json" \
     "| memory_at_rest_mb | 60.0 | 40 | -20.0 | 120 | within, better than baseline |"
 expect "a budgeted metric missing from the run" fail "$FIX/metric-missing.json" "startup_seconds has no numeric value"

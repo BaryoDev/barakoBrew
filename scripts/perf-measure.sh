@@ -64,7 +64,7 @@ PORT=$(docker port "$CNAME" 3000/tcp | head -n1 | sed 's/.*://')
 BASE="http://127.0.0.1:$PORT"
 ready=""
 for _ in $(seq 1 600); do
-    if [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/login" || true)" = "200" ]; then ready=1; break; fi
+    if [ "$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$BASE/login" || true)" = "200" ]; then ready=1; break; fi
     [ "$(docker inspect -f '{{.State.Running}}' "$CNAME")" = "true" ] || { docker logs "$CNAME" 2>&1 | tail -40 >&2; fail "the console exited during startup"; }
     sleep 0.2
 done
