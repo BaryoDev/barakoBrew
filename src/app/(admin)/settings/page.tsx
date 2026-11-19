@@ -8,6 +8,7 @@ import { apiErrorMessage } from '@/lib/api';
 import { useAccess } from '@/hooks/use-access';
 import { useModuleEnabled } from '@/hooks/use-modules';
 import { MODULE } from '@/types/modules';
+import { SettingsSectionSlot } from '@/components/settings-section-slot';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState } from '@/components/patterns/empty-state';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
@@ -51,6 +52,8 @@ export default function SettingsPage() {
           </span>
         </Link>
       )}
+
+      <SettingsSectionSlot />
 
       {isLoading ? (
         <TableSkeleton />
