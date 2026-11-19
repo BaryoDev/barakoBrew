@@ -31,6 +31,11 @@ export interface ApiKey {
   replacedBy?: string | null;
   replaces?: string | null;
   kind?: string | null;
+  /**
+   * The address the key was last used from, as the API records it. Absent on an API that does not
+   * send it, and null for a key not used since it started. Client input, so shown as text only.
+   */
+  lastUsedIp?: string | null;
 }
 
 export interface CreateApiKeyInput {
@@ -93,6 +98,7 @@ export const apiKeyRotationSchema = z.looseObject({
   replacedBy: optionalString,
   replaces: optionalString,
   kind: optionalString,
+  lastUsedIp: optionalString,
 });
 
 export function useApiKeys(options?: {
@@ -106,8 +112,8 @@ export function useApiKeys(options?: {
     queryFn: async () => {
       const items = (await api.get<Paginated<ApiKey>>('/api/api-keys')).data.items;
       return items.map((k): ApiKey => {
-        const { replacedBy, replaces, kind } = apiKeyRotationSchema.parse(k);
-        return { ...k, replacedBy, replaces, kind };
+        const { replacedBy, replaces, kind, lastUsedIp } = apiKeyRotationSchema.parse(k);
+        return { ...k, replacedBy, replaces, kind, lastUsedIp };
       });
     },
   });

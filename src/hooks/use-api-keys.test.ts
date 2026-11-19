@@ -90,6 +90,18 @@ describe('whether a key can be rotated', () => {
     });
 });
 
+describe('the last used IP', () => {
+    it('is read when the API sends it', () => {
+        expect(apiKeyRotationSchema.parse({ id: 'k', lastUsedIp: '203.0.113.24' }).lastUsedIp).toBe('203.0.113.24');
+    });
+
+    it('is absent when the API does not send it, and when it is null or not text', () => {
+        expect(apiKeyRotationSchema.parse({ id: 'k' }).lastUsedIp).toBeUndefined();
+        expect(apiKeyRotationSchema.parse({ id: 'k', lastUsedIp: null }).lastUsedIp).toBeUndefined();
+        expect(apiKeyRotationSchema.parse({ id: 'k', lastUsedIp: 42 }).lastUsedIp).toBeUndefined();
+    });
+});
+
 describe('the last used label', () => {
     const now = Date.parse('2026-11-14T12:00:00Z');
     const ago = (seconds: number) => lastUsedLabel(new Date(now - seconds * 1000).toISOString(), now);
