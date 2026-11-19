@@ -96,6 +96,10 @@ test.describe('sessions', () => {
         // After the API ends the session every authenticated call answers 401, the list read included.
         await page.route('**/api/me/sessions**', (r) => {
             if (r.request().method() === 'GET') {
+                // The rail probe asks for one row on every admin page. It is not a list read.
+                if (new URL(r.request().url()).searchParams.get('pageSize') === '1') {
+                    return r.fulfill({ json: pageOf([CURRENT]) });
+                }
                 if (ended) readsAfterEnd++;
                 return ended
                     ? r.fulfill({ status: 401, json: { message: 'Unauthorized' } })
@@ -192,6 +196,10 @@ test.describe('sessions', () => {
         let reads = 0;
         await page.route('**/api/me/sessions**', (r) => {
             if (r.request().method() === 'GET') {
+                // The rail probe asks for one row on every admin page. It is not a list read.
+                if (new URL(r.request().url()).searchParams.get('pageSize') === '1') {
+                    return r.fulfill({ json: pageOf([CURRENT]) });
+                }
                 reads++;
                 // Another session is listed until the 404 shows it already ended.
                 return r.fulfill({ json: pageOf(reads === 1 ? [CURRENT, OTHER] : [CURRENT]) });

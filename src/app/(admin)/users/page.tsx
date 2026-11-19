@@ -64,8 +64,9 @@ export default function UsersPage() {
   const [sessionsOf, setSessionsOf] = useState<User | null>(null);
   const [blocking, setBlocking] = useState<{ user: User; action: 'block' | 'unblock' } | null>(null);
   // There is no read-only probe for the block routes (a POST changes state). Set when a block call
-  // answers 404 with no error message: an API with the route names an unknown account, one without
-  // it answers an empty 404. The actions go, with no toast.
+  // answers 404 and the body is not an object with an `errors` field: an API with the route names an
+  // unknown account in that shape, one without it answers an empty, text or HTML 404. The actions go,
+  // with no toast.
   const [noBlock, setNoBlock] = useState(false);
 
   // Only a SuperAdmin is offered these: the API answers 403 to anyone else.
