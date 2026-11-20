@@ -51,6 +51,11 @@ export interface ContentTypeDefinition {
     /** This type's own lifecycle, or absent for Draft, Published and Archived. */
     lifecycle?: LifecycleDefinition | null;
     /**
+     * The stored version, sent as If-Match when the lifecycle is edited. Null for a type an account
+     * owns, absent from a core older than 5.9.0. Either way the lifecycle cannot be edited here.
+     */
+    version?: string | null;
+    /**
      * Holds exactly one entry, so the console shows one edit screen for it rather than a list. The
      * API refuses a second create. Absent from an API older than the flag, which reads as false.
      */
@@ -94,6 +99,28 @@ export interface LifecycleDefinition {
     states: string[];
     initialState: string;
     transitions: StateTransition[];
+}
+
+/** One thing a lifecycle edit would break (a blocker) or leave dangling (a warning). */
+export interface LifecycleBlocker {
+    kind: string;
+    state?: string | null;
+    transition?: string | null;
+    name?: string | null;
+    count?: number | null;
+    message: string;
+}
+
+/** The 200 answer of PUT /api/content-types/{name}/lifecycle, for a dry run and for a save. */
+export interface SetLifecycleResult {
+    name: string;
+    version: string;
+    lifecycle: LifecycleDefinition;
+    dryRun: boolean;
+    changed: boolean;
+    canApply: boolean;
+    blockers: LifecycleBlocker[];
+    warnings: LifecycleBlocker[];
 }
 
 export interface CreateSchemaRequest {
