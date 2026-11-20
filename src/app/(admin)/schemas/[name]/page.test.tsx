@@ -245,10 +245,12 @@ describe('editing a stored lifecycle', () => {
     expect(save().disabled).toBe(true);
   });
 
-  it('a check that comes back after the draft changed is ignored', async () => {
-    let late: (value: unknown) => void = () => {};
+  // A late "answered" is hidden anyway, because it is stored against the draft it ran on. A 409 and an
+  // error are not stored against a draft, so only the guard keeps them off the new one.
+  it('a check refused with blockers after the draft changed does not show them', async () => {
+    let late: (error: unknown) => void = () => {};
     vi.mocked(api.put).mockImplementation(
-      () => new Promise((resolve) => { late = resolve; })
+      () => new Promise((_resolve, reject) => { late = reject; })
     );
     await openEditor();
     await addState('Rejected');
@@ -256,11 +258,29 @@ describe('editing a stored lifecycle', () => {
     await addState('Withdrawn');
 
     await act(async () => {
-      late(answer({ canApply: false, blockers: [ENTRY_BLOCKER] }));
+      late(refusal(409, { errors: [], blockers: [ENTRY_BLOCKER], warnings: [] }));
     });
 
     expect(screen.queryByText(ENTRY_BLOCKER.message)).toBeNull();
+    expect(screen.queryByText('This edit cannot be saved.')).toBeNull();
     expect(save().disabled).toBe(true);
+  });
+
+  it('a check that fails after the draft changed does not show its error', async () => {
+    let late: (error: unknown) => void = () => {};
+    vi.mocked(api.put).mockImplementation(
+      () => new Promise((_resolve, reject) => { late = reject; })
+    );
+    await openEditor();
+    await addState('Rejected');
+    await userEvent.click(check());
+    await addState('Withdrawn');
+
+    await act(async () => {
+      late(refusal(403, {}));
+    });
+
+    expect(screen.queryByText(/You are not allowed to change this type/)).toBeNull();
   });
 
   it('a check that is refused leaves Save off, even after an earlier check passed', async () => {
