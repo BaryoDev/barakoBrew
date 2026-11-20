@@ -48,7 +48,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('useSetLifecycle', () => {
     it('sends a dry run with no If-Match even when it is given a version, and does not invalidate', async () => {
-        vi.mocked(api.put).mockResolvedValue(ok({ dryRun: true }));
+        vi.mocked(api.put).mockResolvedValue(ok({ dryRun: true, changed: false }));
         const { result, invalidate } = setup();
 
         result.current.mutate({ lifecycle: LIFECYCLE, dryRun: true, version: VERSION });
@@ -72,6 +72,36 @@ describe('useSetLifecycle', () => {
         );
         expect(result.current.data).toMatchObject({ kind: 'answered', result: { changed: true } });
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['schemas'] });
+    });
+
+    it('writes the saved lifecycle and version into the cached list before the refetch', async () => {
+        const NEWER = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+        vi.mocked(api.put).mockResolvedValue(ok({ version: NEWER }));
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        client.setQueryData(['schemas', 'list', 'default'], [
+            { name: 'article', fields: [], lifecycle: null, version: VERSION },
+            { name: 'other', fields: [], lifecycle: null, version: VERSION },
+        ]);
+        const wrapper = ({ children }: { children: ReactNode }) => (
+            <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        );
+        const { result } = renderHook(() => useSetLifecycle('article'), { wrapper });
+
+        result.current.mutate({ lifecycle: LIFECYCLE, dryRun: false, version: VERSION });
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        const cached = client.getQueryData<{ name: string; version: string; lifecycle: unknown }[]>(['schemas', 'list', 'default']) ?? [];
+        expect(cached[0]).toMatchObject({ name: 'article', version: NEWER, lifecycle: LIFECYCLE });
+        expect(cached[1]).toMatchObject({ name: 'other', version: VERSION, lifecycle: null });
+    });
+
+    it('throws a 412 that carries no version, because there is nothing to start again from', async () => {
+        vi.mocked(api.put).mockRejectedValue(refusal(412, { errors: [] }));
+        const { result } = setup();
+
+        result.current.mutate({ lifecycle: LIFECYCLE, dryRun: false, version: VERSION });
+
+        await waitFor(() => expect(result.current.isError).toBe(true));
     });
 
     it('does not invalidate when a save changed nothing', async () => {

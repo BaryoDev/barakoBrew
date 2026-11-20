@@ -395,11 +395,15 @@ export function useSetLifecycle(name: string) {
                     };
                 }
                 if (axios.isAxiosError(error) && error.response?.status === 412) {
-                    const data = error.response.data as { lifecycle?: LifecycleDefinition | null; version: string };
+                    const data = error.response.data as
+                        | { lifecycle?: LifecycleDefinition | null; version?: string }
+                        | undefined;
+                    // Without the version there is nothing to start again from, so it is an error.
+                    if (!data?.version) throw error;
                     return {
                         kind: 'stale',
                         errors: reasons(data),
-                        lifecycle: data.lifecycle ?? null,
+                        lifecycle: data?.lifecycle ?? null,
                         version: data.version,
                     };
                 }
@@ -408,6 +412,14 @@ export function useSetLifecycle(name: string) {
         },
         onSuccess: (outcome, variables) => {
             const stored = outcome.kind === 'answered' && !variables.dryRun && outcome.result.changed;
+            if (stored) {
+                // Before the refetch lands, so a second edit started at once begins from this save's
+                // version and not the one it replaced.
+                const { lifecycle, version } = outcome.result;
+                queryClient.setQueriesData<ContentTypeDefinition[]>({ queryKey: ['schemas', 'list'] }, (types) =>
+                    types?.map((t) => (t.name === name ? { ...t, lifecycle, version } : t)),
+                );
+            }
             if (stored || outcome.kind === 'stale') {
                 queryClient.invalidateQueries({ queryKey: ['schemas'] });
             }

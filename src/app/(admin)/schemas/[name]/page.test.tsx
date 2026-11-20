@@ -141,7 +141,7 @@ const ENTRY_BLOCKER = {
   kind: 'entryState',
   state: 'Approved',
   count: 12,
-  message: 'Entries are in the state Approved, which this edit removes.',
+  message: '12 entries are in the state Approved, which this edit removes.',
 };
 const TEMPLATE_WARNING = {
   kind: 'templateLink',
@@ -156,7 +156,7 @@ function answer(over: Record<string, unknown> = {}) {
       version: VERSION,
       lifecycle: WITH_REJECTED,
       dryRun: true,
-      changed: true,
+      changed: false,
       canApply: true,
       blockers: [],
       warnings: [],
@@ -224,7 +224,6 @@ describe('editing a stored lifecycle', () => {
     expect(body).toMatchObject({ dryRun: true, lifecycle: WITH_REJECTED });
     expect(config).toBeUndefined();
     expect(await screen.findByText(ENTRY_BLOCKER.message)).toBeTruthy();
-    expect(screen.getByText('(12)')).toBeTruthy();
     expect(screen.getByText('The role Editor may run Approve.')).toBeTruthy();
     expect(save().disabled).toBe(true);
   });
@@ -237,6 +236,8 @@ describe('editing a stored lifecycle', () => {
 
     await userEvent.click(check());
     await screen.findByText(/Nothing stands in the way/);
+    // Core answers changed: false to every dry run, so the check cannot say nothing would change.
+    expect(screen.queryByText(/Nothing would change/)).toBeNull();
     expect(save().disabled).toBe(false);
 
     await addState('Withdrawn');
@@ -244,11 +245,44 @@ describe('editing a stored lifecycle', () => {
     expect(save().disabled).toBe(true);
   });
 
+  it('a check that comes back after the draft changed is ignored', async () => {
+    let late: (value: unknown) => void = () => {};
+    vi.mocked(api.put).mockImplementation(
+      () => new Promise((resolve) => { late = resolve; })
+    );
+    await openEditor();
+    await addState('Rejected');
+    await userEvent.click(check());
+    await addState('Withdrawn');
+
+    await act(async () => {
+      late(answer({ canApply: false, blockers: [ENTRY_BLOCKER] }));
+    });
+
+    expect(screen.queryByText(ENTRY_BLOCKER.message)).toBeNull();
+    expect(save().disabled).toBe(true);
+  });
+
+  it('a check that is refused leaves Save off, even after an earlier check passed', async () => {
+    vi.mocked(api.put).mockResolvedValueOnce(answer());
+    await openEditor();
+    await addState('Rejected');
+    await userEvent.click(check());
+    await screen.findByText(/Nothing stands in the way/);
+    expect(save().disabled).toBe(false);
+
+    vi.mocked(api.put).mockRejectedValueOnce(refusal(403, {}));
+    await userEvent.click(check());
+
+    expect(await screen.findByText(/You are not allowed to change this type/)).toBeTruthy();
+    expect(save().disabled).toBe(true);
+  });
+
   it('a save sends If-Match in quotes with the version the edit started from, and the stored answer shows the new states', async () => {
     vi.mocked(api.put).mockImplementation(async (_url, body) => {
       if ((body as { dryRun: boolean }).dryRun) return answer();
       stored = { ...stored, lifecycle: WITH_REJECTED, version: NEWER };
-      return answer({ dryRun: false, version: NEWER });
+      return answer({ dryRun: false, changed: true, version: NEWER });
     });
     await openEditor();
     await addState('Rejected');
@@ -289,7 +323,6 @@ describe('editing a stored lifecycle', () => {
     await userEvent.click(save());
 
     expect(await screen.findByText(ENTRY_BLOCKER.message)).toBeTruthy();
-    expect(screen.getByText('(12)')).toBeTruthy();
     expect(save().disabled).toBe(true);
   });
 

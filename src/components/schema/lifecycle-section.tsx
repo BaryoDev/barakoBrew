@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api';
@@ -24,7 +24,6 @@ function BlockerList({ items }: { items: LifecycleBlocker[] }) {
             {items.map((b, i) => (
                 <li key={i}>
                     {b.message}
-                    {b.count != null && <span className="text-muted-foreground font-mono text-xs"> ({b.count})</span>}
                 </li>
             ))}
         </ul>
@@ -49,7 +48,9 @@ function refusalText(error: unknown): string {
 export function LifecycleSection({ schema }: { schema: ContentTypeDefinition }) {
     const setLifecycle = useSetLifecycle(schema.name);
     const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState<LifecycleDefinition>(EMPTY_LIFECYCLE);
+    const [draft, setDraftState] = useState<LifecycleDefinition>(EMPTY_LIFECYCLE);
+    // The draft on screen now, for an answer that comes back after the draft has moved on.
+    const draftNow = useRef<LifecycleDefinition>(EMPTY_LIFECYCLE);
     const [startedFrom, setStartedFrom] = useState<string | null>(null);
     const [checked, setChecked] = useState<{ draft: LifecycleDefinition; result: SetLifecycleResult } | null>(null);
     const [blocked, setBlocked] = useState<{ errors: string[]; blockers: LifecycleBlocker[]; warnings: LifecycleBlocker[] } | null>(null);
@@ -60,6 +61,11 @@ export function LifecycleSection({ schema }: { schema: ContentTypeDefinition }) 
     const hasLifecycle = !!lifecycle && lifecycle.states.length > 0;
     const editable = typeof schema.version === 'string';
     const busy = setLifecycle.isPending;
+
+    const setDraft = (next: LifecycleDefinition) => {
+        draftNow.current = next;
+        setDraftState(next);
+    };
 
     const clearAnswers = () => {
         setChecked(null);
@@ -89,17 +95,21 @@ export function LifecycleSection({ schema }: { schema: ContentTypeDefinition }) 
 
     const check = () => {
         const sent = draft;
+        setChecked(null);
         setBlocked(null);
         setMessage(null);
         setLifecycle.mutate(
             { lifecycle: sent, dryRun: true },
             {
                 onSuccess: (outcome) => {
+                    if (draftNow.current !== sent) return;
                     if (outcome.kind === 'answered') setChecked({ draft: sent, result: outcome.result });
                     else if (outcome.kind === 'blocked') setBlocked(outcome);
                     else setStale({ lifecycle: outcome.lifecycle, version: outcome.version });
                 },
-                onError: (error) => setMessage(refusalText(error)),
+                onError: (error) => {
+                    if (draftNow.current === sent) setMessage(refusalText(error));
+                },
             },
         );
     };
@@ -176,9 +186,7 @@ export function LifecycleSection({ schema }: { schema: ContentTypeDefinition }) 
 
                 {checkIsCurrent && checked.result.canApply && (
                     <p role="status" className="text-sm">
-                        {checked.result.changed
-                            ? 'Nothing stands in the way. You can save this lifecycle.'
-                            : 'This is the lifecycle already stored. Nothing would change.'}
+                        Nothing stands in the way. You can save this lifecycle.
                     </p>
                 )}
 
