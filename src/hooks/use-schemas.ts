@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { api, type Paginated } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 import type {
@@ -6,6 +7,9 @@ import type {
     ContentTypeIcon,
     CreateSchemaRequest,
     FieldOption,
+    LifecycleBlocker,
+    LifecycleDefinition,
+    SetLifecycleResult,
     UniquenessRule,
 } from '@/types/schema';
 
@@ -330,6 +334,83 @@ export function useSetFieldSensitivity(name: string) {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+/** What a lifecycle edit came back with, other than an error the caller has no use for. */
+export type SetLifecycleOutcome =
+    | { kind: 'answered'; result: SetLifecycleResult }
+    /** 409: the edit would strand something, or a field change is running. */
+    | { kind: 'blocked'; errors: string[]; blockers: LifecycleBlocker[]; warnings: LifecycleBlocker[] }
+    /** 412: the lifecycle changed since the edit started. Carries what is stored now. */
+    | { kind: 'stale'; errors: string[]; lifecycle: LifecycleDefinition | null; version: string };
+
+function reasons(data: unknown): string[] {
+    const errors = (data as { errors?: { reason?: string }[] } | undefined)?.errors;
+    return Array.isArray(errors) ? errors.map((e) => e?.reason ?? '').filter(Boolean) : [];
+}
+
+/**
+ * Edits a stored type's lifecycle, PUT /api/content-types/{name}/lifecycle. A dry run runs every check
+ * and stores nothing, and needs no version. A save sends the version the edit started from as a
+ * quoted If-Match, which core answers with 428 when it is missing and 412 when it is stale.
+ *
+ * A 409 and a 412 are answers with a body the page shows, so they are returned, not thrown. Every
+ * other refusal (400, 403, 404, 428) throws, and `apiErrorMessage` reads its sentence.
+ */
+export function useSetLifecycle(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            lifecycle,
+            dryRun,
+            version,
+        }: {
+            lifecycle: LifecycleDefinition;
+            dryRun: boolean;
+            /** The version the edit started from. Sent as If-Match on a save, never on a dry run. */
+            version?: string | null;
+        }): Promise<SetLifecycleOutcome> => {
+            const headers = !dryRun && version ? { 'If-Match': `"${version}"` } : undefined;
+            try {
+                const response = await api.put<SetLifecycleResult>(
+                    `${typePath(name)}/lifecycle`,
+                    { lifecycle, dryRun },
+                    headers ? { headers } : undefined,
+                );
+                return { kind: 'answered', result: response.data };
+            } catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 409) {
+                    const data = error.response.data as {
+                        blockers?: LifecycleBlocker[];
+                        warnings?: LifecycleBlocker[];
+                    };
+                    return {
+                        kind: 'blocked',
+                        errors: reasons(data),
+                        blockers: data?.blockers ?? [],
+                        warnings: data?.warnings ?? [],
+                    };
+                }
+                if (axios.isAxiosError(error) && error.response?.status === 412) {
+                    const data = error.response.data as { lifecycle?: LifecycleDefinition | null; version: string };
+                    return {
+                        kind: 'stale',
+                        errors: reasons(data),
+                        lifecycle: data.lifecycle ?? null,
+                        version: data.version,
+                    };
+                }
+                throw error;
+            }
+        },
+        onSuccess: (outcome, variables) => {
+            const stored = outcome.kind === 'answered' && !variables.dryRun && outcome.result.changed;
+            if (stored || outcome.kind === 'stale') {
+                queryClient.invalidateQueries({ queryKey: ['schemas'] });
+            }
         },
     });
 }
