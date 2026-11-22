@@ -31,8 +31,14 @@ function steps(id: string): { name: string; text: string }[] {
     const body = job(id).split('\n    steps:\n')[1] ?? '';
     return body
         .split(/\n(?=      - )/)
+        .map((t) =>
+            t
+                .split('\n')
+                .filter((line) => !/^\s*#/.test(line))
+                .join('\n')
+        )
         .filter((t) => t.trim())
-        .map((text) => ({ name: /name: (.*)/.exec(text)?.[1] ?? '', text }));
+        .map((text) => ({ name: /^\s*- name: (.*)/m.exec(text)?.[1] ?? '', text }));
 }
 
 function step(id: string, name: RegExp) {
@@ -49,6 +55,16 @@ const ATTEST_ALL = /^Attest build provenance/;
 const VERIFY_ATTEST = /^Verify the provenance attestation/;
 const CREATE = /^Create the manifest list/;
 const MOVE = /^Move the floating tags/;
+const MIRROR = /^Mirror to Docker Hub/;
+const DIGEST_ENV = 'DIGEST: ${{ steps.tags.outputs.digest }}';
+
+/** Every cosign command in a step, with backslash continuations joined onto one line. */
+function cosignCommands(text: string): string[] {
+    return text
+        .replace(/\\\n\s*/g, ' ')
+        .split('\n')
+        .filter((line) => /\bcosign (sign|verify|verify-attestation)\b/.test(line));
+}
 
 describe('publish.yml signs and attests the image', () => {
     it('signs and attests by digest under every name it pushes, never by tag', () => {
@@ -76,9 +92,17 @@ describe('publish.yml signs and attests the image', () => {
     });
 
     it('gives id-token and attestations write only to the job that signs', () => {
-        for (const id of ['version', 'verify', 'build', 'release', 'close-milestone', 'playground-image', 'deploy-playground']) {
+        const header = WORKFLOW.slice(0, WORKFLOW.indexOf('\njobs:\n'));
+        expect(header, 'a workflow level grant reaches every job').not.toMatch(
+            /(id-token|attestations)|write-all/
+        );
+        const ids = [...WORKFLOW.slice(WORKFLOW.indexOf('\njobs:\n')).matchAll(/^ {2}([a-z][a-z-]*):$/gm)].map(
+            (m) => m[1]
+        );
+        expect(ids).toContain('publish');
+        for (const id of ids.filter((i) => i !== 'publish')) {
             expect(job(id), `${id} must not hold signing permissions`).not.toMatch(
-                /(id-token|attestations): write/
+                /(id-token|attestations): write|write-all/
             );
         }
         const publish = job('publish').split('\n    steps:\n')[0];
@@ -151,5 +175,82 @@ describe('publish.yml signs and attests the image', () => {
             expect(step('publish', re).text).toContain('set -euo pipefail');
         }
         expect(step('publish', VERIFY_ATTEST).text).not.toMatch(/> \/dev\/null 2>&1|set \+e/);
+    });
+
+    it('checks every cosign command against the digest, never a tag', () => {
+        const commands = steps('publish').flatMap((x) => cosignCommands(x.text));
+        // sign, verify (in the sign step) and verify-attestation, for both names.
+        expect(commands.length).toBeGreaterThanOrEqual(3);
+        for (const c of commands) {
+            expect(c, `${c} must target the image by digest`).toContain(
+                '"ghcr.io/baryodev/$name@$DIGEST"'
+            );
+            expect(c, `${c} must not name a tag`).not.toMatch(/ghcr\.io\/baryodev\/[^\s"@]*:/);
+        }
+    });
+
+    it('takes the digest from the inspect of the immutable tag and passes it on unchanged', () => {
+        const tags = step('publish', CREATE).text;
+        expect(tags).toContain(
+            `DIGEST=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$IMG:$IMMUTABLE" | jq -r '.digest')`
+        );
+        for (const re of [SIGN, VERIFY_ATTEST, MOVE]) {
+            expect(step('publish', re).text).toContain(DIGEST_ENV);
+        }
+        const mirrors = publishSteps().filter((x) => MIRROR.test(x.name));
+        expect(mirrors).toHaveLength(2);
+        for (const m of mirrors) expect(m.text).toContain(DIGEST_ENV);
+    });
+
+    it('lets the release, playground and milestone jobs run only after publish', () => {
+        const needs = (id: string) => /needs: (.*)/.exec(job(id))?.[1] ?? '';
+        expect(needs('release')).toMatch(/\bpublish\b/);
+        expect(needs('playground-image')).toMatch(/\bpublish\b/);
+        expect(needs('close-milestone')).toMatch(/\brelease\b/);
+        expect(needs('deploy-playground')).toMatch(/\bplayground-image\b/);
+    });
+
+    it('puts both Docker Hub mirror steps after the floating tags move', () => {
+        const move = indexOfStep(MOVE);
+        const mirrors = publishSteps()
+            .map((x, i) => ({ x, i }))
+            .filter(({ x }) => MIRROR.test(x.name));
+        expect(mirrors).toHaveLength(2);
+        for (const { i } of mirrors) expect(i).toBeGreaterThan(move);
+    });
+
+    it('copies the Docker Hub mirrors from the verified digest, not from a tag', () => {
+        const mirrors = publishSteps().filter((x) => MIRROR.test(x.name));
+        expect(mirrors).toHaveLength(2);
+        for (const m of mirrors) {
+            expect(m.text).toContain('"ghcr.io/baryodev/barako-brew@$DIGEST"');
+            expect(m.text, `${m.name} must not copy from a tag`).not.toMatch(
+                /"ghcr\.io\/baryodev\/[^"\n]*:\$VERSION"/
+            );
+        }
+    });
+
+    it('refuses a v tag whose commit is not on master, in a job with no write permission', () => {
+        const version = job('version');
+        expect(version).toContain('git merge-base --is-ancestor "$GITHUB_SHA" origin/master || {');
+        expect(version).toContain('::error::tag v$V is not on master');
+        expect(version).toContain('fetch-depth: 0');
+        expect(version).toContain('persist-credentials: false');
+        const head = version.split('\n    steps:\n')[0];
+        expect(head).toContain('contents: read');
+        expect(head).not.toMatch(/: write|write-all/);
+        // The check sits in the tag branch, after the version is validated.
+        const tagBranch = version.slice(version.indexOf('refs/tags/v*)'), version.indexOf(';;'));
+        expect(tagBranch).toContain('is-ancestor');
+    });
+
+    it('does not move :latest for a prerelease, on GHCR or Docker Hub', () => {
+        const tags = step('publish', CREATE).text;
+        expect(tags).toContain('FLOATING="latest"\n');
+        expect(tags).toContain('case "$VERSION" in *-*) FLOATING="" ;; esac');
+        expect(tags.indexOf('FLOATING="latest"')).toBeLessThan(tags.indexOf('FLOATING=""'));
+        for (const m of publishSteps().filter((x) => MIRROR.test(x.name))) {
+            expect(m.text).toContain('case "$VERSION" in *-*) LATEST="" ;; esac');
+        }
     });
 });

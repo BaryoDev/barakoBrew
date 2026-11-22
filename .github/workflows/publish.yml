@@ -33,7 +33,17 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       is_release: ${{ steps.v.outputs.is_release }}
+    permissions:
+      contents: read
     steps:
+      # A release tag has to be on master, so the tag check below reads master's history. No
+      # token is left behind.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - id: v
         run: |
           set -euo pipefail
@@ -47,6 +57,10 @@ jobs:
               # has not read.
               [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] || {
                 echo "::error::tag v$V is not a version"; exit 1; }
+              # The signing identity accepts any v tag, so a release is built only from a commit
+              # that is on master.
+              git merge-base --is-ancestor "$GITHUB_SHA" origin/master || {
+                echo "::error::tag v$V is not on master"; exit 1; }
               echo "version=$V" >> "$GITHUB_OUTPUT"
               echo "is_release=true" >> "$GITHUB_OUTPUT"
               ;;
@@ -238,6 +252,8 @@ jobs:
           if [ "$IS_RELEASE" = "true" ]; then
             IMMUTABLE="$VERSION"
             FLOATING="latest"
+            # A prerelease keeps its :<version> tag and signature and does not move :latest.
+            case "$VERSION" in *-*) FLOATING="" ;; esac
           else
             IMMUTABLE="dev-${GITHUB_SHA}"
             FLOATING="dev"
@@ -364,24 +380,34 @@ jobs:
       # which is the other reason the check above runs before this.
       - name: Mirror to Docker Hub
         if: env.IS_RELEASE == 'true' && steps.dockerhub.outcome == 'success'
+        env:
+          DIGEST: ${{ steps.tags.outputs.digest }}
         run: |
           set -euo pipefail
+          LATEST="--tag arnelirobles/barako-admin:latest"
+          case "$VERSION" in *-*) LATEST="" ;; esac
+          # shellcheck disable=SC2086
           docker buildx imagetools create \
-            --tag "arnelirobles/barako-admin:latest" \
+            $LATEST \
             --tag "arnelirobles/barako-admin:$VERSION" \
-            "ghcr.io/baryodev/barako-brew:$VERSION"
+            "ghcr.io/baryodev/barako-brew@$DIGEST"
 
       # A separate step, and allowed to fail, because the Docker Hub repository under the new name
       # may not exist yet and the mirror is optional. The old name above keeps working meanwhile.
       - name: Mirror to Docker Hub under the new name
         if: env.IS_RELEASE == 'true' && steps.dockerhub.outcome == 'success'
         continue-on-error: true
+        env:
+          DIGEST: ${{ steps.tags.outputs.digest }}
         run: |
           set -euo pipefail
+          LATEST="--tag arnelirobles/barako-brew:latest"
+          case "$VERSION" in *-*) LATEST="" ;; esac
+          # shellcheck disable=SC2086
           docker buildx imagetools create \
-            --tag "arnelirobles/barako-brew:latest" \
+            $LATEST \
             --tag "arnelirobles/barako-brew:$VERSION" \
-            "ghcr.io/baryodev/barako-brew:$VERSION"
+            "ghcr.io/baryodev/barako-brew@$DIGEST"
 
   # The release itself, after the tags are pushed and proven multi-architecture, because a release
   # pointing at an image that does not exist is worse than a late release. Notes come out of
