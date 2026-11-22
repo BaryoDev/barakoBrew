@@ -34,11 +34,14 @@ if [ -f "$allowlist" ]; then
 fi
 
 # "severity<TAB>id<TAB>package<TAB>fixed version", once each. An empty fixed version means no fix.
-found=$(jq -r '
+if ! found=$(jq -r '
     [.Results[]? | .Vulnerabilities[]?
      | select(.Severity == "CRITICAL" or .Severity == "HIGH")
      | {severity: .Severity, id: .VulnerabilityID, name: .PkgName, fixed: (.FixedVersion // "")}]
-    | unique[] | "\(.severity)\t\(.id)\t\(.name)\t\(.fixed)"' "$report")
+    | unique[] | "\(.severity)\t\(.id)\t\(.name)\t\(.fixed)"' "$report"); then
+    echo "::error::could not read the findings in $report, failing closed"
+    exit 1
+fi
 
 failing=0
 unfixed=0

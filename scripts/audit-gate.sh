@@ -34,12 +34,24 @@ if [ -f "$allowlist" ]; then
     fi
 fi
 
-# Every High or Critical advisory in the report, once each, as "severity<TAB>id<TAB>package".
-found=$(jq -r '
+# Every High or Critical advisory in the report, once each, as "severity<TAB>id<TAB>package". An
+# advisory with no url is listed by its npm source number, so it still fails unless accepted.
+if ! found=$(jq -r '
     [.vulnerabilities[] | .via[] | objects
      | select(.severity == "critical" or .severity == "high")
-     | {severity, id: (.url | split("/") | last), name}]
-    | unique[] | "\(.severity)\t\(.id)\t\(.name)"' "$report")
+     | {severity, id: ((.url // .source // "unknown") | tostring | split("/") | last), name}]
+    | unique[] | "\(.severity)\t\(.id)\t\(.name)"' "$report"); then
+    echo "::error::could not read the advisories in $report, failing closed"
+    exit 1
+fi
+
+# npm counts packages by severity. A count above zero with no advisory found means the report has
+# a shape this script does not read, and a gate that cannot see must not pass.
+counted=$(jq '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' "$report")
+if [ "$counted" -gt 0 ] && [ -z "$found" ]; then
+    echo "::error::npm audit counts $counted High or Critical packages but no advisory was read, failing closed"
+    exit 1
+fi
 
 failing=0
 while IFS=$'\t' read -r severity id name; do

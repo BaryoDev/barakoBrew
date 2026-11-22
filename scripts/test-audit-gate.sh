@@ -23,6 +23,9 @@ jq '.vulnerabilities.foo={"severity":"critical","via":[{"severity":"critical","n
 echo '{"metadata":{"vulnerabilities":{"total":0}},"vulnerabilities":{}}' >"$T/clean.json"
 echo '<html>503</html>' >"$T/bad.json"
 echo '{' >"$T/badallow.json"
+jq '.vulnerabilities.foo={"severity":"high","via":[{"severity":"high","name":"foo","source":1099999}]}' "$T/clean.json" >"$T/nourl.json"
+jq '.vulnerabilities.foo={"severity":"high","via":[{"severity":"high","name":"foo","url":7}]}' "$T/clean.json" >"$T/badurl.json"
+echo '{"metadata":{"vulnerabilities":{"high":2,"total":2}},"vulnerabilities":{"foo":{"severity":"high","via":["bar"]}}}' >"$T/unread.json"
 echo '[{"id":"GHSA-aaaa-bbbb-cccc","expires":"2026-11-04"}]' >"$T/noreason.json"
 
 check "a clean report passes"                       0 "$T/clean.json" "$T/allow.json" 2026-10-04
@@ -34,6 +37,9 @@ check "another advisory still fails"                1 "$T/extra.json" "$T/allow.
 check "an unreadable report fails closed"           1 "$T/bad.json" "$T/allow.json" 2026-10-04
 check "an unreadable allowlist fails closed"        1 "$T/report.json" "$T/badallow.json" 2026-10-04
 check "an entry with no reason accepts nothing"     1 "$T/report.json" "$T/noreason.json" 2026-10-04
+check "an advisory with no url still fails"         1 "$T/nourl.json" "$T/allow.json" 2026-10-04
+check "an advisory with a non-string url fails"     1 "$T/badurl.json" "$T/allow.json" 2026-10-04
+check "a High count with no advisory read fails"    1 "$T/unread.json" "$T/allow.json" 2026-10-04
 
 # The image scan gate reads a Trivy report and the same allowlist.
 image_check() { # name, expected rc, args...
@@ -65,6 +71,8 @@ image_check "a Critical finding with no fix is reported only"  0 "$T/image-unfix
 image_check "an unreadable report fails closed"                1 "$T/bad.json" "$T/image-allow.json" 2026-10-04
 image_check "an unreadable allowlist fails closed"             1 "$T/image.json" "$T/badallow.json" 2026-10-04
 image_check "an entry with no reason accepts nothing"          1 "$T/image.json" "$T/image-noreason.json" 2026-10-04
+echo '{"SchemaVersion":2,"Results":[{"Target":"alpine","Vulnerabilities":{"VulnerabilityID":"CVE-2099-0004","Severity":"HIGH","FixedVersion":"1"}}]}' >"$T/image-odd.json"
+image_check "a findings list it cannot read fails closed"      1 "$T/image-odd.json" "$T/none.json" 2026-10-04
 # The caller job in ci-branch.yml must grant what every job in ci.yml declares.
 perm_check() { # name, expected rc, caller file
     local name=$1 want=$2 caller=$3
