@@ -41,6 +41,47 @@ check "an advisory with no url still fails"         1 "$T/nourl.json" "$T/allow.
 check "an advisory with a non-string url fails"     1 "$T/badurl.json" "$T/allow.json" 2026-10-04
 check "a High count with no advisory read fails"    1 "$T/unread.json" "$T/allow.json" 2026-10-04
 
+# Allowlist dates are checked as dates, not compared as strings.
+for bad in never 9 2099-13-45 2099-02-30 "2099-1-1"; do
+    printf '[{"id":"GHSA-aaaa-bbbb-cccc","package":"braces","reason":"test","expires":"%s"}]\n' "$bad" >"$T/baddate.json"
+    check "an expiry of $bad accepts nothing"       1 "$T/report.json" "$T/baddate.json" 2026-10-04
+done
+echo '[{"id":"GHSA-aaaa-bbbb-cccc","package":"braces","reason":"test","expires":20991231}]' >"$T/numdate.json"
+check "a numeric expiry accepts nothing"            1 "$T/report.json" "$T/numdate.json" 2026-10-04
+echo '[{"id":"GHSA-aaaa-bbbb-cccc","package":"braces","reason":"","expires":"2099-12-31"}]' >"$T/emptyreason.json"
+check "an empty reason accepts nothing"             1 "$T/report.json" "$T/emptyreason.json" 2026-10-04
+echo '{"id":"GHSA-aaaa-bbbb-cccc","reason":"x","expires":"2099-12-31"}' >"$T/notarray.json"
+check "an allowlist that is not an array fails"     1 "$T/report.json" "$T/notarray.json" 2026-10-04
+named=$(bash scripts/audit-gate.sh "$T/report.json" "$T/baddate.json" 2026-10-04 2>&1)
+if grep -q 'entry 0 .*GHSA-aaaa-bbbb-cccc.*2099-1-1' <<<"$named"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: a bad entry is named"; fi
+
+# A count that is not a number fails, even when the advisory itself is accepted.
+jq '.metadata.vulnerabilities.high="3"' "$T/report.json" >"$T/strcount.json"
+check "a string High count fails closed"            1 "$T/strcount.json" "$T/allow.json" 2026-10-04
+
+# An advisory with no url and no source is "unknown", and no entry may accept that.
+jq '.vulnerabilities.foo={"severity":"high","via":[{"severity":"high","name":"foo"}]}' "$T/clean.json" >"$T/noid.json"
+echo '[{"id":"unknown","reason":"x","expires":"2099-12-31"}]' >"$T/allow-unknown.json"
+echo '[{"id":"unknown","package":"foo","reason":"x","expires":"2099-12-31"}]' >"$T/allow-unknown2.json"
+echo '[{"id":"unknown:foo","package":"foo","reason":"x","expires":"2099-12-31"}]' >"$T/allow-unknown3.json"
+check "an advisory with no id is not accepted by unknown"    1 "$T/noid.json" "$T/allow-unknown.json" 2026-10-04
+check "unknown with a package does not accept it either"     1 "$T/noid.json" "$T/allow-unknown2.json" 2026-10-04
+check "an unknown:<package> entry does not accept it"        1 "$T/noid.json" "$T/allow-unknown3.json" 2026-10-04
+
+# An entry that names a package only accepts that package.
+echo '[{"id":"GHSA-aaaa-bbbb-cccc","package":"other","reason":"x","expires":"2099-12-31"}]' >"$T/allow-otherpkg.json"
+check "an entry for another package accepts nothing" 1 "$T/report.json" "$T/allow-otherpkg.json" 2026-10-04
+echo '[{"id":"GHSA-aaaa-bbbb-cccc","reason":"x","expires":"2099-12-31"}]' >"$T/allow-nopkg.json"
+check "an entry with no package still accepts the id" 0 "$T/report.json" "$T/allow-nopkg.json" 2026-10-04
+
+# An empty package name or a newline in it must not shift columns or split a row.
+jq '.vulnerabilities.braces.via[0].name=""' "$T/report.json" >"$T/emptyname.json"
+jq '.vulnerabilities.braces.via[0].name="braces\nx"' "$T/report.json" >"$T/nlname.json"
+jq '.vulnerabilities.braces.via[0].name="bra\tces"' "$T/report.json" >"$T/tabname.json"
+check "an empty package name fails"                 1 "$T/emptyname.json" "$T/allow-nopkg.json" 2026-10-04
+check "a newline in a package name fails"           1 "$T/nlname.json" "$T/allow-nopkg.json" 2026-10-04
+check "a tab in a package name fails"               1 "$T/tabname.json" "$T/allow-nopkg.json" 2026-10-04
+
 # The image scan gate reads a Trivy report and the same allowlist.
 image_check() { # name, expected rc, args...
     local name=$1 want=$2; shift 2
@@ -73,6 +114,26 @@ image_check "an unreadable allowlist fails closed"             1 "$T/image.json"
 image_check "an entry with no reason accepts nothing"          1 "$T/image.json" "$T/image-noreason.json" 2026-10-04
 echo '{"SchemaVersion":2,"Results":[{"Target":"alpine","Vulnerabilities":{"VulnerabilityID":"CVE-2099-0004","Severity":"HIGH","FixedVersion":"1"}}]}' >"$T/image-odd.json"
 image_check "a findings list it cannot read fails closed"      1 "$T/image-odd.json" "$T/none.json" 2026-10-04
+# A High with a fix and an empty, tab or newline id or package must fail, not shift columns.
+img_one() { printf '{"SchemaVersion":2,"Results":[{"Vulnerabilities":[{"VulnerabilityID":"%s","PkgName":"%s","Severity":"HIGH","FixedVersion":"1.0"}]}]}\n' "$1" "$2"; }
+img_one "CVE-2099-0009" ""            >"$T/image-nopkg.json"
+img_one ""              "busybox"     >"$T/image-noid.json"
+img_one 'CVE-2099-0001\nx' "busybox"  >"$T/image-nlid.json"
+img_one "CVE-2099-0001" 'busy\tbox'   >"$T/image-tabpkg.json"
+image_check "a High with an empty package name fails"          1 "$T/image-nopkg.json" "$T/none.json" 2026-10-04
+image_check "a High with an empty id fails"                    1 "$T/image-noid.json" "$T/none.json" 2026-10-04
+image_check "a High with a newline in its id fails"            1 "$T/image-nlid.json" "$T/none.json" 2026-10-04
+image_check "a High with a tab in its package fails"           1 "$T/image-tabpkg.json" "$T/none.json" 2026-10-04
+# The same fixable finding is not accepted by an entry for another package.
+echo '[{"id":"CVE-2099-0001","package":"other","reason":"x","expires":"2099-12-31"}]' >"$T/image-otherpkg.json"
+image_check "an entry for another package accepts nothing"     1 "$T/image.json" "$T/image-otherpkg.json" 2026-10-04
+# Allowlist dates are checked as dates, not compared as strings.
+for bad in never 9 2099-13-45 2099-02-30; do
+    printf '[{"id":"CVE-2099-0001","package":"busybox","reason":"test","expires":"%s"}]\n' "$bad" >"$T/image-baddate.json"
+    image_check "an expiry of $bad accepts nothing"            1 "$T/image.json" "$T/image-baddate.json" 2026-10-04
+done
+echo '[{"id":"CVE-2099-0001","package":"busybox","reason":"","expires":"2099-12-31"}]' >"$T/image-emptyreason.json"
+image_check "an empty reason accepts nothing"                  1 "$T/image.json" "$T/image-emptyreason.json" 2026-10-04
 # The caller job in ci-branch.yml must grant what every job in ci.yml declares.
 perm_check() { # name, expected rc, caller file
     local name=$1 want=$2 caller=$3
