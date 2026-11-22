@@ -8,6 +8,10 @@ name: Publish
 # Every tag is also pushed as ghcr.io/baryodev/barako-admin, the name the console shipped under
 # until 1.2.0, pointing at the same digest. That second name stops at 2.0.0 (#84).
 #
+# The manifest is created under :dev-<sha> or :<version>. The image is then signed with cosign
+# (keyless) and given a build provenance attestation under both names, by digest, and both are
+# verified. Only after that do :dev or :latest move, copied from the verified digest.
+#
 # Both architectures, always. The playground VM is arm64 and an amd64-only image has bitten this
 # project before. Each architecture is built on a runner of that architecture and pushed by digest,
 # then joined into one manifest list, so a half-finished matrix cannot leave a tag pointing at one
@@ -29,7 +33,17 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       is_release: ${{ steps.v.outputs.is_release }}
+    permissions:
+      contents: read
     steps:
+      # A release tag has to be on master, so the tag check below reads master's history. No
+      # token is left behind.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - id: v
         run: |
           set -euo pipefail
@@ -43,6 +57,10 @@ jobs:
               # has not read.
               [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] || {
                 echo "::error::tag v$V is not a version"; exit 1; }
+              # The signing identity accepts any v tag, so a release is built only from a commit
+              # that is on master.
+              git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master || {
+                echo "::error::tag v$V is not on master"; exit 1; }
               echo "version=$V" >> "$GITHUB_OUTPUT"
               echo "is_release=true" >> "$GITHUB_OUTPUT"
               ;;
@@ -177,9 +195,16 @@ jobs:
     name: Publish ${{ needs.version.outputs.is_release == 'true' && 'release' || 'dev' }} tags
     needs: [version, build]
     runs-on: ubuntu-latest
+    # Two runs for one version never write its immutable tag at the same time.
+    concurrency:
+      group: publish-image-${{ needs.version.outputs.version }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
+      # Keyless signing asks GitHub for an OIDC token, and the attestation is stored in the registry.
+      id-token: write
+      attestations: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
       IS_RELEASE: ${{ needs.version.outputs.is_release }}
@@ -213,7 +238,10 @@ jobs:
           path: /tmp/digests
           merge-multiple: true
 
-      - name: Create the manifest list
+      # The manifest list is created under an immutable tag, :dev-<sha> or :<version>, and nothing
+      # floating moves here. The digest is read back from the registry, and the old name gets the
+      # same digest by copying from it rather than from a tag.
+      - name: Create the manifest list under the immutable tag
         id: tags
         run: |
           set -euo pipefail
@@ -226,65 +254,164 @@ jobs:
             REFS="$REFS $IMG@$(cat "$F")"
           done
           if [ "$IS_RELEASE" = "true" ]; then
-            TAGS="latest $VERSION"
+            IMMUTABLE="$VERSION"
+            FLOATING="latest"
+            # A prerelease keeps its :<version> tag and signature and does not move :latest.
+            case "$VERSION" in *-*) FLOATING="" ;; esac
           else
-            TAGS="dev dev-${GITHUB_SHA}"
+            IMMUTABLE="dev-${GITHUB_SHA}"
+            FLOATING="dev"
           fi
-          ARGS=""
-          for t in $TAGS; do ARGS="$ARGS --tag $IMG:$t"; done
           # GHCR shows a multi-architecture package's description from the index, not from the
           # labels on each image inside it.
-          docker buildx imagetools create $ARGS \
+          # shellcheck disable=SC2086
+          docker buildx imagetools create --tag "$IMG:$IMMUTABLE" \
             --annotation "index:org.opencontainers.image.description=The console for barakoCMS" \
             $REFS
-          # Copied from the new name rather than built again, so both names resolve to one digest.
-          for t in $TAGS; do
-            docker buildx imagetools create --tag "$OLD:$t" "$IMG:$t"
-          done
-          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
-          echo "pushed: $TAGS" >> "$GITHUB_STEP_SUMMARY"
+          DIGEST=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$IMG:$IMMUTABLE" | jq -r '.digest')
+          # Resolved here once. Every later step takes this value from the step output and never
+          # looks a tag up again.
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::no digest for $IMG:$IMMUTABLE, got '$DIGEST'"; exit 1; }
+          # Copied from the digest rather than built again, so both names resolve to one digest.
+          docker buildx imagetools create --tag "$OLD:$IMMUTABLE" "$IMG@$DIGEST"
+          {
+            echo "immutable=$IMMUTABLE"
+            echo "floating=$FLOATING"
+            echo "digest=$DIGEST"
+          } >> "$GITHUB_OUTPUT"
+          echo "pushed: $IMMUTABLE (floating tags wait for the signature: $FLOATING)" >> "$GITHUB_STEP_SUMMARY"
 
       # Checked on the pushed manifest rather than on the build config, because the config being
       # right is not evidence that the push was. A single-architecture image is invisible to
-      # everyone except whoever pulls it on the wrong hardware.
+      # everyone except whoever pulls it on the wrong hardware. This runs before the image is
+      # signed, so an image that fails it is never signed.
       #
       # The check is a script rather than inline shell so that CI can run it against a known
       # amd64-only tag and watch it fail. A gate whose only evidence is that it has never fired is
       # not evidence (#37).
-      - name: Every published tag serves both architectures
+      - name: The immutable tag serves both architectures under both names
+        env:
+          IMMUTABLE: ${{ steps.tags.outputs.immutable }}
+          DIGEST: ${{ steps.tags.outputs.digest }}
         run: |
           set -euo pipefail
-          for t in ${{ steps.tags.outputs.tags }}; do
-            bash scripts/check-image-platforms.sh "ghcr.io/baryodev/barako-brew:$t"
-            bash scripts/check-image-platforms.sh "ghcr.io/baryodev/barako-admin:$t"
-            new=$(docker buildx imagetools inspect "ghcr.io/baryodev/barako-brew:$t" --format '{{json .Manifest.Digest}}')
-            old=$(docker buildx imagetools inspect "ghcr.io/baryodev/barako-admin:$t" --format '{{json .Manifest.Digest}}')
-            [ "$new" = "$old" ] || { echo "::error::barako-brew:$t is $new but barako-admin:$t is $old"; exit 1; }
+          for name in barako-brew barako-admin; do
+            bash scripts/check-image-platforms.sh "ghcr.io/baryodev/$name:$IMMUTABLE"
+            got=$(docker buildx imagetools inspect "ghcr.io/baryodev/$name:$IMMUTABLE" --format '{{json .Manifest}}' | jq -r '.digest')
+            [ "$got" = "$DIGEST" ] || { echo "::error::$name:$IMMUTABLE is $got, expected $DIGEST"; exit 1; }
           done
+
+      # cosign is a release binary the installer puts on the runner; jq is already on
+      # ubuntu-latest.
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+
+      # Signed by digest, never by tag, in each repository the image is pushed to. The verify that
+      # follows each signature uses the identity an operator uses (README.md), so a signature that
+      # would not verify for them fails here. The identity names this workflow file and the refs
+      # that publish: master, and a v tag.
+      - name: Sign the image under both names and verify the signature
+        env:
+          IDENTITY_REGEXP: '^https://github\.com/BaryoDev/barakoBrew/\.github/workflows/publish\.yml@refs/(heads/master|tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?)$'
+          OIDC_ISSUER: https://token.actions.githubusercontent.com
+          DIGEST: ${{ steps.tags.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for name in barako-brew barako-admin; do
+            cosign sign --yes "ghcr.io/baryodev/$name@$DIGEST"
+            cosign verify \
+              --certificate-identity-regexp "$IDENTITY_REGEXP" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "ghcr.io/baryodev/$name@$DIGEST" > /dev/null
+          done
+
+      - name: Attest build provenance for barako-brew
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/baryodev/barako-brew
+          subject-digest: ${{ steps.tags.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest build provenance for barako-admin
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/baryodev/barako-admin
+          subject-digest: ${{ steps.tags.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Verify the provenance attestation under both names
+        env:
+          IDENTITY_REGEXP: '^https://github\.com/BaryoDev/barakoBrew/\.github/workflows/publish\.yml@refs/(heads/master|tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?)$'
+          OIDC_ISSUER: https://token.actions.githubusercontent.com
+          DIGEST: ${{ steps.tags.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for name in barako-brew barako-admin; do
+            cosign verify-attestation --type slsaprovenance1 \
+              --certificate-identity-regexp "$IDENTITY_REGEXP" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "ghcr.io/baryodev/$name@$DIGEST" > /dev/null
+          done
+
+      # The last steps that move a tag on ghcr: everything above passed for this digest. The
+      # floating tags are copied from the verified digest, so they point at the image that was
+      # signed, and a failed step above leaves them where they were.
+      - name: Move the floating tags to the verified digest
+        env:
+          FLOATING: ${{ steps.tags.outputs.floating }}
+          DIGEST: ${{ steps.tags.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for name in barako-brew barako-admin; do
+            for t in $FLOATING; do
+              docker buildx imagetools create --tag "ghcr.io/baryodev/$name:$t" "ghcr.io/baryodev/$name@$DIGEST"
+            done
+          done
+          for name in barako-brew barako-admin; do
+            for t in $FLOATING; do
+              got=$(docker buildx imagetools inspect "ghcr.io/baryodev/$name:$t" --format '{{json .Manifest}}' | jq -r '.digest')
+              [ "$got" = "$DIGEST" ] || { echo "::error::$name:$t is $got, expected $DIGEST"; exit 1; }
+            done
+          done
+          echo "moved: $FLOATING" >> "$GITHUB_STEP_SUMMARY"
 
       # imagetools create on a manifest list copies the list, so the mirror is multi-architecture
       # too. It would silently mirror one architecture if the source were single-architecture,
       # which is the other reason the check above runs before this.
       - name: Mirror to Docker Hub
         if: env.IS_RELEASE == 'true' && steps.dockerhub.outcome == 'success'
+        env:
+          DIGEST: ${{ steps.tags.outputs.digest }}
         run: |
           set -euo pipefail
+          LATEST="--tag arnelirobles/barako-admin:latest"
+          case "$VERSION" in *-*) LATEST="" ;; esac
+          # shellcheck disable=SC2086
           docker buildx imagetools create \
-            --tag "arnelirobles/barako-admin:latest" \
+            $LATEST \
             --tag "arnelirobles/barako-admin:$VERSION" \
-            "ghcr.io/baryodev/barako-brew:$VERSION"
+            "ghcr.io/baryodev/barako-brew@$DIGEST"
 
       # A separate step, and allowed to fail, because the Docker Hub repository under the new name
       # may not exist yet and the mirror is optional. The old name above keeps working meanwhile.
       - name: Mirror to Docker Hub under the new name
         if: env.IS_RELEASE == 'true' && steps.dockerhub.outcome == 'success'
         continue-on-error: true
+        env:
+          DIGEST: ${{ steps.tags.outputs.digest }}
         run: |
           set -euo pipefail
+          LATEST="--tag arnelirobles/barako-brew:latest"
+          case "$VERSION" in *-*) LATEST="" ;; esac
+          # shellcheck disable=SC2086
           docker buildx imagetools create \
-            --tag "arnelirobles/barako-brew:latest" \
+            $LATEST \
             --tag "arnelirobles/barako-brew:$VERSION" \
-            "ghcr.io/baryodev/barako-brew:$VERSION"
+            "ghcr.io/baryodev/barako-brew@$DIGEST"
 
   # The release itself, after the tags are pushed and proven multi-architecture, because a release
   # pointing at an image that does not exist is worse than a late release. Notes come out of
