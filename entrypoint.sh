@@ -17,8 +17,70 @@ done
 
 # The value is substituted into JavaScript string literals, JSON and HTML attributes, so it is
 # checked before it goes anywhere near them. Quotes, backslashes and spaces are not path characters.
-if [ -n "$base_path" ] && ! printf '%s' "$base_path" | grep -Eq '^(/[A-Za-z0-9._~-]+)+$'; then
+# grep tests line by line, so a value with a newline in it would pass for its first line. Any value
+# that is not one line is refused before the pattern is tried.
+nl='
+'
+multiline=0
+case "$base_path" in
+  *"$nl"*) multiline=1 ;;
+esac
+if [ -n "$base_path" ] && { [ "$multiline" = 1 ] || ! printf '%s' "$base_path" | grep -Eq '^(/[A-Za-z0-9._~-]+)+$'; }; then
   echo "entrypoint: BARAKO_BASE_PATH must be one or more /segments of letters, digits, dot, underscore, tilde or hyphen. Got: ${BARAKO_BASE_PATH:-}" >&2
+  exit 1
+fi
+
+# Everything below rewrites files: the base path and the policy origins go into the build output and
+# the API address goes into public/env-config.js. With BARAKO_RUNTIME_DIR set (the image sets it to a
+# path under /tmp), the server and its build output are copied there first and every rewrite and the
+# server itself run from the copy. The image is never written to, so it runs with a read-only root
+# filesystem and a tmpfs on /tmp. node_modules is only read, so it is linked rather than copied.
+# With it unset the rewrites happen in the current directory, which only works when the app
+# directory is writable. The published image's /app is owned by root, so it needs
+# BARAKO_RUNTIME_DIR.
+runtime_dir="${BARAKO_RUNTIME_DIR:-}"
+if [ -n "$runtime_dir" ]; then
+  case "$runtime_dir" in
+    /*) ;;
+    *) echo "entrypoint: BARAKO_RUNTIME_DIR must be an absolute path. Got: $runtime_dir" >&2; exit 1 ;;
+  esac
+  app_dir=$(pwd -P)
+  mkdir -p "$runtime_dir"
+  # Both sides are resolved, so a trailing slash, a "." or ".." segment or a symlink cannot make the
+  # app directory look like another path. The rm -rf below deletes inside the runtime directory, so
+  # it must never be the app directory, a directory above it or one inside it.
+  runtime_real=$(cd "$runtime_dir" && pwd -P)
+  refuse=""
+  if [ "$runtime_real" = "/" ]; then
+    refuse="is the root directory"
+  elif [ "$runtime_real" = "$app_dir" ]; then
+    refuse="is the app directory"
+  else
+    case "$app_dir/" in
+      "$runtime_real"/*) refuse="is a directory above the app directory" ;;
+    esac
+    case "$runtime_real/" in
+      "$app_dir"/*) refuse="is inside the app directory" ;;
+    esac
+  fi
+  if [ -n "$refuse" ]; then
+    echo "entrypoint: BARAKO_RUNTIME_DIR $refuse, it would delete the app. Got: $runtime_dir (resolved to $runtime_real)" >&2
+    exit 1
+  fi
+  runtime_dir="$runtime_real"
+  for item in server.js package.json .next public; do
+    rm -rf "${runtime_dir:?}/$item"
+    if [ -e "$app_dir/$item" ]; then
+      cp -R "$app_dir/$item" "$runtime_dir/$item"
+      chmod -R u+w "$runtime_dir/$item"
+    fi
+  done
+  if [ -e "$app_dir/node_modules" ]; then
+    ln -sfn "$app_dir/node_modules" "$runtime_dir/node_modules"
+  fi
+  cd "$runtime_dir"
+elif [ ! -w . ] || [ ! -w ./public ]; then
+  echo "entrypoint: $(pwd) or its public directory is not writable, so the base path and the API address cannot be written into it. Set BARAKO_RUNTIME_DIR to a writable directory such as /tmp/barako-app." >&2
   exit 1
 fi
 

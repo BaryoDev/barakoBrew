@@ -139,7 +139,9 @@ export function MarkdownField({
                     {text.trim() ? (
                         <div
                             className={PREVIEW_STYLES}
-                            // Sanitised by renderMarkdown: raw HTML escaped, destinations allowlisted.
+                            // Reviewed exception. renderMarkdown (src/lib/markdown.ts) escapes raw HTML and
+                            // allowlists link and image destinations, so the editor's own text cannot add markup.
+                            // eslint-disable-next-line react/no-danger
                             dangerouslySetInnerHTML={{ __html: previewHtml(text) }}
                         />
                     ) : (

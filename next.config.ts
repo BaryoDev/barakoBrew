@@ -78,9 +78,26 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+// HSTS tells the browser to use https for this host from then on, so it must never reach a plain
+// http origin such as http://localhost, where it would break the next visit to any other http app on
+// that name. The console does not terminate TLS itself, so "served over HTTPS" means a reverse proxy
+// did and said so with X-Forwarded-Proto. A proxy that does not send it gets no HSTS and can add the
+// header itself. A chain of proxies sends "https,https" or "https, https", so the value is matched
+// as one or more https entries (Next anchors it, so the match is case sensitive and exact). No
+// includeSubDomains and no preload: the console may share a domain with sites that are not ready
+// for either.
+const hstsHeader = { key: "Strict-Transport-Security", value: "max-age=31536000" };
+
 const nextConfig: NextConfig = {
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      {
+        source: "/:path*",
+        has: [{ type: "header", key: "x-forwarded-proto", value: "https(?:,\\s*https)*" }],
+        headers: [hstsHeader],
+      },
+    ];
   },
   output: "standalone",
   reactCompiler: true,

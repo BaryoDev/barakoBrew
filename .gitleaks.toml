@@ -1,0 +1,7 @@
+# Secret scanning config. The default rules are the whole policy. The one known false positive, a
+# made-up token in a unit test committed before the scan existed, is ignored by its fingerprint in
+# .gitleaksignore (that commit, file, rule and line only), so nothing else in that file is skipped.
+title = "barakoBrew"
+
+[extend]
+useDefault = true

@@ -1,0 +1,11 @@
+name: caller
+on: push
+jobs:
+  ci:
+    name: Branch push
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+      security-events: write
+    uses: ./.github/workflows/called.yml

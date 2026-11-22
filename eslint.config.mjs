@@ -67,6 +67,17 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // Code that runs a string is how injected text becomes injected script. dangerouslySetInnerHTML
+  // is the React form of it. The one place this console renders markdown carries an inline disable
+  // that says why its input is safe (src/components/content/markdown-field.tsx); any other use has
+  // to be argued for in review the same way.
+  {
+    rules: {
+      "react/no-danger": "error",
+      "no-eval": "error",
+      "no-implied-eval": "error",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
