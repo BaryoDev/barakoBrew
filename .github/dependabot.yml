@@ -46,3 +46,18 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # The Dockerfile's base image is pinned by tag and digest. A pinned digest never moves by itself,
+  # so this is what brings in the base image's security fixes.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+
+  # The quickstart's images (postgres, the API, the console) are pinned the same way.
+  - package-ecosystem: "docker-compose"
+    directory: "/quickstart"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3

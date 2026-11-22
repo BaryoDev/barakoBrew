@@ -22,6 +22,35 @@ if [ -n "$base_path" ] && ! printf '%s' "$base_path" | grep -Eq '^(/[A-Za-z0-9._
   exit 1
 fi
 
+# Everything below rewrites files: the base path and the policy origins go into the build output and
+# the API address goes into public/env-config.js. With BARAKO_RUNTIME_DIR set (the image sets it to a
+# path under /tmp), the server and its build output are copied there first and every rewrite and the
+# server itself run from the copy. The image is never written to, so it runs with a read-only root
+# filesystem and a tmpfs on /tmp. node_modules is only read, so it is linked rather than copied. With
+# it unset the rewrites happen in the current directory, as they always did.
+runtime_dir="${BARAKO_RUNTIME_DIR:-}"
+if [ -n "$runtime_dir" ]; then
+  case "$runtime_dir" in
+    /*) ;;
+    *) echo "entrypoint: BARAKO_RUNTIME_DIR must be an absolute path. Got: $runtime_dir" >&2; exit 1 ;;
+  esac
+  app_dir=$(pwd)
+  if [ "$runtime_dir" != "$app_dir" ]; then
+    mkdir -p "$runtime_dir"
+    for item in server.js package.json .next public; do
+      rm -rf "${runtime_dir:?}/$item"
+      if [ -e "$app_dir/$item" ]; then
+        cp -R "$app_dir/$item" "$runtime_dir/$item"
+        chmod -R u+w "$runtime_dir/$item"
+      fi
+    done
+    if [ -e "$app_dir/node_modules" ]; then
+      ln -sfn "$app_dir/node_modules" "$runtime_dir/node_modules"
+    fi
+    cd "$runtime_dir"
+  fi
+fi
+
 # A build with a real basePath emits a 308 from "<basePath>/" to "<basePath>". Rewriting the
 # placeholder to nothing would leave "/" redirecting to "", which breaks the domain root. A build
 # with no basePath does not carry that redirect at all, so drop it to match.

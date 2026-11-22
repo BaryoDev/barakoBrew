@@ -1,4 +1,6 @@
-FROM node:22.23.4-alpine AS base
+# Pinned by digest so a moved tag cannot change what the build starts from. Dependabot's docker
+# entry bumps the tag and the digest together.
+FROM node:22.23.4-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -76,10 +78,6 @@ RUN chmod +x entrypoint.sh
 
 COPY --from=builder /app/public ./public
 
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
 # Copy only the output traces, which keeps the image small
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -99,20 +97,29 @@ COPY --chown=nextjs:nodejs \
     src/app/fonts/OFL-jetbrains-mono.txt \
     ./font-licences/
 
-# Ensure public directory is owned by nextjs for entrypoint script to write env-config.js
-RUN chown -R nextjs:nodejs ./public
-
-# entrypoint.sh writes the base path into the build output with `sed -i`, which creates its temp
-# file beside the original. So the directories holding those files have to be writable too, not
-# just the files: the copies above chown what they bring, and this one covers /app itself, which
-# WORKDIR created as root and which holds server.js.
-RUN chown nextjs:nodejs /app
+# The server needs node and nothing else. The base image also carries npm, corepack and yarn, which
+# bring their own dependency trees (pacote, sigstore, brace-expansion and others) that an image scan
+# reports and that nothing here runs. Removing them closes those findings instead of listing them.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 USER nextjs
 
 EXPOSE 3000
 
 ENV PORT=3000
+
+# Nothing under /app is written at run time. entrypoint.sh copies the server and its build output
+# here, writes the base path, the policy origins and env-config.js into the copy and starts from
+# it, so the image runs with a read-only root filesystem and a tmpfs on /tmp. Size that tmpfs for
+# the copy (about 64m) and the Next cache.
+ENV BARAKO_RUNTIME_DIR=/tmp/barako-app
+
+# Any answer below 500 means the server is up: under a base path the root is a 404, and that is
+# still a live server. No curl in this image, so node asks.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/',{redirect:'manual'}).then(r=>process.exit(r.status<500?0:1),()=>process.exit(1))"]
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output

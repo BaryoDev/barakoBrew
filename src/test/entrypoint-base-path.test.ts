@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -180,5 +180,58 @@ describe('entrypoint.sh writes the base path in at start', () => {
         expect(read('public/env-config.js')).toContain(
             'NEXT_PUBLIC_API_URL: "https://api.example.test"',
         );
+    });
+});
+
+describe('entrypoint.sh with BARAKO_RUNTIME_DIR leaves the image untouched', () => {
+    let runtime: string;
+    const readRuntime = (relative: string) => readFileSync(join(runtime, relative), 'utf8');
+
+    beforeEach(() => {
+        runtime = mkdtempSync(join(tmpdir(), 'brew-runtime-'));
+        mkdirSync(join(dir, 'node_modules', 'next'), { recursive: true });
+        writeFileSync(join(dir, 'node_modules', 'next', 'index.js'), 'module.exports = {};\n');
+    });
+
+    afterEach(() => {
+        rmSync(runtime, { recursive: true, force: true });
+    });
+
+    it('rewrites the copy and not the files it copied from', () => {
+        const before = FILES.map((file) => read(file));
+        run({
+            BARAKO_RUNTIME_DIR: runtime,
+            BARAKO_BASE_PATH: '/barakocms',
+            NEXT_PUBLIC_API_URL: 'https://api.example.test',
+        });
+
+        expect(FILES.map((file) => read(file))).toEqual(before);
+        expect(() => readFileSync(join(dir, 'public', 'env-config.js'))).toThrow();
+
+        for (const file of FILES) {
+            expect(readRuntime(file), file).not.toContain(PLACEHOLDER);
+        }
+        expect(readRuntime('server.js')).toContain('"basePath":"/barakocms"');
+        expect(readRuntime('public/env-config.js')).toContain('NEXT_PUBLIC_API_URL: "https://api.example.test"');
+    });
+
+    it('links node_modules instead of copying it', () => {
+        run({ BARAKO_RUNTIME_DIR: runtime });
+
+        expect(readRuntime('node_modules/next/index.js')).toContain('module.exports');
+        expect(lstatSync(join(runtime, 'node_modules')).isSymbolicLink()).toBe(true);
+    });
+
+    it('starting again in the same runtime directory gives the same result', () => {
+        run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
+        const after = FILES.map((file) => readRuntime(file));
+        expect(after).toHaveLength(5);
+
+        run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
+        expect(FILES.map((file) => readRuntime(file))).toEqual(after);
+    });
+
+    it('a runtime directory that is not an absolute path is refused', () => {
+        expect(() => run({ BARAKO_RUNTIME_DIR: 'relative/path' })).toThrow();
     });
 });
