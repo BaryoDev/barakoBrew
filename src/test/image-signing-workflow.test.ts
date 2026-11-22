@@ -253,4 +253,23 @@ describe('publish.yml signs and attests the image', () => {
             expect(m.text).toContain('case "$VERSION" in *-*) LATEST="" ;; esac');
         }
     });
+
+    it('resolves the digest once after the create, validates it strictly and passes it on', () => {
+        const tags = step('publish', CREATE).text;
+        expect(tags).toContain('[[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {');
+        expect(tags.indexOf('imagetools create --tag "$IMG:$IMMUTABLE"')).toBeLessThan(
+            tags.indexOf('DIGEST=$(')
+        );
+        for (const s of publishSteps().filter((x) => !CREATE.test(x.name))) {
+            expect(s.text, `${s.name} must not resolve a tag to a digest again`).not.toMatch(
+                /\bDIGEST=\$\(|DIGEST="\$\(/
+            );
+        }
+    });
+
+    it('serialises publish runs of the same version', () => {
+        const head = job('publish').split('\n    steps:\n')[0];
+        expect(head).toContain('group: publish-image-${{ needs.version.outputs.version }}');
+        expect(head).toContain('cancel-in-progress: false');
+    });
 });

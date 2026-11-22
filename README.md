@@ -62,8 +62,11 @@ The `latest`, `<version>`, `dev` and `dev-<sha>` tags are signed with cosign (ke
 then moves `latest` or `dev`. A tag is signed when the Publish run that made it passed. If that run
 failed, the tag can point at a digest that is not signed, and the commands below are how to tell:
 they fail on it. A prerelease (a version with a hyphen) keeps its `:<version>` tag and signature and
-does not move `latest`, here or on Docker Hub. A tag release is signed only when the tag is on
-`master`: the workflow refuses a `v*` tag whose commit is not on `master`. Resolve the tag to a digest, then verify that digest:
+does not move `latest`, here or on Docker Hub. The workflow refuses a `v*` tag whose commit is not
+on `master`. A passing check proves the image was built by this repository's `publish.yml`, run
+from `master` or a semver `v` tag, with GitHub as the issuer. You need cosign 3 or later: the
+workflow signs with cosign 3.1.4, and cosign 2 does not read its default bundle format. Resolve the
+tag to a digest, then verify that digest:
 
 ```bash
 DIGEST=$(docker buildx imagetools inspect --format '{{json .Manifest}}' ghcr.io/baryodev/barako-brew:latest | jq -r '.digest')

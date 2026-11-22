@@ -195,6 +195,10 @@ jobs:
     name: Publish ${{ needs.version.outputs.is_release == 'true' && 'release' || 'dev' }} tags
     needs: [version, build]
     runs-on: ubuntu-latest
+    # Two runs for one version never write its immutable tag at the same time.
+    concurrency:
+      group: publish-image-${{ needs.version.outputs.version }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -265,10 +269,10 @@ jobs:
             --annotation "index:org.opencontainers.image.description=The console for barakoCMS" \
             $REFS
           DIGEST=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$IMG:$IMMUTABLE" | jq -r '.digest')
-          case "$DIGEST" in
-            sha256:*) ;;
-            *) echo "::error::no digest for $IMG:$IMMUTABLE, got '$DIGEST'"; exit 1 ;;
-          esac
+          # Resolved here once. Every later step takes this value from the step output and never
+          # looks a tag up again.
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::no digest for $IMG:$IMMUTABLE, got '$DIGEST'"; exit 1; }
           # Copied from the digest rather than built again, so both names resolve to one digest.
           docker buildx imagetools create --tag "$OLD:$IMMUTABLE" "$IMG@$DIGEST"
           {
