@@ -19,7 +19,11 @@ report=${1:?usage: audit-gate.sh <audit.json> [<allowlist.json>] [<today>]}
 allowlist=${2:-.github/audit-allowlist.json}
 today=${3:-$(date -u +%F)}
 
-if ! jq -e '.metadata.vulnerabilities.total' "$report" >/dev/null 2>&1; then
+# npm audit always writes every count key, so a missing, false, negative, fractional or string
+# High or Critical count is an unreadable report, not a zero (jq's // would read false as 0).
+if ! jq -e '.metadata.vulnerabilities.total' "$report" >/dev/null 2>&1 \
+    || ! jq -e '[.metadata.vulnerabilities.high, .metadata.vulnerabilities.critical]
+                | all(type == "number" and . >= 0 and . == floor)' "$report" >/dev/null 2>&1; then
     echo "::error::npm audit did not return a usable report, failing closed"
     head -c 500 "$report" || true
     exit 1
@@ -82,7 +86,7 @@ fi
 # npm counts packages by severity. A count above zero with no advisory found means the report has
 # a shape this script does not read, and a gate that cannot see must not pass. A count jq cannot
 # read as a number fails too.
-if ! counted=$(jq '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' "$report") \
+if ! counted=$(jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' "$report") \
     || ! [[ $counted =~ ^[0-9]+$ ]]; then
     echo "::error::npm audit High or Critical counts in $report are not numbers, failing closed"
     exit 1

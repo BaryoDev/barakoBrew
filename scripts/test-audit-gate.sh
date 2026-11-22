@@ -20,12 +20,12 @@ cat >"$T/allow.json" <<'J'
 [{"id":"GHSA-aaaa-bbbb-cccc","package":"braces","reason":"test","expires":"2026-11-04"}]
 J
 jq '.vulnerabilities.foo={"severity":"critical","via":[{"severity":"critical","name":"foo","url":"https://github.com/advisories/GHSA-xxxx-yyyy-zzzz"}]}' "$T/report.json" >"$T/extra.json"
-echo '{"metadata":{"vulnerabilities":{"total":0}},"vulnerabilities":{}}' >"$T/clean.json"
+echo '{"metadata":{"vulnerabilities":{"high":0,"critical":0,"total":0}},"vulnerabilities":{}}' >"$T/clean.json"
 echo '<html>503</html>' >"$T/bad.json"
 echo '{' >"$T/badallow.json"
 jq '.vulnerabilities.foo={"severity":"high","via":[{"severity":"high","name":"foo","source":1099999}]}' "$T/clean.json" >"$T/nourl.json"
 jq '.vulnerabilities.foo={"severity":"high","via":[{"severity":"high","name":"foo","url":7}]}' "$T/clean.json" >"$T/badurl.json"
-echo '{"metadata":{"vulnerabilities":{"high":2,"total":2}},"vulnerabilities":{"foo":{"severity":"high","via":["bar"]}}}' >"$T/unread.json"
+echo '{"metadata":{"vulnerabilities":{"high":2,"critical":0,"total":2}},"vulnerabilities":{"foo":{"severity":"high","via":["bar"]}}}' >"$T/unread.json"
 echo '[{"id":"GHSA-aaaa-bbbb-cccc","expires":"2026-11-04"}]' >"$T/noreason.json"
 
 check "a clean report passes"                       0 "$T/clean.json" "$T/allow.json" 2026-10-04
@@ -58,6 +58,18 @@ if grep -q 'entry 0 .*GHSA-aaaa-bbbb-cccc.*2099-1-1' <<<"$named"; then pass=$((p
 # A count that is not a number fails, even when the advisory itself is accepted.
 jq '.metadata.vulnerabilities.high="3"' "$T/report.json" >"$T/strcount.json"
 check "a string High count fails closed"            1 "$T/strcount.json" "$T/allow.json" 2026-10-04
+
+# High and Critical counts must both be present nonnegative integers; anything else is unreadable.
+jq '.metadata.vulnerabilities.high=false' "$T/clean.json" >"$T/c-false.json"
+jq '.metadata.vulnerabilities.critical=-1' "$T/clean.json" >"$T/c-neg.json"
+jq '.metadata.vulnerabilities.high=1.5' "$T/clean.json" >"$T/c-frac.json"
+jq 'del(.metadata.vulnerabilities.high)' "$T/clean.json" >"$T/c-missing.json"
+jq '.metadata.vulnerabilities.high="3"' "$T/clean.json" >"$T/c-str.json"
+check "a High count of false fails closed"          1 "$T/c-false.json" "$T/allow.json" 2026-10-04
+check "a negative Critical count fails closed"      1 "$T/c-neg.json" "$T/allow.json" 2026-10-04
+check "a fractional High count fails closed"        1 "$T/c-frac.json" "$T/allow.json" 2026-10-04
+check "a missing High count fails closed"           1 "$T/c-missing.json" "$T/allow.json" 2026-10-04
+check "a string High count on a clean report fails" 1 "$T/c-str.json" "$T/allow.json" 2026-10-04
 
 # An advisory with no url and no source is "unknown", and no entry may accept that.
 jq '.vulnerabilities.foo={"severity":"high","via":[{"severity":"high","name":"foo"}]}' "$T/clean.json" >"$T/noid.json"
