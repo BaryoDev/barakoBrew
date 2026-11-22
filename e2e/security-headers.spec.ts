@@ -24,6 +24,16 @@ test.describe('Security headers', () => {
         }
     });
 
+    test('a response behind an HTTPS proxy carries HSTS', async ({ request }) => {
+        const response = await request.get('/', { headers: { 'x-forwarded-proto': 'https' } });
+        expect(response.headers()['strict-transport-security']).toBe('max-age=31536000');
+    });
+
+    test('a plain http response carries no HSTS', async ({ request }) => {
+        const response = await request.get('/');
+        expect(response.headers()['strict-transport-security']).toBeUndefined();
+    });
+
     test('the sign-in page is not blocked by its own policy', async ({ page }) => {
         const violations: string[] = [];
         page.on('console', (message) => {
