@@ -19,6 +19,15 @@ moved. Which API a console works against is stated per release instead.
 - `SignInFlow.completeSession(tokens)` lets a package panel hand tokens to the page, which starts the session and redirects as it does after a password. A panel never touches the token store.
 - `QrApprovalPanel`, a reusable panel that shows a QR and a match number, counts down to expiry and polls until a signed-in device approves. The browser secret stays in memory and is sent only in a poll body.
 
+### Security
+
+- The image is scanned for known vulnerabilities with Trivy, in the CI `image` job and in `publish.yml` before anything is pushed. A High or Critical finding that has a fix fails the run. A finding with no fix yet is reported and does not fail. An exception is an entry in `.github/audit-allowlist.json` with a reason and an expiry date, the same file and rule the npm audit gate uses (`scripts/image-scan-gate.sh`, cases in `scripts/test-audit-gate.sh`). The nightly run scans the latest published image too, fails on a finding and uploads the result to code scanning. It never opens or comments on an issue.
+- The runtime image no longer carries npm, corepack or yarn. The server needs only node, and their dependency trees were what the first scan found.
+- The base image is pinned by digest, and Dependabot has `docker` and `docker-compose` entries to move it.
+- The console sends `Strict-Transport-Security: max-age=31536000` when a proxy says the request came over HTTPS (`X-Forwarded-Proto: https`), and never on plain http. A proxy that does not send that header gets no HSTS from the console.
+- `react/no-danger`, `no-eval` and `no-implied-eval` are lint errors. The markdown preview is the one reviewed exception.
+- A gitleaks scan runs in CI with a planted-secret self-test, and CodeQL scans the workflow files (`actions`) as well as the source.
+
 ### Changed
 
 - Overview cards now get a required `queryClient` prop (`OverviewCardProps` is the shared slot props), so a card must render inside a `QueryClientProvider`. Existing overview card authors need to accept the prop and make sure their card is mounted under one.
@@ -32,6 +41,8 @@ moved. Which API a console works against is stated per release instead.
   Custom. Only their own writes `{ "$createdBy": { "_eq": "$CURRENT_USER" } }`, and the department
   preset writes `{ field: { _eq: "$CURRENT_USER.department" } }`. A stored condition of any other
   shape opens on Custom with the builder, unchanged.
+- **Existing deploys, entrypoint.** `entrypoint.sh` no longer rewrites files inside the image. When `BARAKO_RUNTIME_DIR` is set (the image sets it to `/tmp/barako-app`) it copies the server and build output there and runs from the copy, so the image runs with `read_only: true` and a tmpfs on `/tmp`. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_PRESS_URL` and `BARAKO_BASE_PATH` are read at start and behave as before, with or without a read-only filesystem. If you override `ENTRYPOINT` or `CMD`, run `node server.js` from the working directory the entrypoint leaves you in. The image has a `HEALTHCHECK`.
+- **Existing deploys, quickstart.** `quickstart/docker-compose.yml` defaults `AllowedHosts` to `localhost;127.0.0.1` where it was `*`, because barakoCMS 6.0 refuses to start in Production with `*` or empty. Set `ALLOWED_HOSTS` in `.env` to your domain if you serve the API from one. Ports are bound to `127.0.0.1`, the API image defaults to 5.8.0 in place of `latest`, and the console and Postgres run read-only with all capabilities dropped (Postgres keeps the five it needs). The console needs a release that includes the entrypoint change to run read-only.
 
 ## [1.13.0] - 2026-11-17
 
