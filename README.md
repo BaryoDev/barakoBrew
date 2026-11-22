@@ -30,10 +30,10 @@ images.
 
 The image is never written to at start. `entrypoint.sh` copies the server and its build output to
 `/tmp/barako-app`, makes every rewrite there and runs from the copy, so the container runs with
-`--read-only` and a tmpfs on `/tmp` (about 16 MB used, `size=64m` leaves room):
+`--read-only` and a tmpfs on `/tmp` (about 16 MB used, `size=128m` leaves room):
 
 ```bash
-docker run --read-only --tmpfs /tmp:rw,mode=1777,size=64m -e NEXT_PUBLIC_API_URL=https://api.example.com ghcr.io/baryodev/barako-brew
+docker run --read-only --tmpfs /tmp:rw,mode=1777,size=128m -e NEXT_PUBLIC_API_URL=https://api.example.com ghcr.io/baryodev/barako-brew
 ```
 
 Without `--read-only` nothing changes for you: the copy lands in the container's own `/tmp`.

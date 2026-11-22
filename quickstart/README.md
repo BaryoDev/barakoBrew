@@ -28,7 +28,7 @@ put a reverse proxy in front. Every container drops all Linux capabilities (Post
 five it needs to own its data directory) and runs with `no-new-privileges`. The console and Postgres
 run with a read-only root filesystem and a tmpfs for what they write. The console copies its server
 to `/tmp` at start, which is how the API address and base path reach it without writing into the
-image, so its tmpfs needs about 64 MB of room. The API runs with a writable filesystem.
+image, so its tmpfs (128 MB in the compose file) holds about 16 MB of it. The API runs with a writable filesystem.
 
 To publish a port on every interface instead, change its `ports:` line to `"0.0.0.0:..."`.
 

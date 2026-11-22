@@ -113,7 +113,7 @@ ENV PORT=3000
 # Nothing under /app is written at run time. entrypoint.sh copies the server and its build output
 # here, writes the base path, the policy origins and env-config.js into the copy and starts from
 # it, so the image runs with a read-only root filesystem and a tmpfs on /tmp. Size that tmpfs for
-# the copy (about 64m) and the Next cache.
+# the copy (about 16 MB) and the Next cache, 128m is enough.
 ENV BARAKO_RUNTIME_DIR=/tmp/barako-app
 
 # Any answer below 500 means the server is up: under a base path the root is a 404, and that is
