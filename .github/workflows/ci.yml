@@ -139,12 +139,13 @@ jobs:
           printf 'aws_access_key_id = "%s%s"\n' "$AWS_P" "$AWS_SUFFIX" > "$TMP/plant/aws.txt" # allow-secret
           printf 'gh_token = "%s%s"\n' "$GH_P" "$GH_SUFFIX" > "$TMP/plant/github.txt" # allow-secret
 
-          # Exit 1 means leaks were found, which is what is wanted. Anything else is a broken run.
+          # gitleaks exits 1 for a leak and for an error alike, so ask for 42 on a leak. Anything
+          # else is a broken run.
           code=0
-          gitleaks dir "$TMP/plant" --config .gitleaks.toml --redact --no-banner \
+          gitleaks dir "$TMP/plant" --config .gitleaks.toml --redact --no-banner --exit-code 42 \
             --report-format json --report-path "$TMP/report.json" || code=$?
-          if [ "$code" -ne 1 ]; then
-            echo "::error::gitleaks exited $code on the planted credentials, wanted 1. The gate is not working."
+          if [ "$code" -ne 42 ]; then
+            echo "::error::gitleaks exited $code on the planted credentials, wanted 42. The gate is not working."
             exit 1
           fi
           for rule in aws-access-token github-pat; do
