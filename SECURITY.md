@@ -40,6 +40,8 @@ The API it talks to follows barakoCMS's own policy.
   on plain HTTP against a Production API cannot keep a session.
 - Set `CORS__AllowedOrigins` on the API to the console's origin, not `*`.
 - Pin the image tag rather than running `latest`.
+- Verify the image before you run it. The release and `dev` tags are signed and carry a build
+  provenance attestation; the README has the `cosign verify` and `cosign verify-attestation` commands.
 
 ## Known advisories we accept
 

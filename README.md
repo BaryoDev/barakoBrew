@@ -53,6 +53,35 @@ Tags on `ghcr.io/baryodev/barako-brew`:
 Every tag is also pushed as `ghcr.io/baryodev/barako-admin`, the old name, at the same digest.
 That name stops at 2.0.0.
 
+### Verify the image
+
+The `latest`, `<version>`, `dev` and `dev-<sha>` tags are signed with cosign (keyless, from
+`publish.yml` in this repository) and carry a build provenance attestation, under both
+`ghcr.io/baryodev/barako-brew` and `ghcr.io/baryodev/barako-admin`. The workflow signs the digest,
+checks the signature and the attestation, and only then moves `latest` or `dev`. You need `cosign`,
+`docker` and `jq`. Resolve the tag to a digest, then verify that digest:
+
+```bash
+DIGEST=$(docker buildx imagetools inspect --format '{{json .Manifest}}' ghcr.io/baryodev/barako-brew:latest | jq -r '.digest')
+
+cosign verify \
+  --certificate-identity-regexp '^https://github\.com/BaryoDev/barakoBrew/\.github/workflows/publish\.yml@refs/(heads/master|tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/baryodev/barako-brew@$DIGEST
+
+cosign verify-attestation --type slsaprovenance1 \
+  --certificate-identity-regexp '^https://github\.com/BaryoDev/barakoBrew/\.github/workflows/publish\.yml@refs/(heads/master|tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?)$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/baryodev/barako-brew@$DIGEST > /dev/null
+```
+
+Do not run an image that fails either command. To run exactly what you verified, pull
+`ghcr.io/baryodev/barako-brew@$DIGEST`.
+
+Not signed: the `playground` and `playground-<version>` tags, the Docker Hub mirror
+(`arnelirobles/*`), and any tag published before signing was added. For a mirror image, take its
+digest and verify that same digest against `ghcr.io/baryodev/barako-brew@<digest>`.
+
 ### Serving under a sub-path
 
 To host the console at something like `example.com/barakocms`, set `BARAKO_BASE_PATH` on the
