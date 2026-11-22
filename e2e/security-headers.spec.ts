@@ -29,6 +29,13 @@ test.describe('Security headers', () => {
         expect(response.headers()['strict-transport-security']).toBe('max-age=31536000');
     });
 
+    test('a response behind a chain of HTTPS proxies carries HSTS', async ({ request }) => {
+        for (const chain of ['https,https', 'https, https']) {
+            const response = await request.get('/', { headers: { 'x-forwarded-proto': chain } });
+            expect(response.headers()['strict-transport-security'], chain).toBe('max-age=31536000');
+        }
+    });
+
     test('a plain http response carries no HSTS', async ({ request }) => {
         const response = await request.get('/');
         expect(response.headers()['strict-transport-security']).toBeUndefined();
