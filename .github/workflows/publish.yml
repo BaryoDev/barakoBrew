@@ -59,7 +59,7 @@ jobs:
                 echo "::error::tag v$V is not a version"; exit 1; }
               # The signing identity accepts any v tag, so a release is built only from a commit
               # that is on master.
-              git merge-base --is-ancestor "$GITHUB_SHA" origin/master || {
+              git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master || {
                 echo "::error::tag v$V is not on master"; exit 1; }
               echo "version=$V" >> "$GITHUB_OUTPUT"
               echo "is_release=true" >> "$GITHUB_OUTPUT"

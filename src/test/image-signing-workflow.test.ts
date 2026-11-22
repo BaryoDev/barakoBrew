@@ -232,7 +232,7 @@ describe('publish.yml signs and attests the image', () => {
 
     it('refuses a v tag whose commit is not on master, in a job with no write permission', () => {
         const version = job('version');
-        expect(version).toContain('git merge-base --is-ancestor "$GITHUB_SHA" origin/master || {');
+        expect(version).toContain('git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master || {');
         expect(version).toContain('::error::tag v$V is not on master');
         expect(version).toContain('fetch-depth: 0');
         expect(version).toContain('persist-credentials: false');
