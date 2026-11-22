@@ -89,6 +89,63 @@ jobs:
         if: '!cancelled()'
         run: bash scripts/test-wiki-publish.sh
 
+  # Secrets in the tree or in history. The scanner is the gitleaks release binary, checked against a
+  # pinned checksum from the release's own checksums file before it is extracted. A scan that finds
+  # nothing looks the same as a scan that is not running, so the second step plants a credential and
+  # fails if the scan does not catch it.
+  secrets:
+    name: Secret scan (gitleaks)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # History, not one commit. The default depth gives the scan almost nothing to read.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.30.1
+          SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          curl -sSL --fail -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "${SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Secret scan
+        run: gitleaks git . --config .gitleaks.toml --redact --verbose
+
+      # --no-git against a scratch directory, so clone depth cannot break it. It checks that the
+      # rules and the allowlist in .gitleaks.toml are live. The prefixes are assembled from halves,
+      # because written whole they would match the rule and flag this file.
+      - name: The scan catches a planted credential
+        run: |
+          set -euo pipefail
+          TMP=$(mktemp -d)
+          cp .gitleaks.toml "$TMP/.gitleaks.toml"
+          AWS_P="AK"; AWS_P="${AWS_P}IA" # allow-secret
+          GH_P="gh"; GH_P="${GH_P}p_" # allow-secret
+          # A bounded read first. Piping /dev/urandom into `tr | head -c N` kills tr with SIGPIPE
+          # and, under pipefail, fails the assignment before the scan runs.
+          RAND=$(head -c 512 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')
+          AWS_ID="${AWS_P}$(printf '%s' "${RAND}" | LC_ALL=C tr -d 'a-z' | cut -c1-16)" # allow-secret
+          GH_TOK="${GH_P}$(printf '%s' "${RAND}" | cut -c1-36)" # allow-secret
+          {
+            printf 'aws_access_key_id = "%s"\n' "$AWS_ID" # allow-secret
+            printf 'gh_token = "%s"\n' "$GH_TOK" # allow-secret
+          } > "$TMP/planted.txt"
+
+          if gitleaks dir "$TMP" --config "$TMP/.gitleaks.toml" --redact --no-banner; then
+            echo "::error::The secret scan did not catch a planted credential. The gate is not working."
+            exit 1
+          fi
+          echo "Planted secret was caught. The scan is live."
+
   audit:
     name: Audit dependencies
     if: github.event_name != 'schedule'
@@ -283,6 +340,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Known vulnerabilities in the built image: Alpine packages, the node binary and the traced
+      # node_modules. High or Critical with a fix fails, unless .github/audit-allowlist.json names
+      # the id with a reason and an unexpired date. A finding with no fix yet is reported and does
+      # not fail. The scanner is a release binary checked against a pinned checksum.
+      - name: Install Trivy
+        run: bash scripts/install-trivy.sh
+
+      - name: The image has no fixable High or Critical vulnerability
+        run: |
+          set -uo pipefail
+          trivy image --scanners vuln --severity HIGH,CRITICAL --format json \
+            --output image-scan.json barako-brew:ci
+          bash scripts/image-scan-gate.sh image-scan.json | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+
       # What the image redistributes, read out of the image. The tree gate in the licences job
       # answers what comes in, and the two differ: the runtime stage copies Next's traced output,
       # not node_modules, which is how 27MB of LGPL libvips shipped while the tree gate was green
@@ -322,10 +394,14 @@ jobs:
       # A build that succeeds is not a container that starts. entrypoint.sh has to write
       # env-config.js from NEXT_PUBLIC_API_URL and the standalone server has to answer, or the
       # image is a tarball nobody can run.
+      # Started with a read-only root filesystem, which is how the quickstart runs it, so a start
+      # that writes into the image fails here and not on somebody's server. The image's own
+      # HEALTHCHECK has to go healthy too.
       - name: The image starts and reads its API URL at start
         run: |
           set -euo pipefail
           docker run -d --name ci-admin -p 3300:3000 \
+            --read-only --tmpfs /tmp:rw,mode=1777,size=128m \
             -e NEXT_PUBLIC_API_URL=http://api.example.test:5005 barako-brew:ci
           for _ in $(seq 1 30); do
             [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3300/login || true)" = "200" ] && break
@@ -336,6 +412,12 @@ jobs:
           curl -s http://127.0.0.1:3300/env-config.js | tee env-config.js
           grep -q 'NEXT_PUBLIC_API_URL: "http://api.example.test:5005"' env-config.js || {
             echo "::error::env-config.js does not carry the NEXT_PUBLIC_API_URL the container was started with"; exit 1; }
+          for _ in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' ci-admin)" = "healthy" ] && break
+            sleep 2
+          done
+          status=$(docker inspect -f '{{.State.Health.Status}}' ci-admin)
+          [ "$status" = "healthy" ] || { docker logs ci-admin; echo "::error::the container health is $status"; exit 1; }
           docker rm -f ci-admin >/dev/null
 
       # The point of #167: this is the same image as the step above, started with a base path
@@ -345,6 +427,7 @@ jobs:
         run: |
           set -euo pipefail
           docker run -d --name ci-admin-prefix -p 3301:3000 \
+            --read-only --tmpfs /tmp:rw,mode=1777,size=128m \
             -e BARAKO_BASE_PATH=/barakocms \
             -e NEXT_PUBLIC_API_URL=http://api.example.test:5005 barako-brew:ci
           for _ in $(seq 1 30); do
@@ -506,6 +589,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Only the functional smoke feeds this. Image scan results never do (see nightly-image-scan).
   # A failed nightly opens one tracking issue, or comments on it if it is already open. Pull
   # requests run the pinned release, so they stay green while :master is red, and without this a
   # stale pin or an API change the console has to follow would only show as a red run nobody opened.
@@ -540,6 +624,47 @@ jobs:
           else
             gh issue create --title "$title" --body "$body"
           fi
+
+  # The published image again, every night. A new advisory lands against an image that was clean
+  # when it shipped, and nothing else would look. High or Critical with a fix fails the run and the
+  # findings go to code scanning as SARIF.
+  #
+  # Findings are never posted as issues. This job has no issues permission and is not a dependency
+  # of nightly-issue, which only reports the smoke job and never carries scan results. The
+  # repository is public, so an issue naming an unpatched vulnerability tells everyone before the
+  # fix ships.
+  nightly-image-scan:
+    name: Scan the published image
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Trivy
+        run: bash scripts/install-trivy.sh
+
+      - name: Scan the latest published image
+        run: |
+          set -uo pipefail
+          trivy image --scanners vuln --severity HIGH,CRITICAL --format json \
+            --output image-scan.json ghcr.io/baryodev/barako-brew:latest
+          trivy convert --format sarif --output image-scan.sarif image-scan.json
+          bash scripts/image-scan-gate.sh image-scan.json | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+
+      # After the scan, and even when it failed, so the findings reach code scanning either way.
+      - name: Upload the findings to code scanning
+        if: always() && hashFiles('image-scan.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          sarif_file: image-scan.sarif
+          category: published-image
 
   # Lean only stays lean if something notices weight coming back (#853). This builds the production
   # image, boots it with a dummy API address that nothing listens on, and records image size,

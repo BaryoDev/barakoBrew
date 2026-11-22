@@ -34,5 +34,36 @@ check "another advisory still fails"                1 "$T/extra.json" "$T/allow.
 check "an unreadable report fails closed"           1 "$T/bad.json" "$T/allow.json" 2026-10-04
 check "an unreadable allowlist fails closed"        1 "$T/report.json" "$T/badallow.json" 2026-10-04
 check "an entry with no reason accepts nothing"     1 "$T/report.json" "$T/noreason.json" 2026-10-04
+
+# The image scan gate reads a Trivy report and the same allowlist.
+image_check() { # name, expected rc, args...
+    local name=$1 want=$2; shift 2
+    bash scripts/image-scan-gate.sh "$@" >"$T/out" 2>&1; local got=$?
+    if [ "$got" -eq "$want" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $name (rc $got, wanted $want)"; cat "$T/out"; fi
+}
+cat >"$T/image.json" <<'J'
+{"SchemaVersion":2,"Results":[{"Target":"alpine","Vulnerabilities":[
+ {"VulnerabilityID":"CVE-2099-0001","PkgName":"busybox","Severity":"HIGH","FixedVersion":"1.37.1"},
+ {"VulnerabilityID":"CVE-2099-0002","PkgName":"zlib","Severity":"LOW","FixedVersion":"1.3.2"}]}]}
+J
+cat >"$T/image-unfixed.json" <<'J'
+{"SchemaVersion":2,"Results":[{"Target":"alpine","Vulnerabilities":[
+ {"VulnerabilityID":"CVE-2099-0003","PkgName":"openssl","Severity":"CRITICAL"}]}]}
+J
+echo '{"SchemaVersion":2}' >"$T/image-clean.json"
+echo '[{"id":"CVE-2099-0001","expires":"2026-11-04"}]' >"$T/image-noreason.json"
+cat >"$T/image-allow.json" <<'J'
+[{"id":"CVE-2099-0001","package":"busybox","reason":"test","expires":"2026-11-04"}]
+J
+
+image_check "a clean image report passes"                      0 "$T/image-clean.json" "$T/image-allow.json" 2026-10-04
+image_check "a fixable High finding fails"                     1 "$T/image.json" "$T/none.json" 2026-10-04
+image_check "an allowlisted finding passes"                    0 "$T/image.json" "$T/image-allow.json" 2026-10-04
+image_check "an allowlisted finding passes on its expiry"      0 "$T/image.json" "$T/image-allow.json" 2026-11-04
+image_check "an expired allowlist entry fails"                 1 "$T/image.json" "$T/image-allow.json" 2026-11-05
+image_check "a Critical finding with no fix is reported only"  0 "$T/image-unfixed.json" "$T/none.json" 2026-10-04
+image_check "an unreadable report fails closed"                1 "$T/bad.json" "$T/image-allow.json" 2026-10-04
+image_check "an unreadable allowlist fails closed"             1 "$T/image.json" "$T/badallow.json" 2026-10-04
+image_check "an entry with no reason accepts nothing"          1 "$T/image.json" "$T/image-noreason.json" 2026-10-04
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
