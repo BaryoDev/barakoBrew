@@ -121,7 +121,7 @@ jobs:
         run: gitleaks git . --config .gitleaks.toml --redact --verbose
 
       # --no-git against a scratch directory, so clone depth cannot break it. It checks that the
-      # rules and the allowlist in .gitleaks.toml are live. The prefixes are assembled from halves,
+      # rules in .gitleaks.toml are live. The prefixes are assembled from halves,
       # because written whole they would match the rule and flag this file.
       - name: The scan catches a planted credential
         run: |

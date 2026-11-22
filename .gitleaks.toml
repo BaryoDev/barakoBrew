@@ -1,11 +1,7 @@
-# Secret scanning config. The default rules are the whole policy; the one allowlist entry below is a
-# test fixture that has to look like a token.
+# Secret scanning config. The default rules are the whole policy. The one known false positive, a
+# made-up token in a unit test committed before the scan existed, is ignored by its fingerprint in
+# .gitleaksignore (that commit, file, rule and line only), so nothing else in that file is skipped.
 title = "barakoBrew"
 
 [extend]
 useDefault = true
-
-[[allowlists]]
-description = "A made-up bearer token in a unit test, committed before the scan existed."
-paths = ['''src/app/\(admin\)/content/\[id\]/page\.fields\.test\.tsx''']
-regexes = ['''abcdefghjkmnpqrstvwxyz0123456789''']
