@@ -1,8 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, copyFileSync } from 'node:fs';
+import {
+    chmodSync,
+    copyFileSync,
+    existsSync,
+    lstatSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    symlinkSync,
+    writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 /**
  * The console's base path used to be fixed when the image was built, because Next resolves
@@ -71,6 +82,25 @@ const run = (env: Record<string, string> = {}) =>
         stdio: ['ignore', 'pipe', 'pipe'],
     });
 
+// The message the entrypoint wrote when it refused, for the cases that must say why.
+const refusal = (env: Record<string, string> = {}): string => {
+    try {
+        run(env);
+    } catch (error) {
+        return String((error as { stderr?: Buffer | string }).stderr ?? '');
+    }
+    throw new Error('the entrypoint was expected to refuse and did not');
+};
+
+// Tests below take write permission away from parts of the fixture, and rmSync needs it back.
+const restoreModes = () => {
+    try {
+        execFileSync('chmod', ['-R', 'u+w', dir]);
+    } catch {
+        /* the directory is already gone */
+    }
+};
+
 beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'brew-entrypoint-'));
     copyFileSync(join(process.cwd(), 'entrypoint.sh'), join(dir, 'entrypoint.sh'));
@@ -93,6 +123,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    restoreModes();
     rmSync(dir, { recursive: true, force: true });
 });
 
@@ -164,6 +195,18 @@ describe('entrypoint.sh writes the base path in at start', () => {
         expect(read('server.js')).not.toContain('alert(1)');
     });
 
+    it('a value that spans lines is refused, even when its first line is a valid path', () => {
+        const before = read('server.js');
+        const stderr = refusal({ BARAKO_BASE_PATH: '/ok\n/x' });
+
+        expect(stderr).toContain('BARAKO_BASE_PATH must be one or more /segments');
+        expect(read('server.js')).toBe(before);
+    });
+
+    it('a value with a trailing newline is refused', () => {
+        expect(refusal({ BARAKO_BASE_PATH: '/ok\n' })).toContain('BARAKO_BASE_PATH must be one or more /segments');
+    });
+
     it('starting the same container again changes nothing', () => {
         run({ BARAKO_BASE_PATH: '/barakocms' });
         const after = FILES.map((file) => read(file));
@@ -229,9 +272,69 @@ describe('entrypoint.sh with BARAKO_RUNTIME_DIR leaves the image untouched', () 
 
         run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
         expect(FILES.map((file) => readRuntime(file))).toEqual(after);
+
+        // Without the rm before each copy, cp -R puts the source inside the existing directory.
+        expect(existsSync(join(runtime, '.next', '.next'))).toBe(false);
+        expect(existsSync(join(runtime, 'public', 'public'))).toBe(false);
+    });
+
+    it('copies from sources that are read-only and still rewrites the copies, twice', () => {
+        execFileSync('chmod', ['-R', 'a-w', join(dir, 'server.js'), join(dir, '.next'), join(dir, 'public')]);
+
+        run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
+        run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
+
+        for (const file of FILES) {
+            expect(readRuntime(file), file).not.toContain(PLACEHOLDER);
+        }
+        expect(readRuntime('server.js')).toContain('"basePath":"/barakocms"');
+        expect(readRuntime('public/env-config.js')).toContain('window._env_');
+    });
+
+    describe('a runtime directory that is, holds or reaches the app directory is refused', () => {
+        const intact = () => {
+            expect(read('server.js')).toContain(PLACEHOLDER);
+            expect(existsSync(join(dir, '.next', 'routes-manifest.json'))).toBe(true);
+            expect(existsSync(join(dir, 'public'))).toBe(true);
+        };
+        const link = () => {
+            const target = join(runtime, 'link-to-app');
+            symlinkSync(dir, target);
+            return target;
+        };
+
+        const cases: Array<[string, () => string]> = [
+            ['the app directory with a trailing slash', () => `${dir}/`],
+            ['the app directory with a /. segment', () => `${dir}/.`],
+            ['a .. path that comes back to the app directory', () => `${dir}/../${basename(dir)}`],
+            ['a symlink to the app directory', link],
+            ['the directory above the app directory', () => dirname(dir)],
+            ['the root directory', () => '/'],
+            ['a directory inside the app directory', () => join(dir, 'inside')],
+        ];
+
+        it.each(cases)('%s', (_name, value) => {
+            const stderr = refusal({ BARAKO_RUNTIME_DIR: value() });
+
+            expect(stderr).toContain('BARAKO_RUNTIME_DIR');
+            intact();
+        });
     });
 
     it('a runtime directory that is not an absolute path is refused', () => {
         expect(() => run({ BARAKO_RUNTIME_DIR: 'relative/path' })).toThrow();
+    });
+});
+
+describe('entrypoint.sh with BARAKO_RUNTIME_DIR unset and an app directory it cannot write', () => {
+    // Root can write anywhere, so the case cannot be set up as root.
+    it.skipIf(process.getuid?.() === 0)('refuses, and says to set BARAKO_RUNTIME_DIR', () => {
+        chmodSync(dir, 0o555);
+
+        const stderr = refusal();
+
+        expect(stderr).toContain('is not writable');
+        expect(stderr).toContain('Set BARAKO_RUNTIME_DIR');
+        expect(read('server.js')).toContain(PLACEHOLDER);
     });
 });
