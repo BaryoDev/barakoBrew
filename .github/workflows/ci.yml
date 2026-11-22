@@ -120,31 +120,40 @@ jobs:
       - name: Secret scan
         run: gitleaks git . --config .gitleaks.toml --redact --verbose
 
-      # --no-git against a scratch directory, so clone depth cannot break it. It checks that the
-      # rules in .gitleaks.toml are live. The prefixes are assembled from halves,
-      # because written whole they would match the rule and flag this file.
+      # Scans a scratch directory, so clone depth cannot break it, with the repository's own config.
+      # Each planted secret is its own file and the report is read back, so the check needs both
+      # default rules to fire, not any one of them. The prefixes are assembled from halves, because
+      # written whole they would match the rules and flag this file. The AWS rule only accepts
+      # A-Z and 2-7 after the prefix. Bounded reads first: piping /dev/urandom into `tr | head -c N`
+      # kills tr with SIGPIPE and, under pipefail, fails the assignment before the scan runs.
       - name: The scan catches a planted credential
         run: |
           set -euo pipefail
           TMP=$(mktemp -d)
-          cp .gitleaks.toml "$TMP/.gitleaks.toml"
+          mkdir "$TMP/plant"
           AWS_P="AK"; AWS_P="${AWS_P}IA" # allow-secret
           GH_P="gh"; GH_P="${GH_P}p_" # allow-secret
-          # A bounded read first. Piping /dev/urandom into `tr | head -c N` kills tr with SIGPIPE
-          # and, under pipefail, fails the assignment before the scan runs.
-          RAND=$(head -c 512 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')
-          AWS_ID="${AWS_P}$(printf '%s' "${RAND}" | LC_ALL=C tr -d 'a-z' | cut -c1-16)" # allow-secret
-          GH_TOK="${GH_P}$(printf '%s' "${RAND}" | cut -c1-36)" # allow-secret
-          {
-            printf 'aws_access_key_id = "%s"\n' "$AWS_ID" # allow-secret
-            printf 'gh_token = "%s"\n' "$GH_TOK" # allow-secret
-          } > "$TMP/planted.txt"
+          AWS_SUFFIX=$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Z2-7' | cut -c1-16)
+          GH_SUFFIX=$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-36)
+          [ "${#AWS_SUFFIX}" -eq 16 ] && [ "${#GH_SUFFIX}" -eq 36 ] || { echo "::error::could not build the planted values"; exit 1; }
+          printf 'aws_access_key_id = "%s%s"\n' "$AWS_P" "$AWS_SUFFIX" > "$TMP/plant/aws.txt" # allow-secret
+          printf 'gh_token = "%s%s"\n' "$GH_P" "$GH_SUFFIX" > "$TMP/plant/github.txt" # allow-secret
 
-          if gitleaks dir "$TMP" --config "$TMP/.gitleaks.toml" --redact --no-banner; then
-            echo "::error::The secret scan did not catch a planted credential. The gate is not working."
+          # Exit 1 means leaks were found, which is what is wanted. Anything else is a broken run.
+          code=0
+          gitleaks dir "$TMP/plant" --config .gitleaks.toml --redact --no-banner \
+            --report-format json --report-path "$TMP/report.json" || code=$?
+          if [ "$code" -ne 1 ]; then
+            echo "::error::gitleaks exited $code on the planted credentials, wanted 1. The gate is not working."
             exit 1
           fi
-          echo "Planted secret was caught. The scan is live."
+          for rule in aws-access-token github-pat; do
+            if ! jq -e --arg r "$rule" 'any(.[]; .RuleID == $r)' "$TMP/report.json" >/dev/null; then
+              echo "::error::The secret scan did not report rule $rule for its planted credential. The gate is not working."
+              exit 1
+            fi
+          done
+          echo "Both planted secrets were caught. The scan is live."
 
   audit:
     name: Audit dependencies
