@@ -1,0 +1,17 @@
+name: called
+on: workflow_call
+jobs:
+  a:
+    permissions:
+      contents: read
+    steps: []
+  b:
+    permissions:
+      issues: write
+    steps: []
+  c:
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps: []

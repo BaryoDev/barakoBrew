@@ -170,6 +170,12 @@ jobs:
       - name: The audit gate keeps its rules
         run: bash scripts/test-audit-gate.sh
 
+      # ci-branch.yml calls this file. A called workflow cannot ask for more than its caller grants,
+      # and that is checked at startup for every job, so a permission added here and not there fails
+      # every branch-push run before it starts.
+      - name: The branch caller grants every permission this workflow declares
+        run: python3 scripts/check-workflow-permissions.py .github/workflows/ci.yml .github/workflows/ci-branch.yml
+
       - name: Audit dependencies (fail on Critical or High)
         run: |
           # `npm audit` exits non-zero when it finds anything, so its status cannot distinguish

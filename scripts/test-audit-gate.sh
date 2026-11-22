@@ -65,5 +65,13 @@ image_check "a Critical finding with no fix is reported only"  0 "$T/image-unfix
 image_check "an unreadable report fails closed"                1 "$T/bad.json" "$T/image-allow.json" 2026-10-04
 image_check "an unreadable allowlist fails closed"             1 "$T/image.json" "$T/badallow.json" 2026-10-04
 image_check "an entry with no reason accepts nothing"          1 "$T/image.json" "$T/image-noreason.json" 2026-10-04
+# The caller job in ci-branch.yml must grant what every job in ci.yml declares.
+perm_check() { # name, expected rc, caller file
+    local name=$1 want=$2 caller=$3
+    python3 scripts/check-workflow-permissions.py scripts/testdata/workflow-permissions/called.yml "scripts/testdata/workflow-permissions/$caller" >"$T/out" 2>&1; local got=$?
+    if [ "$got" -eq "$want" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $name (rc $got, wanted $want)"; cat "$T/out"; fi
+}
+perm_check "a caller with the full union passes"                       0 caller-ok.yml
+perm_check "the old caller pairing, missing packages and security-events, fails" 1 caller-master.yml
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
