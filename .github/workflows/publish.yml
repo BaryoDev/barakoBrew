@@ -105,36 +105,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Scanned before anything is pushed. This builds the image for the runner's own architecture
-      # into the local daemon, and High or Critical with a fix stops the job here, so a vulnerable
-      # image never reaches a tag. Unfixed findings are reported and do not fail. An exception is an
-      # entry in .github/audit-allowlist.json with a reason and an unexpired date. The push below
-      # builds from the same cache, so it is the image that was scanned.
-      - name: Build for the scan
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: ${{ matrix.platform }}
-          push: false
-          load: true
-          tags: barako-brew:scan
-          build-args: |
-            BARAKO_VERSION=${{ needs.version.outputs.version }}
-          cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
-
-      - name: Install Trivy
-        run: bash scripts/install-trivy.sh
-
-      - name: The image has no fixable High or Critical vulnerability
-        run: |
-          set -uo pipefail
-          trivy image --scanners vuln --severity HIGH,CRITICAL --format json \
-            --output image-scan.json barako-brew:scan
-          bash scripts/image-scan-gate.sh image-scan.json | tee -a "$GITHUB_STEP_SUMMARY"
-          exit "${PIPESTATUS[0]}"
-
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
@@ -158,6 +128,30 @@ jobs:
           outputs: type=image,"name=ghcr.io/baryodev/barako-brew,ghcr.io/baryodev/barako-admin",push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+
+      # The image is scanned from the registry by the digest just pushed, so it is the exact image
+      # that would be tagged. High or Critical with a fix fails the job before the digest is
+      # recorded, so the manifest job never tags it. The untagged digest stays in the registry.
+      # Unfixed findings are reported and do not fail. An exception is an entry in
+      # .github/audit-allowlist.json with a reason and an unexpired date.
+      - name: Install Trivy
+        run: bash scripts/install-trivy.sh
+
+      - name: The pushed image has no fixable High or Critical vulnerability
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -uo pipefail
+          case "$DIGEST" in
+            sha256:*) ;;
+            *) echo "::error::build produced no usable digest, got '$DIGEST'"; exit 1 ;;
+          esac
+          trivy image --scanners vuln --severity HIGH,CRITICAL --format json \
+            --output image-scan.json "ghcr.io/baryodev/barako-brew@$DIGEST"
+          bash scripts/image-scan-gate.sh image-scan.json | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
 
       # An empty digest here would make the merge step below build a manifest out of nothing, so it
       # fails now rather than producing an image that resolves to no architectures.
