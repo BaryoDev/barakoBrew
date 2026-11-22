@@ -346,8 +346,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Known vulnerabilities in the built image: Alpine packages, the node binary and the traced
-      # node_modules. High or Critical with a fix fails, unless .github/audit-allowlist.json names
+      # Known vulnerabilities in the built image: Alpine packages and the traced node_modules. Trivy
+      # has no analyzer for the node runtime in /usr/local/bin, so node itself is kept current by the
+      # base image digest pin and Dependabot, not by this scan. High or Critical with a fix fails, unless .github/audit-allowlist.json names
       # the id with a reason and an unexpired date. A finding with no fix yet is reported and does
       # not fail. The scanner is a release binary checked against a pinned checksum.
       - name: Install Trivy
