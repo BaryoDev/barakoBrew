@@ -21,6 +21,17 @@ Then open:
 
 Sign in to the console with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`.
 
+## What the containers are allowed to do
+
+Both ports are published on `127.0.0.1` only, so nothing outside the machine reaches them until you
+put a reverse proxy in front. Every container drops all Linux capabilities (Postgres gets back the
+five it needs to own its data directory) and runs with `no-new-privileges`. The console and Postgres
+run with a read-only root filesystem and a tmpfs for what they write. The console copies its server
+to `/tmp` at start, which is how the API address and base path reach it without writing into the
+image, so its tmpfs needs about 64 MB of room. The API runs with a writable filesystem.
+
+To publish a port on every interface instead, change its `ports:` line to `"0.0.0.0:..."`.
+
 ## Behind a domain
 
 Put a reverse proxy terminating TLS in front of both, then set in `.env`:
@@ -30,10 +41,16 @@ ASPNETCORE_ENVIRONMENT=Production
 PUBLIC_API_URL=https://cms.example.com        # what the browser calls
 ALLOWED_ORIGINS=https://console.example.com   # where the console is served
 APP_BASE_URL=https://cms.example.com          # what the API puts in links it hands out
-ALLOWED_HOSTS=cms.example.com                 # the Host headers the API answers to
+ALLOWED_HOSTS=cms.example.com                 # the Host headers the API answers to, semicolon separated
 BARAKO_API_TAG=4.7.0                          # pin releases rather than latest
 BARAKO_CONSOLE_TAG=1.8.0
 ```
+
+`ALLOWED_HOSTS` defaults to `localhost;127.0.0.1`, which is enough for the URLs above on one
+machine. Behind a domain, list the domain, and list every name the API is reached by (separate them
+with semicolons, no spaces). barakoCMS 6.0 refuses to start in Production when it is empty or `*`, so
+this compose no longer defaults to `*`. If you relied on that default, set `ALLOWED_HOSTS` in `.env`
+before you upgrade or the API will not answer requests for your domain.
 
 Pick the pair from the compatibility table in the main README's "Which barakoCMS it works with".
 A console refuses to run against an API whose contract it does not speak.

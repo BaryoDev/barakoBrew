@@ -8,13 +8,28 @@
 # Console:   http://localhost:${ADMIN_PORT:-3000}
 # API:       http://localhost:${API_PORT:-5005}
 #
+# Both ports are bound to 127.0.0.1. To reach them from another machine, put a reverse proxy in
+# front (see README.md, "Behind a domain"), or change the ports lines to "0.0.0.0:...".
+#
+# Every container drops all Linux capabilities and cannot gain new ones. The console and Postgres
+# also run with a read-only root filesystem and a tmpfs for what they write. The API does not: its
+# image has no shell to prove what it writes where, so it keeps a writable filesystem.
+#
 # The API image carries every module; each stays off or on a mock until its keys are set. The API
 # repository's quickstart lists them: https://github.com/BaryoDev/barakoCMS/tree/master/quickstart
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:f2f98726820d0342055351c6e9d36e705f5bfffb3dd53ff556325114b08afb6d # postgres:16-alpine
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/postgresql
+    cap_drop: [ALL]
+    # What the image's entrypoint needs to own the data directory and start Postgres as its user.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
     environment:
       POSTGRES_DB: ${DB_NAME:-barakocms}
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -29,13 +44,16 @@ services:
 
   api:
     # The suite: core plus every module. For the lean core swap in ghcr.io/baryodev/barako-cms-decaf.
-    image: ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG:-latest}
+    # 5.8.0 is the newest release the console in this repository's compatibility table supports.
+    image: ghcr.io/baryodev/barako-cms:${BARAKO_API_TAG:-5.8.0}
     restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "${API_PORT:-5005}:8080"
+      - "127.0.0.1:${API_PORT:-5005}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ConnectionStrings__DefaultConnection: "Host=postgres;Database=${DB_NAME:-barakocms};Username=${DB_USER:-postgres};Password=${DB_PASSWORD}"
@@ -51,17 +69,36 @@ services:
       # The public URL of this deployment, used for every absolute link the API hands out. Leave it
       # unset on localhost.
       App__BaseUrl: ${APP_BASE_URL:-}
-      AllowedHosts: ${ALLOWED_HOSTS:-*}
+      # The Host headers the API answers to, separated by semicolons. barakoCMS 6.0 refuses to start
+      # in Production when this is empty or "*", so the default is the two names this quickstart is
+      # reached by. Set ALLOWED_HOSTS to your domain when you put one in front.
+      AllowedHosts: ${ALLOWED_HOSTS:-localhost;127.0.0.1}
       ForwardedHeaders__Enabled: ${FORWARDED_HEADERS_ENABLED:-false}
       ForwardedHeaders__KnownNetworks__0: ${TRUSTED_PROXY_NETWORK:-}
 
   console:
+    # Pin BARAKO_CONSOLE_TAG to a release. A console older than the one that stopped writing into its
+    # own image at start cannot run with a read-only filesystem.
     image: ghcr.io/baryodev/barako-brew:${BARAKO_CONSOLE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       - api
+    read_only: true
+    # entrypoint.sh copies the server here, writes the API address and base path into the copy, and
+    # runs from it. The image itself is never written to.
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      # Any answer below 500 is a live server. No curl in the image, so node asks.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/',{redirect:'manual'}).then(r=>process.exit(r.status<500?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     ports:
-      - "${ADMIN_PORT:-3000}:3000"
+      - "127.0.0.1:${ADMIN_PORT:-3000}:3000"
     environment:
       # Where the browser reaches the API. Read at container start, so repointing is a restart.
       NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:${API_PORT:-5005}}
