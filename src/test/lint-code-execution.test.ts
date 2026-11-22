@@ -21,7 +21,8 @@ async function messagesFor(source: string, filePath: string, ruleId: string) {
 
 const DANGER = 'export const A = () => <div dangerouslySetInnerHTML={{ __html: "x" }} />;\n';
 const EVAL = 'export const run = (code: string) => eval(code);\n';
-const IMPLIED_EVAL = 'export const run = (code: string) => setTimeout(code, 1);\n';
+// The core rule sees a string literal or a concatenation, not a variable's type, so the probe passes one.
+const IMPLIED_EVAL = 'export const run = () => setTimeout("run()", 1);\n';
 
 describe('lint refuses code that runs a string', () => {
     it.each(PROBE_PATHS)('react/no-danger is an error in %s', async (filePath) => {
