@@ -279,6 +279,9 @@ describe('publish.yml scans the image each build pushed', () => {
         const head = job('build').split('\n    steps:\n')[0];
         expect(head).toContain('platform: linux/amd64');
         expect(head).toContain('platform: linux/arm64');
+        expect(job('build'), 'the scan and the build must name one platform').toContain(
+            'platforms: ${{ matrix.platform }}'
+        );
         const scan = step('build', /^The pushed image has no fixable High or Critical vulnerability/).text;
         expect(scan).toContain('PLATFORM: ${{ matrix.platform }}');
         expect(scan.replace(/\\\n\s*/g, ' ')).toMatch(
