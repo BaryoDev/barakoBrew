@@ -39,6 +39,7 @@ declare global {
   }
 }
 
+import { headers } from "next/headers";
 import QueryProvider from "@/components/query-provider";
 import { ContractGate } from "@/components/contract-gate";
 import { ThemeProvider, THEME_STORAGE_KEY } from "@/components/theme-provider";
@@ -59,17 +60,20 @@ export const metadata: Metadata = {
 // domain root even when the console was served under a prefix.
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Set by src/proxy.ts for this request. Reading it makes every route render per request, which a
+  // nonce needs: a prerendered page would carry a stale one that no policy ever matches.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Runtime env must load before hydration so getApiUrl() sees overrides. */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-        <script src={`${basePath}/env-config.js`} />
+        <script src={`${basePath}/env-config.js`} nonce={nonce} />
       </head>
       <body
         className={`${bricolage.variable} ${instrumentSans.variable} ${jetbrainsMono.variable} antialiased`}
@@ -80,6 +84,7 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="system"
           enableSystem
+          nonce={nonce}
           storageKey={THEME_STORAGE_KEY}
           disableTransitionOnChange
         >

@@ -437,6 +437,18 @@ jobs:
           n=$(printf '%s' "$csp" | grep -c . || true)
           [ "$n" -le 1 ] || { echo "$csp"; echo "::error::/login sent $n Content-Security-Policy headers, expected one"; exit 1; }
           [ -n "$csp" ] || { cat headers.txt; echo "::error::/login sent no Content-Security-Policy header"; exit 1; }
+          # Scripts run only with this response's nonce. No 'unsafe-inline' in script-src, and the
+          # nonce in the header must be on a script in the body the same response served.
+          script_src=$(echo "$csp" | tr ';' '\n' | grep -E '^[[:space:]]*script-src' || true)
+          echo "$script_src" | grep -q "'nonce-" || { echo "$csp"; echo "::error::script-src carries no nonce"; exit 1; }
+          echo "$script_src" | grep -q "'strict-dynamic'" || { echo "$csp"; echo "::error::script-src lacks 'strict-dynamic'"; exit 1; }
+          if echo "$script_src" | grep -q "'unsafe-inline'"; then
+            echo "$csp"; echo "::error::script-src allows 'unsafe-inline'"; exit 1
+          fi
+          curl -s -D headers2.txt http://127.0.0.1:3300/login > body.html
+          nonce2=$(tr -d '\r' < headers2.txt | grep -i '^content-security-policy:' | sed -E "s/.*'nonce-([^']+)'.*/\1/")
+          grep -Eq "<script[^>]*nonce=\"$nonce2\"" body.html || {
+            echo "::error::no <script> in the /login body carries the nonce from the same response's header"; exit 1; }
           if echo "$csp" | grep -q '__BARAKO_CONNECT_ORIGINS__'; then
             echo "$csp"; echo "::error::the Content-Security-Policy still carries the __BARAKO_CONNECT_ORIGINS__ placeholder"; exit 1
           fi
