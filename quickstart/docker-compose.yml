@@ -77,13 +77,14 @@ services:
       ForwardedHeaders__KnownNetworks__0: ${TRUSTED_PROXY_NETWORK:-}
 
   console:
-    # Pin BARAKO_CONSOLE_TAG to a release. A console older than the one that stopped writing into its
-    # own image at start cannot run with a read-only filesystem.
+    # Pin BARAKO_CONSOLE_TAG to a release.
     image: ghcr.io/baryodev/barako-brew:${BARAKO_CONSOLE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       - api
-    read_only: true
+    # The console released after 1.13.0 runs from a copy under /tmp and can run read-only, so set
+    # CONSOLE_READ_ONLY=true with it. The default turns true when that release ships.
+    read_only: ${CONSOLE_READ_ONLY:-false}
     # entrypoint.sh copies the server here, writes the API address and base path into the copy, and
     # runs from it. The image itself is never written to.
     tmpfs:

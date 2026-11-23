@@ -28,6 +28,7 @@ moved. Which API a console works against is stated per release instead.
 - The console sends `Strict-Transport-Security: max-age=31536000` when a proxy says the request came over HTTPS (`X-Forwarded-Proto: https`, or a chain of proxies that each say `https`), and never on plain http. A proxy that does not send that header gets no HSTS from the console.
 - `react/no-danger`, `no-eval` and `no-implied-eval` are lint errors. The markdown preview is the one reviewed exception.
 - A gitleaks scan runs in CI with a planted-secret self-test, and CodeQL scans the workflow files (`actions`) as well as the source.
+- The quickstart console starts again on the released image: `read_only` is now `${CONSOLE_READ_ONLY:-false}`, because 1.13.0 and older write into their own image at start. Set `CONSOLE_READ_ONLY=true` with a console released after 1.13.0.
 - The console image's CI start-up test now reads the `Content-Security-Policy` header from the running container and fails when `connect-src` lacks the API origin it was started with, or when the `__BARAKO_CONNECT_ORIGINS__` placeholder is still in it.
 
 ### Changed

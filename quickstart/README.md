@@ -43,12 +43,10 @@ ALLOWED_ORIGINS=https://console.example.com   # where the console is served
 APP_BASE_URL=https://cms.example.com          # what the API puts in links it hands out
 ALLOWED_HOSTS=cms.example.com                 # the Host headers the API answers to, semicolon separated
 BARAKO_API_TAG=5.8.0                          # pin releases rather than latest
-BARAKO_CONSOLE_TAG=1.13.0
+BARAKO_CONSOLE_TAG=latest                     # or a release tag; pinning one is recommended
 ```
 
-A console at 1.13.0 or older rewrites files inside its own image at start, so it cannot start with
-this compose's `read_only: true`. With one of those, delete the `read_only: true` line from the
-`console` service. A console released after 1.13.0 copies itself to `/tmp` first and runs read-only.
+`CONSOLE_READ_ONLY` (default `false`) runs the console with a read-only filesystem. Set it to `true` with a console released after 1.13.0, which runs from a copy under `/tmp`. Older consoles write into their own image at start and cannot start read-only.
 
 `ALLOWED_HOSTS` defaults to `localhost;127.0.0.1`, which is enough for the URLs above on one
 machine. Behind a domain, list the domain, and list every name the API is reached by (separate them
