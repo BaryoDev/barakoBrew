@@ -25,10 +25,11 @@ Sign in to the console with `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env`
 
 Both ports are published on `127.0.0.1` only, so nothing outside the machine reaches them until you
 put a reverse proxy in front. Every container drops all Linux capabilities (Postgres gets back the
-five it needs to own its data directory) and runs with `no-new-privileges`. The console and Postgres
-run with a read-only root filesystem and a tmpfs for what they write. The console copies its server
-to `/tmp` at start, which is how the API address and base path reach it without writing into the
-image, so its tmpfs (128 MB in the compose file) holds about 16 MB of it. The API runs with a writable filesystem.
+five it needs to own its data directory) and runs with `no-new-privileges`. Postgres runs
+with a read-only root filesystem and a tmpfs for what it writes. The console does when
+`CONSOLE_READ_ONLY=true`, which needs a console released after 1.13.0. That release copies its
+server to `/tmp` at start, which is how the API address and base path reach it without writing into
+the image, so its tmpfs (128 MB in the compose file) holds about 16 MB of it. The API runs with a writable filesystem.
 
 To publish a port on every interface instead, change its `ports:` line to `"0.0.0.0:..."`.
 

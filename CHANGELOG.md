@@ -28,7 +28,6 @@ moved. Which API a console works against is stated per release instead.
 - The console sends `Strict-Transport-Security: max-age=31536000` when a proxy says the request came over HTTPS (`X-Forwarded-Proto: https`, or a chain of proxies that each say `https`), and never on plain http. A proxy that does not send that header gets no HSTS from the console.
 - `react/no-danger`, `no-eval` and `no-implied-eval` are lint errors. The markdown preview is the one reviewed exception.
 - A gitleaks scan runs in CI with a planted-secret self-test, and CodeQL scans the workflow files (`actions`) as well as the source.
-- The quickstart console starts again on the released image: `read_only` is now `${CONSOLE_READ_ONLY:-false}`, because 1.13.0 and older write into their own image at start. Set `CONSOLE_READ_ONLY=true` with a console released after 1.13.0.
 - The console image's CI start-up test now reads the `Content-Security-Policy` header from the running container and fails when `connect-src` lacks the API origin it was started with, or when the `__BARAKO_CONNECT_ORIGINS__` placeholder is still in it.
 
 ### Changed
@@ -46,6 +45,10 @@ moved. Which API a console works against is stated per release instead.
   shape opens on Custom with the builder, unchanged.
 - **Existing deploys, entrypoint.** `entrypoint.sh` no longer rewrites files inside the image. When `BARAKO_RUNTIME_DIR` is set (the image sets it to `/tmp/barako-app`) it copies the server and build output there and runs from the copy, so the image runs with `read_only: true` and a tmpfs on `/tmp`. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_PRESS_URL` and `BARAKO_BASE_PATH` are read at start and behave as before, with or without a read-only filesystem. If you override `ENTRYPOINT` or `CMD`, run `node server.js` from the working directory the entrypoint leaves you in. The image has a `HEALTHCHECK`. The entrypoint refuses a `BARAKO_RUNTIME_DIR` that resolves to `/`, the app directory, a directory above it or one inside it, and a `BARAKO_BASE_PATH` that spans lines. With `BARAKO_RUNTIME_DIR` unset it rewrites in place, and stops with a message naming the setting when the app directory is not writable, as in the published image.
 - **Existing deploys, quickstart.** `quickstart/docker-compose.yml` defaults `AllowedHosts` to `localhost;127.0.0.1` where it was `*`, because barakoCMS 6.0 refuses to start in Production with `*` or empty. Set `ALLOWED_HOSTS` in `.env` to your domain if you serve the API from one. Ports are bound to `127.0.0.1`, the API image defaults to 5.8.0 in place of `latest`, and the console and Postgres run read-only with all capabilities dropped (Postgres keeps the five it needs). The console needs a release that includes the entrypoint change to run read-only.
+
+### Fixed
+
+- The quickstart console starts again on the released image: `read_only` is now `${CONSOLE_READ_ONLY:-false}`, because 1.13.0 and older write into their own image at start. Set `CONSOLE_READ_ONLY=true` with a console released after 1.13.0.
 
 ## [1.13.0] - 2026-11-17
 

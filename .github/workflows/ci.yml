@@ -434,11 +434,13 @@ jobs:
           # swap that misses leaves a console whose browser may not call its own API.
           curl -s -D - -o /dev/null http://127.0.0.1:3300/login | tr -d '\r' > headers.txt
           csp=$(grep -i '^content-security-policy:' headers.txt || true)
+          n=$(printf '%s' "$csp" | grep -c . || true)
+          [ "$n" -le 1 ] || { echo "$csp"; echo "::error::/login sent $n Content-Security-Policy headers, expected one"; exit 1; }
           [ -n "$csp" ] || { cat headers.txt; echo "::error::/login sent no Content-Security-Policy header"; exit 1; }
           if echo "$csp" | grep -q '__BARAKO_CONNECT_ORIGINS__'; then
             echo "$csp"; echo "::error::the Content-Security-Policy still carries the __BARAKO_CONNECT_ORIGINS__ placeholder"; exit 1
           fi
-          echo "$csp" | grep -qE 'connect-src[^;]*http://api\.example\.test:5005' || {
+          echo "$csp" | grep -qE 'connect-src[^;]*http://api\.example\.test:5005([ ;]|$)' || {
             echo "$csp"; echo "::error::the Content-Security-Policy connect-src does not carry http://api.example.test:5005, the API origin the container was started with"; exit 1; }
           for _ in $(seq 1 30); do
             [ "$(docker inspect -f '{{.State.Health.Status}}' ci-admin)" = "healthy" ] && break
