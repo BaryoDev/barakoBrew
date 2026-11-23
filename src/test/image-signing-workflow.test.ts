@@ -273,3 +273,16 @@ describe('publish.yml signs and attests the image', () => {
         expect(head).toContain('cancel-in-progress: false');
     });
 });
+
+describe('publish.yml scans the image each build pushed', () => {
+    it('gives Trivy the build platform, since the pushed index holds no other', () => {
+        const head = job('build').split('\n    steps:\n')[0];
+        expect(head).toContain('platform: linux/amd64');
+        expect(head).toContain('platform: linux/arm64');
+        const scan = step('build', /^The pushed image has no fixable High or Critical vulnerability/).text;
+        expect(scan).toContain('PLATFORM: ${{ matrix.platform }}');
+        expect(scan.replace(/\\\n\s*/g, ' ')).toMatch(
+            /trivy image [^\n]*--platform "\$PLATFORM" [^\n]*"ghcr\.io\/baryodev\/barako-brew@\$DIGEST"/
+        );
+    });
+});
