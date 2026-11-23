@@ -104,6 +104,20 @@ if (kept.length !== redirects.length) {
 ' "$BASE_PATH_PLACEHOLDER"
 fi
 
+# The proxy's matcher is compiled into a regular expression that starts "^\\/<placeholder>(?:...". The
+# backslash belongs to the slash, so rewriting the placeholder to nothing would leave "^\\(?:...", an
+# invalid expression that fails every request. At the root, drop the escaped slash with the
+# placeholder, in its JSON form (two backslashes in the file) and its JavaScript form (one). With a
+# prefix the generic rewrite below leaves "\\/prefix", which is right.
+if [ -z "$base_path" ]; then
+  escaped_files=$(grep -rlF "\\$BASE_PATH_PLACEHOLDER" server.js .next 2>/dev/null || true)
+  if [ -n "$escaped_files" ]; then
+    printf '%s\n' "$escaped_files" | while IFS= read -r file; do
+      sed -i.bak -e 's|\\\\'"$BASE_PATH_PLACEHOLDER"'||g' -e 's|\\'"$BASE_PATH_PLACEHOLDER"'||g' "$file" && rm -f "$file.bak"
+    done
+  fi
+fi
+
 placeholder_files=$(grep -rlF "$BASE_PATH_PLACEHOLDER" server.js .next 2>/dev/null || true)
 if [ -n "$placeholder_files" ]; then
   printf '%s\n' "$placeholder_files" | while IFS= read -r file; do
@@ -114,7 +128,7 @@ elif [ -n "$base_path" ]; then
   echo "entrypoint: BARAKO_BASE_PATH is set to $base_path but this image has no runtime base path to write it into. It was built with NEXT_BASE_PATH baked in." >&2
 fi
 
-# The Content-Security-Policy is built with a placeholder in connect-src (see next.config.ts), because
+# The Content-Security-Policy is built with a placeholder in connect-src (see src/lib/csp.ts and src/proxy.ts), because
 # the API and press addresses are only known now. Each is reduced to its origin, so a path, a query or
 # anything that is not an http(s) address cannot reach the header. Unusable or unset values leave
 # nothing in its place, and the origin baked in at build time stays in the policy.

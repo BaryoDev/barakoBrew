@@ -72,6 +72,7 @@ const FILES = [
     '.next/required-server-files.json',
     '.next/static/chunks/turbopack.js',
     '.next/server/app/login.html',
+    '.next/server/functions-config-manifest.json',
 ];
 
 const run = (env: Record<string, string> = {}) =>
@@ -119,6 +120,23 @@ beforeEach(() => {
         '.next/static/chunks/turbopack.js',
         `TURBOPACK_CHUNK_BASE_PATH:"${PLACEHOLDER}/_next/",r="${PLACEHOLDER}/login";\n`,
     );
+    // The proxy matcher, as the build writes it: the placeholder sits behind an escaped slash.
+    write(
+        '.next/server/functions-config-manifest.json',
+        JSON.stringify({
+            version: 1,
+            functions: {
+                '/_middleware': {
+                    runtime: 'nodejs',
+                    matchers: [
+                        {
+                            regexp: `^\\/${PLACEHOLDER.slice(1)}(?:\\/(_next\\/data\\/[^/]{1,}))?(?:\\/((?!_next\\/static|_next\\/image).*))(\\.json|\\.rsc)?[\\/#\\?]?$`,
+                        },
+                    ],
+                },
+            },
+        }),
+    );
     write('.next/server/app/login.html', `<script src="${PLACEHOLDER}/env-config.js"></script>`);
 });
 
@@ -129,7 +147,7 @@ afterEach(() => {
 
 describe('entrypoint.sh writes the base path in at start', () => {
     it('the fixture carries the placeholder in every file a rewrite has to reach', () => {
-        expect(FILES).toHaveLength(5);
+        expect(FILES).toHaveLength(6);
         for (const file of FILES) {
             expect(read(file), file).toContain(PLACEHOLDER);
         }
@@ -210,7 +228,7 @@ describe('entrypoint.sh writes the base path in at start', () => {
     it('starting the same container again changes nothing', () => {
         run({ BARAKO_BASE_PATH: '/barakocms' });
         const after = FILES.map((file) => read(file));
-        expect(after).toHaveLength(5);
+        expect(after).toHaveLength(6);
         expect(after.every((contents) => contents.includes('/barakocms'))).toBe(true);
 
         run({ BARAKO_BASE_PATH: '/barakocms' });
@@ -268,7 +286,7 @@ describe('entrypoint.sh with BARAKO_RUNTIME_DIR leaves the image untouched', () 
     it('starting again in the same runtime directory gives the same result', () => {
         run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
         const after = FILES.map((file) => readRuntime(file));
-        expect(after).toHaveLength(5);
+        expect(after).toHaveLength(6);
 
         run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
         expect(FILES.map((file) => readRuntime(file))).toEqual(after);
@@ -336,5 +354,32 @@ describe('entrypoint.sh with BARAKO_RUNTIME_DIR unset and an app directory it ca
         expect(stderr).toContain('is not writable');
         expect(stderr).toContain('Set BARAKO_RUNTIME_DIR');
         expect(read('server.js')).toContain(PLACEHOLDER);
+    });
+});
+
+describe('the proxy matcher survives the rewrite', () => {
+    const matchers = () =>
+        JSON.parse(read('.next/server/functions-config-manifest.json')).functions['/_middleware'].matchers as {
+            regexp: string;
+        }[];
+
+    it('at the root it is still a valid expression that matches pages', () => {
+        run();
+
+        for (const { regexp } of matchers()) {
+            const expression = new RegExp(regexp);
+            expect(expression.test('/login')).toBe(true);
+            expect(expression.test('/modules/A.B')).toBe(true);
+        }
+    });
+
+    it('under a prefix it is a valid expression that matches the prefixed path only', () => {
+        run({ BARAKO_BASE_PATH: '/barako' });
+
+        for (const { regexp } of matchers()) {
+            const expression = new RegExp(regexp);
+            expect(expression.test('/barako/login')).toBe(true);
+            expect(expression.test('/login')).toBe(false);
+        }
     });
 });
