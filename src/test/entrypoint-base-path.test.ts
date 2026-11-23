@@ -228,7 +228,7 @@ describe('entrypoint.sh writes the base path in at start', () => {
     it('starting the same container again changes nothing', () => {
         run({ BARAKO_BASE_PATH: '/barakocms' });
         const after = FILES.map((file) => read(file));
-        expect(after).toHaveLength(5);
+        expect(after).toHaveLength(6);
         expect(after.every((contents) => contents.includes('/barakocms'))).toBe(true);
 
         run({ BARAKO_BASE_PATH: '/barakocms' });
@@ -286,7 +286,7 @@ describe('entrypoint.sh with BARAKO_RUNTIME_DIR leaves the image untouched', () 
     it('starting again in the same runtime directory gives the same result', () => {
         run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
         const after = FILES.map((file) => readRuntime(file));
-        expect(after).toHaveLength(5);
+        expect(after).toHaveLength(6);
 
         run({ BARAKO_RUNTIME_DIR: runtime, BARAKO_BASE_PATH: '/barakocms' });
         expect(FILES.map((file) => readRuntime(file))).toEqual(after);
