@@ -21,17 +21,13 @@ export function proxy(request: NextRequest) {
   return response;
 }
 
-// Next applies the base path to the matcher, so this reads the same at the root and under a prefix.
-// Static assets (anything with a file extension, which covers env-config.js and the favicon) and
-// _next/static and _next/image need no policy. Link prefetches are skipped as the Next guide shows.
+// Every path goes through the proxy except _next/static and _next/image, including public files and
+// env-config.js: it is header work only. A path with a dot, such as /modules/Community.Thing, is a
+// page and needs its policy. Link prefetches are not skipped, because a browser sends
+// "Purpose: prefetch" for a <link rel=prefetch> to a real document and that document would then be
+// stored without a policy. Next prepends the base path to this source, so it matches under a prefix
+// the same way; the build writes the base path into the compiled matcher, which entrypoint.sh
+// rewrites at start.
 export const config = {
-  matcher: [
-    {
-      source: "/((?!_next/static|_next/image|.*\\..*).*)",
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-      ],
-    },
-  ],
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };
