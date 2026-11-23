@@ -101,21 +101,24 @@ image_check() { # name, expected rc, args...
     if [ "$got" -eq "$want" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $name (rc $got, wanted $want)"; cat "$T/out"; fi
 }
 cat >"$T/image.json" <<'J'
-{"SchemaVersion":2,"Results":[{"Target":"alpine","Vulnerabilities":[
+{"SchemaVersion":2,"Metadata":{"OS":{"Family":"alpine"}},"Results":[{"Target":"alpine","Class":"os-pkgs","Vulnerabilities":[
  {"VulnerabilityID":"CVE-2099-0001","PkgName":"busybox","Severity":"HIGH","FixedVersion":"1.37.1"},
  {"VulnerabilityID":"CVE-2099-0002","PkgName":"zlib","Severity":"LOW","FixedVersion":"1.3.2"}]}]}
 J
 cat >"$T/image-unfixed.json" <<'J'
-{"SchemaVersion":2,"Results":[{"Target":"alpine","Vulnerabilities":[
+{"SchemaVersion":2,"Metadata":{"OS":{"Family":"alpine"}},"Results":[{"Target":"alpine","Class":"os-pkgs","Vulnerabilities":[
  {"VulnerabilityID":"CVE-2099-0003","PkgName":"openssl","Severity":"CRITICAL"}]}]}
 J
-echo '{"SchemaVersion":2}' >"$T/image-clean.json"
+# A clean report still names its OS and holds an os-pkgs result; one with neither scanned nothing.
+echo '{"SchemaVersion":2,"Metadata":{"OS":{"Family":"alpine"}},"Results":[{"Target":"alpine","Class":"os-pkgs"}]}' >"$T/image-clean.json"
+echo '{"SchemaVersion":2}' >"$T/image-empty.json"
 echo '[{"id":"CVE-2099-0001","expires":"2026-11-04"}]' >"$T/image-noreason.json"
 cat >"$T/image-allow.json" <<'J'
 [{"id":"CVE-2099-0001","package":"busybox","reason":"test","expires":"2026-11-04"}]
 J
 
 image_check "a clean image report passes"                      0 "$T/image-clean.json" "$T/image-allow.json" 2026-10-04
+image_check "a report that scanned nothing fails closed"       1 "$T/image-empty.json" "$T/image-allow.json" 2026-10-04
 image_check "a fixable High finding fails"                     1 "$T/image.json" "$T/none.json" 2026-10-04
 image_check "an allowlisted finding passes"                    0 "$T/image.json" "$T/image-allow.json" 2026-10-04
 image_check "an allowlisted finding passes on its expiry"      0 "$T/image.json" "$T/image-allow.json" 2026-11-04
@@ -124,10 +127,10 @@ image_check "a Critical finding with no fix is reported only"  0 "$T/image-unfix
 image_check "an unreadable report fails closed"                1 "$T/bad.json" "$T/image-allow.json" 2026-10-04
 image_check "an unreadable allowlist fails closed"             1 "$T/image.json" "$T/badallow.json" 2026-10-04
 image_check "an entry with no reason accepts nothing"          1 "$T/image.json" "$T/image-noreason.json" 2026-10-04
-echo '{"SchemaVersion":2,"Results":[{"Target":"alpine","Vulnerabilities":{"VulnerabilityID":"CVE-2099-0004","Severity":"HIGH","FixedVersion":"1"}}]}' >"$T/image-odd.json"
+echo '{"SchemaVersion":2,"Metadata":{"OS":{"Family":"alpine"}},"Results":[{"Target":"alpine","Class":"os-pkgs","Vulnerabilities":{"VulnerabilityID":"CVE-2099-0004","Severity":"HIGH","FixedVersion":"1"}}]}' >"$T/image-odd.json"
 image_check "a findings list it cannot read fails closed"      1 "$T/image-odd.json" "$T/none.json" 2026-10-04
 # A High with a fix and an empty, tab or newline id or package must fail, not shift columns.
-img_one() { printf '{"SchemaVersion":2,"Results":[{"Vulnerabilities":[{"VulnerabilityID":"%s","PkgName":"%s","Severity":"HIGH","FixedVersion":"1.0"}]}]}\n' "$1" "$2"; }
+img_one() { printf '{"SchemaVersion":2,"Metadata":{"OS":{"Family":"alpine"}},"Results":[{"Class":"os-pkgs","Vulnerabilities":[{"VulnerabilityID":"%s","PkgName":"%s","Severity":"HIGH","FixedVersion":"1.0"}]}]}\n' "$1" "$2"; }
 img_one "CVE-2099-0009" ""            >"$T/image-nopkg.json"
 img_one ""              "busybox"     >"$T/image-noid.json"
 img_one 'CVE-2099-0001\nx' "busybox"  >"$T/image-nlid.json"
