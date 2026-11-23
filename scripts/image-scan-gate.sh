@@ -17,10 +17,18 @@ report=${1:?usage: image-scan-gate.sh <trivy.json> [<allowlist.json>] [<today>]}
 allowlist=${2:-.github/audit-allowlist.json}
 today=${3:-$(date -u +%F)}
 
-# Results is absent from a report with nothing in it, so the schema version is the shape check.
+# Results is absent from a report with nothing in it, so the schema version is the shape check. The
+# report text is not printed: the log is public.
 if ! jq -e '(.SchemaVersion | type) == "number" and ((.Results // []) | type) == "array"' "$report" >/dev/null 2>&1; then
-    echo "::error::the image scan did not return a usable report, failing closed"
-    head -c 500 "$report" || true
+    echo "::error::the image scan did not return a usable report ($(wc -c <"$report" 2>/dev/null || echo 0) bytes), failing closed"
+    exit 1
+fi
+
+# Trivy exits 0 on an image it could not read, with no operating system and no results, and that
+# report holds no findings. Every image this gate scans is built on Alpine, so a scan that found no
+# operating system packages scanned nothing.
+if ! jq -e '(.Metadata.OS.Family | type == "string" and length > 0) and any(.Results[]?; .Class == "os-pkgs")' "$report" >/dev/null 2>&1; then
+    echo "::error::the image scan found no operating system packages, so it scanned nothing, failing closed"
     exit 1
 fi
 

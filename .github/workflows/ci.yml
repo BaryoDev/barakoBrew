@@ -335,6 +335,9 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
+      - name: The scan gate fails on the reports it must refuse
+        run: bash scripts/test-image-scan-gate.sh
+
       # No push. The published image is built by publish.yml; this proves the Dockerfile still
       # builds from a pull request before it merges.
       - name: Build
@@ -544,7 +547,8 @@ jobs:
           set -euo pipefail
           npm ci --ignore-scripts
           mkdir -p sbom
-          npx --yes @cyclonedx/cyclonedx-npm --output-file sbom/barako-brew.cdx.json package.json
+          # Pinned, so a new release of the tool is a reviewed change and not whatever npm serves today.
+          npx --yes @cyclonedx/cyclonedx-npm@7.0.0 --output-file sbom/barako-brew.cdx.json package.json
           f=sbom/barako-brew.cdx.json
           [ -s "$f" ] || { echo "::error::$f is missing or empty."; exit 1; }
           COMPONENTS=$(python3 -c "import json; print(len(json.load(open('$f')).get('components', [])))")

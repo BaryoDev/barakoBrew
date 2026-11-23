@@ -10,3 +10,4 @@ date	repo	pr	confirmed	refuted	blockers	categories	caught_elsewhere_first	pre_pu
 2026-11-19	BaryoDev/barakoBrew	337	20	1	0	correctness,auth-state,error-handling,tests,ux,security		0	0	0	0
 2026-11-20	barakoBrew	339	6	1	1	contract,state,ui,cache	none	0	0	0	0
 2026-11-23	BaryoDev/barakoBrew	346	1	0	0	test-coverage		0	0	1	0
+2026-11-23	BaryoDev/barakoBrew	347	5	0	0	docs,ci-regex,changelog		0	0	1	0
