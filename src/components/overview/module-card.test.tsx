@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
 import type { ReactElement } from 'react';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
-    return { ...actual, api: { get: vi.fn() } };
+    return { ...actual, api: { get: vi.fn(), post: vi.fn() } };
 });
 let tenant = 'cafe';
 vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => tenant }));
@@ -19,12 +19,12 @@ const { ModuleCard, ModuleCards } = await import('./module-card');
 const render = (ui: ReactElement) =>
     rtlRender(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
-function httpError(status: number) {
+function httpError(status: number, headers: Record<string, string> = {}) {
     return new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
         status,
         data: {},
         statusText: '',
-        headers: {},
+        headers,
         config: { headers: new AxiosHeaders() },
     });
 }
@@ -36,6 +36,7 @@ const answer = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
     vi.mocked(api.get).mockReset();
+    vi.mocked(api.post).mockReset();
     report = undefined;
     tenant = 'cafe';
 });
@@ -118,6 +119,104 @@ describe('ModuleCard', () => {
         expect(screen.getAllByText(evil).length).toBeGreaterThanOrEqual(3);
         expect(container.querySelector('img')).toBeNull();
         expect(container.querySelector('a')).toBeNull();
+    });
+});
+
+describe('ModuleCard refresh', () => {
+    const withLabel = { ...decl, refreshLabel: 'Refresh' };
+
+    it('shows no button without a label', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByText('All good');
+        expect(screen.queryByRole('button')).toBeNull();
+    });
+
+    it('posts to the route once and shows the new text', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockResolvedValue(answer({ text: 'Fresh news' }));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('Fresh news')).toBeInTheDocument();
+        expect(screen.queryByText('All good')).toBeNull();
+        expect(api.post).toHaveBeenCalledTimes(1);
+        expect(api.post).toHaveBeenCalledWith('/api/reports/today', undefined, { skipAuthRefresh: true });
+    });
+
+    it('sends one POST for two quick clicks', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        let release: (value: unknown) => void = () => {};
+        vi.mocked(api.post).mockReturnValue(new Promise((resolve) => (release = resolve)) as never);
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        const button = screen.getByRole('button', { name: 'Refresh' });
+        fireEvent.click(button);
+        fireEvent.click(button);
+        expect(api.post).toHaveBeenCalledTimes(1);
+        expect(button).toBeDisabled();
+        release(answer({ text: 'Fresh news' }));
+        await screen.findByText('Fresh news');
+        expect(api.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the wait from Retry-After on a 429 and keeps the old text', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockRejectedValue(httpError(429, { 'retry-after': '30' }));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('Try again in 30 seconds.')).toBeInTheDocument();
+        expect(screen.getByText('All good')).toBeInTheDocument();
+    });
+
+    it('says try again shortly on a 429 with no header', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockRejectedValue(httpError(429));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('Try again shortly.')).toBeInTheDocument();
+        expect(screen.getByText('All good')).toBeInTheDocument();
+    });
+
+    it('keeps the old text and says it could not refresh on a 500', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockRejectedValue(httpError(500));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('Could not refresh.')).toBeInTheDocument();
+        expect(screen.getByText('All good')).toBeInTheDocument();
+    });
+
+    it('keeps the old text and says it could not refresh on an invalid body', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockResolvedValue({ data: { state: 'surprise' } });
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('Could not refresh.')).toBeInTheDocument();
+        expect(screen.getByText('All good')).toBeInTheDocument();
+    });
+
+    it('clears the line on the next good refresh', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockRejectedValueOnce(httpError(500)).mockResolvedValueOnce(answer({ text: 'Fresh news' }));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        await screen.findByText('Could not refresh.');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        await screen.findByText('Fresh news');
+        expect(screen.queryByText('Could not refresh.')).toBeNull();
+    });
+
+    it.each(['empty', 'unavailable'])('shows the button on a %s card', async (state) => {
+        vi.mocked(api.get).mockResolvedValue(answer({ state, text: 'Nothing yet' }));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('Nothing yet');
+        expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
     });
 });
 

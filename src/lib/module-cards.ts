@@ -9,6 +9,8 @@ export interface ModuleCardDeclaration {
   title: string;
   /** A same-origin API path, already checked against `ROUTE_PATTERN`. */
   route: string;
+  /** Text for an optional refresh button. Only kept when it is 1 to 24 plain characters. */
+  refreshLabel?: string;
 }
 
 export type ModuleCardState = 'ok' | 'empty' | 'unavailable';
@@ -34,6 +36,7 @@ export const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export const MAX_ROUTE = 200;
 export const MAX_CARDS_PER_MODULE = 4;
 export const MAX_TITLE = 60;
+export const MAX_REFRESH_LABEL = 24;
 export const MAX_TEXT = 1000;
 export const MAX_ROWS = 12;
 export const MAX_LABEL = 60;
@@ -54,6 +57,14 @@ export function cleanText(value: unknown, max: number): string | null {
   return Array.from(flat.trim()).slice(0, max).join('');
 }
 
+/** A refresh label, trimmed, or undefined when it is not a string of 1 to 24 characters without control or format characters. */
+function cleanRefreshLabel(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const label = value.trim();
+  if (!label || Array.from(label).length > MAX_REFRESH_LABEL || /[\p{Cc}\p{Cf}]/u.test(label)) return undefined;
+  return label;
+}
+
 /** The cards a module declared, defensively. A missing or non-array value is no cards. */
 export function parseModuleCards(value: unknown): ModuleCardDeclaration[] {
   if (!Array.isArray(value)) return [];
@@ -67,7 +78,8 @@ export function parseModuleCards(value: unknown): ModuleCardDeclaration[] {
     const title = cleanText(raw.title, MAX_TITLE);
     if (!title) continue;
     if (out.some((card) => card.id === id)) continue;
-    out.push({ id, title, route });
+    const refreshLabel = cleanRefreshLabel(raw.refreshLabel);
+    out.push(refreshLabel ? { id, title, route, refreshLabel } : { id, title, route });
   }
   return out;
 }
