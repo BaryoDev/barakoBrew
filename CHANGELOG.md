@@ -9,6 +9,12 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-24
+
+**Speaks API contracts 1 to 17, which covers barakoCMS 4.0.1 to 5.10.0.** No release sends 17 yet;
+it is the contract 6.0.0 will send. Module cards on the Overview need barakoCMS 5.10.0, the first
+release that lists `cards` in `GET /api/modules`. Against an older API the Overview has no cards.
+
 ### Added
 
 - A module card can carry an optional `refreshLabel` (1 to 24 UTF-16 units, no control, format or separator characters). The card then shows a button with that label. Clicking it sends `POST` to the card's route with no body, and the route answers with the same body as its GET, which replaces what the card shows. A 429 shows "Try again in N seconds." from `Retry-After` (1 to 3600), and any other error or a body the console does not recognise keeps the old content and shows "Could not refresh.". A card with no valid label has no button. `SUPPORTED_CONTRACT` does not move. See `docs/extension-slots.md`.
@@ -24,22 +30,6 @@ moved. Which API a console works against is stated per release instead.
 ### Changed
 
 - The console accepts API contract 17 (barakoCMS 6.0.0, which refuses a name, slug or code that ends with a line feed). It still works against 1 to 16.
-
-### Security
-
-- The console's script policy is now `script-src 'self' 'nonce-<per request>' 'strict-dynamic'` with no `'unsafe-inline'`, so a script injected into a page does not run. `src/proxy.ts` makes a nonce for each request and sets the policy on the request (so Next nonces its own scripts) and on the response, and the layout puts the nonce on the env-config script and the theme script. Every page now renders per request. The policy moved out of `next.config.ts` so a page sends one header, built by `src/lib/csp.ts`. `style-src` still allows `'unsafe-inline'`. The API and press origins at runtime still come from `entrypoint.sh` swapping the placeholder, now in the proxy's compiled output. The smoke job checks the nonce in the header appears on a script in the page.
-- The published image is signed with cosign (keyless) and given a build provenance attestation, by digest, under both `barako-brew` and the old `barako-admin` name. `publish.yml` creates the manifest under `:dev-<sha>` or `:<version>`, signs it, verifies the signature and the attestation against this workflow on `master` or a `v*` tag, and only then moves `:dev` or `:latest`, copied from the verified digest. A tag is signed when the Publish run that made it passed, so a failed run can leave `:<version>` or `:dev-<sha>` on a digest that is not signed, and the verify commands in the README show which. A failed verify leaves the floating tags where they were. A `v*` tag must be on `master` or the run fails before it builds. A prerelease version keeps its `:<version>` tag and signature and does not move `:latest`, on GHCR or Docker Hub. The Docker Hub mirror copies the verified digest. Only the `publish` job holds `id-token: write` and `attestations: write`. The README has the commands to verify an image. The playground tags, the Docker Hub mirror and tags published before this are not signed. `src/test/image-signing-workflow.test.ts` checks the workflow follows these rules.
-- The image is scanned for known vulnerabilities with Trivy, in the CI `image` job and in `publish.yml` right after each architecture is pushed, by digest and as that architecture's platform, and before it is tagged. A High or Critical finding that has a fix fails the run, and a failing image is never tagged (the untagged digest can stay in the registry). A finding with no fix yet is reported and does not fail. An exception is an entry in `.github/audit-allowlist.json` with a reason and an expiry date, the same file and rule the npm audit gate uses (`scripts/image-scan-gate.sh`, cases in `scripts/test-audit-gate.sh`). The nightly run scans the latest published image too, fails on a finding and uploads the result to code scanning. It never opens or comments on an issue.
-- The scan gate fails on a report that found no operating system packages, since Trivy exits 0 on an image it could not read, and it no longer prints any of a report it cannot use. A self-test in the CI `image` job proves the reports it must refuse. The SBOM tool is pinned to `@cyclonedx/cyclonedx-npm@7.0.0`.
-- The runtime image no longer carries npm, corepack or yarn. The server needs only node, and their dependency trees were what the first scan found.
-- The base image is pinned by digest, and Dependabot has `docker` and `docker-compose` entries to move it.
-- The console sends `Strict-Transport-Security: max-age=31536000` when a proxy says the request came over HTTPS (`X-Forwarded-Proto: https`, or a chain of proxies that each say `https`), and never on plain http. A proxy that does not send that header gets no HSTS from the console.
-- `react/no-danger`, `no-eval` and `no-implied-eval` are lint errors. The markdown preview is the one reviewed exception.
-- A gitleaks scan runs in CI with a planted-secret self-test, and CodeQL scans the workflow files (`actions`) as well as the source.
-- The console image's CI start-up test now reads the `Content-Security-Policy` header from the running container and fails when `connect-src` lacks the API origin it was started with, or when the `__BARAKO_CONNECT_ORIGINS__` placeholder is still in it.
-
-### Changed
-
 - Overview cards now get a required `queryClient` prop (`OverviewCardProps` is the shared slot props), so a card must render inside a `QueryClientProvider`. Existing overview card authors need to accept the prop and make sure their card is mounted under one.
 - Role editor (#146): each content type is a tab showing its name and a `CRUD` summary in mono (for
   example `CR.D`), with the four actions as pressed chips. Which fields is a grid with each field's
@@ -53,6 +43,19 @@ moved. Which API a console works against is stated per release instead.
   shape opens on Custom with the builder, unchanged.
 - **Existing deploys, entrypoint.** `entrypoint.sh` no longer rewrites files inside the image. When `BARAKO_RUNTIME_DIR` is set (the image sets it to `/tmp/barako-app`) it copies the server and build output there and runs from the copy, so the image runs with `read_only: true` and a tmpfs on `/tmp`. `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_PRESS_URL` and `BARAKO_BASE_PATH` are read at start and behave as before, with or without a read-only filesystem. If you override `ENTRYPOINT` or `CMD`, run `node server.js` from the working directory the entrypoint leaves you in. The image has a `HEALTHCHECK`. The entrypoint refuses a `BARAKO_RUNTIME_DIR` that resolves to `/`, the app directory, a directory above it or one inside it, and a `BARAKO_BASE_PATH` that spans lines. With `BARAKO_RUNTIME_DIR` unset it rewrites in place, and stops with a message naming the setting when the app directory is not writable, as in the published image.
 - **Existing deploys, quickstart.** `quickstart/docker-compose.yml` defaults `AllowedHosts` to `localhost;127.0.0.1` where it was `*`, because barakoCMS 6.0 refuses to start in Production with `*` or empty. Set `ALLOWED_HOSTS` in `.env` to your domain if you serve the API from one. Ports are bound to `127.0.0.1`, the API image defaults to 5.8.0 in place of `latest`, and the console and Postgres run read-only with all capabilities dropped (Postgres keeps the five it needs). The console needs a release that includes the entrypoint change to run read-only.
+
+### Security
+
+- The console's script policy is now `script-src 'self' 'nonce-<per request>' 'strict-dynamic'` with no `'unsafe-inline'`, so a script injected into a page does not run. `src/proxy.ts` makes a nonce for each request and sets the policy on the request (so Next nonces its own scripts) and on the response, and the layout puts the nonce on the env-config script and the theme script. Every page now renders per request. The policy moved out of `next.config.ts` so a page sends one header, built by `src/lib/csp.ts`. `style-src` still allows `'unsafe-inline'`. The API and press origins at runtime still come from `entrypoint.sh` swapping the placeholder, now in the proxy's compiled output. The smoke job checks the nonce in the header appears on a script in the page.
+- The published image is signed with cosign (keyless) and given a build provenance attestation, by digest, under both `barako-brew` and the old `barako-admin` name. `publish.yml` creates the manifest under `:dev-<sha>` or `:<version>`, signs it, verifies the signature and the attestation against this workflow on `master` or a `v*` tag, and only then moves `:dev` or `:latest`, copied from the verified digest. A tag is signed when the Publish run that made it passed, so a failed run can leave `:<version>` or `:dev-<sha>` on a digest that is not signed, and the verify commands in the README show which. A failed verify leaves the floating tags where they were. A `v*` tag must be on `master` or the run fails before it builds. A prerelease version keeps its `:<version>` tag and signature and does not move `:latest`, on GHCR or Docker Hub. The Docker Hub mirror copies the verified digest. Only the `publish` job holds `id-token: write` and `attestations: write`. The README has the commands to verify an image. The playground tags, the Docker Hub mirror and tags published before this are not signed. `src/test/image-signing-workflow.test.ts` checks the workflow follows these rules.
+- The image is scanned for known vulnerabilities with Trivy, in the CI `image` job and in `publish.yml` right after each architecture is pushed, by digest and as that architecture's platform, and before it is tagged. A High or Critical finding that has a fix fails the run, and a failing image is never tagged (the untagged digest can stay in the registry). A finding with no fix yet is reported and does not fail. An exception is an entry in `.github/audit-allowlist.json` with a reason and an expiry date, the same file and rule the npm audit gate uses (`scripts/image-scan-gate.sh`, cases in `scripts/test-audit-gate.sh`). The nightly run scans the latest published image too, fails on a finding and uploads the result to code scanning. It never opens or comments on an issue.
+- The scan gate fails on a report that found no operating system packages, since Trivy exits 0 on an image it could not read, and it no longer prints any of a report it cannot use. A self-test in the CI `image` job proves the reports it must refuse. The SBOM tool is pinned to `@cyclonedx/cyclonedx-npm@7.0.0`.
+- The runtime image no longer carries npm, corepack or yarn. The server needs only node, and their dependency trees were what the first scan found.
+- The base image is pinned by digest, and Dependabot has `docker` and `docker-compose` entries to move it.
+- The console sends `Strict-Transport-Security: max-age=31536000` when a proxy says the request came over HTTPS (`X-Forwarded-Proto: https`, or a chain of proxies that each say `https`), and never on plain http. A proxy that does not send that header gets no HSTS from the console.
+- `react/no-danger`, `no-eval` and `no-implied-eval` are lint errors. The markdown preview is the one reviewed exception.
+- A gitleaks scan runs in CI with a planted-secret self-test, and CodeQL scans the workflow files (`actions`) as well as the source.
+- The console image's CI start-up test now reads the `Content-Security-Policy` header from the running container and fails when `connect-src` lacks the API origin it was started with, or when the `__BARAKO_CONNECT_ORIGINS__` placeholder is still in it.
 
 ### Fixed
 
@@ -1045,8 +1048,9 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.4...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.14.0...HEAD
 [1.11.4]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.4
+[1.14.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.14.0
 [1.13.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.13.0
 [1.12.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.12.0
 [1.11.3]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.3
