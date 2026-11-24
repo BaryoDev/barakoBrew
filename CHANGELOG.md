@@ -19,6 +19,10 @@ moved. Which API a console works against is stated per release instead.
 - `SignInFlow.completeSession(tokens)` lets a package panel hand tokens to the page, which starts the session and redirects as it does after a password. A panel never touches the token store.
 - `QrApprovalPanel`, a reusable panel that shows a QR and a match number, counts down to expiry and polls until a signed-in device approves. The browser secret stays in memory and is sent only in a poll body.
 
+### Changed
+
+- The console accepts API contract 17 (barakoCMS 6.0.0, which refuses a name, slug or code that ends with a line feed). It still works against 1 to 16.
+
 ### Security
 
 - The console's script policy is now `script-src 'self' 'nonce-<per request>' 'strict-dynamic'` with no `'unsafe-inline'`, so a script injected into a page does not run. `src/proxy.ts` makes a nonce for each request and sets the policy on the request (so Next nonces its own scripts) and on the response, and the layout puts the nonce on the env-config script and the theme script. Every page now renders per request. The policy moved out of `next.config.ts` so a page sends one header, built by `src/lib/csp.ts`. `style-src` still allows `'unsafe-inline'`. The API and press origins at runtime still come from `entrypoint.sh` swapping the placeholder, now in the proxy's compiled output. The smoke job checks the nonce in the header appears on a script in the page.
