@@ -59,6 +59,35 @@ describe('parseModuleCards', () => {
         expect(parseModuleCards('x')).toEqual([]);
         expect(parseModuleCards([null, 'x', 3])).toEqual([]);
     });
+
+    it('keeps a valid refresh label, trimmed', () => {
+        expect(parseModuleCards([card({ refreshLabel: '  Refresh  ' })])[0].refreshLabel).toBe('Refresh');
+        expect(parseModuleCards([card({ refreshLabel: 'a'.repeat(24) })])[0].refreshLabel).toBe('a'.repeat(24));
+    });
+
+    it('keeps 12 emoji (24 UTF-16 units)', () => {
+        const label = '\u{1F600}'.repeat(12);
+        expect(parseModuleCards([card({ refreshLabel: label })])[0].refreshLabel).toBe(label);
+    });
+
+    it.each([
+        ['25 characters', 'a'.repeat(25)],
+        ['empty', ''],
+        ['whitespace', '   '],
+        ['not a string', 7],
+        ['null', null],
+        ['control character', 'Re\u0007fresh'],
+        ['zero-width character', 'Re\u200Bfresh'],
+        ['line separator', 'Re\u2028fresh'],
+        ['paragraph separator', 'Re\u2029fresh'],
+        ['bidi override', 'Re\u202Efresh'],
+        ['13 emoji (26 UTF-16 units)', '\u{1F600}'.repeat(13)],
+    ])('drops a refresh label that is %s and keeps the card', (_name, refreshLabel) => {
+        const out = parseModuleCards([card({ refreshLabel })]);
+        expect(out).toHaveLength(1);
+        expect(out[0]).toEqual({ id: 'today', title: 'Daily summary', route: '/api/reports/today' });
+        expect('refreshLabel' in out[0]).toBe(false);
+    });
 });
 
 describe('parseModuleCardContent', () => {

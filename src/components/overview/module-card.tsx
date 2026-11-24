@@ -1,11 +1,13 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { formatDistanceToNow } from 'date-fns';
 import { api } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 import { useModules } from '@/hooks/use-modules';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   parseModuleCardContent,
@@ -20,6 +22,18 @@ function isClientError(error: unknown): boolean {
   return status !== undefined && status >= 400 && status < 500;
 }
 
+/** Retry-After as whole seconds clamped to 1..3600, or null when the header is missing or not a number. */
+function retryAfterSeconds(error: unknown): number | null {
+  const headers = (axios.isAxiosError(error) ? error.response?.headers : undefined) as
+    | (Record<string, unknown> & { get?: (name: string) => unknown })
+    | undefined;
+  if (!headers) return null;
+  const raw = typeof headers.get === 'function' ? headers.get('retry-after') : headers['retry-after'];
+  const text = typeof raw === 'string' || typeof raw === 'number' ? String(raw).trim() : '';
+  if (!/^\d+(\.\d+)?$/.test(text)) return null;
+  return Math.min(3600, Math.max(1, Math.round(Number(text))));
+}
+
 /**
  * One card a module declared. It reads the declared route through the console's API client, so the
  * session and base path apply as for any other query, and draws the answer as plain text. Any error
@@ -27,8 +41,13 @@ function isClientError(error: unknown): boolean {
  */
 export function ModuleCard({ module, card }: { module: string; card: ModuleCardDeclaration }) {
   const tenant = useCurrentTenant();
+  const queryClient = useQueryClient();
+  const queryKey = ['module-card', tenant, module, card.id, card.route];
+  const busy = useRef(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const { data, isLoading } = useQuery({
-    queryKey: ['module-card', tenant, module, card.id, card.route],
+    queryKey,
     queryFn: async () => {
       const response = await api.get<unknown>(card.route, { skipAuthRefresh: true });
       return parseModuleCardContent(response.data);
@@ -36,6 +55,34 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
     staleTime: STALE_MS,
     retry: (count, error) => !isClientError(error) && count < 1,
   });
+
+  async function refresh() {
+    if (busy.current) return;
+    busy.current = true;
+    setRefreshing(true);
+    try {
+      const response = await api.post<unknown>(card.route, undefined, { skipAuthRefresh: true });
+      const fresh = parseModuleCardContent(response.data);
+      if (fresh) {
+        await queryClient.cancelQueries({ queryKey });
+        queryClient.setQueryData(queryKey, fresh);
+        setRefreshNote(null);
+      } else {
+        setRefreshNote('Could not refresh.');
+      }
+    } catch (error) {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      if (status === 429) {
+        const seconds = retryAfterSeconds(error);
+        setRefreshNote(seconds === null ? 'Try again shortly.' : `Try again in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`);
+      } else {
+        setRefreshNote('Could not refresh.');
+      }
+    } finally {
+      busy.current = false;
+      setRefreshing(false);
+    }
+  }
 
   const headingId = `module-card-${module}-${card.id}`.replace(/[^A-Za-z0-9_-]/g, '-');
 
@@ -73,6 +120,16 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
         <p className="text-muted-foreground text-xs">
           Updated <time dateTime={data.updatedAt.toISOString()}>{formatDistanceToNow(data.updatedAt, { addSuffix: true })}</time>
         </p>
+      )}
+      {card.refreshLabel && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={refresh}>
+            {card.refreshLabel}
+          </Button>
+          <p role="status" className="text-muted-foreground text-xs">
+            {refreshNote}
+          </p>
+        </div>
       )}
     </section>
   );
