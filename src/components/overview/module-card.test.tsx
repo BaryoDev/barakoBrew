@@ -8,7 +8,8 @@ vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
     return { ...actual, api: { get: vi.fn() } };
 });
-vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => 'cafe' }));
+let tenant = 'cafe';
+vi.mock('@/hooks/use-tenants', () => ({ useCurrentTenant: () => tenant }));
 let report: unknown;
 vi.mock('@/hooks/use-modules', () => ({ useModules: () => ({ data: report }) }));
 
@@ -36,6 +37,7 @@ const answer = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
     vi.mocked(api.get).mockReset();
     report = undefined;
+    tenant = 'cafe';
 });
 
 describe('ModuleCard', () => {
@@ -48,7 +50,7 @@ describe('ModuleCard', () => {
         expect(screen.getByText('12')).toBeInTheDocument();
         expect(screen.getByText('From cache')).toBeInTheDocument();
         expect(screen.getByText(/Updated/)).toBeInTheDocument();
-        expect(api.get).toHaveBeenCalledWith('/api/reports/today');
+        expect(api.get).toHaveBeenCalledWith('/api/reports/today', { skipAuthRefresh: true });
     });
 
     it.each(['empty', 'unavailable'])('draws a %s answer as title and muted text only', async (state) => {
@@ -61,12 +63,44 @@ describe('ModuleCard', () => {
         expect(screen.queryByText(/Updated/)).toBeNull();
     });
 
-    it.each([401, 403, 404, 503, 500])('draws nothing on a %s', async (status) => {
+    it.each([
+        [401, 1],
+        [403, 1],
+        [404, 1],
+        [503, 2],
+        [500, 2],
+    ])('draws nothing on a %s and asks %s time(s)', async (status, calls) => {
         vi.mocked(api.get).mockRejectedValue(httpError(status));
         const { container } = render(<ModuleCard module="Reports" card={decl} />);
         await waitFor(() => expect(api.get).toHaveBeenCalled());
-        await waitFor(() => expect(container.querySelector('section')).toBeNull());
-        expect(container).toBeEmptyDOMElement();
+        await waitFor(() => expect(api.get).toHaveBeenCalledTimes(calls), { timeout: 3000 });
+        await waitFor(() => expect(container).toBeEmptyDOMElement(), { timeout: 3000 });
+        expect(api.get).toHaveBeenCalledTimes(calls);
+    });
+
+    it('asks without a session refresh', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByText('All good');
+        expect(api.get).toHaveBeenCalledWith('/api/reports/today', { skipAuthRefresh: true });
+    });
+
+    it('keys the cache by tenant', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        const shared = new QueryClient();
+        const ui = (
+            <QueryClientProvider client={shared}>
+                <ModuleCard module="Reports" card={decl} />
+            </QueryClientProvider>
+        );
+        const first = rtlRender(ui);
+        await screen.findByText('All good');
+        expect(api.get).toHaveBeenCalledTimes(1);
+        first.unmount();
+        tenant = 'bistro';
+        rtlRender(ui);
+        await screen.findByText('All good');
+        expect(api.get).toHaveBeenCalledTimes(2);
     });
 
     it('draws nothing on content it does not recognise', async () => {
@@ -105,7 +139,7 @@ describe('ModuleCards on the Overview', () => {
         render(<ModuleCards />);
         await waitFor(() => expect(screen.getAllByRole('heading')).toHaveLength(3));
         expect(screen.getAllByRole('heading').map((h) => h.textContent)).toEqual(['Daily summary', 'Weekly', 'Other card']);
-        expect(api.get).not.toHaveBeenCalledWith('/api/off/x');
+        expect(api.get).not.toHaveBeenCalledWith('/api/off/x', expect.anything());
     });
 
     it('changes nothing against an older server with no cards', () => {

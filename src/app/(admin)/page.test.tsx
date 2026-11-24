@@ -40,6 +40,8 @@ interface Answers {
     runList?: 'fail';
     /** Rows of GET /api/activity, or how it refuses. Left out, it is a 404: an API older than 5.5. */
     activity?: unknown[] | 'forbidden';
+    /** Entries of GET /api/modules. Left out, the list is empty. */
+    modules?: unknown[];
 }
 
 function renderOverview(answers: Answers = {}) {
@@ -51,6 +53,8 @@ function renderOverview(answers: Answers = {}) {
             if (!answers.activity) throw fail(404);
             return { data: { items: answers.activity, cursor: 'c', hasMore: false } };
         }
+        if (url === '/api/modules') return page(answers.modules ?? []);
+        if (url === '/api/reports/today') return { data: { state: 'ok', text: 'Quiet day', rows: [], note: null, updatedAt: null } };
         if (url === '/api/meta') return { data: { version, swaggerEnabled: false, apiContractVersion: contract } };
         if (url === '/api/monitoring/health') {
             if (health === 'fail') throw fail(500);
@@ -125,6 +129,23 @@ beforeEach(() => {
 });
 
 describe('the Overview', () => {
+    it('draws a card an enabled module declares', async () => {
+        renderOverview({
+            modules: [
+                {
+                    name: 'Reports',
+                    contractVersion: 1,
+                    enabled: true,
+                    schemaState: 'ready',
+                    schemaChanges: [],
+                    cards: [{ id: 'today', title: 'Daily summary', route: '/api/reports/today' }],
+                },
+            ],
+        });
+        expect(await screen.findByRole('heading', { name: 'Daily summary' })).toBeInTheDocument();
+        expect(await screen.findByText('Quiet day')).toBeInTheDocument();
+    });
+
     it('says Partly failed on the workflow health chip, never the enum name', async () => {
         renderOverview({ outcome: 'PartiallyFailed' });
 

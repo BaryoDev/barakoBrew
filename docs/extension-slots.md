@@ -128,8 +128,9 @@ The console does not trust the server on these rules:
 - A card is dropped when its `id` is not `^[a-z0-9][a-z0-9-]{0,39}$`, its title is empty, or its
   route is not `^/api/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$` and at most 200 characters. At most 4 cards
   per module.
+- A card title is cut to 60 characters. A route under `/api/auth` is dropped.
 - Content is cut to 1000 characters of text, 12 rows, 60 of label, 120 of value and 200 of note.
-  Control characters are removed. A value that is not a string is dropped. An unknown `state` hides
+  Control, zero-width and bidi override characters are removed. A value that is not a string is dropped. An unknown `state` hides
   the card.
 - Everything is drawn as plain text. There is no markdown, no link and no HTML.
 - The card is read with the console's own API client, so the session applies. A 401, 403, 404, 503,

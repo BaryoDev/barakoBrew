@@ -26,6 +26,23 @@ describe('parseModuleCards', () => {
         expect(parseModuleCards([card({ id })])).toEqual([]);
     });
 
+    it('drops a route under /api/auth', () => {
+        expect(parseModuleCards([card({ route: '/api/auth/refresh' }), card({ route: '/api/auth' })])).toEqual([]);
+        expect(parseModuleCards([card({ route: '/api/authors/top' })])).toHaveLength(1);
+    });
+
+    it('cuts a title to 60 characters', () => {
+        expect(parseModuleCards([card({ title: 't'.repeat(100) })])[0].title).toHaveLength(60);
+    });
+
+    it('removes a bidi override from a title', () => {
+        expect(parseModuleCards([card({ title: 'Sales\u202Eevil' })])[0].title).toBe('Salesevil');
+    });
+
+    it('drops a title made only of zero-width characters', () => {
+        expect(parseModuleCards([card({ title: '\u200B\u200D\uFEFF\u2060' })])).toEqual([]);
+    });
+
     it('drops an empty title', () => {
         expect(parseModuleCards([card({ title: '  ' }), card({ title: 3 })])).toEqual([]);
     });

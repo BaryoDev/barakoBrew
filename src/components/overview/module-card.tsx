@@ -30,7 +30,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
   const { data, isLoading } = useQuery({
     queryKey: ['module-card', tenant, module, card.id, card.route],
     queryFn: async () => {
-      const response = await api.get<unknown>(card.route);
+      const response = await api.get<unknown>(card.route, { skipAuthRefresh: true });
       return parseModuleCardContent(response.data);
     },
     staleTime: STALE_MS,

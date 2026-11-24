@@ -232,6 +232,13 @@ export function __resetSessionBootstrapForTests() {
     signedOut = false;
 }
 
+declare module 'axios' {
+    interface AxiosRequestConfig {
+        /** A 401 on this request is passed on as is: no session refresh and no redirect to sign-in. */
+        skipAuthRefresh?: boolean;
+    }
+}
+
 // Every response, success or failure, carries the API's contract version, so this is where the
 // console learns whether it fits the server it is pointed at. Reading it here rather than from one
 // call at startup is what makes a rolling upgrade visible: the API can change under a live session
@@ -249,6 +256,7 @@ api.interceptors.response.use(
         const original = error.config;
         if (
             error.response?.status === 401 &&
+            !original?.skipAuthRefresh &&
             typeof window !== 'undefined' &&
             !signedOut &&
             !original._retried &&

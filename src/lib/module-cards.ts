@@ -27,11 +27,13 @@ export interface ModuleCardContent {
 }
 
 export const ROUTE_PATTERN = /^\/api\/[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/;
+/** Auth routes are never a card: a card must not be a way to reach the sign-in or token endpoints. */
+const AUTH_ROUTE = /^\/api\/auth(\/|$)/;
 export const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 export const MAX_ROUTE = 200;
 export const MAX_CARDS_PER_MODULE = 4;
-export const MAX_TITLE = 80;
+export const MAX_TITLE = 60;
 export const MAX_TEXT = 1000;
 export const MAX_ROWS = 12;
 export const MAX_LABEL = 60;
@@ -47,7 +49,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Tabs and line breaks become spaces, every other control character is removed, then trimmed and cut. */
 export function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
-  const flat = value.replace(/[\t\n\r]+/g, ' ').replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, '');
+  const flat = value.replace(/[\t\n\r]+/g, ' ').replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, '')
+    .replace(/[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
   return Array.from(flat.trim()).slice(0, max).join('');
 }
 
@@ -60,7 +63,7 @@ export function parseModuleCards(value: unknown): ModuleCardDeclaration[] {
     if (!isRecord(raw)) continue;
     const { id, route } = raw;
     if (typeof id !== 'string' || !ID_PATTERN.test(id)) continue;
-    if (typeof route !== 'string' || route.length > MAX_ROUTE || !ROUTE_PATTERN.test(route)) continue;
+    if (typeof route !== 'string' || route.length > MAX_ROUTE || !ROUTE_PATTERN.test(route) || AUTH_ROUTE.test(route)) continue;
     const title = cleanText(raw.title, MAX_TITLE);
     if (!title) continue;
     if (out.some((card) => card.id === id)) continue;

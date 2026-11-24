@@ -61,3 +61,22 @@ describe('a session that cannot be refreshed', () => {
         expect(location.href).toBe('/login');
     });
 });
+
+describe('a 401 on a request that opts out of refresh', () => {
+    it('rejects at once with no refresh and no redirect', async () => {
+        const location = stubLocation('/barakocms/content');
+
+        await expect(api.get('/api/x/y', { skipAuthRefresh: true })).rejects.toThrow();
+
+        expect(axios.post).not.toHaveBeenCalled();
+        expect(location.href).toBe('https://example.com/barakocms/content');
+    });
+
+    it('still refreshes once without the flag', async () => {
+        stubLocation('/barakocms/content');
+
+        await expect(api.get('/api/x/y')).rejects.toThrow();
+
+        expect(axios.post).toHaveBeenCalledTimes(1);
+    });
+});
