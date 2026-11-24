@@ -9,6 +9,12 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-24
+
+**Speaks API contracts 1 to 17, which covers barakoCMS 4.0.1 to 5.10.0.** No release sends 17 yet;
+it is the contract 6.0.0 will send. Module cards on the Overview need barakoCMS 5.10.0, the first
+release that lists `cards` in `GET /api/modules`. Against an older API the Overview has no cards.
+
 ### Added
 
 - A module card can carry an optional `refreshLabel` (1 to 24 UTF-16 units, no control, format or separator characters). The card then shows a button with that label. Clicking it sends `POST` to the card's route with no body, and the route answers with the same body as its GET, which replaces what the card shows. A 429 shows "Try again in N seconds." from `Retry-After` (1 to 3600), and any other error or a body the console does not recognise keeps the old content and shows "Could not refresh.". A card with no valid label has no button. `SUPPORTED_CONTRACT` does not move. See `docs/extension-slots.md`.
@@ -1045,8 +1051,9 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.11.4...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.14.0...HEAD
 [1.11.4]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.4
+[1.14.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.14.0
 [1.13.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.13.0
 [1.12.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.12.0
 [1.11.3]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.3
