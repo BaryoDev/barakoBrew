@@ -99,3 +99,38 @@ registerSlot('sign-in-method', 'MyModule', {
 - Entries are components registered from code at build time. A string or URL is refused. `icon` and
   `Panel` are functions or `forwardRef` or `memo` components. A `lazy` component is not accepted.
   The ids `password` and `email-code` belong to the console and cannot be registered.
+
+## Module cards
+
+A module can put a small card on the Overview by declaring it in its manifest. No console build and
+no code in the console is needed.
+
+`GET /api/modules` lists each module. An enabled module may carry a `cards` array:
+
+```json
+{ "cards": [{ "id": "today", "title": "Daily summary", "route": "/api/reports/today" }] }
+```
+
+The console draws each card of each enabled module, after the rest of the Overview, in module list
+order and then card order. An older server sends no `cards`, and the Overview is unchanged.
+
+Each card's route is a GET that answers:
+
+```json
+{ "state": "ok", "text": "...", "rows": [{ "label": "...", "value": "..." }], "note": null, "updatedAt": null }
+```
+
+`state` is `ok`, `empty` or `unavailable`. `ok` shows the text, the rows, the note and when it was
+updated. The other two show the text, muted.
+
+The console does not trust the server on these rules:
+
+- A card is dropped when its `id` is not `^[a-z0-9][a-z0-9-]{0,39}$`, its title is empty, or its
+  route is not `^/api/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$` and at most 200 characters. At most 4 cards
+  per module.
+- Content is cut to 1000 characters of text, 12 rows, 60 of label, 120 of value and 200 of note.
+  Control characters are removed. A value that is not a string is dropped. An unknown `state` hides
+  the card.
+- Everything is drawn as plain text. There is no markdown, no link and no HTML.
+- The card is read with the console's own API client, so the session applies. A 401, 403, 404, 503,
+  any other error, or content that fails these rules hides the card. Nothing is shown in its place.

@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { IconArrowRight, IconContent } from '@/components/icons';
 import { OverviewHeader } from '@/components/overview/overview-header';
 import { OverviewCardSlot } from '@/components/overview/overview-card-slot';
+import { ModuleCards } from '@/components/overview/module-card';
 import { GlanceCard } from '@/components/overview/glance-card';
 import { useSlot } from '@/hooks/use-slots';
 import { StatCards } from '@/components/overview/stat-cards';
@@ -97,6 +98,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ModuleCards />
     </div>
   );
 }

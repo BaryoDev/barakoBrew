@@ -25,6 +25,11 @@ export interface ModuleSummary {
      * is saying nothing, which is read as installed, because `/api/modules` lists only what it saw.
      */
     installed?: boolean;
+    /**
+     * Cards the module declares for the Overview. Optional, and read with `parseModuleCards`, never
+     * trusted as typed: an older API sends none.
+     */
+    cards?: unknown;
 }
 
 /** What the module screen's Configuration card reads, from `GET /api/modules/{name}/configuration`. */
