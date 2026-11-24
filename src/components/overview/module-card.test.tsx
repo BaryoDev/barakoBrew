@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render as rtlRender, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
 import type { ReactElement } from 'react';
@@ -151,8 +151,11 @@ describe('ModuleCard refresh', () => {
         render(<ModuleCard module="Reports" card={withLabel} />);
         await screen.findByText('All good');
         const button = screen.getByRole('button', { name: 'Refresh' });
-        fireEvent.click(button);
-        fireEvent.click(button);
+        // Both clicks land before React re-renders, so only the ref can stop the second one.
+        act(() => {
+            fireEvent.click(button);
+            fireEvent.click(button);
+        });
         expect(api.post).toHaveBeenCalledTimes(1);
         expect(button).toBeDisabled();
         release(answer({ text: 'Fresh news' }));
@@ -168,6 +171,54 @@ describe('ModuleCard refresh', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
         expect(await screen.findByText('Try again in 30 seconds.')).toBeInTheDocument();
         expect(screen.getByText('All good')).toBeInTheDocument();
+    });
+
+    it('reads Retry-After from a real AxiosHeaders instance', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        const error = new AxiosError('failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+            status: 429,
+            data: {},
+            statusText: '',
+            headers: new AxiosHeaders({ 'Retry-After': '45' }),
+            config: { headers: new AxiosHeaders() },
+        });
+        vi.mocked(api.post).mockRejectedValue(error);
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('Try again in 45 seconds.')).toBeInTheDocument();
+    });
+
+    it.each([
+        ['0', 'Try again in 1 second.'],
+        ['1', 'Try again in 1 second.'],
+        ['99999', 'Try again in 3600 seconds.'],
+        ['soon', 'Try again shortly.'],
+    ])('turns Retry-After %s into "%s"', async (header, line) => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockRejectedValue(httpError(429, { 'retry-after': header }));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText(line)).toBeInTheDocument();
+    });
+
+    it('keeps an empty status region mounted before any message', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    });
+
+    it('shows could not refresh on a 401 and asks for no session refresh', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        vi.mocked(api.post).mockRejectedValue(httpError(401));
+        render(<ModuleCard module="Reports" card={withLabel} />);
+        await screen.findByText('All good');
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        expect(await screen.findByText('Could not refresh.')).toBeInTheDocument();
+        expect(screen.getByText('All good')).toBeInTheDocument();
+        expect(api.post).toHaveBeenCalledWith('/api/reports/today', undefined, { skipAuthRefresh: true });
     });
 
     it('says try again shortly on a 429 with no header', async () => {

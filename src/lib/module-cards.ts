@@ -57,11 +57,11 @@ export function cleanText(value: unknown, max: number): string | null {
   return Array.from(flat.trim()).slice(0, max).join('');
 }
 
-/** A refresh label, trimmed, or undefined when it is not a string of 1 to 24 characters without control or format characters. */
+/** A refresh label, trimmed, or undefined when it is not a string of 1 to 24 UTF-16 units (as core counts) without control, format or line and paragraph separator characters. */
 function cleanRefreshLabel(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const label = value.trim();
-  if (!label || Array.from(label).length > MAX_REFRESH_LABEL || /[\p{Cc}\p{Cf}]/u.test(label)) return undefined;
+  if (!label || label.length > MAX_REFRESH_LABEL || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(label)) return undefined;
   return label;
 }
 

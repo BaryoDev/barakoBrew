@@ -64,6 +64,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
       const response = await api.post<unknown>(card.route, undefined, { skipAuthRefresh: true });
       const fresh = parseModuleCardContent(response.data);
       if (fresh) {
+        await queryClient.cancelQueries({ queryKey });
         queryClient.setQueryData(queryKey, fresh);
         setRefreshNote(null);
       } else {
@@ -73,7 +74,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
       const status = axios.isAxiosError(error) ? error.response?.status : undefined;
       if (status === 429) {
         const seconds = retryAfterSeconds(error);
-        setRefreshNote(seconds === null ? 'Try again shortly.' : `Try again in ${seconds} seconds.`);
+        setRefreshNote(seconds === null ? 'Try again shortly.' : `Try again in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`);
       } else {
         setRefreshNote('Could not refresh.');
       }
@@ -125,11 +126,9 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
           <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={refresh}>
             {card.refreshLabel}
           </Button>
-          {refreshNote && (
-            <p role="status" className="text-muted-foreground text-xs">
-              {refreshNote}
-            </p>
-          )}
+          <p role="status" className="text-muted-foreground text-xs">
+            {refreshNote}
+          </p>
         </div>
       )}
     </section>
