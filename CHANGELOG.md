@@ -9,6 +9,10 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Security
+
+- The published console image no longer allows `http://localhost:5005` in `connect-src` when it is started with `NEXT_PUBLIC_API_URL`. It allows that address only when no API address is set at start, which is the only case where the console calls it. Builds without the image's placeholder (`npm run dev`, `next start`) keep the fallback.
+
 ## [1.14.0] - 2026-11-24
 
 **Speaks API contracts 1 to 17, which covers barakoCMS 4.0.1 to 5.10.0.** No release sends 17 yet;
