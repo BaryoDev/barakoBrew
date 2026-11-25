@@ -540,7 +540,19 @@ jobs:
           if grep -qE '^[[:space:]]+build:' quickstart.resolved; then
             echo "::error::quickstart/docker-compose.yml resolves to a build step; it must run published images"; exit 1
           fi
+          # The console runs read-only unless .env says otherwise.
+          docker compose -f quickstart/docker-compose.yml config --format json \
+            | jq -e '.services.console.read_only == true' >/dev/null \
+            || { echo "::error::the quickstart console does not default to a read-only filesystem"; exit 1; }
           echo "quickstart/docker-compose.yml resolves"
+
+      # A newcomer runs master's quickstart, so its default tags agree across its files, the console
+      # can run read-only, and both images are published. A release PR that moves a tag before its
+      # image is out fails here.
+      - name: The quickstart starts published releases
+        run: |
+          bash scripts/test-check-quickstart.sh
+          bash scripts/check-quickstart.sh --registry
 
   sbom:
     name: SBOM generates
