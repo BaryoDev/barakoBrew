@@ -9,6 +9,10 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- The quickstart starts console 1.14.0 by default instead of `latest`, with a read-only filesystem: `CONSOLE_READ_ONLY` now defaults to `true`. A `.env` that pins a console older than 1.14.0 needs `CONSOLE_READ_ONLY=false`: those write into their own image at start, so read-only they exit and restart in a loop. CI runs `scripts/check-quickstart.sh`, which fails when a default tag differs between the compose file, `.env.example` and `README.md`, when the console is too old to run read-only, or when a default image is not published. A release moves the quickstart only after its image is out.
+
 ### Security
 
 - The published console image no longer allows `http://localhost:5005` in `connect-src` when it is started with `NEXT_PUBLIC_API_URL`. It allows that address only when no API address is set at start, which is the only case where the console calls it. Builds without the image's placeholder (`npm run dev`, `next start`) keep the fallback.

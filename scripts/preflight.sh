@@ -95,6 +95,7 @@ gate "licences" bash scripts/check-licences.sh . 400
 gate "the Dockerfile declares no unagreed build ARG" bash scripts/check-dockerfile-args.sh
 gate "env-config.js carries only NEXT_PUBLIC_ variables, encoded" bash scripts/check-env-config.sh
 gate "the wiki publish fails when the wiki was not updated" bash scripts/test-wiki-publish.sh
+gate "the quickstart defaults agree and run read-only" bash scripts/test-check-quickstart.sh
 
 # The image job compiles the console, so a build break is otherwise found by the slowest job there
 # is. next build is the same command that runs in the Dockerfile.

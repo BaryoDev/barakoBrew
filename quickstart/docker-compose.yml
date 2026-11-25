@@ -11,9 +11,9 @@
 # Both ports are bound to 127.0.0.1. To reach them from another machine, put a reverse proxy in
 # front (see README.md, "Behind a domain"), or change the ports lines to "0.0.0.0:...".
 #
-# Every container drops all Linux capabilities and cannot gain new ones. Postgres runs read-only,
-# and the console does when CONSOLE_READ_ONLY=true. The API does not: its
-# image has no shell to prove what it writes where, so it keeps a writable filesystem.
+# Every container drops all Linux capabilities and cannot gain new ones. Postgres and the console
+# run read-only. The API does not: its image has no shell to prove what it writes where, so it
+# keeps a writable filesystem.
 #
 # The API image carries every module; each stays off or on a mock until its keys are set. The API
 # repository's quickstart lists them: https://github.com/BaryoDev/barakoCMS/tree/master/quickstart
@@ -77,16 +77,17 @@ services:
       ForwardedHeaders__KnownNetworks__0: ${TRUSTED_PROXY_NETWORK:-}
 
   console:
-    # Pin BARAKO_CONSOLE_TAG to a release.
-    image: ghcr.io/baryodev/barako-brew:${BARAKO_CONSOLE_TAG:-latest}
+    # The newest published console. Move it after a release's image is out, with .env.example and
+    # README.md: scripts/check-quickstart.sh fails on a tag that differs, is too old or is not published.
+    image: ghcr.io/baryodev/barako-brew:${BARAKO_CONSOLE_TAG:-1.14.0}
     restart: unless-stopped
     depends_on:
       - api
-    # The console released after 1.13.0 runs from a copy under /tmp and can run read-only, so set
-    # CONSOLE_READ_ONLY=true with it. The default turns true when that release ships.
-    read_only: ${CONSOLE_READ_ONLY:-false}
-    # A console released after 1.13.0 copies the server here, writes the API address and base path
-    # into the copy, and runs from it. An older one does not use this.
+    # The console runs from a copy under /tmp, so it runs read-only. A console older than 1.14.0
+    # writes into its own image at start: set CONSOLE_READ_ONLY=false to run one.
+    read_only: ${CONSOLE_READ_ONLY:-true}
+    # The console copies the server here, writes the API address and base path into the copy, and
+    # runs from it.
     tmpfs:
       - /tmp:size=128m,mode=1777
     cap_drop: [ALL]
