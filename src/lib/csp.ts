@@ -23,12 +23,16 @@ export function originOf(value: string | undefined): string | null {
 // build time only when it can see the whole expression. BARAKO_CONNECT_PLACEHOLDER is inlined through
 // the env option in next.config.ts.
 export function connectOriginsFromBuild(): string[] {
+  // Set only when building the published image, where entrypoint.sh swaps it for the runtime origins.
+  const placeholder = process.env.BARAKO_CONNECT_PLACEHOLDER || "";
   return [
-    // The same fallback getApiUrl() uses.
-    originOf(process.env.NEXT_PUBLIC_API_URL) ?? "http://localhost:5005",
+    // The same fallback getApiUrl() uses. The published image leaves it to entrypoint.sh, which adds
+    // it only when no API address is set at start, so a console that names its API does not also
+    // allow http://localhost:5005.
+    originOf(process.env.NEXT_PUBLIC_API_URL) ?? (placeholder ? null : "http://localhost:5005"),
     // The barakoPress site, read with a plain fetch for its block schema (use-block-schema.ts).
     originOf(process.env.NEXT_PUBLIC_PRESS_URL),
-    process.env.BARAKO_CONNECT_PLACEHOLDER || "",
+    placeholder,
     // The Modules Browse view asks NuGet's search service for packages tagged barakocms-module (#248).
     // One origin, fixed, and a failed call only shows "unavailable", so an offline deployment loses
     // nothing else.

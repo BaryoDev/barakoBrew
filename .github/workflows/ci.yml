@@ -457,6 +457,11 @@ jobs:
           fi
           echo "$csp" | grep -qE 'connect-src[^;]*http://api\.example\.test:5005([ ;]|$)' || {
             echo "$csp"; echo "::error::the Content-Security-Policy connect-src does not carry http://api.example.test:5005, the API origin the container was started with"; exit 1; }
+          # The quickstart's http://localhost:5005 is the fallback for a console with no API address.
+          # This one was started with one, so its policy must not allow localhost as well.
+          if echo "$csp" | grep -q 'localhost:5005'; then
+            echo "$csp"; echo "::error::connect-src still allows http://localhost:5005 although the container was started with an API origin"; exit 1
+          fi
           for _ in $(seq 1 30); do
             [ "$(docker inspect -f '{{.State.Health.Status}}' ci-admin)" = "healthy" ] && break
             sleep 2

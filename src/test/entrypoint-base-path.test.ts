@@ -244,6 +244,44 @@ describe('entrypoint.sh writes the base path in at start', () => {
     });
 });
 
+describe('entrypoint.sh writes the connect-src origins in at start', () => {
+    const CONNECT = '__BARAKO_CONNECT_ORIGINS__';
+    const PROXY = '.next/server/edge/proxy.js';
+    const connectSrc = () => read(PROXY).match(/connect-src ([^;"]*)/)?.[1] ?? '';
+
+    beforeEach(() => {
+        write(PROXY, `const policy = "connect-src 'self' ${CONNECT} https://azuresearch-usnc.nuget.org; object-src 'none'";\n`);
+    });
+
+    it('a console with an API address allows that origin and not localhost', () => {
+        run({ NEXT_PUBLIC_API_URL: 'https://barakocms.example.test/api', NEXT_PUBLIC_PRESS_URL: '' });
+
+        expect(connectSrc()).toContain('https://barakocms.example.test');
+        expect(connectSrc()).not.toContain('localhost:5005');
+        expect(connectSrc()).not.toContain(CONNECT);
+    });
+
+    it('a console with no API address allows the localhost API it falls back to', () => {
+        run({ NEXT_PUBLIC_API_URL: '', NEXT_PUBLIC_PRESS_URL: 'https://press.example.test' });
+
+        expect(connectSrc()).toContain('http://localhost:5005');
+        expect(connectSrc()).toContain('https://press.example.test');
+        expect(connectSrc()).not.toContain(CONNECT);
+    });
+
+    it('an origin it cannot write still leaves the localhost fallback when no API address is set', () => {
+        run({ NEXT_PUBLIC_API_URL: '', NEXT_PUBLIC_PRESS_URL: 'http://[::1]:3100' });
+
+        expect(connectSrc()).toBe("'self' http://localhost:5005 https://azuresearch-usnc.nuget.org");
+    });
+
+    it('an origin it cannot write with an API address set leaves neither', () => {
+        run({ NEXT_PUBLIC_API_URL: 'http://[::1]:5005', NEXT_PUBLIC_PRESS_URL: '' });
+
+        expect(connectSrc()).toBe("'self'  https://azuresearch-usnc.nuget.org");
+    });
+});
+
 describe('entrypoint.sh with BARAKO_RUNTIME_DIR leaves the image untouched', () => {
     let runtime: string;
     const readRuntime = (relative: string) => readFileSync(join(runtime, relative), 'utf8');

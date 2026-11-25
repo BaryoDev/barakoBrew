@@ -131,7 +131,9 @@ fi
 # The Content-Security-Policy is built with a placeholder in connect-src (see src/lib/csp.ts and src/proxy.ts), because
 # the API and press addresses are only known now. Each is reduced to its origin, so a path, a query or
 # anything that is not an http(s) address cannot reach the header. Unusable or unset values leave
-# nothing in its place, and the origin baked in at build time stays in the policy.
+# nothing in its place, and the origin baked in at build time stays in the policy. With no
+# NEXT_PUBLIC_API_URL at all, getApiUrl() calls http://localhost:5005 (the quickstart's API), so the
+# policy allows that address then and only then.
 CONNECT_PLACEHOLDER="__BARAKO_CONNECT_ORIGINS__"
 connect_origins=$(node -e '
 const origins = [];
@@ -141,6 +143,7 @@ for (const name of ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_PRESS_URL"]) {
     if (u.protocol === "http:" || u.protocol === "https:") origins.push(u.origin);
   } catch (e) {}
 }
+if (!process.env.NEXT_PUBLIC_API_URL) origins.push("http://localhost:5005");
 process.stdout.write(origins.join(" "));
 ')
 if printf '%s' "$connect_origins" | grep -Eq '^[A-Za-z0-9:/. _-]*$'; then
@@ -152,10 +155,13 @@ if printf '%s' "$connect_origins" | grep -Eq '^[A-Za-z0-9:/. _-]*$'; then
   fi
 else
   echo "entrypoint: ignoring NEXT_PUBLIC_API_URL and NEXT_PUBLIC_PRESS_URL for the Content-Security-Policy, an origin held an unexpected character" >&2
+  # The quickstart fallback still applies when no API address is set, as above.
+  connect_fallback=""
+  [ -n "${NEXT_PUBLIC_API_URL:-}" ] || connect_fallback="http://localhost:5005"
   csp_files=$(grep -rlF "$CONNECT_PLACEHOLDER" server.js .next 2>/dev/null || true)
   if [ -n "$csp_files" ]; then
     printf '%s\n' "$csp_files" | while IFS= read -r file; do
-      sed -i.bak "s|$CONNECT_PLACEHOLDER||g" "$file" && rm -f "$file.bak"
+      sed -i.bak "s|$CONNECT_PLACEHOLDER|$connect_fallback|g" "$file" && rm -f "$file.bak"
     done
   fi
 fi

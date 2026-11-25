@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildConsolePolicy, generateNonce, originOf } from "./csp";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildConsolePolicy, connectOriginsFromBuild, generateNonce, originOf } from "./csp";
 
 const origins = ["http://api.example.test:5005", "https://press.example.test", "https://azuresearch-usnc.nuget.org"];
 
@@ -71,5 +71,36 @@ describe("originOf", () => {
     expect(originOf(" http://api.example.test:5005/x?y=1 ")).toBe("http://api.example.test:5005");
     expect(originOf("javascript:alert(1)")).toBeNull();
     expect(originOf(undefined)).toBeNull();
+  });
+});
+
+describe("connectOriginsFromBuild", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("allows the localhost API fallback in a build with no API address and no placeholder", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_PRESS_URL", "");
+    vi.stubEnv("BARAKO_CONNECT_PLACEHOLDER", "");
+    expect(connectOriginsFromBuild()).toContain("http://localhost:5005");
+  });
+
+  it("leaves the localhost fallback to entrypoint.sh in the published image", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_PRESS_URL", "");
+    vi.stubEnv("BARAKO_CONNECT_PLACEHOLDER", "__BARAKO_CONNECT_ORIGINS__");
+    const origins = connectOriginsFromBuild();
+    expect(origins).not.toContain("http://localhost:5005");
+    expect(origins).toContain("__BARAKO_CONNECT_ORIGINS__");
+  });
+
+  it("keeps an API origin set at build time next to the placeholder", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.test/v1");
+    vi.stubEnv("NEXT_PUBLIC_PRESS_URL", "");
+    vi.stubEnv("BARAKO_CONNECT_PLACEHOLDER", "__BARAKO_CONNECT_ORIGINS__");
+    const origins = connectOriginsFromBuild();
+    expect(origins).toContain("https://api.example.test");
+    expect(origins).not.toContain("http://localhost:5005");
   });
 });
