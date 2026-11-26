@@ -416,7 +416,7 @@ describe('ModuleCard visual parts', () => {
     });
 
     it('mounts no question box for a question route outside the card module prefix, on read or refresh', async () => {
-        const outside = { route: '/api/users/question' };
+        const outside = { route: '/api/users/question', placeholder: 'Type a question' };
         vi.mocked(api.get).mockResolvedValue(answer({ ...parts(), question: outside }));
         vi.mocked(api.post).mockResolvedValue(answer({ ...parts(), text: 'Fresh news', question: outside }));
         render(<ModuleCard module="Reports" card={{ ...decl, refreshLabel: 'Refresh' }} />);
