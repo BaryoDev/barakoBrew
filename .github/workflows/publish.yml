@@ -578,6 +578,8 @@ jobs:
     needs: [version, playground-image]
     if: needs.version.outputs.is_release == 'true'
     runs-on: ubuntu-latest
+    # The steps use only secrets and curl, never the workflow token.
+    permissions: {}
     environment:
       name: playground
       url: https://playground.baryo.dev/barakocms
