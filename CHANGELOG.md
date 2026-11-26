@@ -9,6 +9,10 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Changed
+
+- The quickstart starts console 1.15.0 by default.
+
 ## [1.15.0] - 2026-11-26
 
 **Speaks API contracts 1 to 17, which covers barakoCMS 4.0.1 to 5.10.0.** Visual parts and the

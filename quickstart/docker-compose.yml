@@ -79,7 +79,7 @@ services:
   console:
     # The newest published console. Move it after a release's image is out, with .env.example and
     # README.md: scripts/check-quickstart.sh fails on a tag that differs, is too old or is not published.
-    image: ghcr.io/baryodev/barako-brew:${BARAKO_CONSOLE_TAG:-1.14.0}
+    image: ghcr.io/baryodev/barako-brew:${BARAKO_CONSOLE_TAG:-1.15.0}
     restart: unless-stopped
     depends_on:
       - api
