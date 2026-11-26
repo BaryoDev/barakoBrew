@@ -12,7 +12,7 @@ moved. Which API a console works against is stated per release instead.
 ### Added
 
 - Module cards can show visual parts: stat tiles with the change from the previous period, a daily chart against the previous period, bars, and a watch list. The rows move behind a closed disclosure when a card has any of them. A card without them looks as before. Every string is drawn as text.
-- Module cards can show a question box. The card content names the route, and the console sends the question with the earlier answered turns and the browser time zone. Enter sends, Shift+Enter adds a line, one question goes out at a time, and the conversation lives in the page for the current tenant only.
+- Module cards can show a question box. The card content names the route, and the console sends the question with the earlier answered turns and the browser time zone. Enter sends, Shift+Enter adds a line, one question goes out at a time, and the conversation lives in the page for the current tenant only. The question route must share the card route's first two segments (such as `/api/reports`) and cannot be an auth route, or the box is not drawn.
 
 ### Changed
 
