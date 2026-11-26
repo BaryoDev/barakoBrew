@@ -123,6 +123,7 @@ consumer.
 
 | barakoBrew | Contracts it speaks | barakoCMS releases it accepts |
 | --- | --- | --- |
+| 1.15.0 | 1 to 17 | 4.0.1 to 5.10.0 |
 | 1.14.0 | 1 to 17 | 4.0.1 to 5.10.0 |
 | 1.13.0 | 1 to 16 | 4.0.1 to 5.8.0 |
 | 1.12.0 | 1 to 15 | 4.0.1 to 5.7.0 |
