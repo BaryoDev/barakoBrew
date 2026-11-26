@@ -305,3 +305,126 @@ describe('ModuleCards on the Overview', () => {
         expect(container).toBeEmptyDOMElement();
     });
 });
+
+describe('ModuleCard visual parts', () => {
+    const parts = () => ({
+        text: 'Less rain than last week',
+        stats: [{ label: 'Rainfall', value: 69, previous: 78 }],
+        series: {
+            label: 'This week',
+            previousLabel: 'Last week',
+            points: [
+                { date: '2026-11-19', value: 5, previous: 8 },
+                { date: '2026-11-20', value: 9, previous: 4 },
+            ],
+        },
+        bars: { label: 'Wettest towns', items: [{ label: 'Oslo', value: 13 }] },
+        checks: [{ label: 'Rain gauge', tone: 'ok' }],
+        rowsLabel: 'Readings',
+    });
+
+    it('draws the 1.14.0 markup when there are no parts', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer());
+        const { container } = render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByText('Sales');
+        expect(container.querySelector('dl')).not.toBeNull();
+        expect(container.querySelector('details')).toBeNull();
+        expect(container.querySelector('[data-testid^="card-"]')).toBeNull();
+    });
+
+    it('moves rows behind a closed disclosure labelled by rowsLabel', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer(parts()));
+        const { container } = render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByText('Readings');
+        const details = container.querySelector('details')!;
+        expect(details.open).toBe(false);
+        expect(details.querySelector('summary')).toHaveTextContent('Readings');
+        expect(details.querySelector('dl')).toHaveTextContent('Sales');
+    });
+
+    it('uses Details when rowsLabel is absent', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer({ ...parts(), rowsLabel: undefined }));
+        const { container } = render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByText('Details');
+        expect(container.querySelector('summary')).toHaveTextContent('Details');
+    });
+
+    it('draws the parts in order', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer(parts()));
+        const { container } = render(<ModuleCard module="Reports" card={{ ...decl, refreshLabel: 'Refresh' }} />);
+        await screen.findByTestId('card-stats');
+        const order = [
+            container.querySelector('p.text-secondary-foreground')!,
+            screen.getByTestId('card-stats'),
+            screen.getByTestId('card-series'),
+            screen.getByTestId('card-bars'),
+            screen.getByTestId('card-checks'),
+            container.querySelector('details')!,
+            screen.getByRole('button', { name: 'Refresh' }),
+        ];
+        for (let i = 0; i < order.length - 1; i++) {
+            expect(order[i].compareDocumentPosition(order[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        }
+    });
+
+    it('keeps the card when one part is broken', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer({ ...parts(), series: { label: 'This week', points: [{ date: 'nope', value: 1 }] } }));
+        render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByTestId('card-stats');
+        expect(screen.queryByTestId('card-series')).toBeNull();
+        expect(screen.getByTestId('card-bars')).toBeInTheDocument();
+    });
+
+    it('draws part text as literal text', async () => {
+        const bomb = '<img src=x onerror=alert(1)>';
+        vi.mocked(api.get).mockResolvedValue(
+            answer({
+                stats: [{ label: bomb, value: 1 }],
+                series: { label: bomb, previousLabel: bomb, points: [{ date: '2026-11-19', value: 1 }, { date: '2026-11-20', value: 2 }] },
+                bars: { label: bomb, items: [{ label: bomb, value: 1 }] },
+                checks: [{ label: bomb, tone: 'bad', value: bomb }],
+                rowsLabel: bomb,
+            }),
+        );
+        const { container } = render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByTestId('card-stats');
+        expect(screen.getAllByText(bomb).length).toBeGreaterThan(5);
+        expect(container.querySelector('img')).toBeNull();
+        expect(container.querySelector('a')).toBeNull();
+    });
+
+    it('draws no parts for an answer that is not ok', async () => {
+        vi.mocked(api.get).mockResolvedValue(answer({ ...parts(), state: 'empty' }));
+        const { container } = render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByText('Less rain than last week');
+        expect(container.querySelector('[data-testid^="card-"]')).toBeNull();
+    });
+
+    it('mounts the question box only when the content names a question route', async () => {
+        vi.mocked(api.get).mockResolvedValue(
+            answer({ ...parts(), question: { route: '/api/reports/question', placeholder: 'Type a question' } }),
+        );
+        const { unmount } = render(<ModuleCard module="Reports" card={decl} />);
+        expect(await screen.findByTestId('card-question')).toBeInTheDocument();
+        expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Type a question');
+        unmount();
+
+        vi.mocked(api.get).mockResolvedValue(answer(parts()));
+        render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByTestId('card-stats');
+        expect(screen.queryByTestId('card-question')).toBeNull();
+    });
+
+    it('mounts no question box for a question route outside the card module prefix, on read or refresh', async () => {
+        const outside = { route: '/api/users/question', placeholder: 'Type a question' };
+        vi.mocked(api.get).mockResolvedValue(answer({ ...parts(), question: outside }));
+        vi.mocked(api.post).mockResolvedValue(answer({ ...parts(), text: 'Fresh news', question: outside }));
+        render(<ModuleCard module="Reports" card={{ ...decl, refreshLabel: 'Refresh' }} />);
+        await screen.findByTestId('card-stats');
+        expect(screen.queryByTestId('card-question')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        await screen.findByText('Fresh news');
+        expect(screen.queryByTestId('card-question')).toBeNull();
+    });
+});

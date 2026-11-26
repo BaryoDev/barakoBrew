@@ -7,8 +7,14 @@ import { formatDistanceToNow } from 'date-fns';
 import { api } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 import { useModules } from '@/hooks/use-modules';
+import { retryAfterSeconds } from '@/lib/retry-after';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CardBars } from './card-bars';
+import { CardChecks } from './card-checks';
+import { CardQuestion } from './card-question';
+import { CardSeries } from './card-series';
+import { CardStats } from './card-stats';
 import {
   parseModuleCardContent,
   parseModuleCards,
@@ -20,18 +26,6 @@ const STALE_MS = 5 * 60 * 1000;
 function isClientError(error: unknown): boolean {
   const status = axios.isAxiosError(error) ? error.response?.status : undefined;
   return status !== undefined && status >= 400 && status < 500;
-}
-
-/** Retry-After as whole seconds clamped to 1..3600, or null when the header is missing or not a number. */
-function retryAfterSeconds(error: unknown): number | null {
-  const headers = (axios.isAxiosError(error) ? error.response?.headers : undefined) as
-    | (Record<string, unknown> & { get?: (name: string) => unknown })
-    | undefined;
-  if (!headers) return null;
-  const raw = typeof headers.get === 'function' ? headers.get('retry-after') : headers['retry-after'];
-  const text = typeof raw === 'string' || typeof raw === 'number' ? String(raw).trim() : '';
-  if (!/^\d+(\.\d+)?$/.test(text)) return null;
-  return Math.min(3600, Math.max(1, Math.round(Number(text))));
 }
 
 /**
@@ -50,7 +44,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
     queryKey,
     queryFn: async () => {
       const response = await api.get<unknown>(card.route, { skipAuthRefresh: true });
-      return parseModuleCardContent(response.data);
+      return parseModuleCardContent(response.data, card.route);
     },
     staleTime: STALE_MS,
     retry: (count, error) => !isClientError(error) && count < 1,
@@ -62,7 +56,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
     setRefreshing(true);
     try {
       const response = await api.post<unknown>(card.route, undefined, { skipAuthRefresh: true });
-      const fresh = parseModuleCardContent(response.data);
+      const fresh = parseModuleCardContent(response.data, card.route);
       if (fresh) {
         await queryClient.cancelQueries({ queryKey });
         queryClient.setQueryData(queryKey, fresh);
@@ -97,6 +91,18 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
   if (!data) return null;
 
   const muted = data.state !== 'ok';
+  const hasParts = data.state === 'ok' && Boolean(data.stats || data.series || data.bars || data.checks);
+  const rows =
+    data.state === 'ok' && data.rows.length > 0 ? (
+      <dl className="grid gap-1 text-sm">
+        {data.rows.map((row, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-4">
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd className="text-right font-medium">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    ) : null;
   return (
     <section aria-labelledby={headingId} className="border-border bg-card rise grid gap-3 rounded-[18px] border p-5">
       <h2 id={headingId} className="font-display text-xl font-semibold tracking-[-0.02em]">
@@ -105,16 +111,21 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
       {data.text && (
         <p className={muted ? 'text-muted-foreground text-sm' : 'text-secondary-foreground text-sm'}>{data.text}</p>
       )}
-      {data.state === 'ok' && data.rows.length > 0 && (
-        <dl className="grid gap-1 text-sm">
-          {data.rows.map((row, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-4">
-              <dt className="text-muted-foreground">{row.label}</dt>
-              <dd className="text-right font-medium">{row.value}</dd>
-            </div>
-          ))}
-        </dl>
+      {hasParts && data.stats && <CardStats stats={data.stats} />}
+      {hasParts && data.series && <CardSeries series={data.series} />}
+      {hasParts && (data.bars || data.checks) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {data.bars && <CardBars bars={data.bars} />}
+          {data.checks && <CardChecks checks={data.checks} />}
+        </div>
       )}
+      {rows && hasParts && (
+        <details className="text-sm">
+          <summary className="text-muted-foreground cursor-pointer">{data.rowsLabel ?? 'Details'}</summary>
+          <div className="mt-2">{rows}</div>
+        </details>
+      )}
+      {rows && !hasParts && rows}
       {data.state === 'ok' && data.note && <p className="text-muted-foreground text-[13px]">{data.note}</p>}
       {data.state === 'ok' && data.updatedAt && (
         <p className="text-muted-foreground text-xs">
@@ -131,6 +142,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
           </p>
         </div>
       )}
+      {data.state === 'ok' && data.question && <CardQuestion question={data.question} tenantId={tenant ?? ''} />}
     </section>
   );
 }
