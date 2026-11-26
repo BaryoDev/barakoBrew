@@ -122,7 +122,8 @@ export function cleanText(value: unknown, max: number): string | null {
 
 /** A finite number of 0 or more, else null. Strings and NaN are not numbers here. */
 function cleanNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return value === 0 ? 0 : value;
 }
 
 /** An optional number: absent is fine, present and bad is a failure. */
@@ -183,6 +184,10 @@ function parseSeries(value: unknown): ModuleCardSeries | undefined {
     points.push(previous.value === undefined ? { date: raw.date, value: amount } : { date: raw.date, value: amount, previous: previous.value });
   }
   if (points.length < MIN_POINTS) return undefined;
+  // A previous line is drawn only when every point has one.
+  if (points.some((p) => p.previous === undefined)) {
+    return { label, points: points.map(({ date, value: amount }) => ({ date, value: amount })) };
+  }
   return previousLabel.value ? { label, points, previousLabel: previousLabel.value } : { label, points };
 }
 
@@ -223,10 +228,16 @@ function boundedInt(value: unknown, min: number, max: number, fallback: number):
   return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : null;
 }
 
-function parseQuestion(value: unknown): ModuleCardQuestion | undefined {
+/** The first two path segments, such as `/api/foo`: the module prefix of a route. */
+function modulePrefix(route: string): string {
+  return route.split('/').slice(0, 3).join('/');
+}
+
+function parseQuestion(value: unknown, cardRoute?: string): ModuleCardQuestion | undefined {
   if (!isRecord(value)) return undefined;
   const { route } = value;
   if (typeof route !== 'string' || route.length > MAX_ROUTE || !ROUTE_PATTERN.test(route) || AUTH_ROUTE.test(route)) return undefined;
+  if (cardRoute !== undefined && modulePrefix(route) !== modulePrefix(cardRoute)) return undefined;
   const placeholder = cleanText(value.placeholder, MAX_PLACEHOLDER);
   const maxLength = boundedInt(value.maxLength, 1, MAX_QUESTION_LENGTH, DEFAULT_QUESTION_LENGTH);
   const maxTurns = boundedInt(value.maxTurns, 0, MAX_QUESTION_TURNS, DEFAULT_QUESTION_TURNS);
@@ -261,8 +272,11 @@ export function parseModuleCards(value: unknown): ModuleCardDeclaration[] {
   return out;
 }
 
-/** The content a card route returned, or null when it is not one the console will draw. */
-export function parseModuleCardContent(value: unknown): ModuleCardContent | null {
+/**
+ * The content a card route returned, or null when it is not one the console will draw. With the
+ * card's own route, a question route must share its module prefix or the question is dropped.
+ */
+export function parseModuleCardContent(value: unknown, cardRoute?: string): ModuleCardContent | null {
   if (!isRecord(value)) return null;
   const state = value.state;
   if (typeof state !== 'string' || !STATES.includes(state)) return null;
@@ -299,7 +313,7 @@ export function parseModuleCardContent(value: unknown): ModuleCardContent | null
   const series = parseSeries(value.series);
   const bars = parseBars(value.bars);
   const checks = parseChecks(value.checks);
-  const question = parseQuestion(value.question);
+  const question = parseQuestion(value.question, cardRoute);
   if (stats) content.stats = stats;
   if (series) content.series = series;
   if (bars) content.bars = bars;

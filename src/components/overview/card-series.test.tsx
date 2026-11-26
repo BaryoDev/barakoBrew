@@ -60,6 +60,15 @@ describe('CardSeries', () => {
         expect(screen.getByTestId('card-series-tip')).toHaveTextContent('This week: 5');
     });
 
+    it('keeps the tooltip out of the pointer path and the screen reader', () => {
+        render(<CardSeries series={series()} />);
+        fireEvent.mouseEnter(screen.getByLabelText('2026-11-19: 5'));
+        const tip = screen.getByTestId('card-series-tip');
+        expect(tip).toHaveClass('pointer-events-none');
+        expect(tip).toHaveAttribute('aria-hidden', 'true');
+        expect(tip).not.toHaveAttribute('role');
+    });
+
     it('draws an all-zero series with finite coordinates', () => {
         const zero = [0, 1, 2].map((i) => ({ date: `2026-11-2${i}`, value: 0, previous: 0 }));
         const { container } = render(<CardSeries series={series({ points: zero })} />);

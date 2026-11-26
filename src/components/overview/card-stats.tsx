@@ -12,7 +12,8 @@ function formatValue(stat: ModuleCardStat): string {
 /** The change from the previous window as a whole percent, or null when there is nothing to compare. */
 function change(stat: ModuleCardStat): number | null {
   if (stat.previous === undefined || !(stat.previous > 0)) return null;
-  return Math.round(((stat.value - stat.previous) / stat.previous) * 100);
+  const percent = Math.round(((stat.value - stat.previous) / stat.previous) * 100);
+  return Number.isFinite(percent) ? percent : null;
 }
 
 function changeTone(stat: ModuleCardStat, delta: number): string {

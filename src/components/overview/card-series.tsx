@@ -43,7 +43,7 @@ export function CardSeries({ series }: { series: ModuleCardSeries }) {
           {points.map((point, i) => (
             <button
               type="button"
-              key={point.date}
+              key={i}
               aria-label={`${point.date}: ${number.format(point.value)}`}
               className="focus-visible:ring-ring h-full flex-1 rounded-sm outline-none focus-visible:ring-2"
               onMouseEnter={() => setActive(i)}
@@ -55,9 +55,9 @@ export function CardSeries({ series }: { series: ModuleCardSeries }) {
         </div>
         {current && (
           <p
-            role="status"
+            aria-hidden="true"
             data-testid="card-series-tip"
-            className="bg-card border-border absolute top-0 right-0 rounded-lg border px-2.5 py-1.5 text-xs shadow-sm"
+            className="pointer-events-none bg-card border-border absolute top-0 right-0 rounded-lg border px-2.5 py-1.5 text-xs shadow-sm"
           >
             <span className="font-medium">{current.date}</span>
             <span className="block">
@@ -81,8 +81,8 @@ export function CardSeries({ series }: { series: ModuleCardSeries }) {
           </tr>
         </thead>
         <tbody>
-          {points.map((point) => (
-            <tr key={point.date}>
+          {points.map((point, i) => (
+            <tr key={i}>
               <th scope="row">{point.date}</th>
               <td>{number.format(point.value)}</td>
               {hasPrevious && <td>{point.previous === undefined ? '' : number.format(point.previous)}</td>}

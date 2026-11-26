@@ -248,6 +248,25 @@ describe('visual parts', () => {
         expect(parseModuleCardContent(ok({ question: question({ route }) }))!.question).toBeUndefined();
     });
 
+    it('drops a question route outside the card module prefix', () => {
+        const value = ok({ question: question({ route: '/api/users/x' }) });
+        expect(parseModuleCardContent(value, '/api/foo/card')!.question).toBeUndefined();
+        expect(parseModuleCardContent(ok({ question: question({ route: '/api/foo/ask' }) }), '/api/foo/card')!.question?.route).toBe('/api/foo/ask');
+    });
+
+    it('drops previous from every point when some points lack it', () => {
+        const points = days(4).map((p, i) => (i === 2 ? { date: p.date, value: p.value } : p));
+        const series = parseModuleCardContent(ok({ series: { label: 'Rainfall', points, previousLabel: 'Last week' } }))!.series!;
+        expect(series.points).toHaveLength(4);
+        expect(series.points.every((p) => p.previous === undefined)).toBe(true);
+        expect(series.previousLabel).toBeUndefined();
+    });
+
+    it('turns a stat value of negative zero into 0', () => {
+        const value = parseModuleCardContent(ok({ stats: [stat({ value: -0 })] }))!.stats![0].value;
+        expect(Object.is(value, 0)).toBe(true);
+    });
+
     it.each([
         ['maxLength 0', { maxLength: 0 }],
         ['maxLength 1001', { maxLength: 1001 }],

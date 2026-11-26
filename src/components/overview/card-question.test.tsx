@@ -123,11 +123,64 @@ describe('CardQuestion', () => {
         type('Sunny days?');
         fireEvent.keyDown(box(), { key: 'Enter' });
         fireEvent.keyDown(box(), { key: 'Enter' });
-        expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('aria-disabled', 'true');
         send();
         expect(api.post).toHaveBeenCalledTimes(1);
         await act(async () => resolve(reply()));
         await screen.findByText('About 40 mm.');
+    });
+
+    it('keeps the Send button focusable and sends nothing more while pending', async () => {
+        let resolve!: (value: unknown) => void;
+        vi.mocked(api.post).mockReturnValue(new Promise((r) => (resolve = r)));
+        render(<CardQuestion question={base} tenantId="cafe" />);
+        type('Sunny days?');
+        const button = screen.getByRole('button', { name: 'Send' });
+        button.focus();
+        send();
+        expect(button).toHaveAttribute('aria-disabled', 'true');
+        expect(button).not.toBeDisabled();
+        expect(document.activeElement).toBe(button);
+        fireEvent.click(button);
+        expect(api.post).toHaveBeenCalledTimes(1);
+        await act(async () => resolve(reply()));
+        await screen.findByText('About 40 mm.');
+        expect(button).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('keeps text typed while a request is pending', async () => {
+        let resolve!: (value: unknown) => void;
+        vi.mocked(api.post).mockReturnValue(new Promise((r) => (resolve = r)));
+        render(<CardQuestion question={base} tenantId="cafe" />);
+        type('Sunny days?');
+        send();
+        type('And tomorrow?');
+        await act(async () => resolve(reply()));
+        await screen.findByText('About 40 mm.');
+        expect(box().value).toBe('And tomorrow?');
+    });
+
+    it('ignores a late answer after switching away and back to the same tenant', async () => {
+        let resolve!: (value: unknown) => void;
+        vi.mocked(api.post).mockReturnValueOnce(new Promise((r) => (resolve = r)));
+        const view = render(<CardQuestion question={base} tenantId="cafe" />);
+        type('first');
+        send();
+        view.rerender(<CardQuestion question={base} tenantId="bistro" />);
+        view.rerender(<CardQuestion question={base} tenantId="cafe" />);
+        await act(async () => resolve(reply({ answer: 'Stale answer.' })));
+        expect(screen.queryByText('Stale answer.')).toBeNull();
+        expect(screen.queryByText('first')).toBeNull();
+    });
+
+    it('does not send a lone high surrogate when the cut lands inside an emoji', async () => {
+        vi.mocked(api.post).mockResolvedValue(reply());
+        render(<CardQuestion question={{ ...base, maxLength: 5 }} tenantId="cafe" />);
+        type('aaaa\u{1F600}');
+        send();
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        expect(bodyOf(0).question).toBe('aaaa');
+        expect(box().value).not.toMatch(/[\uD800-\uDBFF]$/);
     });
 
     it('stops input at maxLength and shows the counter near the end', () => {

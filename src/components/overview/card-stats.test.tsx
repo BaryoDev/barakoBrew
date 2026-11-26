@@ -49,6 +49,18 @@ describe('CardStats', () => {
         expect(container.querySelector('svg')).toBeNull();
     });
 
+    it('shows no change when the percent is not finite', () => {
+        const { container } = render(<CardStats stats={[stat({ value: 5, previous: 1e-320 })]} />);
+        expect(container.textContent).not.toContain('Infinity');
+        expect(screen.queryByText(/%/)).toBeNull();
+        expect(container.querySelector('svg')).toBeNull();
+    });
+
+    it('draws a value of negative zero as 0', () => {
+        render(<CardStats stats={[stat({ value: -0 })]} />);
+        expect(screen.getByText('0')).toBeInTheDocument();
+    });
+
     it('reads 5 of 5 for total', () => {
         // The total is its own span inside the value, so the value element is found by its whole text.
         render(<CardStats stats={[stat({ label: 'Gauges', value: 5, total: 5 })]} />);

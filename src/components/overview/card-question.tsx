@@ -33,6 +33,13 @@ interface State {
 
 const fresh = (tenant: string): State => ({ tenant, entries: [], input: '', error: null, pending: false });
 
+/** Cut to `max` UTF-16 units without leaving half of a surrogate pair at the end. */
+function cutInput(value: string, max: number): string {
+  const cut = value.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
 function byteLength(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).length;
 }
@@ -113,6 +120,8 @@ export function CardQuestion({ question, tenantId }: { question: ModuleCardQuest
 
   useEffect(() => {
     tenantRef.current = tenantId;
+    // A request from an earlier tenant must not match a later visit to the same tenant.
+    active.current = null;
   }, [tenantId]);
 
   // A tenant switch starts an empty conversation.
@@ -126,7 +135,7 @@ export function CardQuestion({ question, tenantId }: { question: ModuleCardQuest
 
   async function send() {
     const text = input.trim();
-    if (!text || active.current?.tenant === tenantId) return;
+    if (!text || pending || active.current?.tenant === tenantId) return;
     const sentFor = tenantId;
     const id = ++counter.current;
     active.current = { id, tenant: sentFor };
@@ -150,7 +159,11 @@ export function CardQuestion({ question, tenantId }: { question: ModuleCardQuest
         return;
       }
       const entry: Entry = { question: text, answer, refused: data.refused === true, from: sourceLine(data) };
-      setState((prev) => (prev.tenant === sentFor ? { ...prev, entries: [...prev.entries, entry], input: '', pending: false } : prev));
+      setState((prev) =>
+        prev.tenant === sentFor
+          ? { ...prev, entries: [...prev.entries, entry], input: prev.input.trim() === text ? '' : prev.input, pending: false }
+          : prev,
+      );
     } catch (caught) {
       if (stale()) return;
       patch({ pending: false, error: failure(caught) });
@@ -206,12 +219,12 @@ export function CardQuestion({ question, tenantId }: { question: ModuleCardQuest
           value={input}
           maxLength={question.maxLength}
           placeholder={question.placeholder}
-          onChange={(event) => patch({ input: event.target.value.slice(0, question.maxLength) })}
+          onChange={(event) => patch({ input: cutInput(event.target.value, question.maxLength) })}
           onKeyDown={onKeyDown}
           className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2"
         />
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" size="sm" disabled={pending || input.trim() === ''}>
+          <Button type="submit" size="sm" disabled={input.trim() === ''} aria-disabled={pending ? 'true' : undefined}>
             Send
           </Button>
           {entries.length > 0 && (

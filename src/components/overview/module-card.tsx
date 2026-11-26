@@ -44,7 +44,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
     queryKey,
     queryFn: async () => {
       const response = await api.get<unknown>(card.route, { skipAuthRefresh: true });
-      return parseModuleCardContent(response.data);
+      return parseModuleCardContent(response.data, card.route);
     },
     staleTime: STALE_MS,
     retry: (count, error) => !isClientError(error) && count < 1,
@@ -56,7 +56,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
     setRefreshing(true);
     try {
       const response = await api.post<unknown>(card.route, undefined, { skipAuthRefresh: true });
-      const fresh = parseModuleCardContent(response.data);
+      const fresh = parseModuleCardContent(response.data, card.route);
       if (fresh) {
         await queryClient.cancelQueries({ queryKey });
         queryClient.setQueryData(queryKey, fresh);

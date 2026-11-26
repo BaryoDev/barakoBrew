@@ -402,7 +402,7 @@ describe('ModuleCard visual parts', () => {
 
     it('mounts the question box only when the content names a question route', async () => {
         vi.mocked(api.get).mockResolvedValue(
-            answer({ ...parts(), question: { route: '/api/weather/question', placeholder: 'Type a question' } }),
+            answer({ ...parts(), question: { route: '/api/reports/question', placeholder: 'Type a question' } }),
         );
         const { unmount } = render(<ModuleCard module="Reports" card={decl} />);
         expect(await screen.findByTestId('card-question')).toBeInTheDocument();
