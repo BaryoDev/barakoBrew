@@ -20,12 +20,61 @@ export interface ModuleCardRow {
   value: string;
 }
 
+export interface ModuleCardStat {
+  label: string;
+  value: number;
+  previous?: number;
+  format: 'count' | 'percent';
+  total?: number;
+  goodWhen?: 'up' | 'down';
+}
+
+export interface ModuleCardPoint {
+  /** A calendar day, `YYYY-MM-DD`. */
+  date: string;
+  value: number;
+  previous?: number;
+}
+
+export interface ModuleCardSeries {
+  label: string;
+  points: ModuleCardPoint[];
+  previousLabel?: string;
+}
+
+export interface ModuleCardBars {
+  label: string;
+  items: { label: string; value: number }[];
+}
+
+export interface ModuleCardCheck {
+  label: string;
+  tone: 'ok' | 'warn' | 'bad';
+  value?: string;
+}
+
+export interface ModuleCardQuestion {
+  /** A same-origin API path, held to the same rules as a card route. */
+  route: string;
+  placeholder: string;
+  maxLength: number;
+  maxTurns: number;
+}
+
 export interface ModuleCardContent {
   state: ModuleCardState;
   text: string;
   rows: ModuleCardRow[];
   note: string | null;
   updatedAt: Date | null;
+  /** The optional parts below are absent, not empty, when nothing valid was sent. */
+  stats?: ModuleCardStat[];
+  series?: ModuleCardSeries;
+  bars?: ModuleCardBars;
+  checks?: ModuleCardCheck[];
+  /** Label for the disclosure that holds the rows. Set only when a visual part is present. */
+  rowsLabel?: string;
+  question?: ModuleCardQuestion;
 }
 
 export const ROUTE_PATTERN = /^\/api\/[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/;
@@ -42,6 +91,20 @@ export const MAX_ROWS = 12;
 export const MAX_LABEL = 60;
 export const MAX_VALUE = 120;
 export const MAX_NOTE = 200;
+export const MAX_STATS = 4;
+export const MAX_STAT_LABEL = 40;
+export const MIN_POINTS = 2;
+export const MAX_POINTS = 31;
+export const MAX_BARS = 8;
+export const MAX_BAR_LABEL = 60;
+export const MAX_CHECKS = 6;
+export const MAX_ROWS_LABEL = 40;
+export const DEFAULT_ROWS_LABEL = 'Details';
+export const MAX_PLACEHOLDER = 60;
+export const MAX_QUESTION_LENGTH = 1000;
+export const DEFAULT_QUESTION_LENGTH = 500;
+export const MAX_QUESTION_TURNS = 20;
+export const DEFAULT_QUESTION_TURNS = 10;
 
 const STATES: readonly string[] = ['ok', 'empty', 'unavailable'];
 
@@ -55,6 +118,120 @@ export function cleanText(value: unknown, max: number): string | null {
   const flat = value.replace(/[\t\n\r]+/g, ' ').replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, '')
     .replace(/[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
   return Array.from(flat.trim()).slice(0, max).join('');
+}
+
+/** A finite number of 0 or more, else null. Strings and NaN are not numbers here. */
+function cleanNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** An optional number: absent is fine, present and bad is a failure. */
+function optionalNumber(value: unknown): { ok: boolean; value?: number } {
+  if (value === undefined || value === null) return { ok: true };
+  const n = cleanNumber(value);
+  return n === null ? { ok: false } : { ok: true, value: n };
+}
+
+/** An optional label of 1 to `max` characters: absent is fine, present and bad is a failure. */
+function optionalLabel(value: unknown, max: number): { ok: boolean; value?: string } {
+  if (value === undefined || value === null) return { ok: true };
+  const text = cleanText(value, max);
+  return text ? { ok: true, value: text } : { ok: false };
+}
+
+function isCalendarDay(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const when = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(when.getTime()) && when.toISOString().slice(0, 10) === value;
+}
+
+function parseStats(value: unknown): ModuleCardStat[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: ModuleCardStat[] = [];
+  for (const raw of value) {
+    if (out.length >= MAX_STATS) break;
+    if (!isRecord(raw)) continue;
+    const label = cleanText(raw.label, MAX_STAT_LABEL);
+    const amount = cleanNumber(raw.value);
+    const previous = optionalNumber(raw.previous);
+    const total = optionalNumber(raw.total);
+    if (!label || amount === null || !previous.ok || !total.ok) continue;
+    const format = raw.format === undefined || raw.format === null ? 'count' : raw.format;
+    if (format !== 'count' && format !== 'percent') continue;
+    const goodWhen = raw.goodWhen === undefined || raw.goodWhen === null ? undefined : raw.goodWhen;
+    if (goodWhen !== undefined && goodWhen !== 'up' && goodWhen !== 'down') continue;
+    const stat: ModuleCardStat = { label, value: amount, format };
+    if (previous.value !== undefined) stat.previous = previous.value;
+    if (total.value !== undefined) stat.total = total.value;
+    if (goodWhen) stat.goodWhen = goodWhen;
+    out.push(stat);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function parseSeries(value: unknown): ModuleCardSeries | undefined {
+  if (!isRecord(value) || !Array.isArray(value.points) || value.points.length > MAX_POINTS) return undefined;
+  const label = cleanText(value.label, MAX_BAR_LABEL);
+  const previousLabel = optionalLabel(value.previousLabel, MAX_BAR_LABEL);
+  if (!label || !previousLabel.ok) return undefined;
+  const points: ModuleCardPoint[] = [];
+  for (const raw of value.points) {
+    if (!isRecord(raw) || !isCalendarDay(raw.date)) continue;
+    const amount = cleanNumber(raw.value);
+    const previous = optionalNumber(raw.previous);
+    if (amount === null || !previous.ok) continue;
+    points.push(previous.value === undefined ? { date: raw.date, value: amount } : { date: raw.date, value: amount, previous: previous.value });
+  }
+  if (points.length < MIN_POINTS) return undefined;
+  return previousLabel.value ? { label, points, previousLabel: previousLabel.value } : { label, points };
+}
+
+function parseBars(value: unknown): ModuleCardBars | undefined {
+  if (!isRecord(value) || !Array.isArray(value.items)) return undefined;
+  const label = cleanText(value.label, MAX_BAR_LABEL);
+  if (!label) return undefined;
+  const items: { label: string; value: number }[] = [];
+  for (const raw of value.items) {
+    if (items.length >= MAX_BARS) break;
+    if (!isRecord(raw)) continue;
+    const text = cleanText(raw.label, MAX_BAR_LABEL);
+    const amount = cleanNumber(raw.value);
+    if (!text || amount === null) continue;
+    items.push({ label: text, value: amount });
+  }
+  return items.length > 0 ? { label, items } : undefined;
+}
+
+function parseChecks(value: unknown): ModuleCardCheck[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: ModuleCardCheck[] = [];
+  for (const raw of value) {
+    if (out.length >= MAX_CHECKS) break;
+    if (!isRecord(raw)) continue;
+    const label = cleanText(raw.label, MAX_BAR_LABEL);
+    const detail = optionalLabel(raw.value, MAX_VALUE);
+    if (!label || !detail.ok) continue;
+    if (raw.tone !== 'ok' && raw.tone !== 'warn' && raw.tone !== 'bad') continue;
+    out.push(detail.value ? { label, tone: raw.tone, value: detail.value } : { label, tone: raw.tone });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** A whole number in `1..max`, the default when absent, null when present and out of range. */
+function boundedInt(value: unknown, min: number, max: number, fallback: number): number | null {
+  if (value === undefined || value === null) return fallback;
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function parseQuestion(value: unknown): ModuleCardQuestion | undefined {
+  if (!isRecord(value)) return undefined;
+  const { route } = value;
+  if (typeof route !== 'string' || route.length > MAX_ROUTE || !ROUTE_PATTERN.test(route) || AUTH_ROUTE.test(route)) return undefined;
+  const placeholder = cleanText(value.placeholder, MAX_PLACEHOLDER);
+  const maxLength = boundedInt(value.maxLength, 1, MAX_QUESTION_LENGTH, DEFAULT_QUESTION_LENGTH);
+  const maxTurns = boundedInt(value.maxTurns, 0, MAX_QUESTION_TURNS, DEFAULT_QUESTION_TURNS);
+  if (!placeholder || maxLength === null || maxTurns === null) return undefined;
+  return { route, placeholder, maxLength, maxTurns };
 }
 
 /** A refresh label, trimmed, or undefined when it is not a string of 1 to 24 UTF-16 units (as core counts) without control, format or line and paragraph separator characters. */
@@ -108,11 +285,30 @@ export function parseModuleCardContent(value: unknown): ModuleCardContent | null
     if (!Number.isNaN(when.getTime())) updatedAt = when;
   }
 
-  return {
+  const content: ModuleCardContent = {
     state: state as ModuleCardState,
     text: cleanText(value.text, MAX_TEXT) ?? '',
     rows,
     note: cleanText(value.note, MAX_NOTE) || null,
     updatedAt,
   };
+
+  // Parts are only read from an ok answer.
+  if (state !== 'ok') return content;
+  const stats = parseStats(value.stats);
+  const series = parseSeries(value.series);
+  const bars = parseBars(value.bars);
+  const checks = parseChecks(value.checks);
+  const question = parseQuestion(value.question);
+  if (stats) content.stats = stats;
+  if (series) content.series = series;
+  if (bars) content.bars = bars;
+  if (checks) content.checks = checks;
+  if (stats || series || bars || checks) {
+    // Cut one past the cap so a label that is too long is dropped, not shortened.
+    const label = cleanText(value.rowsLabel, MAX_ROWS_LABEL + 1);
+    content.rowsLabel = label && Array.from(label).length <= MAX_ROWS_LABEL ? label : DEFAULT_ROWS_LABEL;
+  }
+  if (question) content.question = question;
+  return content;
 }

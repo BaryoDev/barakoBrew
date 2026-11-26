@@ -140,3 +140,144 @@ describe('parseModuleCardContent', () => {
         expect(content.updatedAt).toBeNull();
     });
 });
+
+describe('visual parts', () => {
+    const ok = (over: Record<string, unknown> = {}) => ({ state: 'ok', text: 'Fine', rows: [], note: null, updatedAt: null, ...over });
+    const stat = (over: Record<string, unknown> = {}) => ({ label: 'Rainfall', value: 12, ...over });
+    const days = (n: number) =>
+        Array.from({ length: n }, (_, i) => ({ date: `2026-11-${String(i + 1).padStart(2, '0')}`, value: i, previous: i + 1 }));
+    const question = (over: Record<string, unknown> = {}) => ({ route: '/api/weather/question', placeholder: 'Type a question', ...over });
+    const bomb = '<img src=x onerror=alert(1)>';
+
+    it('reads every part with the spec caps', () => {
+        const content = parseModuleCardContent(
+            ok({
+                stats: Array.from({ length: 6 }, (_, i) => stat({ label: `Tile ${i}` })),
+                series: { label: 'Rainfall', points: days(7), previousLabel: 'Last week' },
+                bars: { label: 'Wettest towns', items: Array.from({ length: 9 }, (_, i) => ({ label: `Town ${i}`, value: i })) },
+                checks: Array.from({ length: 8 }, (_, i) => ({ label: `Sensor ${i}`, tone: 'ok' })),
+                rowsLabel: 'Readings',
+                question: question(),
+            }),
+        )!;
+        expect(content.stats).toHaveLength(4);
+        expect(content.series?.points).toHaveLength(7);
+        expect(content.series?.previousLabel).toBe('Last week');
+        expect(content.bars?.items).toHaveLength(8);
+        expect(content.checks).toHaveLength(6);
+        expect(content.rowsLabel).toBe('Readings');
+        expect(content.question?.route).toBe('/api/weather/question');
+    });
+
+    it('drops a series over 31 points or under 2', () => {
+        expect(parseModuleCardContent(ok({ series: { label: 'Rainfall', points: days(40) } }))!.series).toBeUndefined();
+        expect(parseModuleCardContent(ok({ series: { label: 'Rainfall', points: days(1) } }))!.series).toBeUndefined();
+        expect(parseModuleCardContent(ok({ series: { label: 'Rainfall', points: days(31) } }))!.series?.points).toHaveLength(31);
+    });
+
+    it('drops a rows label over 40 characters and falls back to Details', () => {
+        const content = parseModuleCardContent(ok({ stats: [stat()], rowsLabel: 'x'.repeat(41) }))!;
+        expect(content.rowsLabel).toBe('Details');
+    });
+
+    it('sets no rows label without a visual part', () => {
+        const content = parseModuleCardContent(ok({ rowsLabel: 'Readings', question: question() }))!;
+        expect(content.rowsLabel).toBeUndefined();
+    });
+
+    it('reads parts only from an ok answer', () => {
+        const content = parseModuleCardContent(ok({ state: 'empty', stats: [stat()], question: question() }))!;
+        expect(content.stats).toBeUndefined();
+        expect(content.question).toBeUndefined();
+    });
+
+    it.each([
+        ['negative', { value: -1 }],
+        ['NaN', { value: Number.NaN }],
+        ['Infinity', { value: Number.POSITIVE_INFINITY }],
+        ['string number', { value: '12' }],
+        ['negative previous', { previous: -3 }],
+        ['string total', { total: '5' }],
+        ['bad format', { format: 'ratio' }],
+        ['bad goodWhen', { goodWhen: 'sideways' }],
+    ])('drops a stat with a %s and keeps the card', (_name, over) => {
+        const content = parseModuleCardContent(ok({ stats: [stat(over), stat({ label: 'Sunny days' })] }))!;
+        expect(content.stats).toEqual([{ label: 'Sunny days', value: 12, format: 'count' }]);
+    });
+
+    it('drops a point with a bad date or number and a check with a bad tone', () => {
+        const points = [
+            { date: '2026-13-45', value: 1 },
+            { date: '2026-11-01', value: -1 },
+            { date: '2026-11-02', value: '3' },
+            { date: '2026-11-03', value: 3 },
+            { date: '2026-11-04', value: 4 },
+        ];
+        const content = parseModuleCardContent(
+            ok({
+                series: { label: 'Rainfall', points },
+                checks: [{ label: 'Gauge', tone: 'fine' }, { label: 'Radar', tone: 'warn', value: 'slow' }],
+                bars: { label: 'Towns', items: [{ label: 'A', value: Number.NaN }, { label: 'B', value: 2 }] },
+            }),
+        )!;
+        expect(content.series?.points.map((p) => p.date)).toEqual(['2026-11-03', '2026-11-04']);
+        expect(content.checks).toEqual([{ label: 'Radar', tone: 'warn', value: 'slow' }]);
+        expect(content.bars?.items).toEqual([{ label: 'B', value: 2 }]);
+    });
+
+    it('defaults format, maxLength and maxTurns', () => {
+        const content = parseModuleCardContent(ok({ stats: [stat()], question: question() }))!;
+        expect(content.stats?.[0].format).toBe('count');
+        expect(content.question?.maxLength).toBe(500);
+        expect(content.question?.maxTurns).toBe(10);
+    });
+
+    it('keeps percent format and a total', () => {
+        const content = parseModuleCardContent(ok({ stats: [stat({ format: 'percent', total: 5, previous: 4, goodWhen: 'down' })] }))!;
+        expect(content.stats?.[0]).toEqual({ label: 'Rainfall', value: 12, format: 'percent', total: 5, previous: 4, goodWhen: 'down' });
+    });
+
+    it.each([
+        ['an auth route', '/api/auth/login'],
+        ['over 200 chars', '/api/' + 'a'.repeat(200)],
+        ['an absolute url', 'https://x.test/a'],
+        ['protocol-relative', '//x.test'],
+        ['not a string', 7],
+    ])('rejects a question route that is %s', (_name, route) => {
+        expect(parseModuleCardContent(ok({ question: question({ route }) }))!.question).toBeUndefined();
+    });
+
+    it.each([
+        ['maxLength 0', { maxLength: 0 }],
+        ['maxLength 1001', { maxLength: 1001 }],
+        ['maxTurns 21', { maxTurns: 21 }],
+        ['maxTurns -1', { maxTurns: -1 }],
+        ['an empty placeholder', { placeholder: '' }],
+    ])('drops the question for %s', (_name, over) => {
+        expect(parseModuleCardContent(ok({ question: question(over) }))!.question).toBeUndefined();
+    });
+
+    it('accepts maxTurns 0 and the largest maxLength', () => {
+        const content = parseModuleCardContent(ok({ question: question({ maxTurns: 0, maxLength: 1000 }) }))!;
+        expect(content.question).toMatchObject({ maxTurns: 0, maxLength: 1000 });
+    });
+
+    it('cleans strings in parts', () => {
+        const content = parseModuleCardContent(
+            ok({
+                stats: [stat({ label: bomb })],
+                bars: { label: 'Towns', items: [{ label: `a\u202Eb${'x'.repeat(10000)}`, value: 1 }] },
+                checks: [{ label: 'Gauge', tone: 'ok', value: 'y'.repeat(10000) }],
+            }),
+        )!;
+        expect(content.stats?.[0].label).toBe(bomb);
+        expect(content.bars?.items[0].label.startsWith('ab')).toBe(true);
+        expect(Array.from(content.bars!.items[0].label)).toHaveLength(60);
+        expect(Array.from(content.checks![0].value!)).toHaveLength(120);
+    });
+
+    it('content without parts has none of the new keys', () => {
+        const content = parseModuleCardContent(ok({ stats: [], bars: { label: 'x', items: [] }, checks: 'no' }))!;
+        expect(Object.keys(content).sort()).toEqual(['note', 'rows', 'state', 'text', 'updatedAt']);
+    });
+});
