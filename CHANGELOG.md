@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-26
+
+**Speaks API contracts 1 to 17, which covers barakoCMS 4.0.1 to 5.10.0.** Visual parts and the
+question box draw only when a module card sends them. A card without them looks as it did in 1.14.0.
+
 ### Added
 
 - Module cards can show visual parts: stat tiles with the change from the previous period, a daily chart against the previous period, bars, and a watch list. The rows move behind a closed disclosure when a card has any of them. A card without them looks as before. Every string is drawn as text.
@@ -1061,7 +1066,8 @@ from a commit anyone can point at.
 - The npm package is `barakobrew`, not `admin`, and carries a real version. It is what appears in
   `npm audit`, the SBOM, and every CI log line.
 
-[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/BaryoDev/barakoBrew/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.15.0
 [1.11.4]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.11.4
 [1.14.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.14.0
 [1.13.0]: https://github.com/BaryoDev/barakoBrew/releases/tag/v1.13.0
