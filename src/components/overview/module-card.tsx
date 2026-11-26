@@ -9,6 +9,10 @@ import { useCurrentTenant } from '@/hooks/use-tenants';
 import { useModules } from '@/hooks/use-modules';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CardBars } from './card-bars';
+import { CardChecks } from './card-checks';
+import { CardSeries } from './card-series';
+import { CardStats } from './card-stats';
 import {
   parseModuleCardContent,
   parseModuleCards,
@@ -97,6 +101,18 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
   if (!data) return null;
 
   const muted = data.state !== 'ok';
+  const hasParts = data.state === 'ok' && Boolean(data.stats || data.series || data.bars || data.checks);
+  const rows =
+    data.state === 'ok' && data.rows.length > 0 ? (
+      <dl className="grid gap-1 text-sm">
+        {data.rows.map((row, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-4">
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd className="text-right font-medium">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    ) : null;
   return (
     <section aria-labelledby={headingId} className="border-border bg-card rise grid gap-3 rounded-[18px] border p-5">
       <h2 id={headingId} className="font-display text-xl font-semibold tracking-[-0.02em]">
@@ -105,16 +121,21 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
       {data.text && (
         <p className={muted ? 'text-muted-foreground text-sm' : 'text-secondary-foreground text-sm'}>{data.text}</p>
       )}
-      {data.state === 'ok' && data.rows.length > 0 && (
-        <dl className="grid gap-1 text-sm">
-          {data.rows.map((row, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-4">
-              <dt className="text-muted-foreground">{row.label}</dt>
-              <dd className="text-right font-medium">{row.value}</dd>
-            </div>
-          ))}
-        </dl>
+      {hasParts && data.stats && <CardStats stats={data.stats} />}
+      {hasParts && data.series && <CardSeries series={data.series} />}
+      {hasParts && (data.bars || data.checks) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {data.bars && <CardBars bars={data.bars} />}
+          {data.checks && <CardChecks checks={data.checks} />}
+        </div>
       )}
+      {rows && hasParts && (
+        <details className="text-sm">
+          <summary className="text-muted-foreground cursor-pointer">{data.rowsLabel ?? 'Details'}</summary>
+          <div className="mt-2">{rows}</div>
+        </details>
+      )}
+      {rows && !hasParts && rows}
       {data.state === 'ok' && data.note && <p className="text-muted-foreground text-[13px]">{data.note}</p>}
       {data.state === 'ok' && data.updatedAt && (
         <p className="text-muted-foreground text-xs">
