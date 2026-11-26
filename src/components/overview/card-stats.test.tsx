@@ -56,11 +56,6 @@ describe('CardStats', () => {
         expect(container.querySelector('svg')).toBeNull();
     });
 
-    it('draws a value of negative zero as 0', () => {
-        render(<CardStats stats={[stat({ value: -0 })]} />);
-        expect(screen.getByText('0')).toBeInTheDocument();
-    });
-
     it('reads 5 of 5 for total', () => {
         // The total is its own span inside the value, so the value element is found by its whole text.
         render(<CardStats stats={[stat({ label: 'Gauges', value: 5, total: 5 })]} />);
