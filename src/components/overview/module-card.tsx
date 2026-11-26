@@ -7,10 +7,12 @@ import { formatDistanceToNow } from 'date-fns';
 import { api } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 import { useModules } from '@/hooks/use-modules';
+import { retryAfterSeconds } from '@/lib/retry-after';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CardBars } from './card-bars';
 import { CardChecks } from './card-checks';
+import { CardQuestion } from './card-question';
 import { CardSeries } from './card-series';
 import { CardStats } from './card-stats';
 import {
@@ -24,18 +26,6 @@ const STALE_MS = 5 * 60 * 1000;
 function isClientError(error: unknown): boolean {
   const status = axios.isAxiosError(error) ? error.response?.status : undefined;
   return status !== undefined && status >= 400 && status < 500;
-}
-
-/** Retry-After as whole seconds clamped to 1..3600, or null when the header is missing or not a number. */
-function retryAfterSeconds(error: unknown): number | null {
-  const headers = (axios.isAxiosError(error) ? error.response?.headers : undefined) as
-    | (Record<string, unknown> & { get?: (name: string) => unknown })
-    | undefined;
-  if (!headers) return null;
-  const raw = typeof headers.get === 'function' ? headers.get('retry-after') : headers['retry-after'];
-  const text = typeof raw === 'string' || typeof raw === 'number' ? String(raw).trim() : '';
-  if (!/^\d+(\.\d+)?$/.test(text)) return null;
-  return Math.min(3600, Math.max(1, Math.round(Number(text))));
 }
 
 /**
@@ -152,6 +142,7 @@ export function ModuleCard({ module, card }: { module: string; card: ModuleCardD
           </p>
         </div>
       )}
+      {data.state === 'ok' && data.question && <CardQuestion question={data.question} tenantId={tenant ?? ''} />}
     </section>
   );
 }

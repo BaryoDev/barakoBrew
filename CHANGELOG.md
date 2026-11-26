@@ -9,6 +9,11 @@ moved. Which API a console works against is stated per release instead.
 
 ## [Unreleased]
 
+### Added
+
+- Module cards can show visual parts: stat tiles with the change from the previous period, a daily chart against the previous period, bars, and a watch list. The rows move behind a closed disclosure when a card has any of them. A card without them looks as before. Every string is drawn as text.
+- Module cards can show a question box. The card content names the route, and the console sends the question with the earlier answered turns and the browser time zone. Enter sends, Shift+Enter adds a line, one question goes out at a time, and the conversation lives in the page for the current tenant only.
+
 ### Changed
 
 - The quickstart starts console 1.14.0 by default instead of `latest`, with a read-only filesystem: `CONSOLE_READ_ONLY` now defaults to `true`. A `.env` that pins a console older than 1.14.0 needs `CONSOLE_READ_ONLY=false`: those write into their own image at start, so read-only they exit and restart in a loop. CI runs `scripts/check-quickstart.sh`, which fails when a default tag differs between the compose file, `.env.example` and `README.md`, when the console is too old to run read-only, or when a default image is not published. A release moves the quickstart only after its image is out.

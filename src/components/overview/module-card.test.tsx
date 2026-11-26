@@ -399,4 +399,19 @@ describe('ModuleCard visual parts', () => {
         await screen.findByText('Less rain than last week');
         expect(container.querySelector('[data-testid^="card-"]')).toBeNull();
     });
+
+    it('mounts the question box only when the content names a question route', async () => {
+        vi.mocked(api.get).mockResolvedValue(
+            answer({ ...parts(), question: { route: '/api/weather/question', placeholder: 'Type a question' } }),
+        );
+        const { unmount } = render(<ModuleCard module="Reports" card={decl} />);
+        expect(await screen.findByTestId('card-question')).toBeInTheDocument();
+        expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Type a question');
+        unmount();
+
+        vi.mocked(api.get).mockResolvedValue(answer(parts()));
+        render(<ModuleCard module="Reports" card={decl} />);
+        await screen.findByTestId('card-stats');
+        expect(screen.queryByTestId('card-question')).toBeNull();
+    });
 });
