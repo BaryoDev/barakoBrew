@@ -145,7 +145,8 @@ describe('visual parts', () => {
     const ok = (over: Record<string, unknown> = {}) => ({ state: 'ok', text: 'Fine', rows: [], note: null, updatedAt: null, ...over });
     const stat = (over: Record<string, unknown> = {}) => ({ label: 'Rainfall', value: 12, ...over });
     const days = (n: number) =>
-        Array.from({ length: n }, (_, i) => ({ date: `2026-11-${String(i + 1).padStart(2, '0')}`, value: i, previous: i + 1 }));
+        // December, so 31 points are 31 real days.
+        Array.from({ length: n }, (_, i) => ({ date: `2026-12-${String(i + 1).padStart(2, '0')}`, value: i, previous: i + 1 }));
     const question = (over: Record<string, unknown> = {}) => ({ route: '/api/weather/question', placeholder: 'Type a question', ...over });
     const bomb = '<img src=x onerror=alert(1)>';
 

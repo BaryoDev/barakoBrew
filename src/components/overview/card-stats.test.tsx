@@ -50,8 +50,9 @@ describe('CardStats', () => {
     });
 
     it('reads 5 of 5 for total', () => {
+        // The total is its own span inside the value, so the pair is read from the tile's text.
         render(<CardStats stats={[stat({ label: 'Gauges', value: 5, total: 5 })]} />);
-        expect(screen.getByText(/5\s+of 5/)).toBeInTheDocument();
+        expect(screen.getByTestId('card-stats').textContent).toMatch(/\b5 of 5\b/);
     });
 
     it('formats percent', () => {
