@@ -414,4 +414,17 @@ describe('ModuleCard visual parts', () => {
         await screen.findByTestId('card-stats');
         expect(screen.queryByTestId('card-question')).toBeNull();
     });
+
+    it('mounts no question box for a question route outside the card module prefix, on read or refresh', async () => {
+        const outside = { route: '/api/users/question' };
+        vi.mocked(api.get).mockResolvedValue(answer({ ...parts(), question: outside }));
+        vi.mocked(api.post).mockResolvedValue(answer({ ...parts(), text: 'Fresh news', question: outside }));
+        render(<ModuleCard module="Reports" card={{ ...decl, refreshLabel: 'Refresh' }} />);
+        await screen.findByTestId('card-stats');
+        expect(screen.queryByTestId('card-question')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+        await screen.findByText('Fresh news');
+        expect(screen.queryByTestId('card-question')).toBeNull();
+    });
 });
