@@ -43,7 +43,7 @@ ALLOWED_ORIGINS=https://console.example.com   # where the console is served
 APP_BASE_URL=https://cms.example.com          # what the API puts in links it hands out
 ALLOWED_HOSTS=cms.example.com                 # the Host headers the API answers to, semicolon separated
 BARAKO_API_TAG=5.8.0                          # pin releases rather than latest
-BARAKO_CONSOLE_TAG=1.14.0                     # the console release this compose file was checked with
+BARAKO_CONSOLE_TAG=1.15.0                     # the console release this compose file was checked with
 ```
 
 `CONSOLE_READ_ONLY` (default `true`) runs the console with a read-only filesystem. A console older than 1.14.0 writes into its own image at start and cannot start read-only, so set it to `false` to run one.
