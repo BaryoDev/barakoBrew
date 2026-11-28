@@ -5,6 +5,7 @@ import type {
     ContentDetail,
     ContentDetailRead,
     CreateContentRequest,
+    EntryLines,
     UpdateContentRequest,
     ContentStatus,
     ScheduleContentRequest,
@@ -89,6 +90,19 @@ export function useContentHistory(id: string, enabled = true) {
                 'GET /api/contents/{id}/history'
             ).items;
         },
+        enabled: !!id && enabled,
+    });
+}
+
+/**
+ * A header's lines, oldest first, at most 200, with the header as the entry read shapes it. Off for
+ * a type that declares no lines: the endpoint refuses one. Under the ['contents'] prefix so a write
+ * refreshes it.
+ */
+export function useEntryLines(id: string, enabled = true) {
+    return useQuery({
+        queryKey: ['contents', 'lines', id],
+        queryFn: async () => (await api.get<EntryLines>(`/api/contents/${id}/lines`)).data,
         enabled: !!id && enabled,
     });
 }

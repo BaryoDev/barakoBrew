@@ -16,6 +16,7 @@ import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { DynamicForm } from '@/components/content/dynamic-form';
 import { SaveRefusal, isRetryableRefusal } from '@/components/content/save-refusal';
 import { withoutTokenFields } from '@/lib/token-fields';
+import { LinesInput, useLinesInput } from '@/components/content/lines-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -48,6 +49,8 @@ function NewContentInner() {
 
   const schema = schemas?.find((s) => s.name === contentType);
   const singleton = schema?.isSingleton === true;
+  // The rows and the refusals that concern them, shown at the grid: a line by its position, or the total.
+  const lines = useLinesInput(schema);
 
   // A second entry of a single-entry type is refused, and the first is created from its own screen.
   useEffect(() => {
@@ -56,8 +59,16 @@ function NewContentInner() {
 
   const submit = (status: ContentStatus) => {
     setRefusal(null);
+    lines.clearRefusals();
     createContent.mutate(
-      { contentType, data: withoutTokenFields(schema?.fields ?? [], values), status, sensitivity },
+      {
+        contentType,
+        data: withoutTokenFields(schema?.fields ?? [], values),
+        status,
+        sensitivity,
+        // No key at all for an empty grid, so a type without lines sends what it always has.
+        ...lines.payload(),
+      },
       {
         onSuccess: ({ id }) => {
           toast.success(status === ContentStatus.Published ? 'Entry published' : 'Draft saved');
@@ -66,7 +77,13 @@ function NewContentInner() {
         // Kept on the page instead of toasted: a uniqueness 409 or a refused field has to stay
         // readable while it is fixed, and showing it twice says nothing more.
         onError: (error) => {
-          setRefusal({ message: apiErrorMessage(error, 'The entry could not be saved.'), status });
+          const { rest, shown } = lines.refuse(error);
+          // Everything the grid took is shown there and not again below the buttons.
+          if (shown) return;
+          setRefusal({
+            message: rest.length > 0 ? rest.join(', ') : apiErrorMessage(error, 'The entry could not be saved.'),
+            status,
+          });
         },
       }
     );
@@ -88,6 +105,7 @@ function NewContentInner() {
                 setContentType(v);
                 setValues({});
                 setRefusal(null);
+                lines.reset();
               }}
             >
               {/* id and htmlFor, not aria-label: the visible text is the right accessible name, and
@@ -135,6 +153,7 @@ function NewContentInner() {
                 contentType={schema.name}
                 viewer={access.viewer}
             />
+            <LinesInput input={lines} header={schema} headerValues={values} viewer={access.viewer} />
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => submit(ContentStatus.Published)}

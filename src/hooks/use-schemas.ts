@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { api, type Paginated } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
+import { findType } from '@/lib/lines';
 import type {
     ContentTypeDefinition,
     ContentTypeIcon,
@@ -9,6 +10,7 @@ import type {
     FieldOption,
     LifecycleBlocker,
     LifecycleDefinition,
+    LinesDefinition,
     SetLifecycleResult,
     UniquenessRule,
 } from '@/types/schema';
@@ -29,6 +31,34 @@ export function useSchemas(enabled = true) {
             return response.data.items;
         },
         enabled,
+    });
+}
+
+const FIND_PAGE_SIZE = 100;
+const FIND_MAX_PAGES = 20;
+
+/**
+ * One type by name, read from the list page by page. For a type the first page did not carry,
+ * since the API has no route that answers for one type. Null when no page has it. Only asked for
+ * when `enabled`, which is when the cached list lacks the name.
+ */
+export function useFindType(name: string | null | undefined, enabled: boolean) {
+    const tenant = useCurrentTenant();
+    return useQuery({
+        queryKey: ['schemas', 'find', tenant, name?.toLowerCase() ?? null],
+        queryFn: async () => {
+            for (let page = 1; page <= FIND_MAX_PAGES; page++) {
+                const response = await api.get<Paginated<ContentTypeDefinition>>('/api/content-types', {
+                    params: { page, pageSize: FIND_PAGE_SIZE },
+                });
+                const hit = findType(response.data.items, name);
+                if (hit) return hit;
+                if (!response.data.hasNextPage) break;
+            }
+            return null;
+        },
+        enabled: enabled && !!name,
+        retry: false,
     });
 }
 
@@ -206,6 +236,28 @@ export function useSetUniqueness(name: string) {
                 uniqueness,
                 force,
             });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+/**
+ * Sets a type's lines, or clears them with null. The refusals (a line type that does not exist, a
+ * parent field that is not a single reference back, a total without an amount) come back as 400s
+ * that name the reason, and a field change in progress is a 409.
+ */
+export function useSetLines(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (lines: LinesDefinition | null) => {
+            const response = await api.put<{ name: string; lines: LinesDefinition | null }>(
+                `${typePath(name)}/lines`,
+                { lines },
+            );
             return response.data;
         },
         onSuccess: () => {

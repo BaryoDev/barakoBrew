@@ -97,6 +97,16 @@ export interface CreateContentRequest {
     data: Record<string, unknown>;
     status: ContentStatus;
     sensitivity?: SensitivityLevel;
+    /** The entries of the type's line type to write with this one, at most 200. Left out when there are none. */
+    lines?: Record<string, unknown>[];
+}
+
+/** What GET /api/contents/{id}/lines answers: the header and its lines, oldest first. */
+export interface EntryLines {
+    header: ContentDetail;
+    /** True when the entry has more lines than are listed. */
+    truncated: boolean;
+    lines: ContentListItem[];
 }
 
 export interface UpdateContentRequest {

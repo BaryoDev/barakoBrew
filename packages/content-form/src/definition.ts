@@ -68,6 +68,13 @@ export interface FieldDefinition {
     section?: string | null;
     /** What the field is to its entry: `title`, `summary` or `date`. */
     role?: string | null;
+    /**
+     * Set on a field the server works out from other fields of the entry. Only its presence matters
+     * to a console: such a field is not entered by hand.
+     */
+    computed?: Record<string, unknown> | null;
+    /** Set on a field the server rolls up from other entries. Only its presence matters here. */
+    rollup?: Record<string, unknown> | null;
     isRequired: boolean;
     defaultValue?: unknown;
     validationRules?: Record<string, unknown>;

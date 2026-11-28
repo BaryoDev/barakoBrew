@@ -68,6 +68,8 @@ export interface ContentTypeDefinition {
     routeTemplate?: string | null;
     /** Values only one entry of this type may hold at a time. Absent or null when there are none. */
     uniqueness?: UniquenessRule[] | null;
+    /** The type whose entries are this type's lines. Absent or null when this type has none. */
+    lines?: LinesDefinition | null;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -90,6 +92,21 @@ export interface UniquenessRule {
     fields: string[];
     /** The lifecycle state an entry has to be in to count, or null to count every entry. */
     whenState?: string | null;
+}
+
+/**
+ * Another type whose entries point back at this one, as the lines of an order point at the order.
+ * Mirrors Models/ContentTypeDefinition.cs LinesDefinition.
+ */
+export interface LinesDefinition {
+    /** The line type's stored name. Match it against the type list without regard to case. */
+    contentType: string;
+    /** The line type's single reference field that holds the header's id. */
+    parentField: string;
+    /** The header's number field that has to equal the lines' sum. Set together with `lineAmountField`. */
+    totalField?: string | null;
+    /** The line type's number field that is added up. Set together with `totalField`. */
+    lineAmountField?: string | null;
 }
 
 /** The name that stands for the entry's creator in a uniqueness rule. */

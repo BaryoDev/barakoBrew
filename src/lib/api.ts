@@ -416,6 +416,23 @@ export function retryAfterText(value: unknown, now: Date = new Date()): string |
     return minutes === 1 ? '1 minute' : `${minutes} minutes`;
 }
 
+/**
+ * Each error a refused write names, in the order the server sent them, or empty when it names
+ * none. `apiErrorMessage` joins these with a comma; a screen that shows each one on its own line
+ * reads them here.
+ */
+export function apiErrorList(error: unknown): string[] {
+    if (!axios.isAxiosError(error)) return [];
+    const errs = error.response?.data?.errors;
+    if (Array.isArray(errs)) {
+        return errs
+            .map((e) => (typeof e === 'string' ? e : (e?.reason ?? e?.message ?? '')))
+            .filter((e): e is string => typeof e === 'string' && e !== '');
+    }
+    if (errs && typeof errs === 'object') return Object.values(errs).flat().filter((e): e is string => typeof e === 'string' && e !== '');
+    return [];
+}
+
 export function apiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
     if (axios.isAxiosError(error) && error.response?.status === 429) {
         const data = error.response.data;

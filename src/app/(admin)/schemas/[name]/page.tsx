@@ -14,6 +14,7 @@ import { FieldSensitivityChip } from '@/components/schema/field-sensitivity-chip
 import { TypeIconPicker } from '@/components/schema/type-icon-picker';
 import { LifecycleSection } from '@/components/schema/lifecycle-section';
 import { UniquenessPanel } from '@/components/schema/uniqueness-panel';
+import { LinesPanel } from '@/components/schema/lines-panel';
 import { PageHeader } from '@/components/patterns/page-header';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { EmptyState } from '@/components/patterns/empty-state';
@@ -137,6 +138,8 @@ export default function SchemaDetailPage({ params }: { params: Promise<{ name: s
       />
 
       <UniquenessPanel schema={schema} />
+
+      <LinesPanel schema={schema} />
 
       <LifecycleSection schema={schema} />
 
