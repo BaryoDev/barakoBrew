@@ -369,3 +369,41 @@ describe('the type list behind the warning', () => {
         expect(typeCalls()).toHaveLength(10);
     });
 });
+
+describe('refusal lines from an earlier try', () => {
+    const REFUSED = new AxiosError('refused', 'ERR_BAD_REQUEST', undefined, undefined, {
+        status: 403,
+        statusText: '',
+        data: answer([], { refusals: ['Missing capability import_content.'] }),
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+    });
+
+    it('are gone once another file is chosen', async () => {
+        vi.mocked(api.post).mockRejectedValueOnce(REFUSED);
+        renderPage();
+
+        choose(OLD_FILE);
+        fireEvent.click(await screen.findByRole('button', { name: 'Import' }));
+        expect(await screen.findByText('Missing capability import_content.')).toBeInTheDocument();
+
+        choose({ version: 1, contentTypes: { post: { name: 'post' } } }, 'other.json');
+
+        expect(await screen.findByText('1 content types and 0 entries in this file.')).toBeInTheDocument();
+        expect(screen.queryByText('Missing capability import_content.')).not.toBeInTheDocument();
+    });
+
+    it('are gone once the same file is run again and is accepted', async () => {
+        vi.mocked(api.post).mockRejectedValueOnce(REFUSED).mockResolvedValue({ data: PLAN });
+        renderPage();
+
+        choose(OLD_FILE);
+        fireEvent.click(await screen.findByRole('button', { name: 'Preview' }));
+        expect(await screen.findByText('Missing capability import_content.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByText('This is what an import would do')).toBeInTheDocument();
+        expect(screen.queryByText('Missing capability import_content.')).not.toBeInTheDocument();
+    });
+});
