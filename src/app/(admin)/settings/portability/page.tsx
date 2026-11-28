@@ -2,13 +2,31 @@
 
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { useExportBundle, useImportBundle, type ImportReport, type PortabilityBundle } from '@/hooks/use-portability';
+import { useAccess } from '@/hooks/use-access';
+import { useSchemas } from '@/hooks/use-schemas';
+import {
+  ImportRefused,
+  sectionSize,
+  useConfigRoutes,
+  useExportBundle,
+  useImportBundle,
+  type ImportReport,
+  type PortabilityBundle,
+} from '@/hooks/use-portability';
 import { apiErrorMessage } from '@/lib/api';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Button } from '@/components/ui/button';
 import { IconArchive, IconDisk, IconWarning } from '@/components/icons';
 
 const CARD = 'bg-card rounded-xl border p-6 shadow-[var(--shadow-card)]';
+
+// Who the page is offered to when the API cannot say what the caller holds (no /api/me before 4.7).
+const LEGACY_ROLES = ['SuperAdmin', 'Admin'] as const;
+
+/** A section is a list of documents, or an object from each document's key to the document. */
+function isSection(value: unknown): value is PortabilityBundle['contents'] {
+  return typeof value === 'object' && value !== null;
+}
 
 /** What a bundle has to look like before anything is sent to the server. */
 function readBundle(text: string): PortabilityBundle {
@@ -20,14 +38,32 @@ function readBundle(text: string): PortabilityBundle {
 
   const bundle = parsed as Partial<PortabilityBundle>;
 
-  // Both arrays, checked here rather than left to the server. A file with the right extension and
+  // Both sections, checked here rather than left to the server. A file with the right extension and
   // the wrong shape otherwise reaches the import endpoint as an empty bundle and reports a
-  // successful import of nothing, which reads as "it worked".
-  if (!Array.isArray(bundle.contentTypes) || !Array.isArray(bundle.contents)) {
+  // successful import of nothing, which reads as "it worked". A section is an array (a bundle from
+  // before the config routes) or an object keyed by id or name (what the config export writes).
+  if (!isSection(bundle.contentTypes) || !isSection(bundle.contents)) {
     throw new Error('That file is missing contentTypes or contents, so it is not a bundle this can import.');
   }
 
-  return { contentTypes: bundle.contentTypes, contents: bundle.contents };
+  return {
+    ...(typeof bundle.version === 'number' ? { version: bundle.version } : {}),
+    contentTypes: bundle.contentTypes,
+    contents: bundle.contents,
+  };
+}
+
+/** One line each, in the tone of the warning below the counts. */
+function Problems({ lines }: { lines: string[] }) {
+  if (lines.length === 0) return null;
+
+  return (
+    <ul role="alert" className="text-destructive mt-3 grid gap-1 text-[12.5px]">
+      {lines.map((line, i) => (
+        <li key={`${i}-${line}`}>{line}</li>
+      ))}
+    </ul>
+  );
 }
 
 function ReportSummary({ report }: { report: ImportReport }) {
@@ -51,6 +87,8 @@ function ReportSummary({ report }: { report: ImportReport }) {
         ))}
       </dl>
 
+      <Problems lines={report.problems ?? []} />
+
       {report.contentsWithoutContentType > 0 && (
         <p className="text-warning mt-3 flex gap-2 text-[12.5px]">
           <IconWarning aria-hidden className="mt-0.5 shrink-0" />
@@ -69,10 +107,27 @@ export default function PortabilityPage() {
   const exportBundle = useExportBundle();
   const importBundle = useImportBundle();
 
+  // On the config routes the page asks for what the caller holds before offering the buttons. The
+  // API still decides, so a refusal comes back as lines either way.
+  const configRoutes = useConfigRoutes();
+  const access = useAccess();
+  const { data: schemas, isLoading: typesLoading } = useSchemas(configRoutes);
+  const canManageConfig = !configRoutes || access.can('manage_config', LEGACY_ROLES);
+  const canImportContent = !configRoutes || access.can('import_content', LEGACY_ROLES);
+  const waitingForTypes = configRoutes && typesLoading;
+  const canExport = canManageConfig;
+  const canImport = canManageConfig && canImportContent;
+  const importBlocked = !canManageConfig
+    ? 'Importing needs the manage_config capability, which your role does not have.'
+    : !canImportContent
+      ? 'Importing needs the import_content capability, which your role does not have.'
+      : '';
+
   const fileInput = useRef<HTMLInputElement>(null);
   const [bundle, setBundle] = useState<PortabilityBundle | null>(null);
   const [fileName, setFileName] = useState('');
   const [report, setReport] = useState<ImportReport | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
 
   const onExport = async () => {
     try {
@@ -89,8 +144,9 @@ export default function PortabilityPage() {
       anchor.click();
       URL.revokeObjectURL(url);
 
+      const left = data.withheld?.length ? ` Left out, because your role may not read them: ${data.withheld.join(', ')}.` : '';
       toast.success(
-        `Exported ${data.contentTypes.length} content types and ${data.contents.length} entries.`
+        `Exported ${sectionSize(data.contentTypes ?? [])} content types and ${sectionSize(data.contents ?? [])} entries.${left}`
       );
     } catch (error) {
       toast.error(apiErrorMessage(error));
@@ -99,6 +155,7 @@ export default function PortabilityPage() {
 
   const onChooseFile = async (file: File | undefined) => {
     setReport(null);
+    setProblems([]);
     setBundle(null);
     setFileName('');
 
@@ -116,10 +173,21 @@ export default function PortabilityPage() {
   const runImport = async (dryRun: boolean) => {
     if (!bundle) return;
 
+    setProblems([]);
     try {
-      setReport(await importBundle.mutateAsync({ bundle, dryRun }));
+      const knownTypes = schemas ? schemas.map((s) => s.name) : null;
+      setReport(await importBundle.mutateAsync({ bundle, dryRun, knownTypes }));
       if (!dryRun) toast.success('Import finished.');
     } catch (error) {
+      if (error instanceof ImportRefused) {
+        // Each reason on its own line under the buttons, where it stays readable while the file is
+        // fixed. The toast says there is more than the first line.
+        setReport(null);
+        setProblems(error.lines);
+        const more = error.lines.length > 1 ? ` (${error.lines.length - 1} more below)` : '';
+        toast.error(`${error.lines[0]}${more}`);
+        return;
+      }
       toast.error(apiErrorMessage(error));
     }
   };
@@ -139,10 +207,15 @@ export default function PortabilityPage() {
             users, no roles and no credentials, so it is safe to hand to someone who is evaluating
             whether they could leave.
           </p>
-          <Button className="mt-4" onClick={onExport} disabled={exportBundle.isPending}>
+          <Button className="mt-4" onClick={onExport} disabled={exportBundle.isPending || !canExport}>
             <IconArchive />
             {exportBundle.isPending ? 'Preparing...' : 'Download bundle'}
           </Button>
+          {!canExport && (
+            <p className="text-muted-foreground mt-2 text-[12.5px]">
+              Exporting needs the manage_config capability, which your role does not have.
+            </p>
+          )}
         </section>
 
         <section className={CARD}>
@@ -162,7 +235,7 @@ export default function PortabilityPage() {
           />
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => fileInput.current?.click()}>
+            <Button variant="outline" onClick={() => fileInput.current?.click()} disabled={!canImport}>
               <IconDisk />
               Choose a file
             </Button>
@@ -170,12 +243,13 @@ export default function PortabilityPage() {
               <span className="text-muted-foreground font-mono text-[12px]">{fileName}</span>
             )}
           </div>
+          {!canImport && <p className="text-muted-foreground mt-2 text-[12.5px]">{importBlocked}</p>}
 
           {bundle && (
             <>
               <p className="text-muted-foreground mt-3 text-[13px]">
-                {bundle.contentTypes.length} content types and {bundle.contents.length} entries in
-                this file.
+                {sectionSize(bundle.contentTypes)} content types and {sectionSize(bundle.contents)}{' '}
+                entries in this file.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {/* Preview first, and it is the button that is not destructive, so it leads. The
@@ -183,16 +257,21 @@ export default function PortabilityPage() {
                 <Button
                   variant="outline"
                   onClick={() => runImport(true)}
-                  disabled={importBundle.isPending}
+                  disabled={importBundle.isPending || !canImport || waitingForTypes}
                 >
                   Preview
                 </Button>
-                <Button onClick={() => runImport(false)} disabled={importBundle.isPending}>
+                <Button
+                  onClick={() => runImport(false)}
+                  disabled={importBundle.isPending || !canImport || waitingForTypes}
+                >
                   {importBundle.isPending ? 'Working...' : 'Import'}
                 </Button>
               </div>
             </>
           )}
+
+          <Problems lines={problems} />
 
           {report && <ReportSummary report={report} />}
         </section>

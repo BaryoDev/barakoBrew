@@ -334,16 +334,35 @@ test.describe('accessibility', () => {
     });
 
     test('export and import, with a bundle chosen and a report shown', async ({ page }) => {
-        await authed(page);
+        // A core that has the config routes, which is where this page plans and applies.
+        await authed(page, 8);
         await stubShell(page);
-        await page.route('**/api/portability/import**', (r) =>
+        await page.route('**/api/config/plan', (r) =>
             r.fulfill({
                 json: {
-                    dryRun: true,
-                    contentTypesCreated: 2,
-                    contentTypesUpdated: 1,
-                    contentsCreated: 34,
-                    contentsWithoutContentType: 3,
+                    applied: false,
+                    errors: [],
+                    refusals: [],
+                    sections: [
+                        {
+                            section: 'contentTypes',
+                            changes: [
+                                { key: 'article', kind: 'create', summary: 'create the type', details: [] },
+                                { key: 'member', kind: 'create', summary: 'create the type', details: [] },
+                                { key: 'page', kind: 'change', summary: 'change the type', details: [] },
+                            ],
+                            errors: [],
+                            refusals: [],
+                            conflicts: [],
+                        },
+                        {
+                            section: 'contents',
+                            changes: [{ key: '#0', kind: 'create', summary: "create a 'ghost' entry", details: [] }],
+                            errors: ["'#1': that entry is not valid"],
+                            refusals: [],
+                            conflicts: [],
+                        },
+                    ],
                 },
             })
         );
@@ -354,13 +373,20 @@ test.describe('accessibility', () => {
         await page.getByLabel('Choose a bundle file').setInputFiles({
             name: 'bundle.json',
             mimeType: 'application/json',
-            buffer: Buffer.from(JSON.stringify({ contentTypes: [{ name: 'article' }], contents: [] })),
+            buffer: Buffer.from(
+                JSON.stringify({
+                    contentTypes: [{ name: 'article' }],
+                    contents: Array.from({ length: 3 }, () => ({ contentType: 'ghost', data: {}, status: 'Draft' })),
+                })
+            ),
         });
         await page.getByRole('button', { name: 'Preview' }).click();
 
-        // The warning is the only thing on this page in the warning tone, and it is the reason the
-        // report exists, so scanning without it would miss the contrast pair that matters.
+        // The warning and the error lines are the two things on this page in a tone of their own,
+        // and they are the reason the report exists, so scanning without them would miss the
+        // contrast pairs that matter.
         await expect(page.getByText('nothing knows which of their fields are public', { exact: false })).toBeVisible();
+        await expect(page.getByText("contents: '#1': that entry is not valid")).toBeVisible();
         await scan(page);
     });
 

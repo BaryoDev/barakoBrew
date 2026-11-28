@@ -25,6 +25,9 @@ export const MOCK_TOKEN = `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`;
  * path on every authenticated spec rather than leaving it untested.
  *
  * Call before page.goto.
+ *
+ * `contract` is the contract version the API reports. Most specs leave it at the lowest the console
+ * supports. A spec for a screen that picks its routes by contract passes the one it is testing.
  */
 /**
  * The signed-out equivalent of {@link authed}: the API answers the bootstrap refresh with a 401,
@@ -95,7 +98,7 @@ export async function unauthed(page: Page) {
     );
 }
 
-export async function authed(page: Page) {
+export async function authed(page: Page, contract: number = SUPPORTED_CONTRACT.min) {
     await page.route('**/api/auth/refresh', (route) =>
         route.fulfill({
             // The real API puts its contract version on every response, and the console refuses to
@@ -108,7 +111,7 @@ export async function authed(page: Page) {
             // carries is a fixture that disagrees with the server, which is the exact class of bug
             // the unmocked pack in smoke/ exists to catch.
             headers: {
-                'x-api-contract-version': String(SUPPORTED_CONTRACT.min),
+                'x-api-contract-version': String(contract),
                 // Exposed, because the console reads it from JavaScript and the API is a different
                 // origin. A fulfilled response still goes through the browser's CORS rules, so a
                 // header that is present but not exposed is invisible, which is exactly the bug

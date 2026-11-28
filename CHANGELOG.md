@@ -12,6 +12,7 @@ moved. Which API a console works against is stated per release instead.
 ### Changed
 
 - The quickstart starts console 1.15.0 by default.
+- Settings, Export and import uses the config routes on a core that has them (API contract 8 or above, barakoCMS 5.0.0 and later). The page looks the same. On those cores the buttons need the `manage_config` capability (import also needs `import_content`), and a file saved by the config export can be imported. Older cores keep the portability routes.
 
 ## [1.15.0] - 2026-11-26
 
