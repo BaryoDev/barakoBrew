@@ -150,9 +150,9 @@ describe('the lines grid', () => {
         const onRows = vi.fn();
         render(<Harness initial={rowsOf([{}, {}])} onRows={onRows} />);
 
-        typeInto('Item', 0, 'Tea');
-        typeInto('Amount', 0, '2.5');
-        typeInto('Item', 1, 'Cake');
+        typeInto('Item', 1, 'Tea');
+        typeInto('Amount', 1, '2.5');
+        typeInto('Item', 2, 'Cake');
 
         const rows = onRows.mock.lastCall![0] as LineRow[];
         const sent = rowsToSend(
@@ -190,8 +190,8 @@ describe('the sum of the lines', () => {
         render(<Harness lines={WITH_TOTAL} headerValues={{ Total: 3 }} initial={rowsOf([{}, {}])} />);
         expect(screen.getByText('0')).toBeInTheDocument();
 
-        typeInto('Amount', 0, '1.25');
-        typeInto('Amount', 1, '1.75');
+        typeInto('Amount', 1, '1.25');
+        typeInto('Amount', 2, '1.75');
 
         expect(screen.getByText('3.00')).toBeInTheDocument();
         expect(screen.queryByRole('status')).toBeNull();
