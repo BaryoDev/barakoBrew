@@ -54,7 +54,7 @@ async function serveTypes(page: Page, order: Record<string, unknown>) {
 }
 
 test.beforeEach(async ({ page }) => {
-    await authed(page);
+    await authed(page, 12);
     await stubShell(page);
     await stubContentTypes(page, [ORDER, ORDER_LINE]);
 });
