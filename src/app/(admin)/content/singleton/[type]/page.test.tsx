@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ContentStatus } from '@/types/content';
 
@@ -176,3 +177,80 @@ describe('a single-entry type', () => {
         expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
     });
 });
+
+describe('a single-entry type with lines', () => {
+    const LINE = {
+        name: 'settingline',
+        displayName: 'Setting lines',
+        fields: [
+            { name: 'Settings', displayName: 'Settings', type: 'reference', isRequired: false, referenceType: 'sitesettings' },
+            { name: 'Label', displayName: 'Label', type: 'string', isRequired: false },
+        ],
+    };
+    const WITH_LINES = { ...SITE, lines: { contentType: 'settingline', parentField: 'Settings' } };
+
+    function serveTypes() {
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === '/api/content-types') return { data: page([WITH_LINES, LINE]) };
+            if (url === '/api/contents') return { data: page([]) };
+            throw new Error(`unrouted GET ${url}`);
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('takes the lines with the first save, as the new entry page does', async () => {
+        serveTypes();
+        vi.mocked(api.post).mockResolvedValue({ data: { id: OLDEST, version: 1 } });
+
+        renderPage();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Add line' }));
+        fireEvent.change(await screen.findByLabelText('Label, line 1'), { target: { value: 'Open' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.post).mock.calls[0][1]).toEqual({
+            contentType: 'sitesettings',
+            data: {},
+            status: ContentStatus.Published,
+            lines: [{ Label: 'Open' }],
+        });
+    });
+
+    it('shows a refusal about a line at the grid and not in a toast', async () => {
+        serveTypes();
+        const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST');
+        error.response = {
+            data: { status: 422, errors: ['Line 1: Label is required'] },
+            status: 422,
+            statusText: '',
+            headers: {},
+            config: { headers: new AxiosHeaders() },
+        };
+        vi.mocked(api.post).mockRejectedValue(error);
+
+        renderPage();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Add line' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+        expect(await screen.findByText('Line 1: Label is required')).toBeInTheDocument();
+        const { toast } = await import('sonner');
+        expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('sends no lines key for a type without lines', async () => {
+        serve(() => []);
+        vi.mocked(api.post).mockResolvedValue({ data: { id: OLDEST, version: 1 } });
+
+        renderPage();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Publish' }));
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.post).mock.calls[0][1]).not.toHaveProperty('lines');
+    });
+});
+

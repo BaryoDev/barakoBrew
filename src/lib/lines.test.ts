@@ -11,7 +11,9 @@ import {
     splitLineRefusals,
     sumAmounts,
     totalDiffers,
+    withStored,
 } from './lines';
+import { isBelowContract } from './api-contract';
 import type { ContentTypeDefinition, FieldDefinition } from '@/types/schema';
 
 function field(name: string, type: string, extra: Partial<FieldDefinition> = {}): FieldDefinition {
@@ -138,5 +140,45 @@ describe('refusals about lines', () => {
         ]);
         expect(split.grid).toEqual(["'Total' is 5, but the lines add up to 6.", 'Line 2: Name is required']);
         expect(split.rest).toEqual(['Data is required']);
+    });
+});
+
+describe('the stored choice among the options', () => {
+    const fields = [field('Total', 'decimal'), field('Cost', 'decimal', { rollup: { source: 'x' } }), field('Note', 'string')];
+    const options = [fields[0]];
+
+    it('leaves the options alone when the stored one is among them', () => {
+        expect(withStored(options, fields, 'Total').map((f) => f.name)).toEqual(['Total']);
+        expect(withStored(options, fields, '')).toEqual(options);
+    });
+
+    it('adds a stored field the filter dropped, by its own label', () => {
+        const listed = withStored(options, fields, 'Cost');
+        expect(listed.map((f) => f.name)).toEqual(['Total', 'Cost']);
+        expect(listed[1].displayName).toBe('Cost');
+    });
+
+    it('adds a stored name no field has any more, under the name stored', () => {
+        const listed = withStored(options, fields, 'Gone');
+        expect(listed.map((f) => [f.name, f.displayName])).toEqual([
+            ['Total', 'Total'],
+            ['Gone', 'Gone'],
+        ]);
+    });
+
+    it('lists a stored name spelled in another case as it is stored, since that is what is sent', () => {
+        expect(withStored(options, fields, 'total').map((f) => f.name)).toEqual(['Total', 'total']);
+    });
+});
+
+describe('an API older than a contract version', () => {
+    it('is below only when it has said so', () => {
+        expect(isBelowContract({ kind: 'ok', version: 11 }, 12)).toBe(true);
+        expect(isBelowContract({ kind: 'ok', version: 12 }, 12)).toBe(false);
+        expect(isBelowContract({ kind: 'ok', version: 17 }, 12)).toBe(false);
+        expect(isBelowContract({ kind: 'api-older', version: 0 }, 12)).toBe(true);
+        expect(isBelowContract({ kind: 'absent' }, 12)).toBe(true);
+        expect(isBelowContract({ kind: 'unknown' }, 12)).toBe(false);
+        expect(isBelowContract({ kind: 'api-newer', version: 40 }, 12)).toBe(false);
     });
 });

@@ -1,16 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { useSchemas, useSetLines } from '@/hooks/use-schemas';
 import { apiErrorList, apiErrorMessage } from '@/lib/api';
 import {
+    getContractServerState,
+    getContractState,
+    isBelowContract,
+    subscribeToContract,
+} from '@/lib/api-contract';
+import {
+    LINES_CONTRACT,
     findType,
+    hasTotal,
     headerOf,
     isSummable,
     lineTypeChoices,
     parentFieldChoices,
     sameName,
+    withStored,
 } from '@/lib/lines';
 import { ConfirmDialog } from '@/components/patterns/confirm-dialog';
 import { Button } from '@/components/ui/button';
@@ -51,6 +60,7 @@ export function LinesPanel({ schema }: { schema: ContentTypeDefinition }) {
     const [clearing, setClearing] = useState(false);
     const [refusal, setRefusal] = useState<string[]>([]);
     const setLines = useSetLines(schema.name);
+    const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
 
     const lines = schema.lines ?? null;
     const lineType = findType(types, lines?.contentType);
@@ -64,6 +74,9 @@ export function LinesPanel({ schema }: { schema: ContentTypeDefinition }) {
             },
             onError: (error) => setRefusal(refusalLines(error, 'The lines could not be cleared.')),
         });
+
+    // An API older than the route would answer the save with a 404, so the panel is not offered.
+    if (isBelowContract(contract, LINES_CONTRACT)) return null;
 
     return (
         <section aria-labelledby="lines-heading" className="mb-6 space-y-3 rounded-lg border p-4">
@@ -117,7 +130,7 @@ export function LinesPanel({ schema }: { schema: ContentTypeDefinition }) {
                             · points back through {fieldLabel(lineType?.fields, lines.parentField)}
                         </span>
                     </li>
-                    {lines.totalField && lines.lineAmountField && (
+                    {hasTotal(lines) && (
                         <li className="text-muted-foreground px-3 py-2">
                             {fieldLabel(schema.fields, lines.totalField)} has to equal the sum of{' '}
                             {fieldLabel(lineType?.fields, lines.lineAmountField)}
@@ -186,8 +199,10 @@ export function LinesDialog({
     const choices = lineTypeChoices(types, schema);
     const lineType = findType(types, lineTypeName);
     const parents = lineType ? parentFieldChoices(lineType, schema.name) : [];
-    const totals = schema.fields.filter(isSummable);
-    const amounts = lineType?.fields.filter(isSummable) ?? [];
+    // What is stored stays among the options, since a save sends it whether or not it is listed.
+    const totals = withStored(schema.fields.filter(isSummable), schema.fields, totalField);
+    const amounts = withStored(lineType?.fields.filter(isSummable) ?? [], lineType?.fields, amountField);
+    const parentOptions = withStored(parents, lineType?.fields, parentField);
 
     const half = (totalField === '') !== (amountField === '');
     const valid = !!lineType && parentField !== '' && !half;
@@ -261,13 +276,13 @@ export function LinesDialog({
                         <Select
                             value={parentField}
                             onValueChange={(v) => pick(() => setParentField(v))}
-                            disabled={parents.length === 0}
+                            disabled={parentOptions.length === 0}
                         >
                             <SelectTrigger id="lines-parent" className="w-full">
                                 <SelectValue placeholder="Choose a field" />
                             </SelectTrigger>
                             <SelectContent>
-                                {parents.map((f) => (
+                                {parentOptions.map((f) => (
                                     <SelectItem key={f.name} value={f.name}>
                                         {f.displayName}
                                     </SelectItem>
@@ -283,7 +298,7 @@ export function LinesDialog({
                     </div>
                 )}
 
-                {lineType && parents.length > 0 && (
+                {lineType && parentOptions.length > 0 && (
                     <fieldset className="space-y-3 rounded-lg border p-3">
                         <legend className="px-1 text-sm font-medium">Total check (optional)</legend>
                         <p className="text-muted-foreground text-xs">

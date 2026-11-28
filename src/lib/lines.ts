@@ -10,6 +10,9 @@ import {
 /** The most lines one create takes. Mirrors LineTotals.MaxLines in barakoCMS. */
 export const MAX_LINES = 200;
 
+/** The admin contract that brought `PUT /api/content-types/{name}/lines`, barakoCMS 5.3.0. */
+export const LINES_CONTRACT = 12;
+
 /** Whether two names are the same field or type. The API finds both without regard to case. */
 export function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
     return !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -45,6 +48,21 @@ export function lineTypeChoices(
         const header = headerOf(types, t.name);
         return !header || sameName(header.name, self.name);
     });
+}
+
+/**
+ * The options with the stored choice among them. A stored field that no longer passes the filter
+ * is still what a save sends, so it is listed (by its stored spelling) for the person to see and
+ * change, rather than leaving the select blank over a value that goes out.
+ */
+export function withStored(
+    options: readonly FieldDefinition[],
+    fields: readonly FieldDefinition[] | undefined,
+    stored: string,
+): FieldDefinition[] {
+    if (!stored || options.some((f) => f.name === stored)) return [...options];
+    const known = fields?.find((f) => sameName(f.name, stored));
+    return [...options, { ...(known ?? { displayName: stored, type: 'string', isRequired: false }), name: stored } as FieldDefinition];
 }
 
 /** The line type's single reference fields that point at `header`. */

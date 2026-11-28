@@ -122,10 +122,10 @@ test('an entry is created with its lines, and its page lists them', async ({ pag
 
     await page.getByRole('button', { name: 'Add line' }).click();
     await page.getByRole('button', { name: 'Add line' }).click();
-    await page.getByLabel('Item').nth(0).fill('Tea');
-    await page.getByLabel('Amount').nth(0).fill('2.5');
-    await page.getByLabel('Item').nth(1).fill('Cake');
-    await page.getByLabel('Amount').nth(1).fill('1.5');
+    await page.getByLabel('Item, line 1').fill('Tea');
+    await page.getByLabel('Amount, line 1').fill('2.5');
+    await page.getByLabel('Item, line 2').fill('Cake');
+    await page.getByLabel('Amount, line 2').fill('1.5');
 
     // The total entered is 3 and the lines add up to 4: warned before the save, not blocked.
     await expect(page.getByRole('status')).toContainText('Total is 3, but the lines add up to 4');

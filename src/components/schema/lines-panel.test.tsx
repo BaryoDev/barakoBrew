@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError, AxiosHeaders } from 'axios';
@@ -20,6 +20,7 @@ beforeAll(() => {
 });
 
 const { api } = await import('@/lib/api');
+const { __resetContractForTests, recordContractVersion } = await import('@/lib/api-contract');
 const { toast } = await import('sonner');
 const { LinesDialog, LinesPanel } = await import('./lines-panel');
 
@@ -317,5 +318,59 @@ describe('the lines panel', () => {
         fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Clear lines' }));
 
         expect(await screen.findByRole('alert')).toHaveTextContent('A field change is running.');
+    });
+});
+
+describe('the stored choice', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('stays in the options when it no longer passes the filter, so the select shows what is sent', async () => {
+        vi.mocked(api.put).mockResolvedValueOnce({ data: { name: 'salesorder', lines: null } });
+        // Cost is a rollup now, which a total may not be, and Gone is not a field at all.
+        const stored = {
+            ...ORDER,
+            lines: { contentType: 'salesorderline', parentField: 'Order', totalField: 'Cost', lineAmountField: 'Gone' },
+        };
+        dialog(stored);
+
+        expect(screen.getByRole('combobox', { name: 'Total field' })).toHaveTextContent('Cost');
+        expect(screen.getByRole('combobox', { name: 'Line amount field' })).toHaveTextContent('Gone');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save lines' }));
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+        expect(vi.mocked(api.put).mock.calls[0][1]).toEqual({
+            lines: { contentType: 'salesorderline', parentField: 'Order', totalField: 'Cost', lineAmountField: 'Gone' },
+        });
+    });
+});
+
+describe('an API older than the lines route', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(api.get).mockResolvedValue({ data: pageOf(TYPES) });
+        __resetContractForTests();
+    });
+
+    afterEach(() => __resetContractForTests());
+
+    it('has no lines panel below contract 12, which is where the route arrived', async () => {
+        recordContractVersion('11');
+        const { container } = wrap(<LinesPanel schema={ORDER} />);
+
+        await waitFor(() => expect(api.get).toHaveBeenCalled());
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it('has the panel at contract 12, and before any answer has been seen', async () => {
+        recordContractVersion('12');
+        const first = wrap(<LinesPanel schema={ORDER} />);
+        expect(await screen.findByText('No lines.')).toBeInTheDocument();
+        first.unmount();
+
+        __resetContractForTests();
+        wrap(<LinesPanel schema={ORDER} />);
+        expect(await screen.findByText('No lines.')).toBeInTheDocument();
     });
 });

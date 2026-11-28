@@ -15,6 +15,7 @@ import {
     MAX_LINES,
     columnAmounts,
     declaredScale,
+    hasTotal,
     lineColumns,
     linePosition,
     sameName,
@@ -163,7 +164,9 @@ function LineRowView({
     return (
         <>
             <TableRow>
-                <TableCell className="text-muted-foreground align-top">{position}</TableCell>
+                <TableHead scope="row" className="text-muted-foreground h-auto p-2 align-top font-normal">
+                    {position}
+                </TableHead>
                 {columns.map((field) => {
                     // Named per row, because the form draws the field's name as its element id and
                     // two rows on one page cannot share one.
@@ -172,7 +175,8 @@ function LineRowView({
                     return (
                         <TableCell key={field.name} className="min-w-40 align-top [&_label]:sr-only">
                             <DynamicForm
-                                fields={[{ ...field, name: scoped }]}
+                                // The line number is in the name so one line's input is told from another's.
+                                fields={[{ ...field, name: scoped, displayName: `${field.displayName}, line ${position}` }]}
                                 values={{ [scoped]: row.values[key] }}
                                 onChange={(next) => {
                                     const value = next[scoped];
@@ -228,7 +232,7 @@ function Total({
     headerValues: Record<string, unknown>;
     rows: LineRow[];
 }) {
-    if (!lines.totalField || !lines.lineAmountField) return null;
+    if (!hasTotal(lines)) return null;
 
     const amountField = lineType.fields.find((f) => sameName(f.name, lines.lineAmountField));
     const totalField = header.fields.find((f) => sameName(f.name, lines.totalField));

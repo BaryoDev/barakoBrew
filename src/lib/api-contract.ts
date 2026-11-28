@@ -84,6 +84,15 @@ export function isIncompatible(state: ContractState): state is IncompatibleContr
     return state.kind === 'api-older' || state.kind === 'api-newer' || state.kind === 'absent';
 }
 
+/**
+ * Whether the API is known to be older than a contract version. Only a state that has been seen
+ * says so: nothing seen yet, or an API ahead of this console, is not below anything.
+ */
+export function isBelowContract(state: ContractState, version: number): boolean {
+    if (state.kind === 'ok') return state.version < version;
+    return state.kind === 'api-older' || state.kind === 'absent';
+}
+
 let current: ContractState = { kind: 'unknown' };
 const listeners = new Set<() => void>();
 

@@ -16,6 +16,7 @@ import { ErrorState } from '@/components/patterns/error-state';
 import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { ContentEditor } from '@/components/content/content-editor';
 import { DynamicForm } from '@/components/content/dynamic-form';
+import { LinesInput, useLinesInput } from '@/components/content/lines-input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { IconContentTypes } from '@/components/icons';
@@ -102,10 +103,12 @@ function FirstEntry({
   const access = useAccess();
   const createContent = useCreateContent();
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const lines = useLinesInput(schema);
 
   const submit = (status: ContentStatus) => {
+    lines.clearRefusals();
     createContent.mutate(
-      { contentType: schema.name, data: values, status },
+      { contentType: schema.name, data: values, status, ...lines.payload() },
       {
         onSuccess: () =>
           toast.success(status === ContentStatus.Published ? 'Published' : 'Draft saved'),
@@ -113,7 +116,10 @@ function FirstEntry({
           // The likeliest refusal is someone else having created the entry since this screen
           // loaded. Reading the list again puts theirs on screen instead of this empty form.
           onRefused();
-          toast.error(apiErrorMessage(error, 'The entry could not be saved.'));
+          // What belongs to the lines is shown at the grid, and not again here.
+          const { rest, shown } = lines.refuse(error);
+          if (shown) return;
+          toast.error(rest.length > 0 ? rest.join(', ') : apiErrorMessage(error, 'The entry could not be saved.'));
         },
       }
     );
@@ -133,6 +139,9 @@ function FirstEntry({
             contentType={schema.name}
             viewer={access.viewer}
         />
+        <div className="mt-6 empty:hidden">
+          <LinesInput input={lines} header={schema} headerValues={values} viewer={access.viewer} />
+        </div>
         <Separator className="my-6" />
         <div className="flex items-center gap-2">
           <Button onClick={() => submit(ContentStatus.Published)} disabled={createContent.isPending}>

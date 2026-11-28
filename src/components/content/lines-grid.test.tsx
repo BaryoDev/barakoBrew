@@ -66,8 +66,9 @@ function Harness({
     );
 }
 
-function typeInto(label: string, index: number, value: string) {
-    fireEvent.change(screen.getAllByLabelText(label)[index], { target: { value } });
+/** The input of a field on a line, found by the name it has: the field and the line number. */
+function typeInto(label: string, line: number, value: string) {
+    fireEvent.change(screen.getByLabelText(`${label}, line ${line}`), { target: { value } });
 }
 
 describe('the lines grid', () => {
@@ -89,7 +90,10 @@ describe('the lines grid', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Remove line 2' }));
 
-        expect(screen.getAllByLabelText('Item').map((i) => (i as HTMLInputElement).value)).toEqual(['a', 'c']);
+        // The lines are numbered again, so the second input is now the old third.
+        expect(screen.getByLabelText('Item, line 1')).toHaveValue('a');
+        expect(screen.getByLabelText('Item, line 2')).toHaveValue('c');
+        expect(screen.queryByLabelText('Item, line 3')).toBeNull();
     });
 
     it('stops at 200 lines and says so', () => {
@@ -114,9 +118,9 @@ describe('the lines grid', () => {
             'Amount',
             'Remove',
         ]);
-        expect(screen.queryByLabelText('Order')).toBeNull();
-        expect(screen.queryByLabelText('Worked')).toBeNull();
-        expect(screen.queryByLabelText('Rolled')).toBeNull();
+        expect(screen.queryByLabelText(/^Order/)).toBeNull();
+        expect(screen.queryByLabelText(/^Worked/)).toBeNull();
+        expect(screen.queryByLabelText(/^Rolled/)).toBeNull();
     });
 
     it('says there is nothing to enter when no column is left, and still adds rows', () => {
@@ -130,8 +134,16 @@ describe('the lines grid', () => {
 
     it('keeps each row\'s inputs apart', () => {
         render(<Harness initial={rowsOf([{}, {}])} />);
-        const ids = screen.getAllByLabelText('Item').map((i) => i.id);
+        const ids = [screen.getByLabelText('Item, line 1').id, screen.getByLabelText('Item, line 2').id];
         expect(new Set(ids).size).toBe(2);
+    });
+
+    it('names each line by its number, as a row header, so a screen reader hears which line an input is on', () => {
+        render(<Harness initial={rowsOf([{}, {}])} />);
+
+        expect(screen.getByRole('rowheader', { name: '1' })).toHaveAttribute('scope', 'row');
+        expect(screen.getByRole('rowheader', { name: '2' })).toBeInTheDocument();
+        expect(screen.getByLabelText('Amount, line 2')).toBeInTheDocument();
     });
 
     it('builds the payload from what was typed, without the fields the server sets', () => {

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { useAccess } from '@/hooks/use-access';
 import { useSchemas } from '@/hooks/use-schemas';
 import { useCreateContent } from '@/hooks/use-contents';
-import { apiErrorList, apiErrorMessage } from '@/lib/api';
+import { apiErrorMessage } from '@/lib/api';
 import { getContractServerState, getContractState, subscribeToContract } from '@/lib/api-contract';
 import { singletonHref } from '@/lib/navigation';
 import { PAGE_FIELDS } from '@/lib/page-tree';
@@ -16,8 +16,7 @@ import { TableSkeleton } from '@/components/patterns/table-skeleton';
 import { DynamicForm } from '@/components/content/dynamic-form';
 import { SaveRefusal, isRetryableRefusal } from '@/components/content/save-refusal';
 import { withoutTokenFields } from '@/lib/token-fields';
-import { findType, linesPayload, splitLineRefusals } from '@/lib/lines';
-import { LinesGrid, type LineRow } from '@/components/content/lines-grid';
+import { LinesInput, useLinesInput } from '@/components/content/lines-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -47,14 +46,11 @@ function NewContentInner() {
   const [sensitivity, setSensitivity] = useState(SensitivityLevel.Public);
   const contract = useSyncExternalStore(subscribeToContract, getContractState, getContractServerState);
   const [refusal, setRefusal] = useState<{ message: string; status: ContentStatus } | null>(null);
-  const [rows, setRows] = useState<LineRow[]>([]);
-  // The refusals that concern the lines, shown at the grid: a line by its position, or the total.
-  const [lineRefusals, setLineRefusals] = useState<string[]>([]);
 
   const schema = schemas?.find((s) => s.name === contentType);
   const singleton = schema?.isSingleton === true;
-  const lines = schema?.lines ?? null;
-  const lineType = findType(schemas ?? [], lines?.contentType);
+  // The rows and the refusals that concern them, shown at the grid: a line by its position, or the total.
+  const lines = useLinesInput(schema);
 
   // A second entry of a single-entry type is refused, and the first is created from its own screen.
   useEffect(() => {
@@ -63,7 +59,7 @@ function NewContentInner() {
 
   const submit = (status: ContentStatus) => {
     setRefusal(null);
-    setLineRefusals([]);
+    lines.clearRefusals();
     createContent.mutate(
       {
         contentType,
@@ -71,9 +67,7 @@ function NewContentInner() {
         status,
         sensitivity,
         // No key at all for an empty grid, so a type without lines sends what it always has.
-        ...(lines && lineType
-          ? linesPayload(lineType, lines.parentField, rows.map((r) => r.values))
-          : {}),
+        ...lines.payload(),
       },
       {
         onSuccess: ({ id }) => {
@@ -83,11 +77,9 @@ function NewContentInner() {
         // Kept on the page instead of toasted: a uniqueness 409 or a refused field has to stay
         // readable while it is fixed, and showing it twice says nothing more.
         onError: (error) => {
-          const list = apiErrorList(error);
-          const { grid, rest } = lines ? splitLineRefusals(list) : { grid: [], rest: list };
-          setLineRefusals(grid);
+          const { rest, shown } = lines.refuse(error);
           // Everything the grid took is shown there and not again below the buttons.
-          if (grid.length > 0 && rest.length === 0) return;
+          if (shown) return;
           setRefusal({
             message: rest.length > 0 ? rest.join(', ') : apiErrorMessage(error, 'The entry could not be saved.'),
             status,
@@ -113,8 +105,7 @@ function NewContentInner() {
                 setContentType(v);
                 setValues({});
                 setRefusal(null);
-                setRows([]);
-                setLineRefusals([]);
+                lines.reset();
               }}
             >
               {/* id and htmlFor, not aria-label: the visible text is the right accessible name, and
@@ -162,28 +153,7 @@ function NewContentInner() {
                 contentType={schema.name}
                 viewer={access.viewer}
             />
-            {lines && lineType && (
-              <LinesGrid
-                lines={lines}
-                lineType={lineType}
-                header={schema}
-                headerValues={values}
-                rows={rows}
-                onChange={(next) => {
-                  // Positions in a refusal are of the rows as they were sent.
-                  setLineRefusals([]);
-                  setRows(next);
-                }}
-                refusals={lineRefusals}
-                viewer={access.viewer}
-              />
-            )}
-            {lines && !lineType && (
-              <p className="text-muted-foreground text-sm">
-                The line type {lines.contentType} is not readable with your role, so lines cannot be
-                entered here.
-              </p>
-            )}
+            <LinesInput input={lines} header={schema} headerValues={values} viewer={access.viewer} />
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => submit(ContentStatus.Published)}
