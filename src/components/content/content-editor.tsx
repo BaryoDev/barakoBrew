@@ -30,6 +30,7 @@ import { SaveRefusal, isRetryableRefusal } from '@/components/content/save-refus
 import { withoutTokenFields } from '@/lib/token-fields';
 import { VersionRail } from '@/components/content/version-rail';
 import { WorkflowsWatching } from '@/components/content/workflows-watching';
+import { EntryLinesSection } from '@/components/content/entry-lines';
 import { PermissionsPanel } from '@/components/content/permissions-panel';
 import { EntrySharePanel } from '@/components/content/entry-share-panel';
 import { Button } from '@/components/ui/button';
@@ -379,6 +380,7 @@ export function ContentEditor({
               cannot be edited here.
             </p>
           )}
+          {schema?.lines && <EntryLinesSection id={id} schema={schema} />}
           <WorkflowsWatching contentType={content.contentType} />
           </div>
           <VersionRail id={id} canRollback={canRollback} />
