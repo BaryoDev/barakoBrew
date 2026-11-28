@@ -426,3 +426,49 @@ describe('a type whose lifecycle cannot be edited', () => {
     expect(screen.getByText('This lifecycle cannot be changed here.')).toBeTruthy();
   });
 });
+
+describe('the field changes on a type', () => {
+  it('lists them under their own heading', async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url === '/api/content-types') {
+        return { data: { items: [SCHEMA], page: 1, pageSize: 20, totalItems: 1 } };
+      }
+      if (url === '/api/content-types/article/field-changes') {
+        return {
+          data: {
+            items: [
+              {
+                id: 'c1',
+                contentType: 'article',
+                field: 'Title',
+                kind: 'recompute',
+                state: 'completed',
+                step: 1,
+                steps: 1,
+                processed: 3,
+                total: 3,
+                valuesLost: 0,
+                error: null,
+                startedAt: '2026-11-20T10:00:00Z',
+                completedAt: '2026-11-20T10:01:00Z',
+                abandonedAt: null,
+                abandonedBy: null,
+                retryOf: null,
+                retriedBy: null,
+              },
+            ],
+            page: 1,
+            pageSize: 20,
+            totalItems: 1,
+          },
+        };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    await renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Field changes' })).toBeTruthy();
+    expect(await screen.findByText('3 of 3')).toBeTruthy();
+  });
+});

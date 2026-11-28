@@ -11,6 +11,7 @@ moved. Which API a console works against is stated per release instead.
 
 ### Added
 
+- A content type's page lists its field changes (renames, conversions, removals and recomputes), newest first. A change that finished with skips shows the entries it passed over and can be retried. The list refreshes while a change is running, and an API without the route (or a caller who cannot manage types) leaves the panel out.
 - A content type can have lines: another type whose entries point back at it, such as the lines of an order. The content type screen has a Lines panel to set or clear them, with an optional total that has to equal the sum of a line amount. A new entry of such a type, and the first save of a single-entry type, take its lines in a grid under the form with a running sum and a warning when the total differs, and the entry's own page lists its lines. An API without these routes (before barakoCMS 5.3.0, contract 12) leaves the Lines panel out. `SUPPORTED_CONTRACT` does not move.
 
 ### Changed

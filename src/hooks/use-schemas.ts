@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { api, type Paginated } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
@@ -134,9 +134,19 @@ export function useSetFieldOptions(name: string, field: string) {
             return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+            invalidateAfterFieldEdit(queryClient);
         },
     });
+}
+
+/**
+ * Reads the types again, and the field changes with them. A field edit can start a change on the
+ * type (sensitivity, currency, options and the like), and the panel on the type's page should show
+ * it running without waiting for its next read.
+ */
+function invalidateAfterFieldEdit(queryClient: QueryClient) {
+    queryClient.invalidateQueries({ queryKey: ['schemas'] });
+    queryClient.invalidateQueries({ queryKey: ['field-changes'] });
 }
 
 const typePath = (name: string) => `/api/content-types/${encodeURIComponent(name)}`;
@@ -164,7 +174,7 @@ export function useSetFieldPresentation(name: string, field: string) {
             return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+            invalidateAfterFieldEdit(queryClient);
         },
     });
 }
@@ -211,7 +221,7 @@ export function useSetFieldCurrency(name: string, field: string) {
             return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+            invalidateAfterFieldEdit(queryClient);
         },
     });
 }
@@ -339,7 +349,7 @@ export function useAddField(name: string) {
             return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+            invalidateAfterFieldEdit(queryClient);
         },
     });
 }
@@ -385,7 +395,7 @@ export function useSetFieldSensitivity(name: string) {
             return response.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+            invalidateAfterFieldEdit(queryClient);
         },
     });
 }
