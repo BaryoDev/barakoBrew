@@ -107,7 +107,72 @@ function bundleFile(body: unknown, name = 'bundle.json') {
 }
 
 test.describe('export and import', () => {
-    test('previews with a dry run and imports for real, and the two are different requests', async ({ page }) => {
+    test('on a core with the config routes, previews with a plan and imports with an apply', async ({ page }) => {
+        // Contract 8 is core 5.0.0, the first with /api/config/*.
+        await authed(page, 8);
+        await stubShell(page);
+
+        const answer = {
+            applied: false,
+            errors: [],
+            refusals: [],
+            sections: [
+                {
+                    section: 'contentTypes',
+                    changes: [
+                        { key: 'article', kind: 'create', summary: 'create the type', details: [] },
+                        { key: 'member', kind: 'change', summary: 'change the type', details: [] },
+                    ],
+                    errors: [],
+                    refusals: [],
+                    conflicts: [],
+                },
+                {
+                    section: 'contents',
+                    changes: Array.from({ length: 5 }, (_, i) => ({ key: `#${i}`, kind: 'create', summary: 'create an entry', details: [] })),
+                    errors: [],
+                    refusals: [],
+                    conflicts: [],
+                },
+            ],
+        };
+        const seen: { path: string; body: Record<string, unknown> }[] = [];
+        const legacy: string[] = [];
+        await page.route('**/api/config/plan', (r) => {
+            seen.push({ path: 'plan', body: r.request().postDataJSON() });
+            return r.fulfill({ json: answer });
+        });
+        await page.route('**/api/config/apply', (r) => {
+            seen.push({ path: 'apply', body: r.request().postDataJSON() });
+            return r.fulfill({ json: { ...answer, applied: true } });
+        });
+        await page.route('**/api/portability/**', (r) => {
+            legacy.push(r.request().url());
+            return r.fulfill({ json: {} });
+        });
+
+        await page.goto('/settings/portability');
+        await expect(page.getByRole('heading', { name: 'Export and import' })).toBeVisible({ timeout: 20000 });
+
+        await page.getByLabel('Choose a bundle file').setInputFiles(bundleFile(BUNDLE));
+        await page.getByRole('button', { name: 'Preview' }).click();
+        await expect(page.getByText('This is what an import would do')).toBeVisible();
+        await page.getByRole('button', { name: 'Import', exact: true }).click();
+        await expect(page.getByText('Imported', { exact: true })).toBeVisible();
+
+        expect(seen.map((s) => s.path)).toEqual(['plan', 'apply']);
+        // A file from before the config routes has no version, so the page declares the one it was
+        // written in. Neither call may ask for destructive changes.
+        for (const call of seen) {
+            expect(call.body.allowDestructive).toBeUndefined();
+            expect((call.body.document as { version: number }).version).toBe(1);
+        }
+        expect(legacy).toEqual([]);
+    });
+
+    test('on a core without the config routes, previews with a dry run and imports for real', async ({ page }) => {
+        // The default contract is the lowest supported, below the config routes, so this is the
+        // portability route a 4.x core still serves.
         await authed(page);
         await stubShell(page);
 
