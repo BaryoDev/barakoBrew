@@ -66,11 +66,15 @@ function Problems({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
 
   return (
-    <ul role="alert" className="text-destructive mt-3 grid gap-1 text-[12.5px]">
-      {lines.map((line, i) => (
-        <li key={`${i}-${line}`}>{line}</li>
-      ))}
-    </ul>
+    // The alert role sits on a wrapper: on the list itself it would replace the list role, and
+    // the items would have no list around them.
+    <div role="alert" className="text-destructive mt-3 text-[12.5px]">
+      <ul className="grid gap-1">
+        {lines.map((line, i) => (
+          <li key={`${i}-${line}`}>{line}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

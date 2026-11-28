@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/lib/api', async () => {
@@ -160,6 +160,10 @@ describe('previewing and importing on the config routes', () => {
         expect(await screen.findByText('contentTypes: post: a field change is running')).toBeInTheDocument();
         expect(screen.getByText("contents: '#1': that entry is not valid")).toBeInTheDocument();
         expect(screen.getByText("contents: '#2': you may not write that type")).toBeInTheDocument();
+
+        // Announced as one alert that holds a real list, so each line is read as an item of it.
+        const alert = screen.getByRole('alert');
+        expect(within(within(alert).getByRole('list')).getAllByRole('listitem')).toHaveLength(3);
     });
 
     it('lists the lines of a refused apply under the buttons and toasts the first', async () => {
