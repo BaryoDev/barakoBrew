@@ -337,6 +337,9 @@ test.describe('accessibility', () => {
         // A core that has the config routes, which is where this page plans and applies.
         await authed(page, 8);
         await stubShell(page);
+        // The page counts entries whose type is in neither the bundle nor the CMS from the full type
+        // list. The shell's count stub never ends, so the page would rightly show no count.
+        await stubContentTypes(page, [{ name: 'page', displayName: 'Page', fields: [] }]);
         await page.route('**/api/config/plan', (r) =>
             r.fulfill({
                 json: {
