@@ -257,7 +257,7 @@ function Total({
     return (
         <div className="space-y-1 text-sm">
             <p>
-                Sum of {amountLabel}: <span className="font-mono">{sum.text}</span>
+                Sum of {amountLabel}: <span className="font-mono tabular-nums">{sum.text}</span>
             </p>
             {differs && (
                 <p role="status" className="text-warning">
