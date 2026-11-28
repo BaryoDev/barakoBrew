@@ -9,6 +9,7 @@ import type {
     FieldOption,
     LifecycleBlocker,
     LifecycleDefinition,
+    LinesDefinition,
     SetLifecycleResult,
     UniquenessRule,
 } from '@/types/schema';
@@ -206,6 +207,28 @@ export function useSetUniqueness(name: string) {
                 uniqueness,
                 force,
             });
+            return response.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+        },
+    });
+}
+
+/**
+ * Sets a type's lines, or clears them with null. The refusals (a line type that does not exist, a
+ * parent field that is not a single reference back, a total without an amount) come back as 400s
+ * that name the reason, and a field change in progress is a 409.
+ */
+export function useSetLines(name: string) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (lines: LinesDefinition | null) => {
+            const response = await api.put<{ name: string; lines: LinesDefinition | null }>(
+                `${typePath(name)}/lines`,
+                { lines },
+            );
             return response.data;
         },
         onSuccess: () => {
