@@ -1,9 +1,11 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { api } from '@/lib/api';
+import { api, type Paginated } from '@/lib/api';
+import { useCurrentTenant } from '@/hooks/use-tenants';
+import type { ContentTypeDefinition } from '@/types/schema';
 import {
     getContractServerState,
     getContractState,
@@ -35,19 +37,24 @@ export function useConfigRoutes(): boolean {
 export type BundleSection = unknown[] | Record<string, unknown>;
 
 /** The documents in a section, whichever shape it is in. */
-export function sectionValues(section: BundleSection): unknown[] {
+export function sectionValues(section: BundleSection | undefined): unknown[] {
+    if (!section) return [];
     return Array.isArray(section) ? section : Object.values(section);
 }
 
-export function sectionSize(section: BundleSection): number {
+export function sectionSize(section: BundleSection | undefined): number {
     return sectionValues(section).length;
 }
 
-/** What a file holds: the two sections this page moves, and the format version when it has one. */
+/**
+ * What a file holds: the two sections this page moves, and the format version when it has one. A
+ * section the exporting caller may not read is left out of the file, so either may be missing, and
+ * the page refuses a file that has neither.
+ */
 export interface PortabilityBundle {
     version?: number;
-    contentTypes: BundleSection;
-    contents: BundleSection;
+    contentTypes?: BundleSection;
+    contents?: BundleSection;
 }
 
 /**
@@ -59,7 +66,14 @@ export interface ExportedBundle {
     contentTypes?: BundleSection;
     contents?: BundleSection;
     withheld?: string[];
+    /** Per section, what is stored and could not be exported, in the server's words. */
+    gaps?: Record<string, string[]>;
     [key: string]: unknown;
+}
+
+/** What the server said an export left out of a section it did write, one line each. */
+export function gapLines(bundle: ExportedBundle): string[] {
+    return Object.values(bundle.gaps ?? {}).flat();
 }
 
 export interface ImportReport {
@@ -124,18 +138,49 @@ export function narrowBundle(bundle: ExportedBundle, types: string[]): ExportedB
 }
 
 /**
+ * The key core reads a document under: the object key for a keyed section, and for a list the first
+ * of name, slug and id that is text (ignoring case in the property name). Null when it has none.
+ */
+function documentKey(document: unknown): string | null {
+    if (typeof document !== 'object' || document === null || Array.isArray(document)) return null;
+    for (const wanted of ['name', 'slug', 'id']) {
+        for (const [property, value] of Object.entries(document)) {
+            if (property.toLowerCase() === wanted && typeof value === 'string' && value.trim() !== '') return value;
+        }
+    }
+    return null;
+}
+
+/**
+ * The content types a section holds, for the portability route, which takes a list and reads a
+ * type's name from the type. The config export keeps a name only as the key, so a keyed type that
+ * has no name gets its key as one.
+ */
+function typesForOldRoute(section: BundleSection | undefined): unknown[] {
+    if (!section) return [];
+    if (Array.isArray(section)) return section;
+    return Object.entries(section).map(([key, document]) =>
+        typeof document === 'object' && document !== null && !Array.isArray(document) && !nameOf(document)?.trim()
+            ? { ...document, name: key }
+            : document
+    );
+}
+
+/**
  * Entries whose content type is in neither the file nor `knownTypes`, compared without case. The
  * config answers carry no such count, so it is worked out here from what the file and the type list
- * hold.
+ * hold. A type in the file is known by the key core would read it under.
  */
 export function countWithoutContentType(bundle: PortabilityBundle, knownTypes: readonly string[]): number {
     const known = new Set(knownTypes.map((t) => t.toLowerCase()));
 
-    const entries = Array.isArray(bundle.contentTypes)
-        ? bundle.contentTypes.map((document) => [null, document] as const)
-        : Object.entries(bundle.contentTypes);
-    for (const [key, document] of entries) {
-        const name = nameOf(document) ?? key;
+    const types = bundle.contentTypes;
+    const names = !types
+        ? []
+        : Array.isArray(types)
+          ? types.map(documentKey)
+          : Object.keys(types);
+    for (const name of names) {
         if (name) known.add(name.toLowerCase());
     }
 
@@ -228,7 +273,14 @@ export function useExportBundle() {
 }
 
 export function useImportBundle() {
+    const queryClient = useQueryClient();
     return useMutation({
+        // A real import changes the type list and the entries, so what is on screen is read again.
+        onSuccess: (_report, input) => {
+            if (input.dryRun) return;
+            queryClient.invalidateQueries({ queryKey: ['schemas'] });
+            queryClient.invalidateQueries({ queryKey: ['contents'] });
+        },
         mutationFn: async (input: {
             bundle: PortabilityBundle;
             dryRun: boolean;
@@ -238,9 +290,10 @@ export function useImportBundle() {
             const { bundle, dryRun } = input;
 
             if (!usesConfigRoutes(getContractState())) {
+                // A section the file does not have goes as an empty list, which every core's import takes.
                 const response = await api.post<ImportReport>('/api/portability/import', {
                     dryRun,
-                    contentTypes: sectionValues(bundle.contentTypes),
+                    contentTypes: typesForOldRoute(bundle.contentTypes),
                     contents: sectionValues(bundle.contents),
                 });
                 return response.data;
@@ -249,10 +302,11 @@ export function useImportBundle() {
             // The config routes read a document that declares its version. A file from before they
             // existed has none, and version 1 is the format it was written in. Never allowDestructive:
             // a destructive change is shown and refused, not applied from here.
+            // A section the file does not have is not sent, and the server leaves it as it is.
             const document = {
                 version: typeof bundle.version === 'number' ? bundle.version : 1,
-                contentTypes: bundle.contentTypes,
-                contents: bundle.contents,
+                ...(bundle.contentTypes ? { contentTypes: bundle.contentTypes } : {}),
+                ...(bundle.contents ? { contents: bundle.contents } : {}),
             };
 
             try {
@@ -272,6 +326,35 @@ export function useImportBundle() {
                 }
                 throw error;
             }
+        },
+    });
+}
+
+/** The most pages of content types the import warning reads. A hundred a page, so a thousand types. */
+export const MAX_TYPE_PAGES = 10;
+
+/**
+ * Every content type name, for the import warning. `useSchemas` reads the first page only, which is
+ * right for its other callers and wrong here: a type on a later page would make its entries look as
+ * if they have no type. Null when more than `MAX_TYPE_PAGES` pages remain, because a partial list
+ * would give a wrong count, so the page shows none. The key starts with `schemas`, so anything that
+ * refreshes the type lists refreshes this.
+ */
+export function useAllContentTypeNames(enabled: boolean) {
+    const tenant = useCurrentTenant();
+    return useQuery({
+        queryKey: ['schemas', 'names', tenant],
+        enabled,
+        queryFn: async (): Promise<string[] | null> => {
+            const names: string[] = [];
+            for (let page = 1; page <= MAX_TYPE_PAGES; page++) {
+                const { data } = await api.get<Paginated<ContentTypeDefinition>>('/api/content-types', {
+                    params: { page, pageSize: 100 },
+                });
+                names.push(...data.items.map((t) => t.name));
+                if (!data.hasNextPage) return names;
+            }
+            return null;
         },
     });
 }

@@ -16,6 +16,7 @@ const {
     countWithoutContentType,
     linesOf,
     narrowBundle,
+    gapLines,
     sectionValues,
     usesConfigRoutes,
     useExportBundle,
@@ -110,6 +111,38 @@ describe('which routes are used', () => {
         expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/api/portability/import');
         expect(postedBody()).toEqual({ dryRun: true, contentTypes: [{ name: 'post' }], contents: [{ contentType: 'post' }] });
         expect(answer).toEqual(report);
+    });
+
+    it('names a keyed type by its key on the portability route, which skips a type with no name', async () => {
+        recordContractVersion('4');
+        vi.mocked(api.post).mockResolvedValue({ data: { dryRun: false } });
+        const { result } = renderHook(() => useImportBundle(), { wrapper });
+
+        await result.current.mutateAsync({
+            bundle: {
+                contentTypes: { Post: { fields: [] }, Page: { name: 'Page', fields: [] }, Note: { name: ' ', fields: [] } },
+                contents: [],
+            },
+            dryRun: false,
+        });
+
+        expect(postedBody().contentTypes).toEqual([
+            { fields: [], name: 'Post' },
+            { name: 'Page', fields: [] },
+            { name: 'Note', fields: [] },
+        ]);
+    });
+
+    it('sends an empty list for a section the file does not have', async () => {
+        recordContractVersion('4');
+        vi.mocked(api.post).mockResolvedValue({ data: { dryRun: true } });
+        const { result } = renderHook(() => useImportBundle(), { wrapper });
+
+        await result.current.mutateAsync({ bundle: { contentTypes: [{ name: 'post' }] }, dryRun: true });
+        await result.current.mutateAsync({ bundle: { contents: [{ contentType: 'post' }] }, dryRun: true });
+
+        expect(postedBody(0)).toEqual({ dryRun: true, contentTypes: [{ name: 'post' }], contents: [] });
+        expect(postedBody(1)).toEqual({ dryRun: true, contentTypes: [], contents: [{ contentType: 'post' }] });
     });
 });
 
@@ -256,6 +289,37 @@ describe('importing on the config routes', () => {
         expect(countWithoutContentType(bundle, ['Post'])).toBe(2);
     });
 
+    it('counts a type in the file by the key core reads it under', () => {
+        const contents = [{ contentType: 'a' }, { contentType: 'b' }, { contentType: 'c' }, { contentType: 'd' }];
+
+        // A list is keyed by name, then slug, then id, and a keyed section by its keys.
+        expect(countWithoutContentType({ contentTypes: [{ slug: 'a' }, { id: 'b' }, { name: 'c', slug: 'x' }], contents }, [])).toBe(1);
+        expect(countWithoutContentType({ contentTypes: { a: {}, B: { name: 'zzz' } }, contents }, [])).toBe(2);
+        expect(countWithoutContentType({ contents }, [])).toBe(4);
+    });
+
+    it('refreshes the type and entry lists after a real import, and not after a preview', async () => {
+        const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+        const invalidate = vi.spyOn(client, 'invalidateQueries');
+        const own = ({ children }: { children: React.ReactNode }) => React.createElement(QueryClientProvider, { client }, children);
+        const { result } = renderHook(() => useImportBundle(), { wrapper: own });
+        const bundle = { version: 1, contentTypes: [], contents: [] };
+
+        await result.current.mutateAsync({ bundle, dryRun: true });
+        expect(invalidate).not.toHaveBeenCalled();
+
+        await result.current.mutateAsync({ bundle, dryRun: false });
+        expect(invalidate.mock.calls.map(([filter]) => filter?.queryKey)).toEqual([['schemas'], ['contents']]);
+    });
+
+    it('sends only the sections the file has', async () => {
+        await run({ bundle: { version: 1, contentTypes: { post: { name: 'post' } } }, dryRun: false });
+        await run({ bundle: { version: 1, contents: [{ contentType: 'post' }] }, dryRun: false });
+
+        expect(Object.keys((postedBody(0).document as object)).sort()).toEqual(['contentTypes', 'version']);
+        expect(Object.keys((postedBody(1).document as object)).sort()).toEqual(['contents', 'version']);
+    });
+
     it('does not guess a count when the type list is not loaded', async () => {
         const report = await run({ bundle: { contentTypes: [], contents: [{ contentType: 'ghost' }] }, dryRun: true, knownTypes: null });
 
@@ -336,6 +400,11 @@ describe('importing on the config routes', () => {
 });
 
 describe('helpers', () => {
+    it('reads the gaps of every section as lines', () => {
+        expect(gapLines({ gaps: { contents: ['one', 'two'], contentTypes: ['three'] } })).toEqual(['one', 'two', 'three']);
+        expect(gapLines({})).toEqual([]);
+    });
+
     it('reads a section as a list whichever shape it is in', () => {
         expect(sectionValues([1, 2])).toEqual([1, 2]);
         expect(sectionValues({ a: 1, b: 2 })).toEqual([1, 2]);

@@ -2,22 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ContentTypeDefinition } from '@/types/schema';
 
 vi.mock('@/lib/api', async () => {
     const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
     return { ...actual, api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } };
 });
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 
 const { accessFrom } = await import('@/lib/access');
 let access = accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: [], capabilities: ['*'] }, []);
 vi.mock('@/hooks/use-access', () => ({ useAccess: () => access }));
-
-let types: ContentTypeDefinition[] | undefined = [];
-let typesLoading = false;
-vi.mock('@/hooks/use-schemas', () => ({ useSchemas: () => ({ data: types, isLoading: typesLoading }) }));
 
 const { api } = await import('@/lib/api');
 const { toast } = await import('sonner');
@@ -29,8 +24,26 @@ function holding(...capabilities: string[]) {
     return accessFrom({ userId: 'u', username: 'u', tenant: 't', roles: [], capabilities }, []);
 }
 
-function type(name: string) {
-    return { name, displayName: name, fields: [] } as ContentTypeDefinition;
+/** The pages of `/api/content-types` the page reads, and what `/api/config/export` answers. */
+let typePages: string[][] = [['Post']];
+let typesPending = false;
+let exported: unknown = {};
+
+function typePage(page: number) {
+    const names = typePages[page - 1] ?? [];
+    return {
+        items: names.map((name) => ({ name, displayName: name, fields: [] })),
+        page,
+        pageSize: 100,
+        totalItems: 0,
+        totalPages: typePages.length,
+        hasNextPage: page < typePages.length,
+        hasPreviousPage: page > 1,
+    };
+}
+
+function typeCalls() {
+    return vi.mocked(api.get).mock.calls.filter(([url]) => url === '/api/content-types');
 }
 
 function answer(sections: unknown[], extra: Record<string, unknown> = {}) {
@@ -84,11 +97,20 @@ beforeEach(() => {
     vi.mocked(api.post).mockReset();
     vi.mocked(toast.success).mockReset();
     vi.mocked(toast.error).mockReset();
+    vi.mocked(toast.warning).mockReset();
     __resetContractForTests();
     recordContractVersion('8');
     access = holding('*');
-    types = [type('Post')];
-    typesLoading = false;
+    typePages = [['Post']];
+    typesPending = false;
+    exported = {};
+    vi.mocked(api.get).mockImplementation(async (url: string, config?: { params?: unknown }) => {
+        if (url === '/api/content-types') {
+            if (typesPending) return new Promise(() => {});
+            return { data: typePage((config?.params as { page?: number } | undefined)?.page ?? 1) };
+        }
+        return { data: exported };
+    });
 });
 
 describe('previewing and importing on the config routes', () => {
@@ -162,7 +184,7 @@ describe('previewing and importing on the config routes', () => {
     });
 
     it('waits for the content type list before it offers Preview and Import', async () => {
-        typesLoading = true;
+        typesPending = true;
         renderPage();
 
         choose(OLD_FILE);
@@ -185,9 +207,7 @@ describe('previewing and importing on the config routes', () => {
 
 describe('exporting on the config routes', () => {
     it('downloads the config document as answered and says how much it holds', async () => {
-        vi.mocked(api.get).mockResolvedValue({
-            data: { version: 1, withheld: [], contentTypes: { post: { name: 'post' } }, contents: { a: {}, b: {} } },
-        });
+        exported = { version: 1, withheld: [], contentTypes: { post: { name: 'post' } }, contents: { a: {}, b: {} } };
         globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
         globalThis.URL.revokeObjectURL = vi.fn();
         vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
@@ -200,7 +220,7 @@ describe('exporting on the config routes', () => {
     });
 
     it('names a section the caller may not read', async () => {
-        vi.mocked(api.get).mockResolvedValue({ data: { version: 1, withheld: ['contents'], contentTypes: { post: { name: 'post' } } } });
+        exported = { version: 1, withheld: ['contents'], contentTypes: { post: { name: 'post' } } };
         globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
         globalThis.URL.revokeObjectURL = vi.fn();
         vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
@@ -272,5 +292,80 @@ describe('on a core without the config routes', () => {
         expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/api/portability/import');
         expect(screen.getByText('Entries created').nextSibling).toHaveTextContent('34');
         expect(screen.getByText(/3 entries name a content type that is in neither/)).toBeInTheDocument();
+    });
+});
+
+describe('a file that has only one of the two sections', () => {
+    it('previews and applies a file saved with contents withheld, sending only the section it has', async () => {
+        vi.mocked(api.post).mockResolvedValue({ data: answer([section('contentTypes', [{ key: 'post', kind: 'create' }])]) });
+        renderPage();
+
+        choose({ version: 1, withheld: ['contents'], contentTypes: { post: { name: 'post' } } });
+        expect(await screen.findByText('1 content types and 0 entries in this file.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+        expect(await screen.findByText('This is what an import would do')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+        expect(await screen.findByText('Imported')).toBeInTheDocument();
+
+        expect(vi.mocked(api.post).mock.calls.map(([url]) => url)).toEqual(['/api/config/plan', '/api/config/apply']);
+        for (const [, body] of vi.mocked(api.post).mock.calls) {
+            const document = (body as { document: Record<string, unknown> }).document;
+            expect(Object.keys(document).sort()).toEqual(['contentTypes', 'version']);
+        }
+    });
+
+    it('refuses a file with neither section without asking the server', async () => {
+        renderPage();
+
+        choose({ version: 1, withheld: ['contents', 'contentTypes'] });
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalled());
+        expect(vi.mocked(toast.error).mock.calls[0][0]).toContain('not a bundle this can import');
+        expect(api.post).not.toHaveBeenCalled();
+    });
+});
+
+describe('what an export could not hold', () => {
+    it('warns, in the server words, that the file has only part of the entries', async () => {
+        const said = 'Only the first 5000 entries are read, the most an apply takes, and more are stored.';
+        exported = { version: 1, withheld: [], gaps: { contents: [said] }, contentTypes: {}, contents: { a: {} } };
+        globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
+        globalThis.URL.revokeObjectURL = vi.fn();
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        renderPage();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Download bundle' }));
+
+        await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(`Exported 0 content types and 1 entries. ${said}`));
+        expect(toast.success).not.toHaveBeenCalled();
+    });
+});
+
+describe('the type list behind the warning', () => {
+    it('reads every page, so an entry of a type on a later page is not counted', async () => {
+        typePages = [['Alpha'], ['Post']];
+        vi.mocked(api.post).mockResolvedValue({ data: PLAN });
+        renderPage();
+
+        await waitFor(() => expect(typeCalls()).toHaveLength(2));
+        choose({ contentTypes: [], contents: [{ contentType: 'post' }, { contentType: 'ghost' }] });
+        fireEvent.click(await screen.findByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByText(/1 entries name a content type that is in neither/)).toBeInTheDocument();
+        expect(typeCalls().map(([, config]) => (config as { params: { page: number } }).params.page)).toEqual([1, 2]);
+    });
+
+    it('stops after ten pages and then shows no count, rather than a count from a partial list', async () => {
+        typePages = Array.from({ length: 12 }, (_, i) => [`Type${i}`]);
+        vi.mocked(api.post).mockResolvedValue({ data: PLAN });
+        renderPage();
+
+        await waitFor(() => expect(typeCalls()).toHaveLength(10));
+        choose({ contentTypes: [], contents: [{ contentType: 'ghost' }] });
+        fireEvent.click(await screen.findByRole('button', { name: 'Preview' }));
+
+        expect(await screen.findByText('This is what an import would do')).toBeInTheDocument();
+        expect(screen.queryByText(/entries name a content type that is in neither/)).not.toBeInTheDocument();
+        expect(typeCalls()).toHaveLength(10);
     });
 });

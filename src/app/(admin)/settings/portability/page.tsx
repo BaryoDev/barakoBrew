@@ -3,10 +3,11 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useAccess } from '@/hooks/use-access';
-import { useSchemas } from '@/hooks/use-schemas';
 import {
   ImportRefused,
+  gapLines,
   sectionSize,
+  useAllContentTypeNames,
   useConfigRoutes,
   useExportBundle,
   useImportBundle,
@@ -24,7 +25,7 @@ const CARD = 'bg-card rounded-xl border p-6 shadow-[var(--shadow-card)]';
 const LEGACY_ROLES = ['SuperAdmin', 'Admin'] as const;
 
 /** A section is a list of documents, or an object from each document's key to the document. */
-function isSection(value: unknown): value is PortabilityBundle['contents'] {
+function isSection(value: unknown): value is NonNullable<PortabilityBundle['contents']> {
   return typeof value === 'object' && value !== null;
 }
 
@@ -38,18 +39,25 @@ function readBundle(text: string): PortabilityBundle {
 
   const bundle = parsed as Partial<PortabilityBundle>;
 
-  // Both sections, checked here rather than left to the server. A file with the right extension and
+  // The sections, checked here rather than left to the server. A file with the right extension and
   // the wrong shape otherwise reaches the import endpoint as an empty bundle and reports a
   // successful import of nothing, which reads as "it worked". A section is an array (a bundle from
-  // before the config routes) or an object keyed by id or name (what the config export writes).
-  if (!isSection(bundle.contentTypes) || !isSection(bundle.contents)) {
-    throw new Error('That file is missing contentTypes or contents, so it is not a bundle this can import.');
+  // before the config routes) or an object keyed by id or name (what the config export writes). One
+  // may be missing, because an export leaves out a section the caller may not read, but not both.
+  const { contentTypes, contents } = bundle;
+  const present = (section: unknown) => section !== undefined && section !== null;
+  if (
+    (!present(contentTypes) && !present(contents)) ||
+    (present(contentTypes) && !isSection(contentTypes)) ||
+    (present(contents) && !isSection(contents))
+  ) {
+    throw new Error('That file has no contentTypes or contents, so it is not a bundle this can import.');
   }
 
   return {
     ...(typeof bundle.version === 'number' ? { version: bundle.version } : {}),
-    contentTypes: bundle.contentTypes,
-    contents: bundle.contents,
+    ...(present(contentTypes) ? { contentTypes } : {}),
+    ...(present(contents) ? { contents } : {}),
   };
 }
 
@@ -111,7 +119,7 @@ export default function PortabilityPage() {
   // API still decides, so a refusal comes back as lines either way.
   const configRoutes = useConfigRoutes();
   const access = useAccess();
-  const { data: schemas, isLoading: typesLoading } = useSchemas(configRoutes);
+  const { data: typeNames, isLoading: typesLoading } = useAllContentTypeNames(configRoutes);
   const canManageConfig = !configRoutes || access.can('manage_config', LEGACY_ROLES);
   const canImportContent = !configRoutes || access.can('import_content', LEGACY_ROLES);
   const waitingForTypes = configRoutes && typesLoading;
@@ -145,9 +153,12 @@ export default function PortabilityPage() {
       URL.revokeObjectURL(url);
 
       const left = data.withheld?.length ? ` Left out, because your role may not read them: ${data.withheld.join(', ')}.` : '';
-      toast.success(
-        `Exported ${sectionSize(data.contentTypes ?? [])} content types and ${sectionSize(data.contents ?? [])} entries.${left}`
-      );
+      // What the server could not put in the file, in its own words. The file is saved either way,
+      // so this says it holds only part of what is stored.
+      const gaps = gapLines(data);
+      const said = `Exported ${sectionSize(data.contentTypes)} content types and ${sectionSize(data.contents)} entries.${left}`;
+      if (gaps.length > 0) toast.warning(`${said} ${gaps.join(' ')}`);
+      else toast.success(said);
     } catch (error) {
       toast.error(apiErrorMessage(error));
     }
@@ -175,7 +186,7 @@ export default function PortabilityPage() {
 
     setProblems([]);
     try {
-      const knownTypes = schemas ? schemas.map((s) => s.name) : null;
+      const knownTypes = typeNames ?? null;
       setReport(await importBundle.mutateAsync({ bundle, dryRun, knownTypes }));
       if (!dryRun) toast.success('Import finished.');
     } catch (error) {
