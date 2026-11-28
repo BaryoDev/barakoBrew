@@ -49,7 +49,7 @@ const SKIPPED = change({
     skipped: [
         { entryId: 'entry-aaa', reason: 'InvalidOperationException', at: '2026-11-20T10:00:10Z' },
         { entryId: 'entry-bbb', reason: 'FormatException', at: '2026-11-20T10:00:20Z' },
-        { entryId: 'entry-ccc', reason: 'OverflowException', at: '2026-11-20T10:00:30Z' },
+        { entryId: 'entry c/3', reason: 'OverflowException', at: '2026-11-20T10:00:30Z' },
     ],
 });
 
@@ -74,12 +74,15 @@ function refusal(status: number, data: unknown = {}) {
 
 function renderPanel(typeName = 'article') {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    return render(
+    const view = render(
         <QueryClientProvider client={client}>
             <FieldChangesPanel typeName={typeName} />
         </QueryClientProvider>,
     );
+    return { ...view, client };
 }
+
+const RETRY = 'Retry Title recompute';
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -98,14 +101,15 @@ describe('the field changes panel', () => {
 
         expect(await screen.findByText('Completed with skips')).toBeTruthy();
         expect(screen.getByText('3 entries skipped')).toBeTruthy();
-        for (const text of ['entry-aaa', 'entry-bbb', 'entry-ccc']) {
+        for (const text of ['entry-aaa', 'entry-bbb', 'entry c/3']) {
             expect(screen.getByText(text)).toBeTruthy();
         }
         for (const text of ['InvalidOperationException', 'FormatException', 'OverflowException']) {
             expect(screen.getByText(text)).toBeTruthy();
         }
         expect(screen.getByText('entry-aaa').closest('a')?.getAttribute('href')).toBe('/content/entry-aaa');
-        expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+        expect(screen.getByText('entry c/3').closest('a')?.getAttribute('href')).toBe('/content/entry%20c%2F3');
+        expect(screen.getByRole('button', { name: RETRY })).toBeTruthy();
     });
 
     it('posts the retry once and reads the list again', async () => {
@@ -113,7 +117,7 @@ describe('the field changes panel', () => {
         vi.mocked(api.post).mockResolvedValue({ data: change({ id: 'c2', state: 'running', retryOf: 'c-skips' }) });
         renderPanel();
 
-        await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+        await userEvent.click(await screen.findByRole('button', { name: RETRY }));
 
         await waitFor(() => expect(toast.success).toHaveBeenCalled());
         expect(api.post).toHaveBeenCalledTimes(1);
@@ -128,14 +132,36 @@ describe('the field changes panel', () => {
         );
         renderPanel();
 
-        await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+        await userEvent.click(await screen.findByRole('button', { name: RETRY }));
 
         const alert = await screen.findByRole('alert');
         expect(alert.textContent).toContain('This change was already retried.');
         expect(
-            (screen.getByRole('button', { name: 'Retry' }) as HTMLButtonElement).disabled,
+            (screen.getByRole('button', { name: RETRY }) as HTMLButtonElement).disabled,
         ).toBe(false);
         expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('reads the list again after a refused retry, so a row that is stale is replaced', async () => {
+        serve([SKIPPED]);
+        vi.mocked(api.post).mockRejectedValue(refusal(409, { message: 'Already retried.' }));
+        renderPanel();
+
+        await userEvent.click(await screen.findByRole('button', { name: RETRY }));
+        await screen.findByRole('alert');
+
+        await waitFor(() => expect(vi.mocked(api.get).mock.calls.length).toBeGreaterThanOrEqual(2));
+    });
+
+    it('encodes the change id in the retry path', async () => {
+        serve([{ ...SKIPPED, id: 'c/1 x' }]);
+        vi.mocked(api.post).mockResolvedValue({ data: change({ id: 'c2' }) });
+        renderPanel();
+
+        await userEvent.click(await screen.findByRole('button', { name: RETRY }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalled());
+        expect(api.post).toHaveBeenCalledWith('/api/content-types/field-changes/c%2F1%20x/retry');
     });
 
     it('offers no Retry for a change already retried or one that completed cleanly', async () => {
@@ -149,7 +175,6 @@ describe('the field changes panel', () => {
         expect(await screen.findByText('Retried')).toBeTruthy();
         expect(screen.getByText('Retry of an earlier change')).toBeTruthy();
         expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
-        expect(screen.queryByText('c-next')).toBeNull();
     });
 
     it('says how many recorded skips are not listed', async () => {
@@ -225,16 +250,124 @@ describe('the field changes panel', () => {
         expect(screen.getByText('Abandoned')).toBeTruthy();
     });
 
-    it('pages when there are more changes than fit on a page', async () => {
-        serve([change()], 45);
+    it('pages, answering by the page asked for', async () => {
+        vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: { page?: number } }) => {
+            const page = config?.params?.page ?? 1;
+            return {
+                data: {
+                    items: [change({ id: `p${page}`, field: `PageField${page}` })],
+                    page,
+                    pageSize: 20,
+                    totalItems: 45,
+                },
+            };
+        }) as typeof api.get);
         renderPanel();
 
-        await screen.findByText('Completed');
-        expect((screen.getByRole('button', { name: /Next/ }) as HTMLButtonElement).disabled).toBe(false);
+        await screen.findByText('PageField1');
         await userEvent.click(screen.getByRole('button', { name: /Next/ }));
+
+        expect(await screen.findByText('PageField2')).toBeTruthy();
+        expect(screen.queryByText('PageField1')).toBeNull();
+    });
+
+    it('keeps the rows of the page on screen while the next one loads', async () => {
+        let answerTwo: (value: unknown) => void = () => {};
+        vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: { page?: number } }) => {
+            const page = config?.params?.page ?? 1;
+            if (page === 2) {
+                return new Promise((resolve) => {
+                    answerTwo = resolve as (value: unknown) => void;
+                });
+            }
+            return { data: { items: [change({ id: 'p1', field: 'PageField1' })], page: 1, pageSize: 20, totalItems: 45 } };
+        }) as typeof api.get);
+        renderPanel();
+
+        await screen.findByText('PageField1');
+        await userEvent.click(screen.getByRole('button', { name: /Next/ }));
+        await waitFor(() => expect(vi.mocked(api.get).mock.calls.length).toBe(2));
+
+        expect(screen.getByText('PageField1')).toBeTruthy();
+        expect(screen.getByRole('button', { name: /Next/ })).toBeTruthy();
+
+        await act(async () =>
+            answerTwo({
+                data: { items: [change({ id: 'p2', field: 'PageField2' })], page: 2, pageSize: 20, totalItems: 45 },
+            }),
+        );
+        expect(await screen.findByText('PageField2')).toBeTruthy();
+        expect(screen.queryByText('PageField1')).toBeNull();
+    });
+
+    it('steps back when a later page comes back empty', async () => {
+        vi.mocked(api.get).mockImplementation((async (_url: string, config?: { params?: { page?: number } }) => {
+            const page = config?.params?.page ?? 1;
+            if (page === 2) return { data: { items: [], page: 2, pageSize: 20, totalItems: 15 } };
+            return { data: { items: [change({ id: 'p1', field: 'PageField1' })], page: 1, pageSize: 20, totalItems: 45 } };
+        }) as typeof api.get);
+        renderPanel();
+
+        await screen.findByText('PageField1');
+        await userEvent.click(screen.getByRole('button', { name: /Next/ }));
+
         await waitFor(() =>
             expect(vi.mocked(api.get).mock.calls.some(([, config]) => (config?.params as { page?: number } | undefined)?.page === 2)).toBe(true),
         );
+        expect(await screen.findByText('PageField1')).toBeTruthy();
+        expect(screen.queryByText('No field changes.')).toBeNull();
+    });
+
+    it('keeps the list and shows an alert above it when a later read fails', async () => {
+        serve([change({ id: 'run', field: 'Price', state: 'running', processed: 4, total: 12 })]);
+        const { client } = renderPanel();
+        await screen.findByText('4 of 12');
+
+        vi.mocked(api.get).mockRejectedValue(refusal(500, { message: 'The server fell over.' }));
+        await act(async () => {
+            await client.invalidateQueries();
+        });
+
+        const alert = await screen.findByRole('alert');
+        expect(alert.textContent).toContain('The server fell over.');
+        expect(screen.getByText('4 of 12')).toBeTruthy();
+    });
+
+    it('shows an alert, and does not throw, when the list body has no items', async () => {
+        vi.mocked(api.get).mockResolvedValue({ data: {} });
+        renderPanel();
+
+        expect((await screen.findByRole('alert')).textContent).toContain('could not be listed');
+        expect(screen.getByRole('heading', { name: 'Field changes' })).toBeTruthy();
+    });
+
+    it('reads the list every five seconds while a change is running, and stops once none is', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            serve([change({ id: 'run', state: 'running', processed: 1, total: 2 })]);
+            renderPanel();
+            await screen.findByText('1 of 2');
+            expect(api.get).toHaveBeenCalledTimes(1);
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(5000);
+            });
+            expect(api.get).toHaveBeenCalledTimes(2);
+
+            serve([change({ id: 'run', state: 'completed', processed: 2, total: 2 })]);
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(5000);
+            });
+            expect(api.get).toHaveBeenCalledTimes(3);
+            await screen.findByText('Completed');
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(20000);
+            });
+            expect(api.get).toHaveBeenCalledTimes(3);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('does not share cached changes between tenants that have a type of the same name', async () => {

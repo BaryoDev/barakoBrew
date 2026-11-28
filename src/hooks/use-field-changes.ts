@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isForbidden, isNotFound } from '@/lib/api';
 import { useCurrentTenant } from '@/hooks/use-tenants';
 
@@ -61,14 +61,24 @@ export function useFieldChanges(name: string, page: number) {
                     `/api/content-types/${encodeURIComponent(name)}/field-changes`,
                     { params: { page, pageSize: FIELD_CHANGES_PAGE_SIZE } },
                 );
+                // A body that is not a list is a failed read, not an empty list.
+                if (!data || !Array.isArray((data as Partial<FieldChangePage>).items)) {
+                    throw new Error('The field changes came back in a shape this console does not know.');
+                }
                 return data;
             } catch (error) {
                 if (isNotFound(error) || isForbidden(error)) return null;
                 throw error;
             }
         },
+        // The previous page stays on screen while the next loads, but only for the same type in the
+        // same tenant: another tenant's list is never shown in its place.
+        placeholderData: (previous, previousQuery) =>
+            previousQuery?.queryKey[1] === tenant && previousQuery?.queryKey[2] === name
+                ? keepPreviousData(previous)
+                : undefined,
         refetchInterval: (query) =>
-            query.state.data?.items.some((change) => change.state === 'running') ? POLL_MS : false,
+            query.state.data?.items?.some((change) => change.state === 'running') ? POLL_MS : false,
     });
 }
 
@@ -79,7 +89,8 @@ export function useRetryFieldChange(name: string) {
 
     return useMutation({
         mutationFn: async (id: string) =>
-            (await api.post<FieldChange>(`/api/content-types/field-changes/${id}/retry`)).data,
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['field-changes', tenant, name] }),
+            (await api.post<FieldChange>(`/api/content-types/field-changes/${encodeURIComponent(id)}/retry`)).data,
+        // On an error too: a 409 says the change is no longer as the row shows it.
+        onSettled: () => queryClient.invalidateQueries({ queryKey: ['field-changes', tenant, name] }),
     });
 }

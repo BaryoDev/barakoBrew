@@ -33,6 +33,14 @@ export function FieldChangesPanel({ typeName }: { typeName: string }) {
     const [page, setPage] = useState(1);
     const { data, isLoading, isError, error } = useFieldChanges(typeName, page);
 
+    // A page past the end (changes were removed since the last read) steps back to the last page
+    // that has any, rather than leaving an empty page and no pager.
+    const emptyLaterPage = !!data && page > 1 && data.items.length === 0;
+    if (emptyLaterPage) {
+        const last = Math.max(1, Math.ceil(data.totalItems / (data.pageSize || FIELD_CHANGES_PAGE_SIZE)));
+        setPage(Math.min(page - 1, last));
+    }
+
     // null is a 404 or a 403: nothing to offer, so nothing is drawn.
     if (data === null) return null;
 
@@ -59,18 +67,23 @@ export function FieldChangesPanel({ typeName }: { typeName: string }) {
 
             {isLoading ? (
                 <p className="text-muted-foreground text-sm">Loading...</p>
-            ) : isError ? (
-                <p role="alert" className="text-destructive text-sm">
-                    {apiErrorMessage(error, 'The field changes could not be listed.')}
-                </p>
-            ) : items.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No field changes.</p>
             ) : (
-                <ul className="divide-y rounded-md border">
-                    {items.map((change) => (
-                        <ChangeRow key={change.id} change={change} typeName={typeName} />
-                    ))}
-                </ul>
+                <>
+                    {isError && (
+                        <p role="alert" className="text-destructive text-sm">
+                            {apiErrorMessage(error, 'The field changes could not be listed.')}
+                        </p>
+                    )}
+                    {!data || emptyLaterPage ? null : items.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">No field changes.</p>
+                    ) : (
+                        <ul className="divide-y rounded-md border">
+                            {items.map((change) => (
+                                <ChangeRow key={change.id} change={change} typeName={typeName} />
+                            ))}
+                        </ul>
+                    )}
+                </>
             )}
 
             {paged && paged.totalItems > paged.pageSize && (
@@ -88,7 +101,7 @@ function ChangeRow({ change, typeName }: { change: FieldChange; typeName: string
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                     <span className="font-mono text-xs font-medium">{change.field}</span>
-                    <span className="text-muted-foreground">{change.kind}</span>
+                    <span className="text-muted-foreground font-mono text-xs">{change.kind}</span>
                     <StatusBadge tone={state.tone} pulse={change.state === 'running'}>
                         {state.label}
                     </StatusBadge>
@@ -140,7 +153,7 @@ function Skips({ change, typeName }: { change: FieldChange; typeName: string }) 
                             >
                                 {entry.entryId}
                             </Link>
-                            <span>{entry.reason}</span>
+                            <span className="font-mono">{entry.reason}</span>
                             <span className="text-muted-foreground font-mono tabular-nums" title={exactTime(entry.at)}>
                                 {relativeTime(entry.at)}
                             </span>
@@ -159,7 +172,14 @@ function Skips({ change, typeName }: { change: FieldChange; typeName: string }) 
                 <p className="text-muted-foreground text-xs">Retried</p>
             ) : (
                 <div className="flex flex-wrap items-center gap-3">
-                    <Button type="button" variant="outline" size="sm" disabled={retry.isPending} onClick={send}>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Retry ${change.field} ${change.kind}`}
+                        disabled={retry.isPending}
+                        onClick={send}
+                    >
                         Retry
                     </Button>
                     {retry.isError && (
