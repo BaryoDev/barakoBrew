@@ -242,6 +242,33 @@ describe('a single-entry type with lines', () => {
         expect(toast.error).not.toHaveBeenCalled();
     });
 
+    it('clears the line refusals when the entry is sent again, without a change to the lines', async () => {
+        serveTypes();
+        const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST');
+        error.response = {
+            data: { status: 422, errors: ['Line 1: Label is required'] },
+            status: 422,
+            statusText: '',
+            headers: {},
+            config: { headers: new AxiosHeaders() },
+        };
+        vi.mocked(api.post)
+            .mockRejectedValueOnce(error)
+            .mockResolvedValueOnce({ data: { id: OLDEST, version: 1 } });
+
+        renderPage();
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Add line' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+        expect(await screen.findByText('Line 1: Label is required')).toBeInTheDocument();
+
+        // The server's side changed, not the grid, so only a new send can take the refusal away.
+        fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(screen.queryByText('Line 1: Label is required')).toBeNull());
+    });
+
     it('sends no lines key for a type without lines', async () => {
         serve(() => []);
         vi.mocked(api.post).mockResolvedValue({ data: { id: OLDEST, version: 1 } });

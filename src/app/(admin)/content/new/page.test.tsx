@@ -165,6 +165,25 @@ describe('the new entry page, for a type with lines', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it('clears the line refusals when the entry is sent again, without a change to the lines', async () => {
+    serve([[ORDER, LINE, NOTE]]);
+    vi.mocked(api.post)
+      .mockRejectedValueOnce(refused(['Line 1: Item is required']))
+      .mockResolvedValueOnce({ data: { id: 'o-1', version: 1 } });
+    renderPage();
+
+    await addLine('Bolt');
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    expect(await screen.findByText('Line 1: Item is required')).toBeInTheDocument();
+
+    // The server's side changed, not the grid, so only a new send can take the refusal away.
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/content/o-1'));
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('Line 1: Item is required')).toBeNull();
+  });
+
   it('drops the rows and their refusals when another type is picked', async () => {
     serve([[ORDER, LINE, NOTE]]);
     vi.mocked(api.post).mockRejectedValue(refused(['Line 1: Item is required']));
