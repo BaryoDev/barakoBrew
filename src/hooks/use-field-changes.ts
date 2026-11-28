@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, isForbidden, isNotFound } from '@/lib/api';
+import { useCurrentTenant } from '@/hooks/use-tenants';
 
 export type FieldChangeState = 'running' | 'completed' | 'abandoned' | 'completed_with_skips';
 
@@ -49,8 +50,11 @@ const POLL_MS = 5000;
  * While a change on the page is running the page is read again every few seconds.
  */
 export function useFieldChanges(name: string, page: number) {
+    // The tenant is in the key, as in useSchemas, so a type of the same name in another tenant never
+    // shows this tenant's changes.
+    const tenant = useCurrentTenant();
     return useQuery({
-        queryKey: ['field-changes', name, page],
+        queryKey: ['field-changes', tenant, name, page],
         queryFn: async (): Promise<FieldChangePage | null> => {
             try {
                 const { data } = await api.get<FieldChangePage>(
@@ -71,10 +75,11 @@ export function useFieldChanges(name: string, page: number) {
 /** Starts a full pass over a change that finished with skips. The API answers 202 with the new change. */
 export function useRetryFieldChange(name: string) {
     const queryClient = useQueryClient();
+    const tenant = useCurrentTenant();
 
     return useMutation({
         mutationFn: async (id: string) =>
             (await api.post<FieldChange>(`/api/content-types/field-changes/${id}/retry`)).data,
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['field-changes', name] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['field-changes', tenant, name] }),
     });
 }

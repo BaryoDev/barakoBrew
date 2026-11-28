@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
@@ -11,7 +11,7 @@ vi.mock('@/lib/api', async () => {
 });
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const { api } = await import('@/lib/api');
+const { api, tokenStore } = await import('@/lib/api');
 const { toast } = await import('sonner');
 const { FieldChangesPanel } = await import('./field-changes-panel');
 
@@ -83,7 +83,13 @@ function renderPanel(typeName = 'article') {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    tokenStore.clear();
 });
+
+function tokenFor(tenant: string) {
+    const encode = (value: object) => btoa(JSON.stringify(value));
+    return `${encode({ alg: 'none' })}.${encode({ tenant })}.x`;
+}
 
 describe('the field changes panel', () => {
     it('shows a change that completed with skips, what was skipped and a Retry button', async () => {
@@ -229,5 +235,30 @@ describe('the field changes panel', () => {
         await waitFor(() =>
             expect(vi.mocked(api.get).mock.calls.some(([, config]) => (config?.params as { page?: number } | undefined)?.page === 2)).toBe(true),
         );
+    });
+
+    it('does not share cached changes between tenants that have a type of the same name', async () => {
+        const list = (field: string) => ({
+            data: { items: [change({ id: field, field })], page: 1, pageSize: 20, totalItems: 1 },
+        });
+        tokenStore.set(tokenFor('alpha'));
+        vi.mocked(api.get).mockResolvedValueOnce(list('AlphaField'));
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        render(
+            <QueryClientProvider client={client}>
+                <FieldChangesPanel typeName="article" />
+            </QueryClientProvider>,
+        );
+        expect(await screen.findByText('AlphaField')).toBeTruthy();
+
+        let answer: (value: ReturnType<typeof list>) => void = () => {};
+        vi.mocked(api.get).mockReturnValueOnce(new Promise((resolve) => (answer = resolve)) as never);
+        act(() => tokenStore.set(tokenFor('beta')));
+
+        // Beta's answer has not arrived, and alpha's changes are not shown in its place.
+        await waitFor(() => expect(screen.queryByText('AlphaField')).toBeNull());
+        await act(async () => answer(list('BetaField')));
+        expect(await screen.findByText('BetaField')).toBeTruthy();
+        expect(api.get).toHaveBeenCalledTimes(2);
     });
 });
